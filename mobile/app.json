@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Palate",
-    "slug": "palate",
+    "slug": "palate-app",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -24,7 +24,9 @@
         "NSUserNotificationsUsageDescription": "We send a single notification on Sunday morning when your weekly Wrapped is ready. You can turn this off in Settings.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "associatedDomains": ["applinks:palate.app"]
+      "associatedDomains": [
+        "applinks:palate.app"
+      ]
     },
     "android": {
       "package": "app.palate.android",
@@ -33,7 +35,12 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FF3008"
       },
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -59,8 +66,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": ""
+        "projectId": "07df10b4-2e73-4f01-aceb-1990fbe59fcf"
       }
-    }
+    },
+    "owner": "kentonmcneal"
   }
 }
