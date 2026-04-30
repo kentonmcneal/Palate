@@ -16,6 +16,7 @@ import {
   type PalateInsight,
 } from "../../lib/palate-insights";
 import { isoWeekStart } from "../../lib/wrapped";
+import { RecommendationsCard } from "../../components/RecommendationsCard";
 
 export default function Home() {
   const router = useRouter();
@@ -102,6 +103,8 @@ export default function Home() {
         {weekInsight && weekInsight.visitCount > 0 && (
           <WeekSoFarCard insight={weekInsight} onPress={() => router.push("/(tabs)/wrapped")} />
         )}
+
+        <RecommendationsCard />
 
         <View style={styles.heroCard}>
           <Text style={styles.heroEyebrow}>RIGHT NOW</Text>

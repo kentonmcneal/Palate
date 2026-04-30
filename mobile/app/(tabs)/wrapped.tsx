@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
-import { View, Text, StyleSheet, Alert, ScrollView, Share } from "react-native";
+import { View, Text, StyleSheet, Alert, ScrollView, Share, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Button, Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { generateForCurrentWeek, latestWrapped, type Wrapped } from "../../lib/wrapped";
@@ -13,6 +13,7 @@ export default function WrappedTab() {
   const [data, setData] = useState<Wrapped | null>(null);
   const [loading, setLoading] = useState(false);
   const cardRef = useRef<View>(null);
+  const router = useRouter();
 
   const refresh = useCallback(async () => {
     try {
@@ -61,10 +62,21 @@ export default function WrappedTab() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={type.title}>Your Wrapped</Text>
-        <Text style={[type.body, { color: colors.mute, marginTop: 4 }]}>
-          What your week says about how you eat.
-        </Text>
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={type.title}>Your Wrapped</Text>
+            <Text style={[type.body, { color: colors.mute, marginTop: 4 }]}>
+              What your week says about how you eat.
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => router.push("/insights")}
+            style={styles.insightsBtn}
+            accessibilityLabel="Open detailed insights"
+          >
+            <Text style={styles.insightsBtnText}>Insights →</Text>
+          </Pressable>
+        </View>
         <Spacer size={20} />
 
         {data ? (
@@ -129,6 +141,16 @@ const SAMPLE_WRAPPED: Wrapped = {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.paper },
   container: { padding: spacing.lg, paddingBottom: 100 },
+  headerRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  insightsBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.faint,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  insightsBtnText: { fontSize: 13, fontWeight: "700", color: colors.ink },
   empty: {
     borderRadius: 18,
     borderWidth: 1,

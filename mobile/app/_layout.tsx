@@ -54,6 +54,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="confirm-visit" options={{ presentation: "modal" }} />
           <Stack.Screen name="year-in-review" options={{ presentation: "modal" }} />
+          <Stack.Screen name="insights" options={{ presentation: "modal" }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>
