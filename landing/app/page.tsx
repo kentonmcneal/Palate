@@ -14,7 +14,6 @@ export const revalidate = 60;
 const SECTION_NAV = [
   { href: "#how", label: "How it works" },
   { href: "#personalities", label: "Personalities" },
-  { href: "#pricing", label: "Pricing" },
   { href: "#privacy", label: "Privacy" },
   { href: "#faq", label: "FAQ" },
 ];
@@ -81,7 +80,7 @@ const FAQS = [
   },
   {
     q: "Is it free?",
-    a: 'Free during beta. Long-term, see <a href="#pricing" class="text-palate-red underline">Pricing</a> — there\'ll always be a free tier.',
+    a: "Free during beta. We'll share details on long-term plans before anything changes — there'll always be a free tier.",
   },
   {
     q: "What about Android?",
@@ -644,77 +643,6 @@ export default async function Page() {
         </div>
       </section>
 
-      {/* ============== PRICING ============== */}
-      <section id="pricing" className="bg-white">
-        <div className="max-w-7xl mx-auto px-6 py-24">
-          <div className="max-w-2xl">
-            <div className="text-xs font-semibold text-palate-mute tracking-widest uppercase">
-              Pricing
-            </div>
-            <h2 className="mt-3 text-3xl sm:text-4xl font-semibold tracking-tightest">
-              Honest pricing. No catch.
-            </h2>
-            <p className="mt-3 text-palate-mute">We'd rather charge a few dollars than ever sell your data. Beta is free.</p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6 mt-12">
-            <div className="rounded-3xl border border-palate-line bg-white p-7 ease-card card-hover">
-              <div className="text-xs font-semibold text-palate-red tracking-widest uppercase">
-                Right now
-              </div>
-              <h3 className="mt-2 text-2xl font-semibold tracking-tightish">Beta</h3>
-              <div className="mt-4 text-4xl font-bold">Free</div>
-              <div className="text-sm text-palate-mute mt-1">Everything, no catch.</div>
-              <ul className="mt-6 space-y-2 text-[15px] text-palate-ink">
-                <PriceLi check>Full visit history</PriceLi>
-                <PriceLi check>Weekly Wrapped</PriceLi>
-                <PriceLi check>Personality reveal</PriceLi>
-                <PriceLi check>Privacy controls</PriceLi>
-              </ul>
-            </div>
-            <div className="rounded-3xl border-2 border-palate-red bg-white p-7 relative ease-card card-hover">
-              <div className="absolute -top-3 left-7 bg-palate-red text-white text-xs font-bold px-3 py-1 rounded-full">
-                After beta — most likely
-              </div>
-              <div className="text-xs font-semibold text-palate-mute tracking-widest uppercase">
-                Forever free
-              </div>
-              <h3 className="mt-2 text-2xl font-semibold tracking-tightish">Casual</h3>
-              <div className="mt-4 text-4xl font-bold">
-                $0<span className="text-base font-medium text-palate-mute">/mo</span>
-              </div>
-              <div className="text-sm text-palate-mute mt-1">Always free, no ads.</div>
-              <ul className="mt-6 space-y-2 text-[15px] text-palate-ink">
-                <PriceLi check>Last 4 weeks of visits</PriceLi>
-                <PriceLi check>Weekly Wrapped</PriceLi>
-                <PriceLi check>Personality reveal</PriceLi>
-                <PriceLi>Full history archive</PriceLi>
-                <PriceLi>Year in Review</PriceLi>
-              </ul>
-            </div>
-            <div className="rounded-3xl border border-palate-line bg-white p-7 ease-card card-hover">
-              <div className="text-xs font-semibold text-palate-mute tracking-widest uppercase">
-                Eventually
-              </div>
-              <h3 className="mt-2 text-2xl font-semibold tracking-tightish">Pro</h3>
-              <div className="mt-4 text-4xl font-bold">
-                ~$3<span className="text-base font-medium text-palate-mute">/mo</span>
-              </div>
-              <div className="text-sm text-palate-mute mt-1">Pays for the servers, no ads.</div>
-              <ul className="mt-6 space-y-2 text-[15px] text-palate-ink">
-                <PriceLi check>Unlimited history</PriceLi>
-                <PriceLi check>Year in Review</PriceLi>
-                <PriceLi check>Spending trends</PriceLi>
-                <PriceLi check>Custom Wrapped exports</PriceLi>
-                <PriceLi check>Early access to new features</PriceLi>
-              </ul>
-            </div>
-          </div>
-          <p className="mt-8 text-sm text-palate-mute">
-            No prices change without 30 days' notice. Beta users get permanent discounted Pro access if they want it.
-          </p>
-        </div>
-      </section>
-
       {/* ============== FAQ ============== */}
       <section id="faq" className="bg-palate-soft border-t border-palate-line">
         <div className="max-w-3xl mx-auto px-6 py-24">
@@ -858,7 +786,6 @@ export default async function Page() {
               <ul className="mt-3 space-y-2 text-sm text-palate-mute">
                 <li><a className="hover:text-palate-ink" href="#how">How it works</a></li>
                 <li><a className="hover:text-palate-ink" href="#personalities">Personalities</a></li>
-                <li><a className="hover:text-palate-ink" href="#pricing">Pricing</a></li>
                 <li><a className="hover:text-palate-ink" href="#faq">FAQ</a></li>
               </ul>
             </div>
@@ -910,22 +837,6 @@ function PrivacyCard({ title, body }: { title: string; body: string }) {
   );
 }
 
-function PriceLi({ check, children }: { check?: boolean; children: React.ReactNode }) {
-  if (check) {
-    return (
-      <li className="flex gap-2">
-        <span className="text-palate-red">✓</span>
-        {children}
-      </li>
-    );
-  }
-  return (
-    <li className="flex gap-2 text-palate-mute">
-      <span>—</span>
-      {children}
-    </li>
-  );
-}
 
 function RoadmapCard({
   eyebrow,
