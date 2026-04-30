@@ -17,6 +17,13 @@ import {
 } from "../../lib/palate-insights";
 import { isoWeekStart } from "../../lib/wrapped";
 import { RecommendationsCard } from "../../components/RecommendationsCard";
+import { Confetti } from "../../components/Confetti";
+
+const STREAK_MILESTONES = [7, 14, 30, 50, 100, 200, 365];
+
+function milestoneFor(count: number): number | null {
+  return STREAK_MILESTONES.includes(count) ? count : null;
+}
 
 export default function Home() {
   const router = useRouter();
@@ -25,6 +32,8 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [streak, setStreak] = useState<StreakInfo | null>(null);
   const [weekInsight, setWeekInsight] = useState<PalateInsight | null>(null);
+  const [milestoneConfetti, setMilestoneConfetti] = useState(0);
+  const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     // All three are independent — fetch in parallel so the screen renders fast.
@@ -34,9 +43,17 @@ export default function Home() {
       loadCurrentWeekInsight(),
     ]);
     if (v.status === "fulfilled") setVisits(v.value);
-    if (s.status === "fulfilled") setStreak(s.value);
+    if (s.status === "fulfilled") {
+      setStreak(s.value);
+      // Fire confetti once per session when the user crosses a milestone day.
+      const m = milestoneFor(s.value.current);
+      if (m && celebratedStreak !== m) {
+        setMilestoneConfetti((k) => k + 1);
+        setCelebratedStreak(m);
+      }
+    }
     if (w.status === "fulfilled") setWeekInsight(w.value);
-  }, []);
+  }, [celebratedStreak]);
 
   useFocusEffect(
     useCallback(() => {
@@ -91,6 +108,7 @@ export default function Home() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <Confetti fire={milestoneConfetti > 0} count={150} />
       <ScrollView
         contentContainerStyle={styles.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}

@@ -7,11 +7,13 @@ import { colors, spacing, type } from "../../theme";
 import { generateForCurrentWeek, latestWrapped, type Wrapped } from "../../lib/wrapped";
 import { WrappedCard } from "../../components/WrappedCard";
 import { WeeklyPalateInsights } from "../../components/WeeklyPalateInsights";
+import { Confetti } from "../../components/Confetti";
 import ViewShot, { captureRef } from "react-native-view-shot";
 
 export default function WrappedTab() {
   const [data, setData] = useState<Wrapped | null>(null);
   const [loading, setLoading] = useState(false);
+  const [confettiKey, setConfettiKey] = useState(0);
   const cardRef = useRef<View>(null);
   const router = useRouter();
 
@@ -40,7 +42,11 @@ export default function WrappedTab() {
           "Add a visit or two this week and try again — we'll generate your Wrapped.",
         );
       } else {
+        const wasFirstReveal = !data;
         setData(w);
+        // Celebrate the moment — bigger burst on the first-ever Wrapped reveal.
+        setConfettiKey((k) => k + 1);
+        void wasFirstReveal;
       }
     } catch (e: any) {
       Alert.alert("Couldn't generate", e.message ?? "Try again");
@@ -61,6 +67,7 @@ export default function WrappedTab() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <Confetti fire={confettiKey > 0} count={180} />
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>

@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal, View, Text, StyleSheet, Pressable, Animated, Easing } from "react-native";
 import { colors, spacing, type } from "../theme";
+import { Confetti } from "./Confetti";
 
 type Props = {
   visible: boolean;
@@ -16,6 +17,7 @@ type Props = {
 export function FirstVisitCelebration({ visible, restaurantName, onDismiss }: Props) {
   const scale = useRef(new Animated.Value(0.85)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  const [confettiKey, setConfettiKey] = useState(0);
 
   useEffect(() => {
     if (visible) {
@@ -28,6 +30,8 @@ export function FirstVisitCelebration({ visible, restaurantName, onDismiss }: Pr
           useNativeDriver: true,
         }),
       ]).start();
+      // Fire confetti after the modal scales in (~360ms)
+      setTimeout(() => setConfettiKey((k) => k + 1), 380);
     } else {
       scale.setValue(0.85);
       opacity.setValue(0);
@@ -36,6 +40,7 @@ export function FirstVisitCelebration({ visible, restaurantName, onDismiss }: Pr
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
+      <Confetti fire={confettiKey > 0} count={150} />
       <View style={styles.scrim}>
         <Animated.View style={[styles.card, { opacity, transform: [{ scale }] }]}>
           <Text style={styles.confetti}>✦  ✦  ✦</Text>
