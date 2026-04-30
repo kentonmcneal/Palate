@@ -8,6 +8,7 @@ import { CookieBanner } from "@/components/CookieBanner";
 import { AppStoreBadge } from "@/components/AppStoreBadge";
 import { PalateQuiz } from "@/components/PalateQuiz";
 import { StickyQuizCta } from "@/components/StickyQuizCta";
+import { EvolutionScrubber } from "@/components/EvolutionScrubber";
 import { getWaitlistCount } from "@/lib/waitlist";
 
 // Revalidate the home page (and the embedded count) every 60s.
@@ -40,10 +41,28 @@ const CATEGORIES = [
 
 const PERSONALITIES = [
   {
-    emoji: "🏆",
-    title: "The Loyalist",
-    sub: "If a place is good, why fix it?",
-    desc: "You eat at the same 3 spots like clockwork.",
+    emoji: "⚡",
+    title: "The Convenience Loyalist",
+    sub: "Speed and familiarity, no thinking required.",
+    desc: "Same spots, on rotation. Not a rut — a system.",
+  },
+  {
+    emoji: "🔥",
+    title: "The Flavor Loyalist",
+    sub: "You know what you want, and you go get it.",
+    desc: "Repeats with intent. You're craving, not avoiding decisions.",
+  },
+  {
+    emoji: "✨",
+    title: "The Premium Comfort Loyalist",
+    sub: "You'll pay a little more for the same good thing.",
+    desc: "Sweetgreen, Cava, Shake Shack on rotation. Loyal to a feeling.",
+  },
+  {
+    emoji: "🌀",
+    title: "The Practical Variety Seeker",
+    sub: "You eat a little bit of everything — on purpose.",
+    desc: "Different modes for different reasons. That's range.",
   },
   {
     emoji: "🧭",
@@ -52,22 +71,28 @@ const PERSONALITIES = [
     desc: "You haven't been to the same place twice in a month.",
   },
   {
-    emoji: "🥗",
-    title: "The Fast Casual Regular",
-    sub: "Healthy-ish, fast, on the way home.",
-    desc: "Your week runs on bowls and counter service.",
-  },
-  {
     emoji: "☕",
     title: "The Café Dweller",
     sub: "Latte before Slack.",
     desc: "Five out of seven mornings start the same way.",
   },
   {
+    emoji: "🥗",
+    title: "The Fast Casual Regular",
+    sub: "Healthy-ish, fast, on the way.",
+    desc: "Your week runs on bowls and counter service.",
+  },
+  {
     emoji: "🍕",
     title: "The Comfort Food Connoisseur",
     sub: "Pizza is a personality trait.",
     desc: "You eat what you actually want, and we love that for you.",
+  },
+  {
+    emoji: "👯",
+    title: "The Social Diner",
+    sub: "Food is the excuse, the table is the point.",
+    desc: "Mediocre meal with great people > great meal alone.",
   },
 ];
 
@@ -613,6 +638,26 @@ export default async function Page() {
         </div>
       </section>
 
+      {/* ============== EVOLUTION SCRUBBER — same person, 4 weeks, 4 identities ============== */}
+      <section className="bg-white border-t border-palate-line">
+        <div className="max-w-6xl mx-auto px-6 py-24">
+          <div className="text-center max-w-2xl mx-auto">
+            <div className="text-xs font-semibold text-palate-mute tracking-widest uppercase">
+              The same person
+            </div>
+            <h2 className="mt-3 text-3xl sm:text-5xl font-semibold tracking-tightest leading-tight">
+              Four weeks. <span className="text-palate-red">Four identities.</span>
+            </h2>
+            <p className="mt-4 text-palate-mute">
+              Your Palate isn't a label — it's a moving picture. Scrub through one fictional user's month and watch the read change with the week.
+            </p>
+          </div>
+          <div className="mt-12">
+            <EvolutionScrubber />
+          </div>
+        </div>
+      </section>
+
       {/* ============== PERSONALITIES ============== */}
       <section id="personalities" className="bg-palate-soft">
         <div className="max-w-7xl mx-auto px-6 py-24">
@@ -624,7 +669,7 @@ export default async function Page() {
               <h2 className="mt-3 text-3xl sm:text-4xl font-semibold tracking-tightest">
                 Which one are you?
               </h2>
-              <p className="mt-2 text-palate-mute">Five archetypes. You'll find out at the end of your first week.</p>
+              <p className="mt-2 text-palate-mute">Nine archetypes. You'll find out at the end of your first week.</p>
             </div>
             <div className="text-sm text-palate-mute">Swipe →</div>
           </div>
