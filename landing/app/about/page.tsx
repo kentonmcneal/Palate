@@ -58,10 +58,11 @@ export default function AboutPage() {
                 eight bars until they sound right shows up in everything I&apos;ve built since.
               </p>
               <p>
-                From Memphis I went to Morehouse College, graduating <em>summa cum laude</em> in Psychology. Four years
-                at Deloitte Consulting followed, leading strategy and operations engagements for Fortune 50 tech and
-                healthcare clients. I&apos;m now finishing my MBA at The Wharton School in Strategic Management &amp;
-                Entrepreneurship, fresh off a summer on Airbnb&apos;s Strategic Finance &amp; Analytics team.
+                From Memphis I went to Morehouse College, graduating <em>summa cum laude</em> in Psychology with the
+                Class of 2020. Four years at Deloitte Consulting followed, leading strategy and operations engagements
+                for Fortune 50 tech and healthcare clients. I&apos;m now finishing my MBA at The Wharton School in
+                Strategic Management &amp; Entrepreneurship, fresh off a summer on Airbnb&apos;s Strategic Finance &amp;
+                Analytics team.
               </p>
               <p>
                 I built Palate because I had no idea I&apos;d been to Sweetgreen{" "}
@@ -94,6 +95,25 @@ export default function AboutPage() {
           </div>
         </section>
 
+        {/* ============== PULL QUOTE ============== */}
+        <section className="mt-20">
+          <figure className="relative rounded-3xl border border-palate-line bg-palate-soft px-8 sm:px-12 py-12 sm:py-14">
+            <span
+              aria-hidden="true"
+              className="absolute -top-6 left-8 sm:left-10 text-palate-red text-[120px] leading-none font-serif select-none"
+            >
+              &ldquo;
+            </span>
+            <blockquote className="relative text-2xl sm:text-3xl font-medium tracking-tightish leading-snug text-palate-ink">
+              Your favorite restaurant isn&apos;t the one you&apos;d rank highest. It&apos;s the one you{" "}
+              <span className="text-palate-red">actually keep going back to.</span>
+            </blockquote>
+            <figcaption className="mt-6 text-sm text-palate-mute">
+              — Kenton, on why Palate has no stars, no scores, and no leaderboard
+            </figcaption>
+          </figure>
+        </section>
+
         {/* ============== QUICK FACTS ============== */}
         <section className="mt-20">
           <div className="text-xs font-semibold text-palate-mute tracking-widest uppercase">
@@ -102,7 +122,7 @@ export default function AboutPage() {
           <div className="mt-5 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <Fact label="Hometown" value="Memphis, Tennessee" />
             <Fact label="High school" value="Overton High School · Valedictorian" />
-            <Fact label="Undergrad" value="Morehouse College · BA Psychology · Summa Cum Laude" />
+            <Fact label="Undergrad" value="Morehouse College &apos;20 · BA Psychology · Summa Cum Laude" />
             <Fact label="MBA" value="The Wharton School · Class of 2026" />
             <Fact label="Most recent" value="Strategic Finance & Analytics, Airbnb" />
             <Fact label="Before that" value="Strategy & Operations, Deloitte Consulting" />
