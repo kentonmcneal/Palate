@@ -8,20 +8,33 @@ import { colors, spacing, type } from "../../theme";
 import { getCurrentLocation, logLocationEvent, requestForegroundPermission } from "../../lib/location";
 import { nearbyRestaurants, type Restaurant } from "../../lib/places";
 import { recentlyPrompted, recentVisits, type Visit } from "../../lib/visits";
+import { computeStreak, type StreakInfo } from "../../lib/streak";
+import {
+  analyzeWeeklyPalate,
+  daysUntilSundayWrap,
+  leaningPersonality,
+  type PalateInsight,
+} from "../../lib/palate-insights";
+import { isoWeekStart } from "../../lib/wrapped";
 
 export default function Home() {
   const router = useRouter();
   const [checking, setChecking] = useState(false);
   const [visits, setVisits] = useState<Visit[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [streak, setStreak] = useState<StreakInfo | null>(null);
+  const [weekInsight, setWeekInsight] = useState<PalateInsight | null>(null);
 
   const load = useCallback(async () => {
-    try {
-      const v = await recentVisits(10);
-      setVisits(v);
-    } catch (e: any) {
-      console.warn("load visits failed", e?.message);
-    }
+    // All three are independent — fetch in parallel so the screen renders fast.
+    const [v, s, w] = await Promise.allSettled([
+      recentVisits(10),
+      computeStreak(),
+      loadCurrentWeekInsight(),
+    ]);
+    if (v.status === "fulfilled") setVisits(v.value);
+    if (s.status === "fulfilled") setStreak(s.value);
+    if (w.status === "fulfilled") setWeekInsight(w.value);
   }, []);
 
   useFocusEffect(
@@ -83,7 +96,12 @@ export default function Home() {
       >
         <View style={styles.header}>
           <Wordmark />
+          {streak && streak.current > 0 && <StreakChip count={streak.current} loggedToday={streak.loggedToday} />}
         </View>
+
+        {weekInsight && weekInsight.visitCount > 0 && (
+          <WeekSoFarCard insight={weekInsight} onPress={() => router.push("/(tabs)/wrapped")} />
+        )}
 
         <View style={styles.heroCard}>
           <Text style={styles.heroEyebrow}>RIGHT NOW</Text>
@@ -114,6 +132,65 @@ export default function Home() {
   );
 }
 
+async function loadCurrentWeekInsight(): Promise<PalateInsight | null> {
+  try {
+    const start = isoWeekStart();
+    const end = new Date().toISOString().slice(0, 10);
+    return await analyzeWeeklyPalate(start, end);
+  } catch {
+    return null;
+  }
+}
+
+function StreakChip({ count, loggedToday }: { count: number; loggedToday: boolean }) {
+  return (
+    <View style={[styles.streakChip, !loggedToday && styles.streakChipAtRisk]}>
+      <Text style={styles.streakEmoji}>🔥</Text>
+      <Text style={[styles.streakText, !loggedToday && styles.streakTextAtRisk]}>
+        {count}
+      </Text>
+    </View>
+  );
+}
+
+function WeekSoFarCard({ insight, onPress }: { insight: PalateInsight; onPress: () => void }) {
+  const leaning = leaningPersonality(insight);
+  const days = daysUntilSundayWrap();
+  const cuisineLabel = insight.primaryCuisine
+    ? insight.primaryCuisine[0].toUpperCase() + insight.primaryCuisine.slice(1).replace("-", " ")
+    : null;
+
+  const countdown =
+    days === 0 ? "Wrapped lands today"
+    : days === 1 ? "Wrapped lands tomorrow"
+    : `${days} days until Wrapped`;
+
+  return (
+    <Pressable onPress={onPress} style={styles.weekCard} accessibilityRole="button">
+      <Text style={styles.weekEyebrow}>YOUR WEEK SO FAR</Text>
+      <View style={styles.weekRow}>
+        <View style={styles.weekStat}>
+          <Text style={styles.weekStatValue}>{insight.visitCount}</Text>
+          <Text style={styles.weekStatLabel}>visits</Text>
+        </View>
+        {cuisineLabel && (
+          <View style={styles.weekStat}>
+            <Text style={styles.weekStatValue}>{cuisineLabel}</Text>
+            <Text style={styles.weekStatLabel}>cuisine</Text>
+          </View>
+        )}
+        {leaning && (
+          <View style={[styles.weekStat, { flex: 1.2 }]}>
+            <Text style={[styles.weekStatValue, { color: colors.red }]} numberOfLines={1}>{leaning}</Text>
+            <Text style={styles.weekStatLabel}>trending</Text>
+          </View>
+        )}
+      </View>
+      <Text style={styles.weekCountdown}>{countdown} · tap to open →</Text>
+    </Pressable>
+  );
+}
+
 function VisitRow({ v }: { v: Visit }) {
   const r = v.restaurant;
   const date = new Date(v.visited_at);
@@ -139,7 +216,54 @@ function prettyType(t: string) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.paper },
   container: { padding: spacing.lg, paddingBottom: 100 },
-  header: { marginBottom: spacing.xl },
+  header: {
+    marginBottom: spacing.xl,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  streakChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#FFF1EE",
+    borderWidth: 1,
+    borderColor: "#FFD7CE",
+  },
+  streakChipAtRisk: {
+    backgroundColor: colors.faint,
+    borderColor: colors.line,
+  },
+  streakEmoji: { fontSize: 14 },
+  streakText: { color: colors.red, fontWeight: "800", fontSize: 14 },
+  streakTextAtRisk: { color: colors.mute },
+  weekCard: {
+    marginBottom: spacing.xl,
+    padding: spacing.md,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.paper,
+  },
+  weekEyebrow: { ...type.micro },
+  weekRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    gap: 14,
+  },
+  weekStat: { flex: 1 },
+  weekStatValue: { fontSize: 18, fontWeight: "800", color: colors.ink },
+  weekStatLabel: { ...type.small, marginTop: 2 },
+  weekCountdown: {
+    marginTop: 12,
+    color: colors.mute,
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
   heroCard: {
     backgroundColor: colors.faint,
     borderRadius: 24,

@@ -475,6 +475,48 @@ async function getVisitedPlaceIds(weekStart: string, weekEnd: string): Promise<S
 }
 
 // ============================================================================
+// Public: leaningPersonality
+// ----------------------------------------------------------------------------
+// Mid-week classifier — predicts which Sunday personality the user is
+// trending toward, based on their week-so-far insight. Returns null when
+// there isn't enough signal yet (so callers can show "still warming up"
+// instead of guessing).
+// ============================================================================
+
+export function leaningPersonality(insight: PalateInsight): string | null {
+  if (insight.visitCount === 0) return null;
+
+  const repeats = insight.visitCount - insight.uniqueRestaurantCount;
+  const repeatRate = insight.visitCount > 0 ? repeats / insight.visitCount : 0;
+  const exploreRate = insight.uniqueRestaurantCount / Math.max(insight.visitCount, 1);
+
+  // Strong signals first
+  if (insight.visitCount >= 3 && repeatRate >= 0.5) return "The Loyalist";
+  if (insight.visitCount >= 5 && exploreRate >= 0.8) return "The Explorer";
+
+  // Trait-based leans
+  if (insight.dominantTrait === "café") return "The Café Dweller";
+  if (insight.primaryCuisine === "healthy" || insight.dominantTrait === "healthy") {
+    return "The Fast Casual Regular";
+  }
+  if (insight.dominantTrait === "comfort" || insight.primaryCuisine === "italian") {
+    return "The Comfort Food Connoisseur";
+  }
+
+  // Not enough signal
+  return null;
+}
+
+/**
+ * Days until next Sunday (when the week's Wrapped lands).
+ * Returns 0 on Sunday itself.
+ */
+export function daysUntilSundayWrap(now = new Date()): number {
+  const dow = now.getDay(); // 0 = Sunday
+  return (7 - dow) % 7;
+}
+
+// ============================================================================
 // Public: addToWishlist
 // ----------------------------------------------------------------------------
 // Requires the wishlist table from supabase/migrations/0003_wishlist.sql.
