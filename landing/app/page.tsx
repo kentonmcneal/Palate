@@ -912,6 +912,7 @@ export default async function Page() {
               <div className="text-sm font-semibold">Company</div>
               <ul className="mt-3 space-y-2 text-sm text-palate-mute">
                 <li><Link className="hover:text-palate-ink" href="/about">About</Link></li>
+                <li><Link className="hover:text-palate-ink" href="/resume">Resume</Link></li>
                 <li><Link className="hover:text-palate-ink" href="/press">Press</Link></li>
                 <li><a className="hover:text-palate-ink" href="mailto:hello@palate.app">Contact</a></li>
               </ul>

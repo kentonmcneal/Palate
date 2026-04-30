@@ -83,6 +83,12 @@ export default function AboutPage() {
               >
                 Get in touch
               </a>
+              <Link
+                href="/resume"
+                className="inline-flex rounded-full border border-palate-line px-5 py-2.5 text-sm font-semibold hover:bg-palate-soft"
+              >
+                Resume
+              </Link>
               <a
                 href="https://www.linkedin.com/in/kenton-mcneal"
                 target="_blank"
