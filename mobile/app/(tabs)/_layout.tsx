@@ -37,7 +37,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="wishlist"
         options={{
-          title: "Wishlist",
+          title: "Try List",
           tabBarIcon: ({ color }) => <TabIcon glyph="♡" color={color} />,
         }}
       />

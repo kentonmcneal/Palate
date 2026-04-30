@@ -7,6 +7,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { colors } from "../theme";
+import { initObservability } from "../lib/observability";
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
@@ -15,6 +16,7 @@ export default function RootLayout() {
   const segments = useSegments();
 
   useEffect(() => {
+    void initObservability();
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoaded(true);
@@ -51,6 +53,7 @@ export default function RootLayout() {
           <Stack.Screen name="onboarding" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="confirm-visit" options={{ presentation: "modal" }} />
+          <Stack.Screen name="year-in-review" options={{ presentation: "modal" }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

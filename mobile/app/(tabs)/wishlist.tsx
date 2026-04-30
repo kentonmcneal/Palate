@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -16,11 +16,16 @@ import { colors, spacing, type } from "../../theme";
 import { listWishlist, removeFromWishlist, type WishlistEntry } from "../../lib/palate-insights";
 import { saveVisit } from "../../lib/visits";
 
+type GroupBy = "recent" | "cuisine" | "neighborhood";
+
 export default function WishlistTab() {
   const router = useRouter();
   const [entries, setEntries] = useState<WishlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [groupBy, setGroupBy] = useState<GroupBy>("recent");
+
+  const grouped = useMemo(() => groupEntries(entries, groupBy), [entries, groupBy]);
 
   const load = useCallback(async () => {
     try {
@@ -89,10 +94,29 @@ export default function WishlistTab() {
           />
         }
       >
-        <Text style={type.title}>Wishlist</Text>
+        <Text style={type.title}>Try List</Text>
         <Text style={[type.body, { color: colors.mute, marginTop: 4 }]}>
           Spots you've saved from your weekly Palate insights.
         </Text>
+
+        {entries.length > 0 && (
+          <>
+            <Spacer size={16} />
+            <View style={styles.segmented}>
+              {(["recent", "cuisine", "neighborhood"] as GroupBy[]).map((g) => (
+                <Pressable
+                  key={g}
+                  onPress={() => setGroupBy(g)}
+                  style={[styles.segment, groupBy === g && styles.segmentActive]}
+                >
+                  <Text style={[styles.segmentText, groupBy === g && styles.segmentTextActive]}>
+                    {g === "recent" ? "Recent" : g === "cuisine" ? "By cuisine" : "By area"}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        )}
         <Spacer size={20} />
 
         {loading && (
@@ -112,13 +136,20 @@ export default function WishlistTab() {
           </View>
         )}
 
-        {!loading && entries.map((entry) => (
-          <WishlistRow
-            key={entry.id}
-            entry={entry}
-            onLog={() => handleLogVisit(entry)}
-            onRemove={() => handleRemove(entry)}
-          />
+        {!loading && grouped.map(({ heading, items }) => (
+          <View key={heading} style={{ marginBottom: spacing.lg }}>
+            {groupBy !== "recent" && (
+              <Text style={styles.groupHeading}>{heading}</Text>
+            )}
+            {items.map((entry) => (
+              <WishlistRow
+                key={entry.id}
+                entry={entry}
+                onLog={() => handleLogVisit(entry)}
+                onRemove={() => handleRemove(entry)}
+              />
+            ))}
+          </View>
         ))}
       </ScrollView>
     </SafeAreaView>
@@ -169,6 +200,32 @@ function capitalize(s: string): string {
   return s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, " ") : s;
 }
 
+function groupEntries(
+  entries: WishlistEntry[],
+  by: GroupBy,
+): Array<{ heading: string; items: WishlistEntry[] }> {
+  if (by === "recent") return [{ heading: "Recent", items: entries }];
+
+  const map = new Map<string, WishlistEntry[]>();
+  for (const e of entries) {
+    const key =
+      by === "cuisine"
+        ? capitalize(e.restaurant?.cuisine_type ?? "Other")
+        : (e.restaurant?.neighborhood ?? "Nearby");
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(e);
+  }
+  // Largest groups first; "Other" / "Nearby" goes to the bottom.
+  return [...map.entries()]
+    .sort((a, b) => {
+      const aDefault = a[0] === "Other" || a[0] === "Nearby";
+      const bDefault = b[0] === "Other" || b[0] === "Nearby";
+      if (aDefault !== bDefault) return aDefault ? 1 : -1;
+      return b[1].length - a[1].length;
+    })
+    .map(([heading, items]) => ({ heading, items }));
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.paper },
   container: { padding: spacing.lg, paddingBottom: 100 },
@@ -212,4 +269,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   btnGhostText: { color: colors.mute, fontSize: 13, fontWeight: "700" },
+  segmented: {
+    flexDirection: "row",
+    backgroundColor: colors.faint,
+    borderRadius: 14,
+    padding: 4,
+    gap: 4,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  segmentActive: { backgroundColor: colors.paper, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
+  segmentText: { fontSize: 13, fontWeight: "600", color: colors.mute },
+  segmentTextActive: { color: colors.ink },
+  groupHeading: {
+    ...type.micro,
+    marginBottom: 8,
+    marginTop: 4,
+    color: colors.mute,
+  },
 });

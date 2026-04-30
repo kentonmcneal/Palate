@@ -16,6 +16,7 @@
     "expo-linking": "~6.3.1",
     "expo-location": "~17.0.1",
     "expo-notifications": "~0.28.19",
+    "@sentry/react-native": "~5.24.3",
     "expo-router": "~3.5.23",
     "expo-secure-store": "~13.0.2",
     "expo-status-bar": "~1.12.1",

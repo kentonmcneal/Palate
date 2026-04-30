@@ -135,6 +135,12 @@ export default function Settings() {
 
         <Section title="Wrapped">
           <Button title="Generate this week's Wrapped" onPress={manualGenerate} variant="ghost" />
+          <Spacer />
+          <Button
+            title="Preview Year in Palate (December)"
+            onPress={() => router.push("/year-in-review")}
+            variant="ghost"
+          />
         </Section>
 
         <Section title="Your data">
