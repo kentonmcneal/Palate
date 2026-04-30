@@ -105,8 +105,8 @@ export default function AboutPage() {
               &ldquo;
             </span>
             <blockquote className="relative text-2xl sm:text-3xl font-medium tracking-tightish leading-snug text-palate-ink">
-              Your favorite restaurant isn&apos;t the one you&apos;d rank highest. It&apos;s the one you{" "}
-              <span className="text-palate-red">actually keep going back to.</span>
+              Other apps measure your opinions. Palate measures{" "}
+              <span className="text-palate-red">your patterns.</span>
             </blockquote>
             <figcaption className="mt-6 text-sm text-palate-mute">
               — Kenton, on why Palate has no stars, no scores, and no leaderboard
