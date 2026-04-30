@@ -1,0 +1,3 @@
+# Supabase CLI per-developer state — do not commit.
+.temp/
+.branches/

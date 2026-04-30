@@ -209,7 +209,7 @@ Actually, change of plan: keep JWT verification on. Re-run:
 supabase functions deploy places-proxy
 ```
 
-The function code in `supabase/edge-functions/places-proxy/index.ts` reads the user's JWT to know who is calling, so we want Supabase to verify it.
+The function code in `supabase/functions/places-proxy/index.ts` reads the user's JWT to know who is calling, so we want Supabase to verify it.
 
 ---
 
