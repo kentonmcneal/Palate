@@ -1,11 +1,12 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Logo } from "@/components/Logo";
 import { MobileDrawer } from "@/components/MobileDrawer";
 import { HeroWaitlist } from "@/components/HeroWaitlist";
 import { CtaWaitlist } from "@/components/CtaWaitlist";
 import { CookieBanner } from "@/components/CookieBanner";
 import { AppStoreBadge } from "@/components/AppStoreBadge";
-import { OpenInApp } from "@/components/OpenInApp";
+import { PalateQuiz } from "@/components/PalateQuiz";
 import { getWaitlistCount } from "@/lib/waitlist";
 
 // Revalidate the home page (and the embedded count) every 60s.
@@ -174,11 +175,12 @@ export default async function Page() {
 
           <HeroWaitlist initialCount={waitlistCount} />
 
-          {/* App Store coming-soon badge + TestFlight deep link */}
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <AppStoreBadge />
-            <OpenInApp />
-          </div>
+          <a
+            href="#quiz"
+            className="mt-6 inline-flex items-center gap-1 text-sm font-semibold text-palate-red hover:underline"
+          >
+            Curious already? Take the 30-second Palate quiz ↓
+          </a>
         </div>
 
         {/* Hero cards grid */}
@@ -418,6 +420,26 @@ export default async function Page() {
         </div>
       </section>
 
+      {/* ============== INTERACTIVE QUIZ ============== */}
+      <section id="quiz" className="bg-palate-soft border-y border-palate-line">
+        <div className="max-w-3xl mx-auto px-6 py-24">
+          <div className="text-center max-w-xl mx-auto">
+            <div className="text-xs font-semibold text-palate-red tracking-widest uppercase">
+              30-second preview
+            </div>
+            <h2 className="mt-3 text-3xl sm:text-5xl font-semibold tracking-tightest leading-tight">
+              What's your <span className="text-palate-red">starter Palate?</span>
+            </h2>
+            <p className="mt-4 text-palate-mute">
+              Three taps. No signup required. The real one comes after a week of actual visits — but here's a glimpse of how it feels.
+            </p>
+          </div>
+          <div className="mt-12">
+            <PalateQuiz />
+          </div>
+        </div>
+      </section>
+
       {/* ============== CATEGORY STRIP ============== */}
       <section className="border-y border-palate-line bg-white">
         <div className="max-w-7xl mx-auto px-6 py-6">
@@ -445,6 +467,9 @@ export default async function Page() {
             The average American eats out{" "}
             <span className="text-palate-red">5.9× a week.</span>
           </h2>
+          <p className="mt-5 text-2xl sm:text-3xl font-medium text-palate-ink">
+            That's <span className="text-palate-red font-bold">$3,800 a year.</span> On takeout.
+          </p>
           <p className="mt-5 text-lg text-palate-mute max-w-xl mx-auto">
             Most people guess two or three. Palate shows you the real number — and what it adds up to.
           </p>
@@ -584,34 +609,20 @@ export default async function Page() {
         </div>
       </section>
 
-      {/* ============== COMPARISON ============== */}
+      {/* ============== WHY PALATE ============== */}
       <section className="bg-white">
-        <div className="max-w-5xl mx-auto px-6 py-24">
+        <div className="max-w-3xl mx-auto px-6 py-24 text-center">
           <div className="text-xs font-semibold text-palate-mute tracking-widest uppercase">
             Why Palate
           </div>
-          <h2 className="mt-3 text-3xl sm:text-4xl font-semibold tracking-tightest">
-            Not Yelp. Not Beli. Not Foursquare.
+          <h2 className="mt-3 text-3xl sm:text-5xl font-semibold tracking-tightest leading-tight">
+            Other apps measure your <em className="not-italic text-palate-mute">opinions.</em><br />
+            Palate measures your <span className="text-palate-red">patterns.</span>
           </h2>
-          <p className="mt-3 text-palate-mute max-w-2xl">
-            Other apps are about <em>opinions</em>. Palate is about <em>behavior</em> — what you actually do.
+          <p className="mt-6 text-palate-mute text-lg leading-relaxed">
+            No reviews to write. No followers to grow. No feed to scroll.
+            Just a quiet record of where you actually went, and a personality reveal every Sunday morning.
           </p>
-
-          <div className="mt-10 rounded-3xl border border-palate-line bg-white overflow-hidden">
-            <div className="grid grid-cols-5 text-center text-sm font-semibold border-b border-palate-line">
-              <div className="p-4 text-left text-palate-mute"></div>
-              <div className="p-4 bg-palate-red text-white">Palate</div>
-              <div className="p-4 text-palate-mute">Yelp</div>
-              <div className="p-4 text-palate-mute">Beli</div>
-              <div className="p-4 text-palate-mute">Foursquare</div>
-            </div>
-            <CompareRow label="Tracks where you actually go" cells={["✓", "—", "—", "✓"]} />
-            <CompareRow label="Public reviews & ratings" cells={["—", "✓", "✓", "✓"]} />
-            <CompareRow label="Social feed & followers" cells={["—", "✓", "✓", "✓"]} />
-            <CompareRow label="Weekly Wrapped of your real life" cells={["✓", "—", "—", "—"]} />
-            <CompareRow label="Works for McDonald's, not just fancy spots" cells={["✓", "✓", "—", "✓"]} />
-            <CompareRow label="Privacy-first, never sells data" cells={["✓", "—", "—", "—"]} last />
-          </div>
         </div>
       </section>
 
@@ -698,20 +709,33 @@ export default async function Page() {
 
       {/* ============== FOUNDER NOTE ============== */}
       <section className="bg-palate-soft">
-        <div className="max-w-3xl mx-auto px-6 py-24">
+        <div className="max-w-4xl mx-auto px-6 py-24">
           <div className="text-xs font-semibold text-palate-mute tracking-widest uppercase">
-            A note from us
+            A note from the founder
           </div>
-          <p className="mt-5 text-2xl sm:text-3xl font-medium tracking-tightish leading-snug">
-            I built Palate because I had no idea I went to Sweetgreen{" "}
-            <span className="text-palate-red">fourteen times</span> last month. Not because I love it — because it was on the way. We deserve to see our patterns honestly. McDonald's counts. Coffee counts. The fancy place counts. All of it.
-          </p>
-          <p className="mt-6 text-palate-mute">
-            — Kenton McNeal, founder ·{" "}
-            <Link href="/about" className="text-palate-red hover:underline">
-              read more
-            </Link>
-          </p>
+          <div className="mt-8 grid sm:grid-cols-[120px_1fr] gap-6 sm:gap-8 items-start">
+            <div className="rounded-2xl overflow-hidden border border-palate-line bg-white aspect-square w-[120px] relative">
+              <Image
+                src="/founder.jpg"
+                alt="Kenton McNeal, founder of Palate"
+                fill
+                sizes="120px"
+                className="object-cover"
+              />
+            </div>
+            <div>
+              <p className="text-2xl sm:text-3xl font-medium tracking-tightish leading-snug">
+                I built Palate because I had no idea I went to Sweetgreen{" "}
+                <span className="text-palate-red">fourteen times</span> last month. Not because I love it — because it was on the way. We deserve to see our patterns honestly. McDonald's counts. Coffee counts. The fancy place counts. All of it.
+              </p>
+              <p className="mt-6 text-palate-mute">
+                — Kenton McNeal · Wharton MBA &apos;26 ·{" "}
+                <Link href="/about" className="text-palate-red hover:underline">
+                  read the whole story
+                </Link>
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -866,34 +890,6 @@ function RoadmapCard({
       </div>
       <h3 className="mt-2 font-semibold text-lg">{title}</h3>
       <p className="mt-2 text-palate-mute text-[15px] leading-relaxed">{body}</p>
-    </div>
-  );
-}
-
-function CompareRow({
-  label,
-  cells,
-  last,
-}: {
-  label: string;
-  cells: [string, string, string, string];
-  last?: boolean;
-}) {
-  return (
-    <div className={`grid grid-cols-5 text-sm ${last ? "" : "border-b border-palate-line"}`}>
-      <div className="p-4 text-left font-medium">{label}</div>
-      {cells.map((cell, i) => (
-        <div
-          key={i}
-          className={`p-4 text-center ${i === 0 ? "bg-palate-red/5" : ""}`}
-        >
-          {cell === "✓" ? (
-            <span className="text-palate-red font-bold">✓</span>
-          ) : (
-            <span className="text-palate-line">—</span>
-          )}
-        </div>
-      ))}
     </div>
   );
 }
