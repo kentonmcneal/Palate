@@ -72,10 +72,10 @@ const PERSONALITIES = [
 const FAQS = [
   {
     q: "Will Palate kill my battery?",
-    a: "No. We use the iPhone's lowest-power location signals (significant location changes), not continuous GPS. Most users see no measurable battery impact.",
+    a: "No. Palate only uses location when you open the app and tap to log a visit. Nothing runs in the background today, so there's no measurable battery impact. (Optional background detection is on the roadmap and will be opt-in.)",
   },
   {
-    q: "How accurate is the detection?",
+    q: "How accurate is finding the right place?",
     a: "Very good for sit-down spots; pretty good for fast casual; sometimes wrong for big food courts or dense streets. That's why we always ask before saving — and let you pick the right place.",
   },
   {
@@ -169,7 +169,7 @@ export default async function Page() {
             <span className="text-palate-red">actually</span> eat.
           </h1>
           <p className="mt-6 text-lg sm:text-xl text-palate-mute max-w-2xl mx-auto leading-relaxed">
-            Palate quietly notices when you're at a restaurant, café, food truck, or drive-thru — and turns your week into a beautiful, shareable Wrapped.
+            One tap when you arrive at a restaurant, café, food truck, or drive-thru — and your week becomes a beautiful, shareable Wrapped.
           </p>
 
           <HeroWaitlist initialCount={waitlistCount} />
@@ -308,7 +308,7 @@ export default async function Page() {
               <div className="mt-2">
                 <div className="text-base font-semibold">A 3-second flow</div>
                 <p className="text-palate-mute text-sm mt-1 leading-relaxed">
-                  Notice → confirm → see your week. No reviews, no ratings, no photos.
+                  Tap → confirm → see your week. No reviews, no ratings, no photos.
                 </p>
               </div>
             </div>
@@ -465,15 +465,15 @@ export default async function Page() {
           <div className="grid md:grid-cols-3 gap-6 mt-12">
             <Step
               n={1}
-              title="It just runs"
-              body="Palate uses your phone's location to notice when you're somewhere food is served. No check-ins, no photos, no rating anything."
+              title="One tap, that's it"
+              body="When you arrive somewhere, open Palate and tap once. We use your location to find what's around you — no check-ins, no photos, no rating anything."
             />
             <Step
               n={2}
-              title="A quick tap"
+              title="Confirm the spot"
               body={
                 <>
-                  When we think you're at a spot, we ask: <em>Are you eating here?</em> Yes, no, or pick the right place.
+                  Palate shows the most likely place and asks: <em>Are you eating here?</em> Yes, no, or pick the right place.
                 </>
               }
             />
