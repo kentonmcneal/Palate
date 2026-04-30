@@ -8,23 +8,29 @@
     "scheme": "palate",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
+    "primaryColor": "#FF3008",
+    "description": "See what you actually eat. A weekly Wrapped of your real eating life — privacy-first, no public profiles.",
     "splash": {
       "image": "./assets/splash.png",
-      "resizeMode": "cover",
+      "resizeMode": "contain",
       "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.palate.ios",
+      "buildNumber": "1",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Palate uses your location only when the app is open, to detect which restaurant or café you may be eating at. We never share or sell your location.",
+        "NSUserNotificationsUsageDescription": "We send a single notification on Sunday morning when your weekly Wrapped is ready. You can turn this off in Settings.",
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "associatedDomains": ["applinks:palate.app"]
     },
     "android": {
       "package": "app.palate.android",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FF3008"
       },
       "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
@@ -36,6 +42,13 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Palate uses your location to detect when you may be at a restaurant. You can disable this anytime in Settings."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#FF3008"
+        }
       ]
     ],
     "experiments": {
@@ -44,6 +57,9 @@
     "extra": {
       "router": {
         "origin": false
+      },
+      "eas": {
+        "projectId": ""
       }
     }
   }
