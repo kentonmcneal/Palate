@@ -159,6 +159,8 @@ function ResultCard({
       ? `${window.location.origin}/api/palate-card/${personaKey}`
       : `/api/palate-card/${personaKey}`;
 
+  const [igLabel, setIgLabel] = useState("Post to Instagram");
+
   async function handleShare() {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://palate.app";
     // Share a link to the per-persona landing page so previews render the OG card.
@@ -185,6 +187,61 @@ function ResultCard({
     } catch {
       setShareLabel("Couldn't share");
       setTimeout(() => setShareLabel("Share my Palate"), 2200);
+    }
+  }
+
+  /**
+   * "Post to Instagram" handler.
+   * Strategy:
+   *   1. Fetch the persona share-card PNG (1080x1080, square — fits IG feed
+   *      and IG Stories with bars).
+   *   2. On mobile with Web Share Level 2 (file sharing): try
+   *      navigator.share({ files: [...] }). The native share sheet then
+   *      lists Instagram as a destination.
+   *   3. Fallback (desktop / older browsers): trigger a download with
+   *      a one-line instruction toast.
+   */
+  async function handleInstagram() {
+    QuizEvents.shareCardClicked({ persona: personaKey, method: "native" }); // logged with method=native; could split later
+    setIgLabel("Saving image…");
+    try {
+      const resp = await fetch(cardUrl);
+      if (!resp.ok) throw new Error(`fetch ${resp.status}`);
+      const blob = await resp.blob();
+      const fileName = `palate-${personaKey}.png`;
+      const file = new File([blob], fileName, { type: "image/png" });
+
+      // Try native file-share first (mobile Safari / Chrome on iOS+Android).
+      const nav = typeof navigator !== "undefined" ? (navigator as Navigator & { canShare?: (data: ShareData) => boolean }) : null;
+      if (nav && nav.canShare && nav.canShare({ files: [file] }) && nav.share) {
+        try {
+          await nav.share({
+            files: [file],
+            title: `My Palate: ${persona.label}`,
+            text: `I'm ${persona.label} on Palate.`,
+          });
+          setIgLabel("Posted ✓");
+          setTimeout(() => setIgLabel("Post to Instagram"), 2200);
+          return;
+        } catch {
+          // User cancelled or sheet failed — fall through to download.
+        }
+      }
+
+      // Fallback: download the file and instruct.
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setIgLabel("Saved! Open IG to post →");
+      setTimeout(() => setIgLabel("Post to Instagram"), 3500);
+    } catch {
+      setIgLabel("Couldn't save");
+      setTimeout(() => setIgLabel("Post to Instagram"), 2200);
     }
   }
 
@@ -261,8 +318,8 @@ function ResultCard({
           </p>
         </div>
 
-        {/* CTAs */}
-        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+        {/* Primary CTA */}
+        <div className="mt-8 flex justify-center">
           <a
             href="#waitlist"
             onClick={() => QuizEvents.saveMyPalateClicked({ persona: personaKey })}
@@ -270,12 +327,23 @@ function ResultCard({
           >
             Save my Palate · Join the waitlist
           </a>
+        </div>
+
+        {/* Secondary share row */}
+        <div className="mt-3 flex flex-col sm:flex-row items-center justify-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleInstagram}
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/30 text-white/90 px-5 py-2.5 text-sm font-semibold hover:bg-white/10"
+          >
+            <span aria-hidden>📷</span> {igLabel}
+          </button>
           <button
             type="button"
             onClick={handleShare}
-            className="inline-flex rounded-full border border-white/30 text-white/85 px-5 py-3 text-sm font-semibold hover:bg-white/10"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/30 text-white/90 px-5 py-2.5 text-sm font-semibold hover:bg-white/10"
           >
-            {shareLabel}
+            <span aria-hidden>↗</span> {shareLabel}
           </button>
           <button
             type="button"

@@ -19,6 +19,7 @@ const SECTION_NAV = [
   { href: "#personalities", label: "Personalities" },
   { href: "#privacy", label: "Privacy" },
   { href: "#faq", label: "FAQ" },
+  { href: "/about", label: "About" },
 ];
 
 const CATEGORIES = [
