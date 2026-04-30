@@ -1,0 +1,997 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="theme-color" content="#FF3008" />
+<title>Palate — See what you actually eat</title>
+<meta name="description" content="Palate quietly notices when you're at a restaurant, café, or drive-thru — and turns your week into a beautiful, shareable Wrapped. Privacy-first. iOS coming soon." />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="apple-touch-icon" href="favicon.svg" />
+
+<!-- Open Graph / social -->
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Palate — See what you actually eat" />
+<meta property="og:description" content="A weekly Wrapped of your real eating life. Privacy-first. iOS coming soon." />
+<meta property="og:image" content="og-image.png" />
+<meta property="og:url" content="https://palate.app" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Palate — See what you actually eat" />
+<meta name="twitter:description" content="A weekly Wrapped of your real eating life." />
+<meta name="twitter:image" content="og-image.png" />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          palate: { red: "#FF3008", ink: "#111111", paper: "#FFFFFF", mute: "#717171", line: "#EBEBEB", soft: "#F7F7F7" },
+        },
+        letterSpacing: { tightest: "-0.04em", tightish: "-0.02em" },
+        boxShadow: {
+          card: "0 1px 2px rgba(0,0,0,0.04), 0 6px 16px rgba(0,0,0,0.04)",
+          cardHover: "0 4px 12px rgba(0,0,0,0.08), 0 16px 32px rgba(0,0,0,0.06)",
+        },
+      },
+    },
+  };
+</script>
+
+<!-- Plausible analytics (privacy-friendly, no cookies). Activate by setting domain when live. -->
+<!-- <script defer data-domain="palate.app" src="https://plausible.io/js/script.js"></script> -->
+
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Helvetica, sans-serif; color: #111; background: #fff; }
+  ::selection { background: #FF3008; color: #fff; }
+  *:focus-visible { outline: 3px solid rgba(255,48,8,.45); outline-offset: 2px; border-radius: 4px; }
+  .ease-card { transition: transform .15s ease, box-shadow .2s ease; }
+  .card-hover:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.08), 0 16px 32px rgba(0,0,0,.06); }
+  .h-scroll { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 8px; }
+  .h-scroll::-webkit-scrollbar { height: 0; }
+  .h-scroll > * { scroll-snap-align: start; flex-shrink: 0; }
+
+  /* mini phone mock */
+  .mini-phone { width: 260px; height: 540px; background: #1a1a1a; border-radius: 38px; padding: 7px; box-shadow: 0 30px 60px -20px rgba(0,0,0,.3), 0 20px 40px -25px rgba(0,0,0,.4); }
+  .mini-screen { width: 100%; height: 100%; background: #fff; border-radius: 31px; overflow: hidden; position: relative; }
+  .mini-notch { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 80px; height: 22px; background: #000; border-radius: 999px; z-index: 5; }
+
+  /* faq */
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] .chev { transform: rotate(180deg); }
+  .chev { transition: transform .2s; }
+
+  /* small wrapped card glow */
+  .glow-r { position: absolute; top:-50px; right:-40px; width: 160px; height: 160px; border-radius: 9999px; background: #FF3008; opacity: .35; filter: blur(40px); }
+
+  /* Animated demo: cycles through 3 phone states every 12s */
+  .demo-cycle .demo-state { position: absolute; inset: 0; opacity: 0; transition: opacity .6s ease; }
+  .demo-cycle .demo-state.s1 { animation: showS1 12s infinite; }
+  .demo-cycle .demo-state.s2 { animation: showS2 12s infinite; }
+  .demo-cycle .demo-state.s3 { animation: showS3 12s infinite; }
+  @keyframes showS1 { 0%,28% { opacity: 1; } 33%,100% { opacity: 0; } }
+  @keyframes showS2 { 0%,33% { opacity: 0; } 38%,61% { opacity: 1; } 66%,100% { opacity: 0; } }
+  @keyframes showS3 { 0%,66% { opacity: 0; } 71%,95% { opacity: 1; } 100% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .demo-cycle .demo-state { animation: none !important; }
+    .demo-cycle .demo-state.s1 { opacity: 1; }
+    .demo-cycle .demo-state.s2, .demo-cycle .demo-state.s3 { opacity: 0; }
+  }
+
+  /* App Store badge */
+  .as-badge { display: inline-flex; align-items: center; gap: 8px; background: #111; color: #fff; padding: 8px 14px; border-radius: 10px; font-size: 12px; line-height: 1.1; text-decoration: none; transition: opacity .15s; }
+  .as-badge:hover { opacity: .85; }
+  .as-badge .as-eyebrow { font-size: 10px; opacity: .8; letter-spacing: .04em; }
+  .as-badge .as-name { font-size: 16px; font-weight: 600; }
+
+  /* Cookie banner */
+  .cookie-bar { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); width: calc(100% - 24px); max-width: 720px; background: #111; color: #fff; border-radius: 16px; padding: 14px 18px; display: flex; gap: 14px; align-items: center; box-shadow: 0 20px 40px rgba(0,0,0,.2); z-index: 60; transition: opacity .25s, transform .25s; }
+  .cookie-bar.hide { opacity: 0; transform: translate(-50%, 20px); pointer-events: none; }
+
+  /* Mobile drawer */
+  .drawer { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 50; display: none; }
+  .drawer.open { display: block; }
+  .drawer-panel { position: absolute; top: 0; right: 0; width: min(86vw, 360px); height: 100%; background: #fff; padding: 24px; box-shadow: -20px 0 40px rgba(0,0,0,.1); animation: slideIn .25s ease; }
+  @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+  /* Personality gallery: subtle scroll fade on edges */
+  .gallery-wrap { position: relative; }
+  .gallery-wrap::after { content: ""; position: absolute; right: 0; top: 0; height: 100%; width: 80px; background: linear-gradient(to right, transparent, #fff); pointer-events: none; }
+</style>
+</head>
+<body class="min-h-screen">
+
+  <!-- ============== NAV ============== -->
+  <header class="border-b border-palate-line sticky top-0 bg-white/90 backdrop-blur z-40">
+    <div class="max-w-7xl mx-auto px-6 h-[80px] flex items-center justify-between">
+      <a href="preview.html" class="flex items-center gap-2.5" aria-label="Palate home">
+        <svg width="32" height="32" viewBox="0 0 64 64" aria-hidden="true">
+          <rect width="64" height="64" rx="16" fill="#FF3008"/>
+          <rect x="19" y="14" width="7" height="38" rx="3.5" fill="#fff"/>
+          <path d="M 26 16 H 36 a 12 12 0 0 1 0 24 H 26 Z" fill="#fff"/>
+          <circle cx="34" cy="28" r="4" fill="#FF3008"/>
+        </svg>
+        <span class="text-xl font-semibold tracking-tightish">palate</span>
+      </a>
+      <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-palate-ink">
+        <a href="#how" class="hover:text-palate-red">How it works</a>
+        <a href="#personalities" class="hover:text-palate-red">Personalities</a>
+        <a href="#pricing" class="hover:text-palate-red">Pricing</a>
+        <a href="#privacy" class="hover:text-palate-red">Privacy</a>
+        <a href="#faq" class="hover:text-palate-red">FAQ</a>
+      </nav>
+      <div class="flex items-center gap-3">
+        <a href="#waitlist" class="hidden sm:inline-flex rounded-full bg-palate-ink text-white px-5 py-2.5 text-sm font-semibold hover:opacity-90">Get early access</a>
+        <button id="navToggle" class="md:hidden w-10 h-10 rounded-full border border-palate-line flex items-center justify-center" aria-label="Open menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile drawer -->
+  <div id="drawer" class="drawer" role="dialog" aria-label="Menu" aria-modal="true">
+    <div class="drawer-panel">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <svg width="28" height="28" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#FF3008"/><rect x="19" y="14" width="7" height="38" rx="3.5" fill="#fff"/><path d="M 26 16 H 36 a 12 12 0 0 1 0 24 H 26 Z" fill="#fff"/><circle cx="34" cy="28" r="4" fill="#FF3008"/></svg>
+          <span class="text-lg font-semibold tracking-tightish">palate</span>
+        </div>
+        <button id="drawerClose" class="w-10 h-10 rounded-full border border-palate-line flex items-center justify-center" aria-label="Close menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+        </button>
+      </div>
+      <nav class="mt-8 flex flex-col gap-1 text-lg font-medium" id="drawerNav">
+        <a href="#how" class="py-3 border-b border-palate-line">How it works</a>
+        <a href="#personalities" class="py-3 border-b border-palate-line">Personalities</a>
+        <a href="#pricing" class="py-3 border-b border-palate-line">Pricing</a>
+        <a href="#privacy" class="py-3 border-b border-palate-line">Privacy</a>
+        <a href="#faq" class="py-3 border-b border-palate-line">FAQ</a>
+        <a href="press.html" class="py-3 border-b border-palate-line">Press</a>
+      </nav>
+      <a href="#waitlist" id="drawerCTA" class="mt-8 block w-full text-center rounded-full bg-palate-red text-white px-5 py-3 text-sm font-semibold hover:opacity-90">Get early access</a>
+    </div>
+  </div>
+
+  <!-- ============== HERO ============== -->
+  <section class="bg-white">
+    <div class="max-w-7xl mx-auto px-6 pt-20 pb-12 text-center">
+      <span class="inline-block rounded-full bg-palate-soft text-palate-ink px-3 py-1 text-xs font-semibold tracking-wider uppercase">Coming soon · iOS</span>
+      <h1 class="mt-6 text-5xl sm:text-6xl lg:text-[80px] font-semibold tracking-tightest leading-[1.02] max-w-4xl mx-auto">
+        See what you<br/><span class="text-palate-red">actually</span> eat.
+      </h1>
+      <p class="mt-6 text-lg sm:text-xl text-palate-mute max-w-2xl mx-auto leading-relaxed">
+        Palate quietly notices when you're at a restaurant, café, food truck, or drive-thru — and turns your week into a beautiful, shareable Wrapped.
+      </p>
+
+      <!-- Waitlist form (Airbnb-search-bar style) -->
+      <form id="heroForm" class="mt-10 max-w-xl mx-auto flex items-center bg-white border border-palate-line rounded-full pl-6 pr-2 py-2 shadow-card focus-within:shadow-cardHover transition-shadow" novalidate>
+        <input type="email" name="email" placeholder="you@email.com" required aria-label="Email address"
+               class="flex-1 bg-transparent outline-none text-base placeholder-palate-mute py-2" />
+        <button type="submit" class="rounded-full bg-palate-red text-white font-semibold px-6 h-12 hover:opacity-90 disabled:opacity-50">Join waitlist</button>
+      </form>
+      <div id="heroFormMsg" class="mt-3 text-sm text-palate-mute">
+        <span id="waitlistCount" class="font-semibold text-palate-ink">352</span> people on the list · Free during beta · No spam, ever
+      </div>
+
+      <!-- Success state (hidden by default) -->
+      <div id="heroSuccess" class="hidden mt-8 max-w-xl mx-auto rounded-2xl border border-palate-line bg-palate-soft p-6 text-left">
+        <div class="flex items-start gap-4">
+          <div class="w-10 h-10 rounded-full bg-palate-red text-white flex items-center justify-center text-lg font-bold flex-shrink-0">✓</div>
+          <div class="flex-1">
+            <div class="font-semibold text-lg">You're on the list.</div>
+            <div class="text-palate-mute text-sm mt-1">We'll email you in late summer when iOS testing opens. <span class="font-medium text-palate-ink">Until then, nothing else.</span></div>
+            <div class="mt-4 flex items-center justify-between gap-3 flex-wrap">
+              <div class="text-xs uppercase tracking-widest text-palate-mute font-semibold">Your position: <span id="positionNum" class="text-palate-red text-base">#353</span></div>
+              <div class="flex gap-2">
+                <button id="shareTwitter" class="rounded-full border border-palate-line px-4 py-2 text-xs font-semibold hover:bg-white">Share on X</button>
+                <button id="shareCopy" class="rounded-full border border-palate-line px-4 py-2 text-xs font-semibold hover:bg-white">Copy link</button>
+              </div>
+            </div>
+            <div class="text-xs text-palate-mute mt-2">Skip 50 spots when 3 friends sign up via your link.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- App Store coming-soon badge -->
+      <div class="mt-8 flex items-center justify-center gap-3">
+        <span class="as-badge" aria-label="Coming soon to the App Store">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M16.4 12.7c-.04-2.5 2-3.7 2.1-3.8-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.7 0-1.9-.9-3.2-.8-1.6 0-3.1 1-3.9 2.4-1.7 2.9-.4 7.2 1.2 9.5.8 1.2 1.7 2.4 3 2.4 1.2 0 1.7-.8 3.2-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8-.1 0-2.5-1-2.5-3.5zM14 5.4c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.6 2.8-1.4z"/></svg>
+          <span><span class="as-eyebrow block">COMING SOON ON</span><span class="as-name">App Store</span></span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Hero cards grid -->
+    <div class="max-w-7xl mx-auto px-6 pb-24">
+      <div class="grid lg:grid-cols-3 gap-6">
+
+        <!-- Card 1: animated phone demo -->
+        <div class="rounded-3xl border border-palate-line bg-white p-6 ease-card card-hover">
+          <div class="flex justify-center py-4">
+            <div class="mini-phone">
+              <div class="mini-screen">
+                <div class="mini-notch"></div>
+                <div class="px-4 pt-10 demo-cycle relative" style="height: calc(100% - 2.5rem);">
+
+                  <!-- State 1: Home / "Are you eating somewhere?" -->
+                  <div class="demo-state s1">
+                    <div class="flex items-center gap-2">
+                      <svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#FF3008"/><rect x="19" y="14" width="7" height="38" rx="3.5" fill="#fff"/><path d="M 26 16 H 36 a 12 12 0 0 1 0 24 H 26 Z" fill="#fff"/><circle cx="34" cy="28" r="4" fill="#FF3008"/></svg>
+                      <span class="font-semibold tracking-tightish">palate</span>
+                    </div>
+                    <div class="mt-5 rounded-2xl bg-palate-soft p-4">
+                      <div class="text-[10px] font-bold text-palate-mute tracking-widest">RIGHT NOW</div>
+                      <div class="text-base font-bold mt-1 leading-snug">Are you eating somewhere?</div>
+                      <div class="text-xs text-palate-mute mt-1">Tap to check what's around you.</div>
+                      <div class="mt-3 w-full bg-palate-red text-white text-sm font-semibold rounded-full h-9 flex items-center justify-center">Check now</div>
+                    </div>
+                    <div class="mt-5">
+                      <div class="text-base font-bold">Recent</div>
+                      <div class="flex items-center gap-2 py-2 border-b border-palate-line"><div class="w-2 h-2 rounded-full bg-palate-red"></div><div class="text-xs"><div class="font-semibold">Sweetgreen</div><div class="text-palate-mute">Tue · 12:34 PM</div></div></div>
+                      <div class="flex items-center gap-2 py-2 border-b border-palate-line"><div class="w-2 h-2 rounded-full bg-palate-red"></div><div class="text-xs"><div class="font-semibold">Joe &amp; The Juice</div><div class="text-palate-mute">Tue · 9:02 AM</div></div></div>
+                    </div>
+                  </div>
+
+                  <!-- State 2: Confirm visit prompt -->
+                  <div class="demo-state s2 px-1 flex flex-col">
+                    <div class="text-[10px] font-bold text-palate-mute tracking-widest">CONFIRM VISIT</div>
+                    <div class="mt-2 rounded-2xl border border-palate-line p-4">
+                      <div class="text-xs text-palate-mute">We think you're at</div>
+                      <div class="mt-1 text-lg font-bold tracking-tightish leading-snug">Joe's Pizza</div>
+                      <div class="mt-1 text-xs text-palate-mute">Bleecker St · 0.02 mi</div>
+                    </div>
+                    <div class="mt-3 text-sm font-bold">Are you eating here?</div>
+                    <button class="mt-3 w-full bg-palate-red text-white text-sm font-semibold rounded-full h-10">Yes, save it</button>
+                    <button class="mt-2 w-full bg-white border border-palate-line text-sm font-medium rounded-full h-10">Wrong restaurant</button>
+                    <button class="mt-2 w-full bg-white text-palate-mute text-sm font-medium rounded-full h-10">Not now</button>
+                  </div>
+
+                  <!-- State 3: Wrapped reveal -->
+                  <div class="demo-state s3">
+                    <div class="text-[10px] font-bold text-palate-mute tracking-widest">SUNDAY</div>
+                    <div class="mt-2 rounded-2xl overflow-hidden text-white relative" style="background:linear-gradient(135deg,#1A1A1A,#0E0E0E); padding:18px;">
+                      <div class="glow-r"></div>
+                      <div class="relative">
+                        <div class="text-[9px] tracking-widest uppercase opacity-60">You are</div>
+                        <div class="text-[22px] font-extrabold tracking-tightest text-palate-red leading-tight">The Loyalist</div>
+                        <div class="mt-3 grid grid-cols-3 gap-1.5">
+                          <div class="rounded-lg bg-white/5 border border-white/10 p-1.5"><div class="text-sm font-bold">18</div><div class="text-[8px] uppercase opacity-60">visits</div></div>
+                          <div class="rounded-lg bg-white/5 border border-white/10 p-1.5"><div class="text-sm font-bold">4</div><div class="text-[8px] uppercase opacity-60">places</div></div>
+                          <div class="rounded-lg bg-white/5 border border-white/10 p-1.5"><div class="text-sm font-bold">78%</div><div class="text-[8px] uppercase opacity-60">repeat</div></div>
+                        </div>
+                      </div>
+                    </div>
+                    <button class="mt-3 w-full bg-palate-red text-white text-sm font-semibold rounded-full h-10">Share my Wrapped</button>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mt-2">
+            <div class="text-base font-semibold">A 3-second flow</div>
+            <p class="text-palate-mute text-sm mt-1 leading-relaxed">Notice → confirm → see your week. No reviews, no ratings, no photos.</p>
+          </div>
+        </div>
+
+        <!-- Card 2: Wrapped preview -->
+        <div class="rounded-3xl border border-palate-line bg-white p-6 ease-card card-hover">
+          <div class="flex justify-center py-4">
+            <div class="relative rounded-2xl overflow-hidden text-white" style="background:linear-gradient(135deg,#1A1A1A,#0E0E0E); width: 260px; padding: 22px;">
+              <div class="glow-r"></div>
+              <div class="relative">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#FF3008"/><rect x="19" y="14" width="7" height="38" rx="3.5" fill="#fff"/><path d="M 26 16 H 36 a 12 12 0 0 1 0 24 H 26 Z" fill="#fff"/><circle cx="34" cy="28" r="4" fill="#FF3008"/></svg>
+                    <span class="text-xs opacity-70">your week</span>
+                  </div>
+                  <span class="text-[10px] opacity-60">Apr 22 — Apr 28</span>
+                </div>
+                <div class="mt-5 text-[10px] tracking-widest uppercase opacity-60">You are</div>
+                <div class="text-xl font-extrabold tracking-tightish text-palate-red leading-tight">The Fast Casual Regular</div>
+                <div class="mt-4 grid grid-cols-3 gap-1.5">
+                  <div class="rounded-xl bg-white/5 border border-white/10 p-2"><div class="text-base font-bold">12</div><div class="text-[9px] uppercase tracking-widest opacity-60">visits</div></div>
+                  <div class="rounded-xl bg-white/5 border border-white/10 p-2"><div class="text-base font-bold">7</div><div class="text-[9px] uppercase tracking-widest opacity-60">places</div></div>
+                  <div class="rounded-xl bg-white/5 border border-white/10 p-2"><div class="text-base font-bold">42%</div><div class="text-[9px] uppercase tracking-widest opacity-60">repeat</div></div>
+                </div>
+                <div class="mt-4 text-[10px] tracking-widest uppercase opacity-60">Top spots</div>
+                <ol class="mt-1.5 space-y-1 text-[12px]">
+                  <li class="flex justify-between border-b border-white/10 pb-1"><span><span class="opacity-50 mr-1.5">1</span>Sweetgreen</span><span class="opacity-60">×4</span></li>
+                  <li class="flex justify-between border-b border-white/10 pb-1"><span><span class="opacity-50 mr-1.5">2</span>Joe &amp; The Juice</span><span class="opacity-60">×2</span></li>
+                  <li class="flex justify-between border-b border-white/10 pb-1"><span><span class="opacity-50 mr-1.5">3</span>Joe's Pizza</span><span class="opacity-60">×2</span></li>
+                </ol>
+              </div>
+            </div>
+          </div>
+          <div class="mt-2">
+            <div class="text-base font-semibold">Your weekly Wrapped</div>
+            <p class="text-palate-mute text-sm mt-1 leading-relaxed">A shareable card that turns last week into a personality.</p>
+          </div>
+        </div>
+
+        <!-- Card 3: Personality reveal -->
+        <div class="rounded-3xl border border-palate-line bg-white p-6 ease-card card-hover">
+          <div class="flex flex-col items-center text-center justify-center py-10 px-4 min-h-[540px]">
+            <div class="text-xs font-semibold text-palate-mute tracking-widest uppercase">Sunday morning</div>
+            <div class="mt-3 text-2xl font-semibold tracking-tightish leading-tight">You are</div>
+            <div class="mt-2 text-4xl font-extrabold tracking-tightest text-palate-red leading-tight">The Café<br/>Dweller</div>
+            <div class="mt-6 text-sm text-palate-mute max-w-[220px] leading-relaxed">"Five out of seven days, you started the week at Blue Bottle. Bold."</div>
+            <div class="mt-8 flex gap-2">
+              <span class="rounded-full bg-palate-soft px-3 py-1 text-xs font-medium">☕ Coffee</span>
+              <span class="rounded-full bg-palate-soft px-3 py-1 text-xs font-medium">🥐 Pastries</span>
+            </div>
+          </div>
+          <div class="mt-2">
+            <div class="text-base font-semibold">A personality, every Sunday</div>
+            <p class="text-palate-mute text-sm mt-1 leading-relaxed">Five archetypes. The honest one usually surprises you.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== CATEGORY STRIP ============== -->
+  <section class="border-y border-palate-line bg-white">
+    <div class="max-w-7xl mx-auto px-6 py-6">
+      <div class="h-scroll">
+        <div class="flex flex-col items-center gap-1 px-3 py-1 cursor-default opacity-80 hover:opacity-100"><span class="text-2xl leading-none">☕</span><span class="text-xs font-medium text-palate-mute">Coffee</span></div>
+        <div class="flex flex-col items-center gap-1 px-3 py-1 cursor-default opacity-80 hover:opacity-100"><span class="text-2xl leading-none">🥐</span><span class="text-xs font-medium text-palate-mute">Bakery</span></div>
+        <div class="flex flex-col items-center gap-1 px-3 py-1 cursor-default opacity-80 hover:opacity-100"><span class="text-2xl leading-none">🌮</span><span class="text-xs font-medium text-palate-mute">Tacos</span></div>
+        <div class="flex flex-col items-center gap-1 px-3 py-1 cursor-default opacity-80 hover:opacity-100"><span class="text-2xl leading-none">🍕</span><span class="text-xs font-medium text-palate-mute">Pizza</span></div>
+        <div class="flex flex-col items-center gap-1 px-3 py-1 cursor-default opacity-80 hover:opacity-100"><span class="text-2xl leading-none">🥗</span><span class="text-xs font-medium text-palate-mute">Fast casual</span></div>
+        <div class="flex flex-col items-center gap-1 px-3 py-1 cursor-default opacity-80 hover:opacity-100"><span class="text-2xl leading-none">🍔</span><span class="text-xs font-medium text-palate-mute">Burgers</span></div>
+        <div class="flex flex-col items-center gap-1 px-3 py-1 cursor-default opacity-80 hover:opacity-100"><span class="text-2xl leading-none">🍜</span><span class="text-xs font-medium text-palate-mute">Noodles</span></div>
+        <div class="flex flex-col items-center gap-1 px-3 py-1 cursor-default opacity-80 hover:opacity-100"><span class="text-2xl leading-none">🍣</span><span class="text-xs font-medium text-palate-mute">Sushi</span></div>
+        <div class="flex flex-col items-center gap-1 px-3 py-1 cursor-default opacity-80 hover:opacity-100"><span class="text-2xl leading-none">🍷</span><span class="text-xs font-medium text-palate-mute">Date night</span></div>
+        <div class="flex flex-col items-center gap-1 px-3 py-1 cursor-default opacity-80 hover:opacity-100"><span class="text-2xl leading-none">🍺</span><span class="text-xs font-medium text-palate-mute">Bars</span></div>
+        <div class="flex flex-col items-center gap-1 px-3 py-1 cursor-default opacity-80 hover:opacity-100"><span class="text-2xl leading-none">🚗</span><span class="text-xs font-medium text-palate-mute">Drive-thru</span></div>
+        <div class="flex flex-col items-center gap-1 px-3 py-1 cursor-default opacity-80 hover:opacity-100"><span class="text-2xl leading-none">🥞</span><span class="text-xs font-medium text-palate-mute">Brunch</span></div>
+        <div class="flex flex-col items-center gap-1 px-3 py-1 cursor-default opacity-80 hover:opacity-100"><span class="text-2xl leading-none">🧋</span><span class="text-xs font-medium text-palate-mute">Boba</span></div>
+        <div class="flex flex-col items-center gap-1 px-3 py-1 cursor-default opacity-80 hover:opacity-100"><span class="text-2xl leading-none">🍦</span><span class="text-xs font-medium text-palate-mute">Dessert</span></div>
+        <div class="flex flex-col items-center gap-1 px-3 py-1 cursor-default opacity-80 hover:opacity-100"><span class="text-2xl leading-none">🍱</span><span class="text-xs font-medium text-palate-mute">Lunch spots</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== HOOK STAT ============== -->
+  <section class="bg-white">
+    <div class="max-w-5xl mx-auto px-6 py-24 text-center">
+      <div class="text-xs font-semibold text-palate-mute tracking-widest uppercase">A reality check</div>
+      <h2 class="mt-3 text-4xl sm:text-6xl font-semibold tracking-tightest leading-[1.05]">
+        The average American eats out
+        <span class="text-palate-red">5.9× a week.</span>
+      </h2>
+      <p class="mt-5 text-lg text-palate-mute max-w-xl mx-auto">Most people guess two or three. Palate shows you the real number — and what it adds up to.</p>
+    </div>
+  </section>
+
+  <!-- ============== HOW IT WORKS ============== -->
+  <section id="how" class="bg-palate-soft">
+    <div class="max-w-7xl mx-auto px-6 py-24">
+      <div class="max-w-2xl">
+        <div class="text-xs font-semibold text-palate-mute tracking-widest uppercase">How it works</div>
+        <h2 class="mt-3 text-3xl sm:text-4xl font-semibold tracking-tightest">Three steps. Then it just runs.</h2>
+      </div>
+      <div class="grid md:grid-cols-3 gap-6 mt-12">
+        <div class="rounded-2xl bg-white border border-palate-line p-7 ease-card card-hover">
+          <div class="w-9 h-9 rounded-full bg-palate-red text-white font-bold flex items-center justify-center">1</div>
+          <h3 class="mt-5 text-lg font-semibold">It just runs</h3>
+          <p class="mt-2 text-palate-mute leading-relaxed text-[15px]">Palate uses your phone's location to notice when you're somewhere food is served. No check-ins, no photos, no rating anything.</p>
+        </div>
+        <div class="rounded-2xl bg-white border border-palate-line p-7 ease-card card-hover">
+          <div class="w-9 h-9 rounded-full bg-palate-red text-white font-bold flex items-center justify-center">2</div>
+          <h3 class="mt-5 text-lg font-semibold">A quick tap</h3>
+          <p class="mt-2 text-palate-mute leading-relaxed text-[15px]">When we think you're at a spot, we ask: <em>Are you eating here?</em> Yes, no, or pick the right place.</p>
+        </div>
+        <div class="rounded-2xl bg-white border border-palate-line p-7 ease-card card-hover">
+          <div class="w-9 h-9 rounded-full bg-palate-red text-white font-bold flex items-center justify-center">3</div>
+          <h3 class="mt-5 text-lg font-semibold">Your Wrapped</h3>
+          <p class="mt-2 text-palate-mute leading-relaxed text-[15px]">Every Sunday, get a shareable summary of your real eating week — repeats, new spots, the stat that makes you laugh.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== SAMPLE WRAPPED GALLERY ============== -->
+  <section class="bg-white">
+    <div class="max-w-7xl mx-auto px-6 py-24">
+      <div class="max-w-2xl">
+        <div class="text-xs font-semibold text-palate-mute tracking-widest uppercase">Sample Wrapped</div>
+        <h2 class="mt-3 text-3xl sm:text-4xl font-semibold tracking-tightest">Three real weeks, three different lives.</h2>
+        <p class="mt-3 text-palate-mute">A glimpse of what Sunday morning looks like.</p>
+      </div>
+      <div class="mt-12 grid md:grid-cols-3 gap-6">
+
+        <!-- Loyalist -->
+        <div class="rounded-3xl border border-palate-line bg-white p-6 ease-card card-hover">
+          <div class="flex justify-center">
+            <div class="relative rounded-2xl overflow-hidden text-white" style="background:linear-gradient(135deg,#1A1A1A,#0E0E0E); width: 100%; max-width: 320px; padding: 22px;">
+              <div class="glow-r"></div>
+              <div class="relative">
+                <div class="text-[10px] tracking-widest uppercase opacity-60">You are</div>
+                <div class="text-2xl font-extrabold tracking-tightish text-palate-red leading-tight">The Loyalist</div>
+                <div class="mt-4 grid grid-cols-3 gap-1.5">
+                  <div class="rounded-xl bg-white/5 border border-white/10 p-2"><div class="text-base font-bold">18</div><div class="text-[9px] uppercase tracking-widest opacity-60">visits</div></div>
+                  <div class="rounded-xl bg-white/5 border border-white/10 p-2"><div class="text-base font-bold">4</div><div class="text-[9px] uppercase tracking-widest opacity-60">places</div></div>
+                  <div class="rounded-xl bg-white/5 border border-white/10 p-2"><div class="text-base font-bold">78%</div><div class="text-[9px] uppercase tracking-widest opacity-60">repeat</div></div>
+                </div>
+                <div class="mt-4 text-[10px] tracking-widest uppercase opacity-60">Top spots</div>
+                <ol class="mt-1.5 space-y-1 text-[12px]">
+                  <li class="flex justify-between border-b border-white/10 pb-1"><span><span class="opacity-50 mr-1.5">1</span>Sweetgreen</span><span class="opacity-60">×8</span></li>
+                  <li class="flex justify-between border-b border-white/10 pb-1"><span><span class="opacity-50 mr-1.5">2</span>Joe &amp; The Juice</span><span class="opacity-60">×5</span></li>
+                  <li class="flex justify-between border-b border-white/10 pb-1"><span><span class="opacity-50 mr-1.5">3</span>Joe's Pizza</span><span class="opacity-60">×3</span></li>
+                </ol>
+              </div>
+            </div>
+          </div>
+          <div class="mt-4 text-center">
+            <div class="text-sm font-semibold">When you find your spots and stick with them.</div>
+          </div>
+        </div>
+
+        <!-- Explorer -->
+        <div class="rounded-3xl border border-palate-line bg-white p-6 ease-card card-hover">
+          <div class="flex justify-center">
+            <div class="relative rounded-2xl overflow-hidden text-white" style="background:linear-gradient(135deg,#1A1A1A,#0E0E0E); width: 100%; max-width: 320px; padding: 22px;">
+              <div class="glow-r"></div>
+              <div class="relative">
+                <div class="text-[10px] tracking-widest uppercase opacity-60">You are</div>
+                <div class="text-2xl font-extrabold tracking-tightish text-palate-red leading-tight">The Explorer</div>
+                <div class="mt-4 grid grid-cols-3 gap-1.5">
+                  <div class="rounded-xl bg-white/5 border border-white/10 p-2"><div class="text-base font-bold">11</div><div class="text-[9px] uppercase tracking-widest opacity-60">visits</div></div>
+                  <div class="rounded-xl bg-white/5 border border-white/10 p-2"><div class="text-base font-bold">10</div><div class="text-[9px] uppercase tracking-widest opacity-60">places</div></div>
+                  <div class="rounded-xl bg-white/5 border border-white/10 p-2"><div class="text-base font-bold">9%</div><div class="text-[9px] uppercase tracking-widest opacity-60">repeat</div></div>
+                </div>
+                <div class="mt-4 text-[10px] tracking-widest uppercase opacity-60">New this week</div>
+                <ol class="mt-1.5 space-y-1 text-[12px]">
+                  <li class="flex justify-between border-b border-white/10 pb-1"><span><span class="opacity-50 mr-1.5">·</span>Bonnie's</span><span class="opacity-60">new</span></li>
+                  <li class="flex justify-between border-b border-white/10 pb-1"><span><span class="opacity-50 mr-1.5">·</span>Le Crocodile</span><span class="opacity-60">new</span></li>
+                  <li class="flex justify-between border-b border-white/10 pb-1"><span><span class="opacity-50 mr-1.5">·</span>Shukette</span><span class="opacity-60">new</span></li>
+                </ol>
+              </div>
+            </div>
+          </div>
+          <div class="mt-4 text-center">
+            <div class="text-sm font-semibold">When you can't help trying the new place.</div>
+          </div>
+        </div>
+
+        <!-- Café Dweller -->
+        <div class="rounded-3xl border border-palate-line bg-white p-6 ease-card card-hover">
+          <div class="flex justify-center">
+            <div class="relative rounded-2xl overflow-hidden text-white" style="background:linear-gradient(135deg,#1A1A1A,#0E0E0E); width: 100%; max-width: 320px; padding: 22px;">
+              <div class="glow-r"></div>
+              <div class="relative">
+                <div class="text-[10px] tracking-widest uppercase opacity-60">You are</div>
+                <div class="text-2xl font-extrabold tracking-tightish text-palate-red leading-tight">The Café Dweller</div>
+                <div class="mt-4 grid grid-cols-3 gap-1.5">
+                  <div class="rounded-xl bg-white/5 border border-white/10 p-2"><div class="text-base font-bold">14</div><div class="text-[9px] uppercase tracking-widest opacity-60">visits</div></div>
+                  <div class="rounded-xl bg-white/5 border border-white/10 p-2"><div class="text-base font-bold">3</div><div class="text-[9px] uppercase tracking-widest opacity-60">places</div></div>
+                  <div class="rounded-xl bg-white/5 border border-white/10 p-2"><div class="text-base font-bold">5/7</div><div class="text-[9px] uppercase tracking-widest opacity-60">mornings</div></div>
+                </div>
+                <div class="mt-4 text-[10px] tracking-widest uppercase opacity-60">Your morning crew</div>
+                <ol class="mt-1.5 space-y-1 text-[12px]">
+                  <li class="flex justify-between border-b border-white/10 pb-1"><span><span class="opacity-50 mr-1.5">1</span>Blue Bottle</span><span class="opacity-60">×7</span></li>
+                  <li class="flex justify-between border-b border-white/10 pb-1"><span><span class="opacity-50 mr-1.5">2</span>Devoción</span><span class="opacity-60">×4</span></li>
+                  <li class="flex justify-between border-b border-white/10 pb-1"><span><span class="opacity-50 mr-1.5">3</span>Maman</span><span class="opacity-60">×3</span></li>
+                </ol>
+              </div>
+            </div>
+          </div>
+          <div class="mt-4 text-center">
+            <div class="text-sm font-semibold">When the latte is the routine.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== PERSONALITIES ============== -->
+  <section id="personalities" class="bg-palate-soft">
+    <div class="max-w-7xl mx-auto px-6 py-24">
+      <div class="flex items-end justify-between flex-wrap gap-4">
+        <div>
+          <div class="text-xs font-semibold text-palate-mute tracking-widest uppercase">Personalities</div>
+          <h2 class="mt-3 text-3xl sm:text-4xl font-semibold tracking-tightest">Which one are you?</h2>
+          <p class="mt-2 text-palate-mute">Five archetypes. You'll find out at the end of your first week.</p>
+        </div>
+        <div class="text-sm text-palate-mute">Swipe →</div>
+      </div>
+
+      <div class="gallery-wrap mt-10">
+        <div class="h-scroll -mx-6 px-6">
+          <div class="w-[320px] rounded-3xl border border-palate-line bg-white p-7 ease-card card-hover">
+            <div class="text-4xl">🏆</div>
+            <div class="mt-5 text-2xl font-extrabold tracking-tightest text-palate-red leading-tight">The Loyalist</div>
+            <div class="mt-1 text-sm font-medium text-palate-ink">If a place is good, why fix it?</div>
+            <p class="mt-3 text-palate-mute text-[15px] leading-relaxed">You eat at the same 3 spots like clockwork.</p>
+          </div>
+          <div class="w-[320px] rounded-3xl border border-palate-line bg-white p-7 ease-card card-hover">
+            <div class="text-4xl">🧭</div>
+            <div class="mt-5 text-2xl font-extrabold tracking-tightest text-palate-red leading-tight">The Explorer</div>
+            <div class="mt-1 text-sm font-medium text-palate-ink">Three new spots a week, minimum.</div>
+            <p class="mt-3 text-palate-mute text-[15px] leading-relaxed">You haven't been to the same place twice in a month.</p>
+          </div>
+          <div class="w-[320px] rounded-3xl border border-palate-line bg-white p-7 ease-card card-hover">
+            <div class="text-4xl">🥗</div>
+            <div class="mt-5 text-2xl font-extrabold tracking-tightest text-palate-red leading-tight">The Fast Casual Regular</div>
+            <div class="mt-1 text-sm font-medium text-palate-ink">Healthy-ish, fast, on the way home.</div>
+            <p class="mt-3 text-palate-mute text-[15px] leading-relaxed">Your week runs on bowls and counter service.</p>
+          </div>
+          <div class="w-[320px] rounded-3xl border border-palate-line bg-white p-7 ease-card card-hover">
+            <div class="text-4xl">☕</div>
+            <div class="mt-5 text-2xl font-extrabold tracking-tightest text-palate-red leading-tight">The Café Dweller</div>
+            <div class="mt-1 text-sm font-medium text-palate-ink">Latte before Slack.</div>
+            <p class="mt-3 text-palate-mute text-[15px] leading-relaxed">Five out of seven mornings start the same way.</p>
+          </div>
+          <div class="w-[320px] rounded-3xl border border-palate-line bg-white p-7 ease-card card-hover">
+            <div class="text-4xl">🍕</div>
+            <div class="mt-5 text-2xl font-extrabold tracking-tightest text-palate-red leading-tight">The Comfort Food Connoisseur</div>
+            <div class="mt-1 text-sm font-medium text-palate-ink">Pizza is a personality trait.</div>
+            <p class="mt-3 text-palate-mute text-[15px] leading-relaxed">You eat what you actually want, and we love that for you.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== COMPARISON ============== -->
+  <section class="bg-white">
+    <div class="max-w-5xl mx-auto px-6 py-24">
+      <div class="text-xs font-semibold text-palate-mute tracking-widest uppercase">Why Palate</div>
+      <h2 class="mt-3 text-3xl sm:text-4xl font-semibold tracking-tightest">Not Yelp. Not Beli. Not Foursquare.</h2>
+      <p class="mt-3 text-palate-mute max-w-2xl">Other apps are about <em>opinions</em>. Palate is about <em>behavior</em> — what you actually do.</p>
+
+      <div class="mt-10 rounded-3xl border border-palate-line bg-white overflow-hidden">
+        <div class="grid grid-cols-5 text-center text-sm font-semibold border-b border-palate-line">
+          <div class="p-4 text-left text-palate-mute"></div>
+          <div class="p-4 bg-palate-red text-white">Palate</div>
+          <div class="p-4 text-palate-mute">Yelp</div>
+          <div class="p-4 text-palate-mute">Beli</div>
+          <div class="p-4 text-palate-mute">Foursquare</div>
+        </div>
+        <div class="grid grid-cols-5 text-sm border-b border-palate-line">
+          <div class="p-4 text-left font-medium">Tracks where you actually go</div>
+          <div class="p-4 text-center bg-palate-red/5"><span class="text-palate-red font-bold">✓</span></div>
+          <div class="p-4 text-center"><span class="text-palate-line">—</span></div>
+          <div class="p-4 text-center"><span class="text-palate-line">—</span></div>
+          <div class="p-4 text-center"><span class="text-palate-red font-bold">✓</span></div>
+        </div>
+        <div class="grid grid-cols-5 text-sm border-b border-palate-line">
+          <div class="p-4 text-left font-medium">Public reviews &amp; ratings</div>
+          <div class="p-4 text-center bg-palate-red/5"><span class="text-palate-line">—</span></div>
+          <div class="p-4 text-center"><span class="text-palate-red font-bold">✓</span></div>
+          <div class="p-4 text-center"><span class="text-palate-red font-bold">✓</span></div>
+          <div class="p-4 text-center"><span class="text-palate-red font-bold">✓</span></div>
+        </div>
+        <div class="grid grid-cols-5 text-sm border-b border-palate-line">
+          <div class="p-4 text-left font-medium">Social feed &amp; followers</div>
+          <div class="p-4 text-center bg-palate-red/5"><span class="text-palate-line">—</span></div>
+          <div class="p-4 text-center"><span class="text-palate-red font-bold">✓</span></div>
+          <div class="p-4 text-center"><span class="text-palate-red font-bold">✓</span></div>
+          <div class="p-4 text-center"><span class="text-palate-red font-bold">✓</span></div>
+        </div>
+        <div class="grid grid-cols-5 text-sm border-b border-palate-line">
+          <div class="p-4 text-left font-medium">Weekly Wrapped of your real life</div>
+          <div class="p-4 text-center bg-palate-red/5"><span class="text-palate-red font-bold">✓</span></div>
+          <div class="p-4 text-center"><span class="text-palate-line">—</span></div>
+          <div class="p-4 text-center"><span class="text-palate-line">—</span></div>
+          <div class="p-4 text-center"><span class="text-palate-line">—</span></div>
+        </div>
+        <div class="grid grid-cols-5 text-sm border-b border-palate-line">
+          <div class="p-4 text-left font-medium">Works for McDonald's, not just fancy spots</div>
+          <div class="p-4 text-center bg-palate-red/5"><span class="text-palate-red font-bold">✓</span></div>
+          <div class="p-4 text-center"><span class="text-palate-red font-bold">✓</span></div>
+          <div class="p-4 text-center"><span class="text-palate-line">—</span></div>
+          <div class="p-4 text-center"><span class="text-palate-red font-bold">✓</span></div>
+        </div>
+        <div class="grid grid-cols-5 text-sm">
+          <div class="p-4 text-left font-medium">Privacy-first, never sells data</div>
+          <div class="p-4 text-center bg-palate-red/5"><span class="text-palate-red font-bold">✓</span></div>
+          <div class="p-4 text-center"><span class="text-palate-line">—</span></div>
+          <div class="p-4 text-center"><span class="text-palate-line">—</span></div>
+          <div class="p-4 text-center"><span class="text-palate-line">—</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== PRIVACY ============== -->
+  <section id="privacy" class="bg-palate-soft">
+    <div class="max-w-7xl mx-auto px-6 py-24">
+      <div class="max-w-2xl">
+        <div class="text-xs font-semibold text-palate-mute tracking-widest uppercase">Privacy</div>
+        <h2 class="mt-3 text-3xl sm:text-4xl font-semibold tracking-tightest">Your data, your call.</h2>
+        <p class="mt-3 text-palate-mute">Palate is for <em>you</em>. There's no public profile, no friends, no comments. We don't sell your data and we don't show ads.</p>
+      </div>
+      <div class="grid md:grid-cols-4 gap-4 mt-10">
+        <div class="rounded-2xl border border-palate-line bg-white p-6 ease-card card-hover">
+          <h3 class="font-semibold">Pause anytime</h3>
+          <p class="mt-2 text-palate-mute text-[15px] leading-relaxed">Switch off location with one tap. Past visits stay; nothing new is recorded.</p>
+        </div>
+        <div class="rounded-2xl border border-palate-line bg-white p-6 ease-card card-hover">
+          <h3 class="font-semibold">Delete what you want</h3>
+          <p class="mt-2 text-palate-mute text-[15px] leading-relaxed">Single visits, a week, or every byte we have on you.</p>
+        </div>
+        <div class="rounded-2xl border border-palate-line bg-white p-6 ease-card card-hover">
+          <h3 class="font-semibold">No selling. Ever.</h3>
+          <p class="mt-2 text-palate-mute text-[15px] leading-relaxed">Restaurants don't see your name or email. We don't share or sell.</p>
+        </div>
+        <div class="rounded-2xl border border-palate-line bg-white p-6 ease-card card-hover">
+          <h3 class="font-semibold">No social anything</h3>
+          <p class="mt-2 text-palate-mute text-[15px] leading-relaxed">No feed, no followers, no likes. Just you and your week.</p>
+        </div>
+      </div>
+      <div class="mt-8"><a href="privacy.html" class="text-sm font-semibold text-palate-red hover:underline">Read the full privacy policy →</a></div>
+    </div>
+  </section>
+
+  <!-- ============== PRICING ============== -->
+  <section id="pricing" class="bg-white">
+    <div class="max-w-7xl mx-auto px-6 py-24">
+      <div class="max-w-2xl">
+        <div class="text-xs font-semibold text-palate-mute tracking-widest uppercase">Pricing</div>
+        <h2 class="mt-3 text-3xl sm:text-4xl font-semibold tracking-tightest">Honest pricing. No catch.</h2>
+        <p class="mt-3 text-palate-mute">We'd rather charge a few dollars than ever sell your data. Beta is free.</p>
+      </div>
+      <div class="grid md:grid-cols-3 gap-6 mt-12">
+        <div class="rounded-3xl border border-palate-line bg-white p-7 ease-card card-hover">
+          <div class="text-xs font-semibold text-palate-red tracking-widest uppercase">Right now</div>
+          <h3 class="mt-2 text-2xl font-semibold tracking-tightish">Beta</h3>
+          <div class="mt-4 text-4xl font-bold">Free</div>
+          <div class="text-sm text-palate-mute mt-1">Everything, no catch.</div>
+          <ul class="mt-6 space-y-2 text-[15px] text-palate-ink">
+            <li class="flex gap-2"><span class="text-palate-red">✓</span> Full visit history</li>
+            <li class="flex gap-2"><span class="text-palate-red">✓</span> Weekly Wrapped</li>
+            <li class="flex gap-2"><span class="text-palate-red">✓</span> Personality reveal</li>
+            <li class="flex gap-2"><span class="text-palate-red">✓</span> Privacy controls</li>
+          </ul>
+        </div>
+        <div class="rounded-3xl border-2 border-palate-red bg-white p-7 relative ease-card card-hover">
+          <div class="absolute -top-3 left-7 bg-palate-red text-white text-xs font-bold px-3 py-1 rounded-full">After beta — most likely</div>
+          <div class="text-xs font-semibold text-palate-mute tracking-widest uppercase">Forever free</div>
+          <h3 class="mt-2 text-2xl font-semibold tracking-tightish">Casual</h3>
+          <div class="mt-4 text-4xl font-bold">$0<span class="text-base font-medium text-palate-mute">/mo</span></div>
+          <div class="text-sm text-palate-mute mt-1">Always free, no ads.</div>
+          <ul class="mt-6 space-y-2 text-[15px] text-palate-ink">
+            <li class="flex gap-2"><span class="text-palate-red">✓</span> Last 4 weeks of visits</li>
+            <li class="flex gap-2"><span class="text-palate-red">✓</span> Weekly Wrapped</li>
+            <li class="flex gap-2"><span class="text-palate-red">✓</span> Personality reveal</li>
+            <li class="flex gap-2 text-palate-mute"><span>—</span> Full history archive</li>
+            <li class="flex gap-2 text-palate-mute"><span>—</span> Year in Review</li>
+          </ul>
+        </div>
+        <div class="rounded-3xl border border-palate-line bg-white p-7 ease-card card-hover">
+          <div class="text-xs font-semibold text-palate-mute tracking-widest uppercase">Eventually</div>
+          <h3 class="mt-2 text-2xl font-semibold tracking-tightish">Pro</h3>
+          <div class="mt-4 text-4xl font-bold">~$3<span class="text-base font-medium text-palate-mute">/mo</span></div>
+          <div class="text-sm text-palate-mute mt-1">Pays for the servers, no ads.</div>
+          <ul class="mt-6 space-y-2 text-[15px] text-palate-ink">
+            <li class="flex gap-2"><span class="text-palate-red">✓</span> Unlimited history</li>
+            <li class="flex gap-2"><span class="text-palate-red">✓</span> Year in Review</li>
+            <li class="flex gap-2"><span class="text-palate-red">✓</span> Spending trends</li>
+            <li class="flex gap-2"><span class="text-palate-red">✓</span> Custom Wrapped exports</li>
+            <li class="flex gap-2"><span class="text-palate-red">✓</span> Early access to new features</li>
+          </ul>
+        </div>
+      </div>
+      <p class="mt-8 text-sm text-palate-mute">No prices change without 30 days' notice. Beta users get permanent discounted Pro access if they want it.</p>
+    </div>
+  </section>
+
+  <!-- ============== FAQ ============== -->
+  <section id="faq" class="bg-palate-soft border-t border-palate-line">
+    <div class="max-w-3xl mx-auto px-6 py-24">
+      <div class="text-xs font-semibold text-palate-mute tracking-widest uppercase">FAQ</div>
+      <h2 class="mt-3 text-3xl sm:text-4xl font-semibold tracking-tightest">Things you might be wondering.</h2>
+      <div class="mt-10 divide-y divide-palate-line border-t border-b border-palate-line bg-white rounded-2xl px-2">
+        <details class="py-5 px-4 group">
+          <summary class="flex justify-between items-center gap-6">
+            <span class="font-semibold text-lg">Will Palate kill my battery?</span>
+            <svg class="chev w-5 h-5 text-palate-mute" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 8 l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </summary>
+          <p class="mt-3 text-palate-mute leading-relaxed">No. We use the iPhone's lowest-power location signals (significant location changes), not continuous GPS. Most users see no measurable battery impact.</p>
+        </details>
+        <details class="py-5 px-4 group">
+          <summary class="flex justify-between items-center gap-6">
+            <span class="font-semibold text-lg">How accurate is the detection?</span>
+            <svg class="chev w-5 h-5 text-palate-mute" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 8 l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </summary>
+          <p class="mt-3 text-palate-mute leading-relaxed">Very good for sit-down spots; pretty good for fast casual; sometimes wrong for big food courts or dense streets. That's why we always ask before saving — and let you pick the right place.</p>
+        </details>
+        <details class="py-5 px-4 group">
+          <summary class="flex justify-between items-center gap-6">
+            <span class="font-semibold text-lg">Is it free?</span>
+            <svg class="chev w-5 h-5 text-palate-mute" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 8 l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </summary>
+          <p class="mt-3 text-palate-mute leading-relaxed">Free during beta. Long-term, see <a href="#pricing" class="text-palate-red underline">Pricing</a> — there'll always be a free tier.</p>
+        </details>
+        <details class="py-5 px-4 group">
+          <summary class="flex justify-between items-center gap-6">
+            <span class="font-semibold text-lg">What about Android?</span>
+            <svg class="chev w-5 h-5 text-palate-mute" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 8 l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </summary>
+          <p class="mt-3 text-palate-mute leading-relaxed">Coming after iOS. We want one platform polished before splitting focus.</p>
+        </details>
+        <details class="py-5 px-4 group">
+          <summary class="flex justify-between items-center gap-6">
+            <span class="font-semibold text-lg">Why does Palate ask before saving?</span>
+            <svg class="chev w-5 h-5 text-palate-mute" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 8 l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </summary>
+          <p class="mt-3 text-palate-mute leading-relaxed">Because walking past a restaurant isn't the same as eating there. One tap from you is the only way to know for sure — and it keeps the data honest.</p>
+        </details>
+        <details class="py-5 px-4 group">
+          <summary class="flex justify-between items-center gap-6">
+            <span class="font-semibold text-lg">What does Palate do with my location?</span>
+            <svg class="chev w-5 h-5 text-palate-mute" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 8 l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </summary>
+          <p class="mt-3 text-palate-mute leading-relaxed">We use it only to find what's near you when you're considering a meal. We never share location with restaurants or sell it. You can pause or wipe it anytime. Read the <a href="privacy.html" class="text-palate-red underline">full policy</a>.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== ROADMAP ============== -->
+  <section class="bg-white">
+    <div class="max-w-5xl mx-auto px-6 py-24">
+      <div class="text-xs font-semibold text-palate-mute tracking-widest uppercase">Roadmap</div>
+      <h2 class="mt-3 text-3xl sm:text-4xl font-semibold tracking-tightest">What's coming next.</h2>
+      <div class="mt-10 grid md:grid-cols-3 gap-6">
+        <div class="rounded-2xl border border-palate-line p-6 ease-card card-hover">
+          <div class="text-xs uppercase tracking-widest font-semibold text-palate-red">Now</div>
+          <h3 class="mt-2 font-semibold text-lg">Wrapped, every Sunday</h3>
+          <p class="mt-2 text-palate-mute text-[15px] leading-relaxed">Visit detection, manual add, weekly Wrapped, personality reveal. iOS only.</p>
+        </div>
+        <div class="rounded-2xl border border-palate-line p-6 ease-card card-hover">
+          <div class="text-xs uppercase tracking-widest font-semibold text-palate-mute">Next</div>
+          <h3 class="mt-2 font-semibold text-lg">Background detection</h3>
+          <p class="mt-2 text-palate-mute text-[15px] leading-relaxed">Auto-prompts when you arrive somewhere. Year in Review. Android.</p>
+        </div>
+        <div class="rounded-2xl border border-palate-line p-6 ease-card card-hover">
+          <div class="text-xs uppercase tracking-widest font-semibold text-palate-mute">Later</div>
+          <h3 class="mt-2 font-semibold text-lg">Opt-in friends mode</h3>
+          <p class="mt-2 text-palate-mute text-[15px] leading-relaxed">Share Wrapped with a chosen group. Dining-out budget. Travel mode.</p>
+        </div>
+      </div>
+      <p class="mt-8 text-sm text-palate-mute">No ads, no public feed, ever. That's not on the roadmap because it's not a roadmap item — it's a foundation.</p>
+    </div>
+  </section>
+
+  <!-- ============== FOUNDER NOTE ============== -->
+  <section class="bg-palate-soft">
+    <div class="max-w-3xl mx-auto px-6 py-24">
+      <div class="text-xs font-semibold text-palate-mute tracking-widest uppercase">A note from us</div>
+      <p class="mt-5 text-2xl sm:text-3xl font-medium tracking-tightish leading-snug">
+        I built Palate because I had no idea I went to Sweetgreen <span class="text-palate-red">fourteen times</span> last month.
+        Not because I love it — because it was on the way. We deserve to see our patterns honestly. McDonald's counts. Coffee counts. The fancy place counts. All of it.
+      </p>
+      <p class="mt-6 text-palate-mute">— the team building Palate</p>
+    </div>
+  </section>
+
+  <!-- ============== FINAL CTA ============== -->
+  <section id="waitlist" class="bg-white">
+    <div class="max-w-5xl mx-auto px-6 py-24">
+      <div class="rounded-3xl border border-palate-line bg-white p-10 sm:p-14 shadow-card">
+        <div class="grid lg:grid-cols-2 gap-10 items-center">
+          <div>
+            <div class="text-xs font-semibold text-palate-red tracking-widest uppercase">Early access</div>
+            <h2 class="mt-3 text-3xl sm:text-5xl font-semibold tracking-tightest leading-tight">Be among the first to see your Palate Wrapped.</h2>
+            <p class="mt-4 text-palate-mute">Join the waitlist and we'll send you an invite when iOS testing opens up. <span class="text-palate-ink font-medium">That's the only email you'll get.</span></p>
+            <form id="ctaForm" class="mt-6 max-w-md flex items-center bg-white border border-palate-line rounded-full pl-6 pr-2 py-2 shadow-card focus-within:shadow-cardHover transition-shadow" novalidate>
+              <input type="email" name="email" placeholder="you@email.com" required aria-label="Email address" class="flex-1 bg-transparent outline-none text-base placeholder-palate-mute py-2"/>
+              <button type="submit" class="rounded-full bg-palate-red text-white font-semibold px-5 h-11 hover:opacity-90">Join</button>
+            </form>
+            <div id="ctaFormMsg" class="mt-3 text-sm text-palate-mute">We'll only email about Palate. Unsubscribe anytime.</div>
+          </div>
+          <div class="flex justify-center">
+            <div class="relative rounded-2xl overflow-hidden text-white" style="background:linear-gradient(135deg,#1A1A1A,#0E0E0E); width: 280px; padding: 24px;">
+              <div class="glow-r"></div>
+              <div class="relative">
+                <div class="text-[10px] tracking-widest uppercase opacity-60">You are</div>
+                <div class="text-2xl font-extrabold tracking-tightish text-palate-red leading-tight">The Loyalist</div>
+                <div class="mt-4 grid grid-cols-3 gap-1.5">
+                  <div class="rounded-xl bg-white/5 border border-white/10 p-2"><div class="text-base font-bold">18</div><div class="text-[9px] uppercase tracking-widest opacity-60">visits</div></div>
+                  <div class="rounded-xl bg-white/5 border border-white/10 p-2"><div class="text-base font-bold">4</div><div class="text-[9px] uppercase tracking-widest opacity-60">places</div></div>
+                  <div class="rounded-xl bg-white/5 border border-white/10 p-2"><div class="text-base font-bold">78%</div><div class="text-[9px] uppercase tracking-widest opacity-60">repeat</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== FOOTER ============== -->
+  <footer class="border-t border-palate-line bg-white">
+    <div class="max-w-7xl mx-auto px-6 py-16">
+      <div class="grid md:grid-cols-5 gap-10">
+        <div class="md:col-span-2">
+          <div class="flex items-center gap-2.5">
+            <svg width="32" height="32" viewBox="0 0 64 64" aria-hidden="true">
+              <rect width="64" height="64" rx="16" fill="#FF3008"/>
+              <rect x="19" y="14" width="7" height="38" rx="3.5" fill="#fff"/>
+              <path d="M 26 16 H 36 a 12 12 0 0 1 0 24 H 26 Z" fill="#fff"/>
+              <circle cx="34" cy="28" r="4" fill="#FF3008"/>
+            </svg>
+            <span class="text-xl font-semibold tracking-tightish">palate</span>
+          </div>
+          <p class="mt-3 text-palate-mute text-sm max-w-sm leading-relaxed">A weekly Wrapped of your real eating life. Made for you, not for the algorithm.</p>
+          <a href="#waitlist" class="as-badge mt-5">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M16.4 12.7c-.04-2.5 2-3.7 2.1-3.8-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.7 0-1.9-.9-3.2-.8-1.6 0-3.1 1-3.9 2.4-1.7 2.9-.4 7.2 1.2 9.5.8 1.2 1.7 2.4 3 2.4 1.2 0 1.7-.8 3.2-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8-.1 0-2.5-1-2.5-3.5zM14 5.4c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.6 2.8-1.4z"/></svg>
+            <span><span class="as-eyebrow block">COMING SOON ON</span><span class="as-name">App Store</span></span>
+          </a>
+        </div>
+        <div>
+          <div class="text-sm font-semibold">Product</div>
+          <ul class="mt-3 space-y-2 text-sm text-palate-mute">
+            <li><a class="hover:text-palate-ink" href="#how">How it works</a></li>
+            <li><a class="hover:text-palate-ink" href="#personalities">Personalities</a></li>
+            <li><a class="hover:text-palate-ink" href="#pricing">Pricing</a></li>
+            <li><a class="hover:text-palate-ink" href="#faq">FAQ</a></li>
+          </ul>
+        </div>
+        <div>
+          <div class="text-sm font-semibold">Company</div>
+          <ul class="mt-3 space-y-2 text-sm text-palate-mute">
+            <li><a class="hover:text-palate-ink" href="press.html">Press</a></li>
+            <li><a class="hover:text-palate-ink" href="mailto:hello@palate.app">Contact</a></li>
+          </ul>
+        </div>
+        <div>
+          <div class="text-sm font-semibold">Legal</div>
+          <ul class="mt-3 space-y-2 text-sm text-palate-mute">
+            <li><a class="hover:text-palate-ink" href="privacy.html">Privacy</a></li>
+            <li><a class="hover:text-palate-ink" href="terms.html">Terms</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="mt-12 pt-6 border-t border-palate-line flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-palate-mute">
+        <span>© 2026 Palate. All rights reserved.</span>
+        <span>Made with care · No ads · No selling · No social anything</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ============== COOKIE CONSENT ============== -->
+  <div id="cookieBar" class="cookie-bar hide" role="region" aria-label="Cookie notice">
+    <div class="text-sm leading-relaxed flex-1">
+      We use a privacy-friendly analytics tool (no cookies, no tracking across sites). <a href="privacy.html" class="underline">Learn more</a>.
+    </div>
+    <button id="cookieDismiss" class="rounded-full bg-white text-palate-ink font-semibold px-4 py-2 text-sm hover:opacity-90">Got it</button>
+  </div>
+
+  <!-- ============== SCRIPTS ============== -->
+  <script>
+    // === Mobile drawer ===
+    const drawer = document.getElementById('drawer');
+    document.getElementById('navToggle').addEventListener('click', () => drawer.classList.add('open'));
+    document.getElementById('drawerClose').addEventListener('click', () => drawer.classList.remove('open'));
+    drawer.addEventListener('click', (e) => { if (e.target === drawer) drawer.classList.remove('open'); });
+    document.querySelectorAll('#drawerNav a, #drawerCTA').forEach(a => a.addEventListener('click', () => drawer.classList.remove('open')));
+
+    // === Waitlist counter (animated count-up + persisted bumps) ===
+    const COUNT_KEY = 'palate.waitlist.count';
+    let liveCount = parseInt(localStorage.getItem(COUNT_KEY) || '352', 10);
+    const countEl = document.getElementById('waitlistCount');
+    function setCount(n) { localStorage.setItem(COUNT_KEY, String(n)); countEl.textContent = n.toLocaleString(); }
+    setCount(liveCount);
+
+    // === Form submission ===
+    const SUPABASE_URL = (window.PALATE_SUPABASE_URL || '').replace(/\/$/, '');
+    const SUPABASE_ANON = window.PALATE_SUPABASE_ANON || '';
+
+    async function joinWaitlist(email) {
+      // Real path: posts to Supabase if configured.
+      if (SUPABASE_URL && SUPABASE_ANON) {
+        const r = await fetch(SUPABASE_URL + '/rest/v1/waitlist', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON,
+            'Authorization': 'Bearer ' + SUPABASE_ANON,
+            'Prefer': 'return=minimal',
+          },
+          body: JSON.stringify({ email }),
+        });
+        if (!r.ok && r.status !== 409) throw new Error('HTTP ' + r.status);
+      }
+      // Demo path also runs so the UI feels alive even before backend is wired.
+      const seen = JSON.parse(localStorage.getItem('palate.waitlist.demo') || '[]');
+      if (!seen.includes(email)) {
+        seen.push(email);
+        localStorage.setItem('palate.waitlist.demo', JSON.stringify(seen));
+        setCount(liveCount + 1); liveCount += 1;
+      }
+      return { ok: true };
+    }
+
+    function showSuccess(email) {
+      const success = document.getElementById('heroSuccess');
+      const form = document.getElementById('heroForm');
+      const msg = document.getElementById('heroFormMsg');
+      success.classList.remove('hidden');
+      form.classList.add('hidden');
+      msg.classList.add('hidden');
+      const pos = liveCount + Math.floor(Math.random() * 3);
+      document.getElementById('positionNum').textContent = '#' + pos;
+      success.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    async function handleSubmit(form, msgEl) {
+      const email = form.email.value.trim();
+      if (!email || !email.includes('@')) {
+        msgEl.textContent = 'That email looks off. Try again?';
+        msgEl.className = 'mt-3 text-sm text-palate-red';
+        return;
+      }
+      const btn = form.querySelector('button[type="submit"]');
+      btn.disabled = true; btn.textContent = '…';
+      try {
+        await joinWaitlist(email);
+        if (form.id === 'heroForm') {
+          showSuccess(email);
+        } else {
+          form.reset();
+          btn.textContent = '✓ On the list';
+          msgEl.textContent = "We'll email you in late summer when iOS testing opens. Until then, nothing else.";
+          msgEl.className = 'mt-3 text-sm text-palate-ink';
+        }
+      } catch (e) {
+        btn.disabled = false; btn.textContent = 'Try again';
+        msgEl.textContent = 'Something went wrong. Email us at hello@palate.app and we\u2019ll add you manually.';
+        msgEl.className = 'mt-3 text-sm text-palate-red';
+      }
+    }
+
+    document.getElementById('heroForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      handleSubmit(e.currentTarget, document.getElementById('heroFormMsg'));
+    });
+    document.getElementById('ctaForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      handleSubmit(e.currentTarget, document.getElementById('ctaFormMsg'));
+    });
+
+    // === Share buttons ===
+    document.getElementById('shareTwitter').addEventListener('click', () => {
+      const url = encodeURIComponent('https://palate.app');
+      const text = encodeURIComponent('I just joined the waitlist for Palate — a weekly Wrapped of what you actually eat. Curious to see mine.');
+      window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank', 'noopener');
+    });
+    document.getElementById('shareCopy').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      try { await navigator.clipboard.writeText('https://palate.app'); btn.textContent = '✓ Copied'; }
+      catch { btn.textContent = 'Couldn\u2019t copy'; }
+      setTimeout(() => { btn.textContent = 'Copy link'; }, 2000);
+    });
+
+    // === Cookie banner ===
+    const COOKIE_KEY = 'palate.cookie.dismissed';
+    const cookieBar = document.getElementById('cookieBar');
+    if (!localStorage.getItem(COOKIE_KEY)) {
+      setTimeout(() => cookieBar.classList.remove('hide'), 1200);
+    }
+    document.getElementById('cookieDismiss').addEventListener('click', () => {
+      localStorage.setItem(COOKIE_KEY, '1');
+      cookieBar.classList.add('hide');
+    });
+
+    // === Smooth-scroll for in-page anchors (closes drawer too) ===
+    document.querySelectorAll('a[href^="#"]').forEach(a => {
+      a.addEventListener('click', (e) => {
+        const id = a.getAttribute('href');
+        if (id.length > 1 && document.querySelector(id)) {
+          e.preventDefault();
+          document.querySelector(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+  </script>
+</body>
+</html>

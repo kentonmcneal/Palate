@@ -1,0 +1,309 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --palate-red: #FF3008;
+  --palate-ink: #111111;
+  --palate-paper: #FFFFFF;
+}
+
+html,
+body {
+  background: var(--palate-paper);
+  color: var(--palate-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
+    "Segoe UI", Helvetica, sans-serif;
+}
+
+::selection {
+  background: var(--palate-red);
+  color: #fff;
+}
+
+*:focus-visible {
+  outline: 3px solid rgba(255, 48, 8, 0.45);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Skip link — visually hidden until focused, then anchors top-left. */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 12px;
+  background: var(--palate-ink);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  z-index: 100;
+  transition: top 0.15s ease;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  top: 12px;
+}
+
+.ease-card {
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 16px 32px rgba(0, 0, 0, 0.06);
+}
+
+.h-scroll {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 8px;
+}
+.h-scroll::-webkit-scrollbar {
+  height: 0;
+}
+.h-scroll > * {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+/* mini phone mock */
+.mini-phone {
+  width: 260px;
+  height: 540px;
+  background: #1a1a1a;
+  border-radius: 38px;
+  padding: 7px;
+  box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.3),
+    0 20px 40px -25px rgba(0, 0, 0, 0.4);
+}
+.mini-screen {
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  border-radius: 31px;
+  overflow: hidden;
+  position: relative;
+}
+.mini-notch {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 22px;
+  background: #000;
+  border-radius: 999px;
+  z-index: 5;
+}
+
+/* faq */
+details > summary {
+  list-style: none;
+  cursor: pointer;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+details[open] .chev {
+  transform: rotate(180deg);
+}
+.chev {
+  transition: transform 0.2s;
+}
+
+/* small wrapped card glow */
+.glow-r {
+  position: absolute;
+  top: -50px;
+  right: -40px;
+  width: 160px;
+  height: 160px;
+  border-radius: 9999px;
+  background: #ff3008;
+  opacity: 0.35;
+  filter: blur(40px);
+}
+
+/* Animated demo: cycles through 3 phone states every 12s */
+.demo-cycle .demo-state {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.demo-cycle .demo-state.s1 {
+  animation: showS1 12s infinite;
+}
+.demo-cycle .demo-state.s2 {
+  animation: showS2 12s infinite;
+}
+.demo-cycle .demo-state.s3 {
+  animation: showS3 12s infinite;
+}
+@keyframes showS1 {
+  0%,
+  28% {
+    opacity: 1;
+  }
+  33%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes showS2 {
+  0%,
+  33% {
+    opacity: 0;
+  }
+  38%,
+  61% {
+    opacity: 1;
+  }
+  66%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes showS3 {
+  0%,
+  66% {
+    opacity: 0;
+  }
+  71%,
+  95% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .demo-cycle .demo-state {
+    animation: none !important;
+  }
+  .demo-cycle .demo-state.s1 {
+    opacity: 1;
+  }
+  .demo-cycle .demo-state.s2,
+  .demo-cycle .demo-state.s3 {
+    opacity: 0;
+  }
+}
+
+/* App Store badge */
+.as-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #111;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.1;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+.as-badge:hover {
+  opacity: 0.85;
+}
+.as-badge .as-eyebrow {
+  font-size: 10px;
+  opacity: 0.8;
+  letter-spacing: 0.04em;
+}
+.as-badge .as-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+.as-badge.as-badge-outline {
+  background: transparent;
+  color: #111;
+  border: 1px solid #111;
+}
+.as-badge.as-badge-outline:hover {
+  background: #111;
+  color: #fff;
+  opacity: 1;
+}
+.as-badge.as-badge-outline .as-eyebrow {
+  opacity: 0.7;
+}
+
+/* Cookie banner */
+.cookie-bar {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 24px);
+  max-width: 720px;
+  background: #111;
+  color: #fff;
+  border-radius: 16px;
+  padding: 14px 18px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  z-index: 60;
+  transition: opacity 0.25s, transform 0.25s;
+}
+.cookie-bar.hide {
+  opacity: 0;
+  transform: translate(-50%, 20px);
+  pointer-events: none;
+}
+
+/* Mobile drawer */
+.drawer {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 50;
+  display: none;
+}
+.drawer.open {
+  display: block;
+}
+.drawer-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: min(86vw, 360px);
+  height: 100%;
+  background: #fff;
+  padding: 24px;
+  box-shadow: -20px 0 40px rgba(0, 0, 0, 0.1);
+  animation: slideIn 0.25s ease;
+}
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Personality gallery: subtle scroll fade on edges */
+.gallery-wrap {
+  position: relative;
+}
+.gallery-wrap::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 80px;
+  background: linear-gradient(to right, transparent, #fff);
+  pointer-events: none;
+}

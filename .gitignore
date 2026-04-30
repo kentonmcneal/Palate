@@ -1,0 +1,13 @@
+# Root catch-all — each subfolder also has its own .gitignore.
+.DS_Store
+*.log
+node_modules
+.env
+.env.local
+.env.*.local
+!**/.env.example
+!**/.env.local.example
+.vercel
+.next
+dist
+.expo
