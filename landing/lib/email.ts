@@ -92,7 +92,7 @@ export function welcomeEmail(opts: {
     </p>
 
     <p style="margin:48px 0 0 0;color:#bbb;font-size:12px;line-height:1.5;">
-      Palate · A weekly Wrapped of your real eating life.<br>
+      Palate · Your eating habits have a pattern. We tell you what it means.<br>
       Reply to this email if you have questions or want to chat.
     </p>
   </div>
@@ -108,7 +108,7 @@ One email when TestFlight is ready. That's the only email you'll get. No newslet
 ${opts.referralCode ? `Want to skip 50 spots? Share this link: https://palate.app/?ref=${opts.referralCode}\n\n` : ""}Curious what your Palate looks like? Take the 30-second quiz at https://palate.app/#quiz — no signup needed.
 
 — Palate
-A weekly Wrapped of your real eating life.`;
+Your eating habits have a pattern. We tell you what it means.`;
 
   return {
     to: opts.email,

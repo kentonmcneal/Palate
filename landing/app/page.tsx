@@ -851,7 +851,7 @@ export default async function Page() {
                 <span className="text-xl font-semibold tracking-tightish">palate</span>
               </div>
               <p className="mt-3 text-palate-mute text-sm max-w-sm leading-relaxed">
-                A weekly Wrapped of your real eating life. Made for you, not for the algorithm.
+                A taste-identity system. Made for you, not for the algorithm.
               </p>
               <AppStoreBadge href="#waitlist" className="mt-5" />
             </div>

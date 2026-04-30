@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://palate.app"),
   title: "Palate — See what you actually eat",
   description:
-    "Palate quietly notices when you're at a restaurant, café, or drive-thru — and turns your week into a beautiful, shareable Wrapped. Privacy-first. iOS coming soon.",
+    "Your eating habits have a pattern. Palate tells you what it means. A weekly identity reveal of your real eating life — privacy-first, no public profiles. iOS coming soon.",
   icons: {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
     apple: "/favicon.svg",
@@ -16,14 +16,14 @@ export const metadata: Metadata = {
     type: "website",
     title: "Palate — See what you actually eat",
     description:
-      "A weekly Wrapped of your real eating life. Privacy-first. iOS coming soon.",
+      "Your eating habits have a pattern. Palate tells you what it means. A weekly identity reveal — privacy-first.",
     url: "https://palate.app",
     images: [{ url: "/og-image.png" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Palate — See what you actually eat",
-    description: "A weekly Wrapped of your real eating life.",
+    description: "Your eating habits have a pattern. Palate tells you what it means.",
     images: ["/og-image.png"],
   },
 };
@@ -52,7 +52,7 @@ const STRUCTURED_DATA = {
   applicationCategory: "LifestyleApplication",
   operatingSystem: "iOS",
   description:
-    "Palate turns your real eating week into a beautiful, shareable Wrapped — privacy-first, no ads, no public profiles.",
+    "Palate is a taste-identity system. Tap once when you arrive somewhere; every Sunday, get a personality reveal — 1 of 9 eating identities — built from your actual visits. Privacy-first, no ads, no public profiles.",
   offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
   publisher: { "@type": "Organization", name: "Palate", url: "https://palate.app" },
 };

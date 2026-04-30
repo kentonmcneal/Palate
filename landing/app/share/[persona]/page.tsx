@@ -116,14 +116,14 @@ export default function SharePersonaPage({
               What's <span className="text-palate-red">your</span> Palate?
             </h2>
             <p className="mt-3 text-palate-mute max-w-lg mx-auto">
-              Three taps. No signup required. The real one comes after a week of actual visits.
+              30 seconds. No signup needed. 1 of 9 possible identities. Your real one builds from where you actually go.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
               <Link
                 href="/#quiz"
                 className="inline-flex rounded-full bg-palate-red text-white px-6 py-3 text-sm font-semibold hover:opacity-90"
               >
-                Take the quiz →
+                Find my Palate →
               </Link>
               <Link
                 href="/"

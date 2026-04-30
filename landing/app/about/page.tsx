@@ -6,7 +6,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "About — Palate",
   description:
-    "Meet the founder of Palate — a Memphis-raised, Wharton MBA building a privacy-first weekly Wrapped of your real eating life.",
+    "Meet Kenton McNeal — Wharton MBA, Memphis-raised, building Palate: a taste-identity system that tells you what your eating habits actually say about you.",
 };
 
 export default function AboutPage() {
