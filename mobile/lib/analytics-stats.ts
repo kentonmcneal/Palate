@@ -40,37 +40,11 @@ export type AnalyticsSummary = {
 
   topSpots: TopSpot[];
 
-  /** Rough $ estimate based on price_level + format. */
-  estimatedSpendAllTime: number;
-  estimatedSpendPerWeek: number;
-  estimatedSpendPerYear: number;
-
   /** 0..1 — uniqueRestaurants / totalVisits. 1 = no repeats; 0 = single spot. */
   varietyScore: number;
   /** % of visits at top single restaurant. */
   loyaltyScore: number;
 };
-
-// ----------------------------------------------------------------------------
-// Heuristic dollar estimate per visit by price level + format.
-// Quick-service value spots: ~$10. Fast casual: ~$15. Casual: ~$28. Fine: ~$80.
-// ----------------------------------------------------------------------------
-
-function estimatePerVisit(p: RestaurantProfile): number {
-  const price = p.priceLevel ?? 2;
-  const base: Record<RestaurantFormat, number> = {
-    quick_service: 10,
-    fast_casual: 15,
-    casual_dining: 28,
-    fine_dining: 80,
-    cafe: 8,
-    bar: 22,
-  };
-  const b = base[p.format] ?? 18;
-  // Bump by price level (1=cheap, 4=$$$$). Adjust by ~30% per step from 2 baseline.
-  const factor = 1 + (price - 2) * 0.30;
-  return Math.max(5, b * factor);
-}
 
 // ----------------------------------------------------------------------------
 // Time-range bounds — calendar-anchored (Monday for week, 1st for month, etc).
@@ -169,7 +143,6 @@ export function aggregate(
   };
   const restaurantCounts = new Map<string, { name: string; count: number; cuisine: string | null }>();
 
-  let estTotal = 0;
   let earliestMs = Infinity;
   let latestMs = -Infinity;
 
@@ -200,14 +173,11 @@ export function aggregate(
     const ms = d.getTime();
     if (ms < earliestMs) earliestMs = ms;
     if (ms > latestMs) latestMs = ms;
-
-    estTotal += estimatePerVisit(profile);
   }
 
   const naturalSpan = Math.max(1, Math.round((latestMs - earliestMs) / 86_400_000) + 1);
   const spanDays = options?.windowDays ?? naturalSpan;
   const avgVisitsPerWeek = (totalVisits / spanDays) * 7;
-  const estimatedSpendPerWeek = (estTotal / spanDays) * 7;
 
   const cuisineBreakdown = sortedSlices(cuisineCounts, totalVisits);
   const formatBreakdown = sortedFormatSlices(formatCounts, totalVisits);
@@ -232,9 +202,6 @@ export function aggregate(
     dayOfWeekCounts: dowCounts,
     brandTierMix: tierCounts,
     topSpots,
-    estimatedSpendAllTime: estTotal,
-    estimatedSpendPerWeek,
-    estimatedSpendPerYear: estimatedSpendPerWeek * 52,
     varietyScore,
     loyaltyScore,
   };
@@ -277,9 +244,6 @@ function emptySummary(): AnalyticsSummary {
     dayOfWeekCounts: [0, 0, 0, 0, 0, 0, 0],
     brandTierMix: { value: 0, mainstream: 0, premium_fast_casual: 0, upscale: 0, luxury: 0 },
     topSpots: [],
-    estimatedSpendAllTime: 0,
-    estimatedSpendPerWeek: 0,
-    estimatedSpendPerYear: 0,
     varietyScore: 0,
     loyaltyScore: 0,
   };

@@ -371,7 +371,7 @@ export default async function Page() {
                     What your behavior proves
                   </div>
                   <p className="text-palate-ink text-[15px] leading-snug font-medium">
-                    5.9 times. <span className="text-palate-red">$73 this week.</span> 18 different spots.
+                    5.9 times this week. <span className="text-palate-red">18 different spots.</span> Mostly fast casual.
                   </p>
                 </div>
               </div>
@@ -487,10 +487,10 @@ export default async function Page() {
             <span className="text-palate-red">5.9× a week.</span>
           </h2>
           <p className="mt-5 text-2xl sm:text-3xl font-medium text-palate-ink">
-            That's <span className="text-palate-red font-bold">$3,800 a year.</span> On takeout.
+            Most people guess <span className="text-palate-red font-bold">two or three.</span>
           </p>
           <p className="mt-5 text-lg text-palate-mute max-w-xl mx-auto">
-            Most people guess two or three. Palate shows you the real number — and what it adds up to.
+            Palate shows you the real number — and what it actually says about how you eat.
           </p>
         </div>
       </section>

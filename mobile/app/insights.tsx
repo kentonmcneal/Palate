@@ -142,7 +142,7 @@ export default function InsightsScreen() {
             <Text style={type.subtitle}>Nothing to read for {rangeLabel(range)}.</Text>
             <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
               {range === "all"
-                ? "Once you've logged a few visits, this is where your patterns surface — cuisine mix, where you eat, what time, how much you spend."
+                ? "Once you've logged a few visits, this is where your patterns surface — cuisine mix, where you eat, what time."
                 : "No visits logged in this range yet. Try a wider window above, or come back after a few more visits."}
             </Text>
           </View>
@@ -258,29 +258,6 @@ function Dashboard({ data, range }: { data: AnalyticsSummary; range: TimeRange }
         <VerticalBars data={dowBars} accentIndex={dowAccentIndex} height={150} />
       </Section>
 
-      {/* Spending — labels adapt to the selected range */}
-      <Section title="What it adds up to" subtitle="Estimate — based on price level + format">
-        <View style={styles.spendRow}>
-          {isAllTime ? (
-            <>
-              <SpendStat label="Per week (avg)" value={`$${Math.round(data.estimatedSpendPerWeek)}`} />
-              <SpendStat label="Per year (this pace)" value={`$${Math.round(data.estimatedSpendPerYear).toLocaleString()}`} highlight />
-              <SpendStat label="All time" value={`$${Math.round(data.estimatedSpendAllTime).toLocaleString()}`} />
-            </>
-          ) : (
-            <>
-              <SpendStat label={`${capCase(rangeLabel(range))} so far`} value={`$${Math.round(data.estimatedSpendAllTime).toLocaleString()}`} highlight />
-              <SpendStat label="Per week (avg)" value={`$${Math.round(data.estimatedSpendPerWeek)}`} />
-              <SpendStat label="Year, at this rate" value={`$${Math.round(data.estimatedSpendPerYear).toLocaleString()}`} />
-            </>
-          )}
-        </View>
-        <Text style={[type.small, { marginTop: 14, lineHeight: 18 }]}>
-          Heuristic estimate. Real bills will vary — but the ratio between
-          periods stays honest, which is the point.
-        </Text>
-      </Section>
-
       {/* Top spots */}
       <Section title="Where you keep going">
         {data.topSpots.map((s, i) => (
@@ -340,15 +317,6 @@ function HeroStat({ label, value }: { label: string; value: string }) {
     <View style={styles.heroStat}>
       <Text style={styles.heroStatValue}>{value}</Text>
       <Text style={styles.heroStatLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function SpendStat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <View style={[styles.spendStat, highlight && styles.spendStatHi]}>
-      <Text style={[styles.spendValue, highlight && { color: colors.red }]}>{value}</Text>
-      <Text style={styles.spendLabel}>{label}</Text>
     </View>
   );
 }
@@ -452,19 +420,6 @@ const styles = StyleSheet.create({
   legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
   legendLabel: { flex: 1, fontSize: 14, color: colors.ink, fontWeight: "500" },
   legendValue: { ...type.small, fontWeight: "700" },
-
-  spendRow: { flexDirection: "row", gap: 10 },
-  spendStat: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.faint,
-  },
-  spendStatHi: { borderColor: colors.red, backgroundColor: "#FFF1EE" },
-  spendValue: { fontSize: 22, fontWeight: "800", color: colors.ink },
-  spendLabel: { ...type.small, marginTop: 4 },
 
   topRow: {
     flexDirection: "row",
