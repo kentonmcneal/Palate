@@ -50,6 +50,34 @@ export async function setDisplayName(name: string): Promise<void> {
   if (error) throw error;
 }
 
+// ============================================================================
+// Public profile snapshot — what a friend sees when they view you, or what
+// you see when you tap into a friend's profile.
+// ============================================================================
+
+export type FriendProfileSnapshot = {
+  id: string;
+  display_name: string | null;
+  email: string | null;
+  profile_visibility: ProfileVisibility;
+  persona_label: string | null;
+  persona_tagline: string | null;
+  top_restaurant: string | null;
+  unique_restaurants: number | null;
+  total_visits: number | null;
+  is_friend: boolean;
+  is_self: boolean;
+};
+
+export async function getFriendProfileSnapshot(targetId: string): Promise<FriendProfileSnapshot | null> {
+  const { data, error } = await supabase
+    .rpc("get_friend_profile_snapshot", { target_id: targetId });
+  if (error) throw error;
+  const row = (data as any[])?.[0];
+  if (!row) return null;
+  return row as FriendProfileSnapshot;
+}
+
 export async function saveTastePreferences(cuisines: string[]): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not signed in");

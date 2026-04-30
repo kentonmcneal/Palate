@@ -270,12 +270,16 @@ type Action = { label: string; style: "primary" | "ghost"; onPress: () => void }
 function FriendRow({
   friend, actions = [], sublabel,
 }: { friend: FriendProfile; actions?: Action[]; sublabel?: string }) {
+  const router = useRouter();
   const name = friend.display_name || (friend.email ? friend.email.split("@")[0] : "Unknown");
   const initial = name[0]?.toUpperCase() ?? "•";
   const subtext = sublabel ?? friend.email ?? "";
 
   return (
-    <View style={styles.friendRow}>
+    <Pressable
+      style={styles.friendRow}
+      onPress={() => router.push(`/profile/${friend.id}`)}
+    >
       <View style={styles.friendAvatar}>
         <Text style={styles.friendAvatarText}>{initial}</Text>
       </View>
@@ -291,7 +295,7 @@ function FriendRow({
         {actions.map((a) => (
           <Pressable
             key={a.label}
-            onPress={a.onPress}
+            onPress={(e) => { e.stopPropagation(); a.onPress(); }}
             style={a.style === "primary" ? styles.btnPrimary : styles.btnGhost}
           >
             <Text style={a.style === "primary" ? styles.btnPrimaryText : styles.btnGhostText}>
@@ -300,7 +304,7 @@ function FriendRow({
           </Pressable>
         ))}
       </View>
-    </View>
+    </Pressable>
   );
 }
 

@@ -118,13 +118,17 @@ export default function FeedTab() {
 }
 
 function FeedRow({ event, onLike }: { event: FeedEvent; onLike: () => void }) {
+  const router = useRouter();
   const name = event.user?.display_name || (event.user?.email ? event.user.email.split("@")[0] : "Someone");
   const initial = name[0]?.toUpperCase() ?? "•";
   const when = relativeTime(event.created_at);
 
   return (
     <View style={styles.card}>
-      <View style={styles.row}>
+      <Pressable
+        style={styles.row}
+        onPress={() => event.user_id && router.push(`/profile/${event.user_id}`)}
+      >
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initial}</Text>
         </View>
@@ -132,7 +136,7 @@ function FeedRow({ event, onLike }: { event: FeedEvent; onLike: () => void }) {
           <Text style={styles.name}>{name}</Text>
           <Text style={styles.when}>{when}</Text>
         </View>
-      </View>
+      </Pressable>
 
       <FeedBody event={event} />
 

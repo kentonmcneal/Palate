@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Switch, Alert, Linking, ScrollView, Share, Pressable } from "react-native";
+import { View, Text, StyleSheet, Switch, Alert, Linking, ScrollView, Share, Pressable, Modal, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
@@ -15,7 +15,7 @@ import {
   disableSundayWrappedReminder,
 } from "../../lib/notifications";
 import { loadAnalytics, type AnalyticsSummary } from "../../lib/analytics-stats";
-import { getMyProfile, setProfileVisibility, type ProfileVisibility } from "../../lib/profile";
+import { getMyProfile, setProfileVisibility, setDisplayName, type ProfileVisibility } from "../../lib/profile";
 import { listIncomingRequests } from "../../lib/friends";
 
 const CUISINE_LABELS: Record<string, string> = {
@@ -36,16 +36,38 @@ export default function Settings() {
   const [sundayReminder, setSundayReminder] = useState(false);
   const [stats, setStats] = useState<AnalyticsSummary | null>(null);
   const [visibility, setVisibility] = useState<ProfileVisibility>("friends");
+  const [displayName, setDisplayNameState] = useState<string | null>(null);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
+  const [editingName, setEditingName] = useState(false);
+  const [draftName, setDraftName] = useState("");
 
   useEffect(() => {
     AsyncStorage.getItem(PAUSE_KEY).then((v) => setTracking(v !== "1"));
     supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
     isReminderEnabled().then(setSundayReminder);
     loadAnalytics("all").then(setStats).catch(() => {});
-    getMyProfile().then((p) => p && setVisibility(p.profile_visibility)).catch(() => {});
+    getMyProfile().then((p) => {
+      if (!p) return;
+      setVisibility(p.profile_visibility);
+      setDisplayNameState(p.display_name);
+    }).catch(() => {});
     listIncomingRequests().then((rs) => setPendingRequestCount(rs.length)).catch(() => {});
   }, []);
+
+  function openNameEditor() {
+    setDraftName(displayName ?? "");
+    setEditingName(true);
+  }
+
+  async function saveName() {
+    setEditingName(false);
+    try {
+      await setDisplayName(draftName);
+      setDisplayNameState(draftName.trim() || null);
+    } catch (e: any) {
+      Alert.alert("Couldn't save", e.message ?? "Try again");
+    }
+  }
 
   async function changeVisibility(next: ProfileVisibility) {
     setVisibility(next); // optimistic
@@ -165,13 +187,16 @@ export default function Settings() {
               </Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={type.title}>You</Text>
+              <Text style={type.title}>{displayName || "You"}</Text>
               {email && (
                 <Text style={[type.small, { marginTop: 2 }]} numberOfLines={1}>
                   {email}
                 </Text>
               )}
             </View>
+            <Pressable onPress={openNameEditor} style={styles.editName}>
+              <Text style={styles.editNameText}>{displayName ? "Edit name" : "Set name"}</Text>
+            </Pressable>
           </View>
 
           {stats && stats.totalVisits > 0 && (
@@ -310,6 +335,35 @@ export default function Settings() {
           <Note>Palate v0.1 — no ads, we don't sell your data, you control what's public.</Note>
         </Section>
       </ScrollView>
+
+      {/* Display name editor */}
+      <Modal visible={editingName} transparent animationType="fade" onRequestClose={() => setEditingName(false)}>
+        <View style={styles.modalScrim}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Your display name</Text>
+            <Text style={styles.modalBody}>How your friends will see you in the feed.</Text>
+            <TextInput
+              value={draftName}
+              onChangeText={setDraftName}
+              placeholder="Kenton M."
+              placeholderTextColor={colors.mute}
+              maxLength={30}
+              autoFocus
+              style={styles.modalInput}
+              returnKeyType="done"
+              onSubmitEditing={saveName}
+            />
+            <View style={styles.modalRow}>
+              <Pressable onPress={() => setEditingName(false)} style={styles.modalCancel}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={saveName} style={styles.modalSave}>
+                <Text style={styles.modalSaveText}>Save</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -402,6 +456,41 @@ const styles = StyleSheet.create({
   visBtnActive: { backgroundColor: colors.ink, borderColor: colors.ink },
   visText: { fontSize: 13, fontWeight: "700", color: colors.mute },
   visTextActive: { color: "#fff" },
+
+  // Edit name pill
+  editName: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999,
+    backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line,
+  },
+  editNameText: { fontSize: 12, fontWeight: "700", color: colors.ink },
+
+  // Display name modal
+  modalScrim: {
+    flex: 1, backgroundColor: "rgba(15,15,15,0.55)",
+    alignItems: "center", justifyContent: "center", padding: spacing.lg,
+  },
+  modalCard: {
+    width: "100%", maxWidth: 360,
+    backgroundColor: colors.paper, borderRadius: 22, padding: spacing.lg,
+  },
+  modalTitle: { fontSize: 22, fontWeight: "800", color: colors.ink, letterSpacing: -0.4 },
+  modalBody: { ...type.small, marginTop: 6, lineHeight: 20 },
+  modalInput: {
+    marginTop: 18, height: 50, borderRadius: 14,
+    borderWidth: 1, borderColor: colors.line,
+    paddingHorizontal: 16, fontSize: 17, color: colors.ink,
+  },
+  modalRow: { flexDirection: "row", gap: 10, marginTop: 18 },
+  modalCancel: {
+    flex: 1, paddingVertical: 12, borderRadius: 14,
+    backgroundColor: colors.faint, alignItems: "center",
+  },
+  modalCancelText: { fontSize: 14, fontWeight: "700", color: colors.mute },
+  modalSave: {
+    flex: 1, paddingVertical: 12, borderRadius: 14,
+    backgroundColor: colors.red, alignItems: "center",
+  },
+  modalSaveText: { color: "#fff", fontSize: 14, fontWeight: "700" },
   row: {
     flexDirection: "row",
     alignItems: "center",

@@ -56,6 +56,7 @@ export default function RootLayout() {
           <Stack.Screen name="year-in-review" options={{ presentation: "modal" }} />
           <Stack.Screen name="insights" options={{ presentation: "modal" }} />
           <Stack.Screen name="friends" options={{ presentation: "modal" }} />
+          <Stack.Screen name="profile/[id]" options={{ presentation: "modal" }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>
