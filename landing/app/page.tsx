@@ -706,7 +706,12 @@ export default async function Page() {
             I built Palate because I had no idea I went to Sweetgreen{" "}
             <span className="text-palate-red">fourteen times</span> last month. Not because I love it — because it was on the way. We deserve to see our patterns honestly. McDonald's counts. Coffee counts. The fancy place counts. All of it.
           </p>
-          <p className="mt-6 text-palate-mute">— the team building Palate</p>
+          <p className="mt-6 text-palate-mute">
+            — Kenton McNeal, founder ·{" "}
+            <Link href="/about" className="text-palate-red hover:underline">
+              read more
+            </Link>
+          </p>
         </div>
       </section>
 
@@ -792,6 +797,7 @@ export default async function Page() {
             <div>
               <div className="text-sm font-semibold">Company</div>
               <ul className="mt-3 space-y-2 text-sm text-palate-mute">
+                <li><Link className="hover:text-palate-ink" href="/about">About</Link></li>
                 <li><Link className="hover:text-palate-ink" href="/press">Press</Link></li>
                 <li><a className="hover:text-palate-ink" href="mailto:hello@palate.app">Contact</a></li>
               </ul>

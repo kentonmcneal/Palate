@@ -149,6 +149,7 @@ export default function PressPage() {
           <span>© 2026 Palate</span>
           <div className="flex gap-6">
             <Link href="/" className="hover:text-palate-ink">Home</Link>
+            <Link href="/about" className="hover:text-palate-ink">About</Link>
             <Link href="/privacy" className="hover:text-palate-ink">Privacy</Link>
             <Link href="/terms" className="hover:text-palate-ink">Terms</Link>
           </div>
