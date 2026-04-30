@@ -4,10 +4,22 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Spacer } from "../components/Button";
 import { colors, spacing, type } from "../theme";
-import { loadAllTimeAnalytics, type AnalyticsSummary } from "../lib/analytics-stats";
+import { loadAnalytics, type AnalyticsSummary, type TimeRange } from "../lib/analytics-stats";
 import { DonutChart, type DonutSlice } from "../components/charts/DonutChart";
 import { HorizontalBars, type BarRow } from "../components/charts/HorizontalBars";
 import { VerticalBars, type VBar } from "../components/charts/VerticalBars";
+
+const RANGE_OPTIONS: Array<{ key: TimeRange; short: string; long: string }> = [
+  { key: "week",    short: "Week",    long: "this week" },
+  { key: "month",   short: "Month",   long: "this month" },
+  { key: "quarter", short: "Quarter", long: "this quarter" },
+  { key: "year",    short: "Year",    long: "this year" },
+  { key: "all",     short: "All",     long: "all time" },
+];
+
+function rangeLabel(range: TimeRange): string {
+  return RANGE_OPTIONS.find((r) => r.key === range)?.long ?? "all time";
+}
 
 const CUISINE_PALETTE = [
   "#FF3008", "#FF6B45", "#FF9466", "#FFB68C", "#1F1F1F", "#555555", "#9A9A9A",
@@ -53,12 +65,13 @@ export default function InsightsScreen() {
   const [data, setData] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [range, setRange] = useState<TimeRange>("all");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (r: TimeRange) => {
     setLoading(true);
     setError(null);
     try {
-      setData(await loadAllTimeAnalytics());
+      setData(await loadAnalytics(r));
     } catch (e: any) {
       setError(e?.message ?? "Couldn't load your insights");
     } finally {
@@ -66,7 +79,13 @@ export default function InsightsScreen() {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => { load(range); }, [load, range]));
+
+  function handleRangeChange(next: TimeRange) {
+    if (next === range) return;
+    setRange(next);
+    load(next);
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -79,6 +98,30 @@ export default function InsightsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
+        {/* Range selector */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.rangeRow}
+        >
+          {RANGE_OPTIONS.map((opt) => {
+            const active = opt.key === range;
+            return (
+              <Pressable
+                key={opt.key}
+                onPress={() => handleRangeChange(opt.key)}
+                style={[styles.rangePill, active && styles.rangePillActive]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={[styles.rangePillText, active && styles.rangePillTextActive]}>
+                  {opt.short}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
         {loading && (
           <View style={styles.center}>
             <ActivityIndicator color={colors.red} />
@@ -96,16 +139,17 @@ export default function InsightsScreen() {
 
         {!loading && !error && data && data.totalVisits === 0 && (
           <View style={styles.emptyCard}>
-            <Text style={type.subtitle}>Nothing to read yet.</Text>
+            <Text style={type.subtitle}>Nothing to read for {rangeLabel(range)}.</Text>
             <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
-              Once you've logged a few visits, this is where your patterns surface — cuisine
-              mix, where you eat, what time, how much you spend.
+              {range === "all"
+                ? "Once you've logged a few visits, this is where your patterns surface — cuisine mix, where you eat, what time, how much you spend."
+                : "No visits logged in this range yet. Try a wider window above, or come back after a few more visits."}
             </Text>
           </View>
         )}
 
         {!loading && !error && data && data.totalVisits > 0 && (
-          <Dashboard data={data} />
+          <Dashboard data={data} range={range} />
         )}
       </ScrollView>
     </SafeAreaView>
@@ -116,7 +160,12 @@ export default function InsightsScreen() {
 // Dashboard — rendered when we have actual data
 // ============================================================================
 
-function Dashboard({ data }: { data: AnalyticsSummary }) {
+function Dashboard({ data, range }: { data: AnalyticsSummary; range: TimeRange }) {
+  const isAllTime = range === "all";
+  const heroEyebrow = isAllTime
+    ? "YOUR EATING LIFE · ALL TIME"
+    : `YOUR EATING LIFE · ${rangeLabel(range).toUpperCase()}`;
+
   // ---------------- Cuisine donut ----------------
   const cuisineSlices: DonutSlice[] = data.cuisineBreakdown.map((s, i) => ({
     label: CUISINE_LABELS[s.cuisine] ?? s.cuisine,
@@ -155,7 +204,7 @@ function Dashboard({ data }: { data: AnalyticsSummary }) {
     <>
       {/* Hero summary */}
       <View style={styles.heroCard}>
-        <Text style={styles.heroEyebrow}>YOUR EATING LIFE · ALL TIME</Text>
+        <Text style={styles.heroEyebrow}>{heroEyebrow}</Text>
         <Text style={styles.heroNumber}>{data.totalVisits}</Text>
         <Text style={styles.heroSub}>
           visits across{" "}
@@ -209,16 +258,26 @@ function Dashboard({ data }: { data: AnalyticsSummary }) {
         <VerticalBars data={dowBars} accentIndex={dowAccentIndex} height={150} />
       </Section>
 
-      {/* Spending */}
+      {/* Spending — labels adapt to the selected range */}
       <Section title="What it adds up to" subtitle="Estimate — based on price level + format">
         <View style={styles.spendRow}>
-          <SpendStat label="This week" value={`$${Math.round(data.estimatedSpendPerWeek)}`} />
-          <SpendStat label="At this pace, per year" value={`$${Math.round(data.estimatedSpendPerYear).toLocaleString()}`} highlight />
-          <SpendStat label="All time" value={`$${Math.round(data.estimatedSpendAllTime).toLocaleString()}`} />
+          {isAllTime ? (
+            <>
+              <SpendStat label="Per week (avg)" value={`$${Math.round(data.estimatedSpendPerWeek)}`} />
+              <SpendStat label="Per year (this pace)" value={`$${Math.round(data.estimatedSpendPerYear).toLocaleString()}`} highlight />
+              <SpendStat label="All time" value={`$${Math.round(data.estimatedSpendAllTime).toLocaleString()}`} />
+            </>
+          ) : (
+            <>
+              <SpendStat label={`${capCase(rangeLabel(range))} so far`} value={`$${Math.round(data.estimatedSpendAllTime).toLocaleString()}`} highlight />
+              <SpendStat label="Per week (avg)" value={`$${Math.round(data.estimatedSpendPerWeek)}`} />
+              <SpendStat label="Year, at this rate" value={`$${Math.round(data.estimatedSpendPerYear).toLocaleString()}`} />
+            </>
+          )}
         </View>
         <Text style={[type.small, { marginTop: 14, lineHeight: 18 }]}>
-          Heuristic estimate. Real bills will vary — but the ratio between weeks
-          stays honest, which is the point.
+          Heuristic estimate. Real bills will vary — but the ratio between
+          periods stays honest, which is the point.
         </Text>
       </Section>
 
@@ -272,6 +331,10 @@ function Section({
   );
 }
 
+function capCase(s: string): string {
+  return s ? s[0].toUpperCase() + s.slice(1) : s;
+}
+
 function HeroStat({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.heroStat}>
@@ -308,6 +371,33 @@ const styles = StyleSheet.create({
   },
   closeText: { fontSize: 16, fontWeight: "700", color: colors.ink },
   body: { padding: spacing.lg, paddingBottom: 80 },
+
+  // Range selector
+  rangeRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingBottom: spacing.lg,
+  },
+  rangePill: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.faint,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  rangePillActive: {
+    backgroundColor: colors.ink,
+    borderColor: colors.ink,
+  },
+  rangePillText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.mute,
+    letterSpacing: 0.3,
+  },
+  rangePillTextActive: { color: "#fff" },
+
   center: { padding: 60, alignItems: "center" },
   errCard: { padding: spacing.lg, borderRadius: 18, borderWidth: 1, borderColor: colors.line },
   retry: {

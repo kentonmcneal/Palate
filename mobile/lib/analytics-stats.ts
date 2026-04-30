@@ -1,8 +1,10 @@
 // ============================================================================
-// analytics-stats.ts — all-time aggregations for the Insights screen.
+// analytics-stats.ts — bounded-range aggregations for the Insights screen.
 // ----------------------------------------------------------------------------
-// Pulls every confirmed visit, derives a RestaurantProfile per row, and
-// returns a structured summary the Insights UI can render directly.
+// loadAnalytics(range) accepts week / month / quarter / year / all and
+// returns the same AnalyticsSummary shape. Per-week and per-year estimates
+// normalize against the range's calendar window (not the actual visit span),
+// so projections stay sensible even when there are zero visits in the period.
 // All amounts in USD, all counts integers.
 // ============================================================================
 
@@ -14,6 +16,8 @@ import {
   type BrandTier,
 } from "./restaurant-profile";
 import type { Restaurant } from "./places";
+
+export type TimeRange = "week" | "month" | "quarter" | "year" | "all";
 
 export type CuisineSlice  = { cuisine: string;  count: number; pct: number };
 export type FormatSlice   = { format: RestaurantFormat; count: number; pct: number };
@@ -69,6 +73,37 @@ function estimatePerVisit(p: RestaurantProfile): number {
 }
 
 // ----------------------------------------------------------------------------
+// Time-range bounds — calendar-anchored (Monday for week, 1st for month, etc).
+// Returns the cutoff date for the query AND the elapsed days in the window
+// (used to normalize per-week / per-year estimates so projections still make
+// sense partway through a window).
+// ----------------------------------------------------------------------------
+
+export function dateBoundsFor(range: TimeRange, now = new Date()): { since: Date | null; windowDays: number } {
+  if (range === "all") return { since: null, windowDays: 365 }; // windowDays ignored for "all"
+
+  const since = new Date(now);
+  if (range === "week") {
+    // Monday of this week
+    const dow = since.getDay() || 7; // Sunday => 7
+    since.setDate(since.getDate() - (dow - 1));
+    since.setHours(0, 0, 0, 0);
+  } else if (range === "month") {
+    since.setDate(1);
+    since.setHours(0, 0, 0, 0);
+  } else if (range === "quarter") {
+    const m = now.getMonth();
+    const qStart = m - (m % 3);
+    since.setMonth(qStart, 1);
+    since.setHours(0, 0, 0, 0);
+  } else if (range === "year") {
+    since.setMonth(0, 1);
+    since.setHours(0, 0, 0, 0);
+  }
+
+  const windowDays = Math.max(1, Math.floor((now.getTime() - since.getTime()) / 86_400_000) + 1);
+  return { since, windowDays };
+}
 
 type VisitRow = {
   visited_at: string;
@@ -76,8 +111,10 @@ type VisitRow = {
   restaurant: Restaurant | null;
 };
 
-export async function loadAllTimeAnalytics(): Promise<AnalyticsSummary> {
-  const { data, error } = await supabase
+export async function loadAnalytics(range: TimeRange = "all"): Promise<AnalyticsSummary> {
+  const { since, windowDays } = dateBoundsFor(range);
+
+  let query = supabase
     .from("visits")
     .select(`
       visited_at, meal_type,
@@ -88,22 +125,37 @@ export async function loadAllTimeAnalytics(): Promise<AnalyticsSummary> {
       )
     `)
     .order("visited_at", { ascending: false });
+
+  if (since) query = query.gte("visited_at", since.toISOString());
+
+  const { data, error } = await query;
   if (error) throw error;
   const visits = (data ?? []) as unknown as VisitRow[];
 
-  return aggregate(visits);
+  // For bounded ranges, use the window length so per-week / per-year
+  // projections stay sensible (don't compress to a single day if there's
+  // only one visit early in the period).
+  return aggregate(visits, range === "all" ? undefined : { windowDays });
 }
+
+/** @deprecated use loadAnalytics(range) */
+export const loadAllTimeAnalytics = () => loadAnalytics("all");
 
 // ----------------------------------------------------------------------------
 // Pure aggregation — exported separately so it's easy to unit-test or feed
 // fixture data without hitting Supabase.
 // ----------------------------------------------------------------------------
 
-export function aggregate(visits: VisitRow[]): AnalyticsSummary {
+export function aggregate(
+  visits: VisitRow[],
+  options?: { windowDays?: number },
+): AnalyticsSummary {
   const totalVisits = visits.length;
 
   if (totalVisits === 0) {
-    return emptySummary();
+    // Even with no visits, we want windowDays to reflect the chosen range
+    // so the empty UI shows e.g. "7 days · 0 visits" not "0 days · 0 visits".
+    return { ...emptySummary(), spanDays: options?.windowDays ?? 0 };
   }
 
   const cuisineCounts = new Map<string, number>();
@@ -152,7 +204,8 @@ export function aggregate(visits: VisitRow[]): AnalyticsSummary {
     estTotal += estimatePerVisit(profile);
   }
 
-  const spanDays = Math.max(1, Math.round((latestMs - earliestMs) / 86_400_000) + 1);
+  const naturalSpan = Math.max(1, Math.round((latestMs - earliestMs) / 86_400_000) + 1);
+  const spanDays = options?.windowDays ?? naturalSpan;
   const avgVisitsPerWeek = (totalVisits / spanDays) * 7;
   const estimatedSpendPerWeek = (estTotal / spanDays) * 7;
 
