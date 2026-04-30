@@ -36,7 +36,7 @@ export function HeroWaitlist({ initialCount = 352 }: { initialCount?: number }) 
     // jitter; we now use the canonical position.
     setPosition(newCount);
     setStatus("success");
-    track("waitlist_signup", { source: "hero" });
+    track("waitlist_joined", { source: "hero" });
   }
 
   function shareOnX() {

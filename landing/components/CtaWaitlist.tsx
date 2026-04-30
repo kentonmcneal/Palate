@@ -38,7 +38,7 @@ export function CtaWaitlist({ initialCount: _initialCount }: { initialCount?: nu
       "We'll email you in late summer when iOS testing opens. Until then, nothing else.",
     );
     setEmail("");
-    track("waitlist_signup", { source: "cta" });
+    track("waitlist_joined", { source: "cta" });
   }
 
   const labelClass =
