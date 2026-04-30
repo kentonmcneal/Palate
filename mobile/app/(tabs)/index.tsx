@@ -7,7 +7,7 @@ import { Wordmark } from "../../components/Logo";
 import { colors, spacing, type } from "../../theme";
 import { getCurrentLocation, logLocationEvent, requestForegroundPermission } from "../../lib/location";
 import { nearbyRestaurants, type Restaurant } from "../../lib/places";
-import { recentlyPrompted, recentVisits, type Visit } from "../../lib/visits";
+import { recentlyPrompted, recentVisits, deleteVisit, type Visit } from "../../lib/visits";
 import { computeStreak, type StreakInfo } from "../../lib/streak";
 import {
   analyzeWeeklyPalate,
@@ -124,7 +124,33 @@ export default function Home() {
               </Text>
             </View>
           ) : (
-            visits.map((v) => <VisitRow key={v.id} v={v} />)
+            visits.map((v) => (
+              <VisitRow
+                key={v.id}
+                v={v}
+                onLongPress={() => {
+                  Alert.alert(
+                    "Delete this visit?",
+                    `${v.restaurant?.name ?? "Unknown"} on ${new Date(v.visited_at).toLocaleDateString()}`,
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Delete",
+                        style: "destructive",
+                        onPress: async () => {
+                          try {
+                            await deleteVisit(v.id);
+                            setVisits((curr) => curr.filter((x) => x.id !== v.id));
+                          } catch (e: any) {
+                            Alert.alert("Couldn't delete", e.message ?? "Try again");
+                          }
+                        },
+                      },
+                    ],
+                  );
+                }}
+              />
+            ))
           )}
         </View>
       </ScrollView>
@@ -191,11 +217,16 @@ function WeekSoFarCard({ insight, onPress }: { insight: PalateInsight; onPress: 
   );
 }
 
-function VisitRow({ v }: { v: Visit }) {
+function VisitRow({ v, onLongPress }: { v: Visit; onLongPress: () => void }) {
   const r = v.restaurant;
   const date = new Date(v.visited_at);
   return (
-    <View style={styles.visit}>
+    <Pressable
+      onLongPress={onLongPress}
+      delayLongPress={400}
+      style={({ pressed }) => [styles.visit, pressed && { opacity: 0.5 }]}
+      accessibilityHint="Long-press to delete"
+    >
       <View style={styles.visitDot} />
       <View style={{ flex: 1 }}>
         <Text style={styles.visitName}>{r?.name ?? "Unknown"}</Text>
@@ -205,7 +236,7 @@ function VisitRow({ v }: { v: Visit }) {
           {r?.primary_type ? ` · ${prettyType(r.primary_type)}` : ""}
         </Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

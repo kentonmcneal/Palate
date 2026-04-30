@@ -9,6 +9,11 @@ import { colors, spacing, type } from "../../theme";
 import { supabase } from "../../lib/supabase";
 import { signOut } from "../../lib/auth";
 import { generateForCurrentWeek } from "../../lib/wrapped";
+import {
+  isReminderEnabled,
+  enableSundayWrappedReminder,
+  disableSundayWrappedReminder,
+} from "../../lib/notifications";
 
 const PAUSE_KEY = "palate.tracking.paused";
 
@@ -16,11 +21,36 @@ export default function Settings() {
   const router = useRouter();
   const [tracking, setTracking] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
+  const [sundayReminder, setSundayReminder] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(PAUSE_KEY).then((v) => setTracking(v !== "1"));
     supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
+    isReminderEnabled().then(setSundayReminder);
   }, []);
+
+  async function toggleSundayReminder(next: boolean) {
+    if (next) {
+      const result = await enableSundayWrappedReminder();
+      if (result.ok) {
+        setSundayReminder(true);
+      } else if (result.reason === "denied") {
+        Alert.alert(
+          "Notifications off",
+          "Allow notifications in iOS Settings → Palate to get the Sunday Wrapped reminder.",
+          [
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+            { text: "Not now" },
+          ],
+        );
+      } else {
+        Alert.alert("Couldn't enable", "Try again in a moment.");
+      }
+    } else {
+      await disableSundayWrappedReminder();
+      setSundayReminder(false);
+    }
+  }
 
   async function toggleTracking(next: boolean) {
     setTracking(next);
@@ -96,6 +126,11 @@ export default function Settings() {
             When off, Palate stops checking your location. Past visits stay. You can still
             add visits manually.
           </Note>
+        </Section>
+
+        <Section title="Notifications">
+          <Row label="Sunday Wrapped reminder" right={<Switch value={sundayReminder} onValueChange={toggleSundayReminder} thumbColor={sundayReminder ? colors.red : "#fff"} trackColor={{ true: "#FFCFC5", false: colors.line }} />} />
+          <Note>One reminder a week, Sunday at 9 AM. That's it.</Note>
         </Section>
 
         <Section title="Wrapped">

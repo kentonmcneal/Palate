@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button, Spacer } from "../components/Button";
 import { colors, spacing, type } from "../theme";
 import { saveVisit, recordPromptDecision } from "../lib/visits";
+import { FirstVisitCelebration } from "../components/FirstVisitCelebration";
 import type { Restaurant } from "../lib/places";
 
 export default function ConfirmVisit() {
@@ -18,6 +19,7 @@ export default function ConfirmVisit() {
 
   const [showAlts, setShowAlts] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [celebration, setCelebration] = useState<{ name: string } | null>(null);
 
   const alternates: Restaurant[] = params.alternates
     ? JSON.parse(params.alternates as string)
@@ -26,10 +28,14 @@ export default function ConfirmVisit() {
   async function handleYes() {
     setBusy(true);
     try {
-      await saveVisit({ googlePlaceId: params.place_id as string, source: "auto" });
+      const result = await saveVisit({ googlePlaceId: params.place_id as string, source: "auto" });
       await recordPromptDecision(params.place_id as string, "confirmed");
-      router.back();
-      setTimeout(() => Alert.alert("Saved", `${params.name} added to your week.`), 250);
+      if (result.isFirstVisit) {
+        setCelebration({ name: params.name as string });
+      } else {
+        router.back();
+        setTimeout(() => Alert.alert("Saved", `${params.name} added to your week.`), 250);
+      }
     } catch (e: any) {
       Alert.alert("Couldn't save", e.message ?? "Try again");
     } finally {
@@ -50,10 +56,14 @@ export default function ConfirmVisit() {
   async function pickAlternate(p: Restaurant) {
     setBusy(true);
     try {
-      await saveVisit({ googlePlaceId: p.google_place_id, source: "auto" });
+      const result = await saveVisit({ googlePlaceId: p.google_place_id, source: "auto" });
       await recordPromptDecision(p.google_place_id, "confirmed");
-      router.back();
-      setTimeout(() => Alert.alert("Saved", `${p.name} added.`), 250);
+      if (result.isFirstVisit) {
+        setCelebration({ name: p.name });
+      } else {
+        router.back();
+        setTimeout(() => Alert.alert("Saved", `${p.name} added.`), 250);
+      }
     } catch (e: any) {
       Alert.alert("Couldn't save", e.message ?? "Try again");
     } finally {
@@ -107,6 +117,11 @@ export default function ConfirmVisit() {
         <Spacer />
         <Button title="Not right now" variant="ghost" onPress={handleNotNow} />
       </View>
+      <FirstVisitCelebration
+        visible={!!celebration}
+        restaurantName={celebration?.name ?? ""}
+        onDismiss={() => { setCelebration(null); router.back(); }}
+      />
     </SafeAreaView>
   );
 }

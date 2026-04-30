@@ -114,24 +114,6 @@ export default function AboutPage() {
           </figure>
         </section>
 
-        {/* ============== QUICK FACTS ============== */}
-        <section className="mt-20">
-          <div className="text-xs font-semibold text-palate-mute tracking-widest uppercase">
-            Quick facts
-          </div>
-          <div className="mt-5 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Fact label="Hometown" value="Memphis, Tennessee" />
-            <Fact label="High school" value="Overton High School · Valedictorian" />
-            <Fact label="Undergrad" value="Morehouse College &apos;20 · BA Psychology · Summa Cum Laude" />
-            <Fact label="MBA" value="The Wharton School · Class of 2026" />
-            <Fact label="Most recent" value="Strategic Finance & Analytics, Airbnb" />
-            <Fact label="Before that" value="Strategy & Operations, Deloitte Consulting" />
-            <Fact label="Trained pianist" value="Classical · 7 years" />
-            <Fact label="Off-the-clock" value="Avid runner, weight lifter, food connoisseur" />
-            <Fact label="Honors" value="Howard E. Mitchell Fellow · Phi Beta Kappa · UNCF Scholar" />
-          </div>
-        </section>
-
         {/* ============== WHY PALATE ============== */}
         <section className="mt-20 rounded-3xl bg-palate-soft border border-palate-line p-8 sm:p-12">
           <div className="text-xs font-semibold text-palate-mute tracking-widest uppercase">
@@ -163,13 +145,3 @@ export default function AboutPage() {
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-palate-line bg-white p-5">
-      <div className="text-xs uppercase tracking-widest text-palate-mute font-semibold">
-        {label}
-      </div>
-      <div className="mt-2 text-[15px] font-medium leading-snug">{value}</div>
-    </div>
-  );
-}

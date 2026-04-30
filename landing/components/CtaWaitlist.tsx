@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { joinWaitlist } from "@/lib/waitlist";
 import { track } from "@/lib/analytics";
+import { captureRefFromUrl } from "@/lib/referral";
 
 export function CtaWaitlist({ initialCount: _initialCount }: { initialCount?: number } = {}) {
   // initialCount is accepted for API symmetry with HeroWaitlist; this form
@@ -15,6 +16,9 @@ export function CtaWaitlist({ initialCount: _initialCount }: { initialCount?: nu
   const [message, setMessage] = useState<string>(
     "We'll only email about Palate. Unsubscribe anytime.",
   );
+  const [referredBy, setReferredBy] = useState<string | null>(null);
+
+  useEffect(() => { setReferredBy(captureRefFromUrl()); }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -25,7 +29,7 @@ export function CtaWaitlist({ initialCount: _initialCount }: { initialCount?: nu
       return;
     }
     setStatus("loading");
-    const result = await joinWaitlist(value, "landing-cta");
+    const result = await joinWaitlist(value, "landing-cta", referredBy);
     if (!result.ok) {
       setStatus("error");
       setMessage(
@@ -38,7 +42,7 @@ export function CtaWaitlist({ initialCount: _initialCount }: { initialCount?: nu
       "We'll email you in late summer when iOS testing opens. Until then, nothing else.",
     );
     setEmail("");
-    track("waitlist_joined", { source: "cta" });
+    track("waitlist_joined", { source: "cta", referred_by: referredBy ?? "direct" });
   }
 
   const labelClass =

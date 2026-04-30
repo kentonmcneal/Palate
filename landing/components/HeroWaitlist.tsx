@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { joinWaitlist } from "@/lib/waitlist";
 import { track } from "@/lib/analytics";
+import { captureRefFromUrl, shareUrlFor, REFERRAL_BUMP_AT } from "@/lib/referral";
 
 export function HeroWaitlist({ initialCount = 352 }: { initialCount?: number }) {
   const [email, setEmail] = useState("");
@@ -10,7 +11,12 @@ export function HeroWaitlist({ initialCount = 352 }: { initialCount?: number }) 
   const [message, setMessage] = useState<string | null>(null);
   const [count, setCount] = useState(initialCount);
   const [position, setPosition] = useState<number | null>(null);
-  const [copyText, setCopyText] = useState("Copy link");
+  const [copyText, setCopyText] = useState("Copy referral link");
+  const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [referredBy, setReferredBy] = useState<string | null>(null);
+
+  // Pull ?ref= from the URL on mount (and persist for later signups).
+  useEffect(() => { setReferredBy(captureRefFromUrl()); }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,7 +28,7 @@ export function HeroWaitlist({ initialCount = 352 }: { initialCount?: number }) 
     }
     setStatus("loading");
     setMessage(null);
-    const result = await joinWaitlist(value, "landing-hero");
+    const result = await joinWaitlist(value, "landing-hero", referredBy);
     if (!result.ok) {
       setStatus("error");
       setMessage(
@@ -32,15 +38,16 @@ export function HeroWaitlist({ initialCount = 352 }: { initialCount?: number }) 
     }
     const newCount = count + 1;
     setCount(newCount);
-    // Position = count + 1 (the spec: their slot in line). Earlier code added
-    // jitter; we now use the canonical position.
     setPosition(newCount);
+    setReferralCode(result.referralCode ?? null);
     setStatus("success");
-    track("waitlist_joined", { source: "hero" });
+    track("waitlist_joined", { source: "hero", referred_by: referredBy ?? "direct" });
   }
 
   function shareOnX() {
-    const url = encodeURIComponent("https://palate.app");
+    const url = encodeURIComponent(
+      referralCode ? shareUrlFor(referralCode) : "https://palate.app",
+    );
     const text = encodeURIComponent(
       "I just joined the waitlist for Palate — a weekly Wrapped of what you actually eat. Curious to see mine.",
     );
@@ -49,18 +56,19 @@ export function HeroWaitlist({ initialCount = 352 }: { initialCount?: number }) 
       "_blank",
       "noopener",
     );
-    track("share_click", { method: "twitter" });
+    track("share_click", { method: "twitter", with_referral: !!referralCode });
   }
 
   async function copyLink() {
+    const link = referralCode ? shareUrlFor(referralCode) : "https://palate.app";
     try {
-      await navigator.clipboard.writeText("https://palate.app");
+      await navigator.clipboard.writeText(link);
       setCopyText("Copied");
     } catch {
       setCopyText("Couldn't copy");
     }
-    setTimeout(() => setCopyText("Copy link"), 2000);
-    track("share_click", { method: "copy" });
+    setTimeout(() => setCopyText("Copy referral link"), 2000);
+    track("share_click", { method: "copy", with_referral: !!referralCode });
   }
 
   if (status === "success") {
@@ -106,8 +114,13 @@ export function HeroWaitlist({ initialCount = 352 }: { initialCount?: number }) 
               </div>
             </div>
             <div className="text-xs text-palate-mute mt-2">
-              Skip 50 spots when 3 friends sign up via your link.
+              Skip 50 spots when {REFERRAL_BUMP_AT} friends sign up via your link.
             </div>
+            {referralCode && (
+              <div className="mt-3 rounded-lg bg-white border border-palate-line px-3 py-2 text-xs font-mono text-palate-ink break-all">
+                {shareUrlFor(referralCode)}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -21,17 +21,26 @@ function mealTypeFor(date: Date): Visit["meal_type"] {
   return "snack";
 }
 
+export type SaveVisitResult = Visit & { isFirstVisit: boolean };
+
 export async function saveVisit(opts: {
   googlePlaceId: string;
   visitedAt?: Date;
   source: "auto" | "manual";
   notes?: string;
-}) {
+}): Promise<SaveVisitResult> {
   const restaurantId = await getRestaurantIdByPlaceId(opts.googlePlaceId);
   const visitedAt = opts.visitedAt ?? new Date();
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not signed in");
+
+  // Cheap pre-insert count so the caller can show the first-visit celebration.
+  // Done before insert so we don't double-count the new row.
+  const { count: priorCount } = await supabase
+    .from("visits")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
 
   const { data, error } = await supabase
     .from("visits")
@@ -48,7 +57,7 @@ export async function saveVisit(opts: {
     .single();
 
   if (error) throw error;
-  return data as Visit;
+  return { ...(data as Visit), isFirstVisit: (priorCount ?? 0) === 0 };
 }
 
 export async function recentVisits(limit = 20) {

@@ -7,12 +7,14 @@ import { colors, spacing, type } from "../../theme";
 import { searchRestaurants, type Restaurant } from "../../lib/places";
 import { saveVisit } from "../../lib/visits";
 import { getCurrentLocation } from "../../lib/location";
+import { FirstVisitCelebration } from "../../components/FirstVisitCelebration";
 
 export default function AddTab() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState(false);
+  const [celebration, setCelebration] = useState<{ name: string } | null>(null);
 
   async function handleSearch() {
     if (!query.trim()) return;
@@ -36,10 +38,14 @@ export default function AddTab() {
 
   async function pickPlace(p: Restaurant) {
     try {
-      await saveVisit({ googlePlaceId: p.google_place_id, source: "manual" });
-      Alert.alert("Saved", `${p.name} added.`, [
-        { text: "OK", onPress: () => router.replace("/(tabs)") },
-      ]);
+      const result = await saveVisit({ googlePlaceId: p.google_place_id, source: "manual" });
+      if (result.isFirstVisit) {
+        setCelebration({ name: p.name });
+      } else {
+        Alert.alert("Saved", `${p.name} added.`, [
+          { text: "OK", onPress: () => router.replace("/(tabs)") },
+        ]);
+      }
     } catch (e: any) {
       Alert.alert("Couldn't save", e.message ?? "Try again");
     }
@@ -83,6 +89,11 @@ export default function AddTab() {
           ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.line }} />}
         />
       </View>
+      <FirstVisitCelebration
+        visible={!!celebration}
+        restaurantName={celebration?.name ?? ""}
+        onDismiss={() => { setCelebration(null); router.replace("/(tabs)"); }}
+      />
     </SafeAreaView>
   );
 }
