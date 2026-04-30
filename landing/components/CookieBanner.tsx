@@ -3,19 +3,34 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-// NOTE: per spec, no localStorage / sessionStorage. This is in-memory only;
-// "accept" hides the banner for the current session. A real consent service
-// (Plausible doesn't need consent, but a future integration might) would
-// persist this server-side or via a managed CMP.
+// Self-dismissing privacy notice. Slides in after 1.2s, auto-fades on the
+// first scroll past 200px (most visitors won't even register it), and is
+// dismissable via Escape or the close button. Footer carries the persistent
+// disclosure for anyone who actually wants to read it.
+//
+// No localStorage by design — we don't need to remember dismissal because
+// the banner is non-blocking and the analytics is cookie-free anyway.
 export function CookieBanner() {
   const [visible, setVisible] = useState(false);
 
+  // Show after a brief delay (less jarring than appearing on first paint).
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 1200);
     return () => clearTimeout(t);
   }, []);
 
-  // Allow keyboard users to dismiss the banner with Escape.
+  // Auto-dismiss on first meaningful scroll — visitor's reading the page,
+  // they shouldn't be blocked by a privacy notice they didn't ask about.
+  useEffect(() => {
+    if (!visible) return;
+    function onScroll() {
+      if (window.scrollY > 200) setVisible(false);
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [visible]);
+
+  // Escape to dismiss for keyboard users.
   useEffect(() => {
     if (!visible) return;
     function onKey(e: KeyboardEvent) {
@@ -29,24 +44,22 @@ export function CookieBanner() {
     <div
       className={`cookie-bar ${visible ? "" : "hide"}`}
       role="region"
-      aria-label="Cookie notice"
+      aria-label="Privacy notice"
       aria-hidden={!visible}
     >
-      <div className="text-sm leading-relaxed flex-1">
-        We use a privacy-friendly analytics tool (no cookies, no tracking
-        across sites).{" "}
-        <Link href="/privacy" className="underline">
+      <div className="text-xs leading-relaxed flex-1 text-white/85">
+        Privacy-friendly analytics — no cookies, no cross-site tracking.{" "}
+        <Link href="/privacy" className="underline hover:text-white">
           Learn more
         </Link>
-        .
       </div>
       <button
         type="button"
         onClick={() => setVisible(false)}
-        aria-label="Dismiss cookie notice"
-        className="rounded-full bg-white text-palate-ink font-semibold px-4 py-2 text-sm hover:opacity-90"
+        aria-label="Dismiss privacy notice"
+        className="text-white/60 hover:text-white text-base px-1 leading-none"
       >
-        Got it
+        ×
       </button>
     </div>
   );

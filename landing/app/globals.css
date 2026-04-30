@@ -246,29 +246,36 @@ details[open] .chev {
   opacity: 0.7;
 }
 
-/* Cookie banner */
+/* Privacy notice — bottom-left pill, smaller and less competitive */
 .cookie-bar {
   position: fixed;
   bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 24px);
-  max-width: 720px;
-  background: #111;
+  left: 16px;
+  max-width: 380px;
+  background: rgba(17, 17, 17, 0.92);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   color: #fff;
-  border-radius: 16px;
-  padding: 14px 18px;
+  border-radius: 999px;
+  padding: 10px 12px 10px 18px;
   display: flex;
-  gap: 14px;
+  gap: 10px;
   align-items: center;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
   z-index: 60;
   transition: opacity 0.25s, transform 0.25s;
 }
 .cookie-bar.hide {
   opacity: 0;
-  transform: translate(-50%, 20px);
+  transform: translateY(20px);
   pointer-events: none;
+}
+@media (max-width: 480px) {
+  .cookie-bar {
+    left: 12px;
+    right: 12px;
+    max-width: none;
+  }
 }
 
 /* Mobile drawer */
