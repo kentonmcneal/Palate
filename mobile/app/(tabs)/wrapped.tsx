@@ -6,6 +6,7 @@ import { Button, Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { generateForCurrentWeek, latestWrapped, type Wrapped } from "../../lib/wrapped";
 import { WrappedCard } from "../../components/WrappedCard";
+import { WeeklyPalateInsights } from "../../components/WeeklyPalateInsights";
 import ViewShot, { captureRef } from "react-native-view-shot";
 
 export default function WrappedTab() {
@@ -71,6 +72,7 @@ export default function WrappedTab() {
             <ViewShot ref={cardRef as any} options={{ format: "png", quality: 1 }}>
               <WrappedCard data={data} />
             </ViewShot>
+            <WeeklyPalateInsights weekStart={data.week_start} weekEnd={data.week_end} />
             <Spacer />
             <Button title="Share" onPress={share} />
             <Spacer />
