@@ -33,6 +33,13 @@ export type StarterPersona = {
   coreSignals: Signal[];
   /** "You probably…" callout — single line, slightly exposing. */
   probably: string;
+  /**
+   * Plausible % of quiz-takers who land on this persona. Currently a static
+   * estimate based on US eating-pattern intuitions; once we have real
+   * `quiz_completed` analytics data we'll compute this server-side and
+   * display the live distribution. Sums to ~100 across all 9.
+   */
+  frequencyPct: number;
 };
 
 export const STARTER_PERSONAS: Record<StarterPersonaKey, StarterPersona> = {
@@ -46,6 +53,7 @@ export const STARTER_PERSONAS: Record<StarterPersonaKey, StarterPersona> = {
     coreSignals: ["no_friction", "routine", "convenience"],
     probably:
       "You probably have the same lunch order Mon-Wed-Fri, and you're not changing it.",
+    frequencyPct: 24,
   },
 
   flavor_loyalist: {
@@ -58,6 +66,7 @@ export const STARTER_PERSONAS: Record<StarterPersonaKey, StarterPersona> = {
     coreSignals: ["flavor_driven", "indulgence", "routine"],
     probably:
       "You probably have a specific dish in mind before you even open the app.",
+    frequencyPct: 6,
   },
 
   premium_comfort_loyalist: {
@@ -70,6 +79,7 @@ export const STARTER_PERSONAS: Record<StarterPersonaKey, StarterPersona> = {
     coreSignals: ["premium", "intentional", "routine"],
     probably:
       "You probably know exactly which Sweetgreen has the best playlist.",
+    frequencyPct: 4,
   },
 
   practical_variety_seeker: {
@@ -82,6 +92,7 @@ export const STARTER_PERSONAS: Record<StarterPersonaKey, StarterPersona> = {
     coreSignals: ["intentional", "novelty", "healthy_ish"],
     probably:
       "You probably hate being asked 'what kind of food do you like?' — the answer is 'depends.'",
+    frequencyPct: 8,
   },
 
   explorer: {
@@ -94,6 +105,7 @@ export const STARTER_PERSONAS: Record<StarterPersonaKey, StarterPersona> = {
     coreSignals: ["novelty", "intentional", "flavor_driven"],
     probably:
       "You probably have a saved list of 30 places you still haven't gotten to.",
+    frequencyPct: 10,
   },
 
   cafe_dweller: {
@@ -106,6 +118,7 @@ export const STARTER_PERSONAS: Record<StarterPersonaKey, StarterPersona> = {
     coreSignals: ["routine", "intentional", "premium"],
     probably:
       "You probably know your barista's name. They probably know yours.",
+    frequencyPct: 12,
   },
 
   comfort_connoisseur: {
@@ -118,6 +131,7 @@ export const STARTER_PERSONAS: Record<StarterPersonaKey, StarterPersona> = {
     coreSignals: ["indulgence", "flavor_driven", "routine"],
     probably:
       "You probably have a 'rough day' restaurant. You don't even need a menu.",
+    frequencyPct: 16,
   },
 
   fast_casual_regular: {
@@ -130,6 +144,7 @@ export const STARTER_PERSONAS: Record<StarterPersonaKey, StarterPersona> = {
     coreSignals: ["healthy_ish", "convenience", "intentional"],
     probably:
       "You'd probably choose Sweetgreen over cooking, even when you have time.",
+    frequencyPct: 18,
   },
 
   social_diner: {
@@ -142,5 +157,6 @@ export const STARTER_PERSONAS: Record<StarterPersonaKey, StarterPersona> = {
     coreSignals: ["social", "intentional"],
     probably:
       "You probably can't always remember what you ordered — but you remember who you were with.",
+    frequencyPct: 2,
   },
 };

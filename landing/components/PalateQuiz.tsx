@@ -211,6 +211,16 @@ function ResultCard({
           {persona.insight}
         </p>
 
+        {/* Frequency / "you're not alone" social context */}
+        <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-white/8 border border-white/15 px-3.5 py-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-palate-red" />
+          <span className="text-[12px] text-white/85 font-medium">
+            1 of 9 possible Palates · about{" "}
+            <span className="text-white font-semibold">{persona.frequencyPct}%</span>{" "}
+            of quiz takers are also {persona.label}
+          </span>
+        </div>
+
         {/* Why we think this */}
         {chips.length > 0 && (
           <div className="mt-7 flex flex-wrap justify-center gap-2 max-w-md mx-auto">

@@ -7,6 +7,7 @@ import { CtaWaitlist } from "@/components/CtaWaitlist";
 import { CookieBanner } from "@/components/CookieBanner";
 import { AppStoreBadge } from "@/components/AppStoreBadge";
 import { PalateQuiz } from "@/components/PalateQuiz";
+import { StickyQuizCta } from "@/components/StickyQuizCta";
 import { getWaitlistCount } from "@/lib/waitlist";
 
 // Revalidate the home page (and the embedded count) every 60s.
@@ -71,6 +72,10 @@ const PERSONALITIES = [
 ];
 
 const FAQS = [
+  {
+    q: "How is Palate different from Beli, Yelp, or Resy?",
+    a: "Those apps measure your <em>opinions</em> — what you'd recommend, how you'd rate it. Palate measures your <em>patterns</em> — where you actually keep going. They're complementary, not competitive. Palate is the part those apps don't have.",
+  },
   {
     q: "Will Palate kill my battery?",
     a: "No. Palate only uses location when you open the app and tap to log a visit. Nothing runs in the background today, so there's no measurable battery impact. (Optional background detection is on the roadmap and will be opt-in.)",
@@ -176,14 +181,14 @@ export default async function Page() {
             Not what you say you like. What your behavior proves.
           </p>
 
-          <HeroWaitlist initialCount={waitlistCount} />
-
           <a
             href="#quiz"
-            className="mt-6 inline-flex items-center gap-1 text-sm font-semibold text-palate-red hover:underline"
+            className="mt-8 inline-flex items-center gap-1 text-sm font-semibold text-palate-red hover:underline"
           >
-            Curious already? Take the 30-second Palate quiz ↓
+            Find your starter Palate in 30 seconds ↓
           </a>
+
+          <HeroWaitlist initialCount={waitlistCount} />
         </div>
 
         {/* Hero cards grid */}
@@ -882,6 +887,7 @@ export default async function Page() {
       </footer>
 
       <CookieBanner />
+      <StickyQuizCta />
     </>
   );
 }

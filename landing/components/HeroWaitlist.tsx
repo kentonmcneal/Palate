@@ -129,9 +129,21 @@ export function HeroWaitlist({ initialCount = 352 }: { initialCount?: number }) 
 
   return (
     <>
+      {/* Live-feeling social proof above the form */}
+      <div className="mt-8 flex items-center justify-center gap-2 text-sm text-palate-mute">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-palate-red opacity-60" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-palate-red" />
+        </span>
+        <span>
+          <span className="font-semibold text-palate-ink">{count.toLocaleString()}</span>{" "}
+          early eaters · joining in NYC, LA, SF, Boston, Atlanta
+        </span>
+      </div>
+
       <form
         onSubmit={onSubmit}
-        className="mt-10 max-w-xl mx-auto flex items-center bg-white border border-palate-line rounded-full pl-6 pr-2 py-2 shadow-card focus-within:shadow-cardHover transition-shadow"
+        className="mt-4 max-w-xl mx-auto flex items-center bg-white border border-palate-line rounded-full pl-6 pr-2 py-2 shadow-card focus-within:shadow-cardHover transition-shadow"
         noValidate
         aria-label="Join the waitlist"
       >
@@ -170,10 +182,8 @@ export function HeroWaitlist({ initialCount = 352 }: { initialCount?: number }) 
           message
         ) : (
           <>
-            <span className="font-semibold text-palate-ink">
-              {count.toLocaleString()}
-            </span>{" "}
-            people on the list · Free during beta · No spam, ever
+            <span className="font-semibold text-palate-ink">What you'll get:</span>{" "}
+            one email when iOS testing opens. That's the only email.
           </>
         )}
       </div>
