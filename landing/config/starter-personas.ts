@@ -12,10 +12,14 @@ import type { Signal } from "./signals";
 
 export type StarterPersonaKey =
   | "convenience_loyalist"
+  | "flavor_loyalist"
+  | "premium_comfort_loyalist"
+  | "practical_variety_seeker"
   | "explorer"
   | "cafe_dweller"
   | "comfort_connoisseur"
-  | "fast_casual_regular";
+  | "fast_casual_regular"
+  | "social_diner";
 
 export type StarterPersona = {
   key: StarterPersonaKey;
@@ -42,6 +46,42 @@ export const STARTER_PERSONAS: Record<StarterPersonaKey, StarterPersona> = {
     coreSignals: ["no_friction", "routine", "convenience"],
     probably:
       "You probably have the same lunch order Mon-Wed-Fri, and you're not changing it.",
+  },
+
+  flavor_loyalist: {
+    key: "flavor_loyalist",
+    label: "The Flavor Loyalist",
+    tagline: "You know what you want, and you go get it.",
+    insight:
+      "You don't drift toward food — you go *for* it. The repeats in your week aren't laziness; they're a craving you've already done the homework on.",
+    exampleBrands: ["Burger King", "Popeyes", "Joe's Pizza"],
+    coreSignals: ["flavor_driven", "indulgence", "routine"],
+    probably:
+      "You probably have a specific dish in mind before you even open the app.",
+  },
+
+  premium_comfort_loyalist: {
+    key: "premium_comfort_loyalist",
+    label: "The Premium Comfort Loyalist",
+    tagline: "You'll pay a little more for the same good thing.",
+    insight:
+      "Not the cheapest option, not the fanciest — the one you trust. You return to the same elevated spots because you've already filtered the noise. Loyal to a feeling, not a price tag.",
+    exampleBrands: ["Sweetgreen", "Shake Shack", "Cava"],
+    coreSignals: ["premium", "intentional", "routine"],
+    probably:
+      "You probably know exactly which Sweetgreen has the best playlist.",
+  },
+
+  practical_variety_seeker: {
+    key: "practical_variety_seeker",
+    label: "The Practical Variety Seeker",
+    tagline: "You eat a little bit of everything — on purpose.",
+    insight:
+      "You're not loyal, but you're not random either. Healthy on Tuesday, indulgent on Friday, somewhere new on Sunday — you're picking different modes for different reasons. That's range, not indecision.",
+    exampleBrands: ["Sweetgreen", "Joe's Pizza", "the new spot"],
+    coreSignals: ["intentional", "novelty", "healthy_ish"],
+    probably:
+      "You probably hate being asked 'what kind of food do you like?' — the answer is 'depends.'",
   },
 
   explorer: {
@@ -90,5 +130,17 @@ export const STARTER_PERSONAS: Record<StarterPersonaKey, StarterPersona> = {
     coreSignals: ["healthy_ish", "convenience", "intentional"],
     probably:
       "You'd probably choose Sweetgreen over cooking, even when you have time.",
+  },
+
+  social_diner: {
+    key: "social_diner",
+    label: "The Social Diner",
+    tagline: "Food is the excuse, the table is the point.",
+    insight:
+      "Your most memorable meals are about the company, not the cuisine. You'd take a mediocre meal with great people over a great meal alone every time.",
+    exampleBrands: ["the wine bar", "the group dinner", "wherever the friends are"],
+    coreSignals: ["social", "intentional"],
+    probably:
+      "You probably can't always remember what you ordered — but you remember who you were with.",
   },
 };

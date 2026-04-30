@@ -5,9 +5,11 @@
 // is presentational; this file holds all copy and scoring logic so iterating
 // on tone or scoring weights doesn't require touching React.
 //
-// Scoring: each option contributes one point to its `persona` key. Tie-break
-// goes to the most recent (Q3) answer. Each option also carries a `chip`
-// string — the user sees these on the result card as "Why we think this".
+// SCORING (v2): each option contributes weighted points to MULTIPLE personas
+// (was: one option = one vote for one persona). Five questions × four options
+// each = 1024 unique answer paths mapping to 9 personas — far more variety
+// than the v1 vote-counting system. Tie-break still favors the most recent
+// answer.
 // ============================================================================
 
 import type { Signal } from "./signals";
@@ -15,12 +17,14 @@ import type { StarterPersonaKey } from "./starter-personas";
 
 export type QuizLean = "routine" | "exploration" | "intentional" | "indulgent" | "social";
 
+export type PersonaWeights = Partial<Record<StarterPersonaKey, number>>;
+
 export type QuizOption = {
   emoji: string;
   /** What the option says. Behavioral confessions, not menu items. */
   text: string;
-  /** Persona this option votes for. */
-  persona: StarterPersonaKey;
+  /** Weighted votes this option casts toward each persona. Sum doesn't need to equal anything. */
+  personaWeights: PersonaWeights;
   /** Coarser axis for the progressive-reveal hint between questions. */
   lean: QuizLean;
   /** Signals this answer contributes to the user's profile. */
@@ -38,6 +42,11 @@ export type QuizQuestion = {
 };
 
 // ----------------------------------------------------------------------------
+// QUESTIONS — five total, designed to cross-cut the persona space rather
+// than each question pointing at one persona. The first three set the broad
+// pattern (routine vs exploration, comfort vs healthy). Q4 adds price/social
+// signal. Q5 surfaces what they remember most about meals.
+// ----------------------------------------------------------------------------
 
 export const QUIZ_QUESTIONS: QuizQuestion[] = [
   {
@@ -47,7 +56,7 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       {
         emoji: "🥡",
         text: "I'm not deciding. I'm getting the thing that always hits.",
-        persona: "convenience_loyalist",
+        personaWeights: { convenience_loyalist: 3, flavor_loyalist: 1 },
         lean: "routine",
         signals: ["no_friction", "routine"],
         chip: "Low decision effort",
@@ -56,7 +65,7 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       {
         emoji: "🌮",
         text: "Walking ten minutes for the place I've been meaning to try.",
-        persona: "explorer",
+        personaWeights: { explorer: 3, practical_variety_seeker: 1 },
         lean: "exploration",
         signals: ["novelty", "intentional"],
         chip: "Try-new energy",
@@ -65,7 +74,7 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       {
         emoji: "🥗",
         text: "Something healthy-ish, fast, and on the way.",
-        persona: "fast_casual_regular",
+        personaWeights: { fast_casual_regular: 3, practical_variety_seeker: 1 },
         lean: "intentional",
         signals: ["healthy_ish", "convenience", "intentional"],
         chip: "Healthy-ish choices",
@@ -74,7 +83,7 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       {
         emoji: "🍔",
         text: "I had a long day. I'm getting the thing I keep thinking about.",
-        persona: "comfort_connoisseur",
+        personaWeights: { comfort_connoisseur: 3, flavor_loyalist: 2 },
         lean: "indulgent",
         signals: ["indulgence", "flavor_driven"],
         chip: "Comfort over optics",
@@ -89,7 +98,7 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       {
         emoji: "☕",
         text: "Same café. Same order. No surprises.",
-        persona: "cafe_dweller",
+        personaWeights: { cafe_dweller: 3, convenience_loyalist: 1 },
         lean: "routine",
         signals: ["routine", "intentional"],
         chip: "Coffee shop loyalty",
@@ -98,16 +107,16 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       {
         emoji: "📸",
         text: "Somewhere I'd actually want to talk about. The vibe matters.",
-        persona: "explorer",
+        personaWeights: { explorer: 2, premium_comfort_loyalist: 2, social_diner: 1 },
         lean: "exploration",
         signals: ["novelty", "premium", "intentional"],
         chip: "Vibe over speed",
-        feedback: "You're picking for the story, not the food.",
+        feedback: "You're picking for the story, not just the food.",
       },
       {
         emoji: "⚡",
         text: "Whatever's open and fast. I'm not making decisions today.",
-        persona: "convenience_loyalist",
+        personaWeights: { convenience_loyalist: 3, fast_casual_regular: 1 },
         lean: "routine",
         signals: ["no_friction", "convenience"],
         chip: "Convenience matters",
@@ -116,7 +125,7 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       {
         emoji: "🥑",
         text: "Something fresh. I've been eating heavy all week.",
-        persona: "fast_casual_regular",
+        personaWeights: { fast_casual_regular: 3, practical_variety_seeker: 1 },
         lean: "intentional",
         signals: ["healthy_ish", "intentional"],
         chip: "Bowls over brunch",
@@ -131,7 +140,7 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       {
         emoji: "🔥",
         text: "Honestly? That one indulgent thing I can't stop thinking about.",
-        persona: "comfort_connoisseur",
+        personaWeights: { comfort_connoisseur: 3, flavor_loyalist: 2 },
         lean: "indulgent",
         signals: ["indulgence", "flavor_driven"],
         chip: "Indulgent and proud",
@@ -140,7 +149,7 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       {
         emoji: "🆕",
         text: "A new spot a friend dragged me to. I never would have gone.",
-        persona: "explorer",
+        personaWeights: { explorer: 3, social_diner: 2 },
         lean: "exploration",
         signals: ["novelty", "social"],
         chip: "New > known",
@@ -149,7 +158,7 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       {
         emoji: "🥣",
         text: "The exact bowl I get every Thursday. Don't judge.",
-        persona: "convenience_loyalist",
+        personaWeights: { convenience_loyalist: 2, fast_casual_regular: 2 },
         lean: "routine",
         signals: ["routine", "no_friction"],
         chip: "Repeat-order energy",
@@ -158,11 +167,95 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       {
         emoji: "🥐",
         text: "Long brunch with great coffee, somewhere quiet.",
-        persona: "cafe_dweller",
+        personaWeights: { cafe_dweller: 3, premium_comfort_loyalist: 1 },
         lean: "intentional",
         signals: ["intentional", "premium"],
         chip: "Slow Saturday energy",
         feedback: "The meal is the medium. The mood is the point.",
+      },
+    ],
+  },
+  {
+    id: "the_bill",
+    prompt: "When the bill comes, you…",
+    options: [
+      {
+        emoji: "🙋",
+        text: "I split it. Money stuff is a vibe-killer.",
+        personaWeights: { social_diner: 3, comfort_connoisseur: 1 },
+        lean: "social",
+        signals: ["social"],
+        chip: "Tab is the table's",
+        feedback: "Food is the excuse, the table is the point.",
+      },
+      {
+        emoji: "💸",
+        text: "I check the math. Always.",
+        personaWeights: { convenience_loyalist: 2, practical_variety_seeker: 1 },
+        lean: "routine",
+        signals: ["value", "intentional"],
+        chip: "Value-aware",
+        feedback: "You know exactly where the money goes.",
+      },
+      {
+        emoji: "✨",
+        text: "I don't really notice. Good food is worth it.",
+        personaWeights: { premium_comfort_loyalist: 3, flavor_loyalist: 2 },
+        lean: "indulgent",
+        signals: ["premium", "flavor_driven"],
+        chip: "Quality over price",
+        feedback: "You'll pay for the thing you actually want.",
+      },
+      {
+        emoji: "🍳",
+        text: "I'd rather have spent that on groceries.",
+        personaWeights: { fast_casual_regular: 2, cafe_dweller: 1, practical_variety_seeker: 1 },
+        lean: "intentional",
+        signals: ["healthy_ish", "value", "intentional"],
+        chip: "Cook-at-home leanings",
+        feedback: "You like eating out — but the math is in your head.",
+      },
+    ],
+  },
+  {
+    id: "memorable_meal",
+    prompt: "Your last memorable meal was about…",
+    options: [
+      {
+        emoji: "🌶️",
+        text: "The food itself. A specific flavor I can't stop thinking about.",
+        personaWeights: { flavor_loyalist: 3, comfort_connoisseur: 1 },
+        lean: "indulgent",
+        signals: ["flavor_driven"],
+        chip: "Flavor-first",
+        feedback: "You don't forget a great bite.",
+      },
+      {
+        emoji: "👯",
+        text: "The people I was with. Honestly can't remember what I ordered.",
+        personaWeights: { social_diner: 3, explorer: 1 },
+        lean: "social",
+        signals: ["social"],
+        chip: "People > plate",
+        feedback: "Food is the canvas. The company is the painting.",
+      },
+      {
+        emoji: "💯",
+        text: "Trying something I'd never had before. New cuisine, new dish.",
+        personaWeights: { explorer: 3, premium_comfort_loyalist: 1 },
+        lean: "exploration",
+        signals: ["novelty", "intentional"],
+        chip: "First-time energy",
+        feedback: "Novelty is the meal you remember.",
+      },
+      {
+        emoji: "🛋️",
+        text: "Just relaxing. Comfort food, no pressure, my favorite spot.",
+        personaWeights: { comfort_connoisseur: 2, cafe_dweller: 2, convenience_loyalist: 1 },
+        lean: "routine",
+        signals: ["comfort_food", "routine"],
+        chip: "Comfort = memory",
+        feedback: "Familiar is its own kind of special.",
       },
     ],
   },
@@ -172,16 +265,25 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
 // Scoring helpers — pure functions so the component stays presentational.
 // ============================================================================
 
+/** Sums weighted persona votes across all picked options; ties broken by recency. */
 export function tallyPersona(answers: QuizOption[]): StarterPersonaKey {
-  const counts: Record<string, number> = {};
-  for (const a of answers) counts[a.persona] = (counts[a.persona] ?? 0) + 1;
-  const max = Math.max(...Object.values(counts));
-  const winners = Object.keys(counts).filter((k) => counts[k] === max);
-  if (winners.length > 1 && answers.length > 0) {
-    const last = answers[answers.length - 1].persona;
-    if (winners.includes(last)) return last;
+  const totals: Partial<Record<StarterPersonaKey, number>> = {};
+  for (const a of answers) {
+    for (const [persona, weight] of Object.entries(a.personaWeights) as Array<[StarterPersonaKey, number]>) {
+      totals[persona] = (totals[persona] ?? 0) + weight;
+    }
   }
-  return winners[0] as StarterPersonaKey;
+  const entries = Object.entries(totals) as Array<[StarterPersonaKey, number]>;
+  if (entries.length === 0) return "convenience_loyalist"; // safe fallback, should never hit
+  const max = Math.max(...entries.map(([, v]) => v));
+  const winners = entries.filter(([, v]) => v === max).map(([k]) => k);
+  if (winners.length > 1 && answers.length > 0) {
+    // Tie-break: pick the persona the most recent answer voted for, if it tied.
+    const lastWeights = answers[answers.length - 1].personaWeights;
+    const recencyMatch = winners.find((k) => (lastWeights[k] ?? 0) > 0);
+    if (recencyMatch) return recencyMatch;
+  }
+  return winners[0];
 }
 
 /** "Why we think this" chips. Dedupes, caps at 4, preserves answer order. */
@@ -216,8 +318,15 @@ export function progressiveReveal(answers: QuizOption[]): string {
       case "routine":     return "Two for two on routine. You like what you like.";
       case "exploration": return "Two for two on exploration. You don't repeat.";
       case "intentional": return "Two for two on intentional choices. You don't drift.";
+      case "social":      return "Food is showing up as a social act. Noted.";
       default:            return "You're consistent. That's a tell.";
     }
   }
-  return "Routine, with the occasional dare. You're balancing two modes.";
+  if (answers.length === 2) {
+    return "Routine, with the occasional dare. You're balancing two modes.";
+  }
+  if (answers.length === 3) {
+    return "Three answers in. The picture is sharpening.";
+  }
+  return "One more. The picture is almost done.";
 }

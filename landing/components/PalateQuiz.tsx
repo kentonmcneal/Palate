@@ -9,6 +9,7 @@ import {
   type QuizOption,
 } from "@/config/quiz-taxonomy";
 import { STARTER_PERSONAS, type StarterPersonaKey } from "@/config/starter-personas";
+// (StarterPersonaKey is imported above; used in the analytics fallback below.)
 import { QuizEvents } from "@/lib/quiz-events";
 
 // ============================================================================
@@ -44,10 +45,14 @@ export function PalateQuiz() {
     const idx = answers.length;
     setAnswers(next);
     setMicrofeedback(opt.feedback);
+    // Log the persona this option weighted most heavily — useful funnel signal
+    // even though the actual result depends on the full set of answers.
+    const heaviest = (Object.entries(opt.personaWeights) as Array<[StarterPersonaKey, number]>)
+      .sort((a, b) => b[1] - a[1])[0]?.[0] ?? "convenience_loyalist";
     QuizEvents.questionAnswered({
       questionId: QUIZ_QUESTIONS[idx].id,
       questionIndex: idx,
-      persona: opt.persona,
+      persona: heaviest,
       chip: opt.chip,
     });
     setTimeout(() => {

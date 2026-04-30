@@ -318,104 +318,89 @@ export default async function Page() {
               </div>
             </div>
 
-            {/* Card 2: Wrapped preview */}
-            <div className="rounded-3xl border border-palate-line bg-white p-6 ease-card card-hover">
-              <div className="flex justify-center py-4">
-                <div
-                  className="relative rounded-2xl overflow-hidden text-white"
-                  style={{
-                    background: "linear-gradient(135deg,#1A1A1A,#0E0E0E)",
-                    width: "260px",
-                    padding: "22px",
-                  }}
-                >
-                  <div className="glow-r"></div>
-                  <div className="relative">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <SmallLogo />
-                        <span className="text-xs opacity-70">your week</span>
-                      </div>
-                      <span className="text-[10px] opacity-70">Apr 22 — Apr 28</span>
-                    </div>
-                    <div className="mt-5 text-[10px] tracking-widest uppercase opacity-70">
-                      You are
-                    </div>
-                    <div className="text-xl font-extrabold tracking-tightish text-palate-red leading-tight">
-                      The Fast Casual Regular
-                    </div>
-                    <div className="mt-4 grid grid-cols-3 gap-1.5">
-                      <div className="rounded-xl bg-white/5 border border-white/10 p-2">
-                        <div className="text-base font-bold">12</div>
-                        <div className="text-[9px] uppercase tracking-widest opacity-70">visits</div>
-                      </div>
-                      <div className="rounded-xl bg-white/5 border border-white/10 p-2">
-                        <div className="text-base font-bold">7</div>
-                        <div className="text-[9px] uppercase tracking-widest opacity-70">places</div>
-                      </div>
-                      <div className="rounded-xl bg-white/5 border border-white/10 p-2">
-                        <div className="text-base font-bold">42%</div>
-                        <div className="text-[9px] uppercase tracking-widest opacity-70">repeat</div>
-                      </div>
-                    </div>
-                    <div className="mt-4 text-[10px] tracking-widest uppercase opacity-70">
-                      Top spots
-                    </div>
-                    <ol className="mt-1.5 space-y-1 text-[12px]">
-                      <li className="flex justify-between border-b border-white/10 pb-1">
-                        <span>
-                          <span className="opacity-50 mr-1.5">1</span>Sweetgreen
-                        </span>
-                        <span className="opacity-70">×4</span>
-                      </li>
-                      <li className="flex justify-between border-b border-white/10 pb-1">
-                        <span>
-                          <span className="opacity-50 mr-1.5">2</span>Joe &amp; The Juice
-                        </span>
-                        <span className="opacity-70">×2</span>
-                      </li>
-                      <li className="flex justify-between border-b border-white/10 pb-1">
-                        <span>
-                          <span className="opacity-50 mr-1.5">3</span>Joe's Pizza
-                        </span>
-                        <span className="opacity-70">×2</span>
-                      </li>
-                    </ol>
+            {/* Card 2: "What you say vs What you do" — light treatment, no dark gradient */}
+            <div className="rounded-3xl border border-palate-line bg-white p-6 ease-card card-hover flex flex-col">
+              <div className="text-xs font-semibold text-palate-mute tracking-widest uppercase">
+                The gap
+              </div>
+              <h3 className="mt-3 text-2xl font-semibold tracking-tightish leading-snug">
+                What you say vs what you do.
+              </h3>
+              <div className="mt-6 space-y-4 flex-1">
+                <div className="rounded-2xl bg-palate-soft border border-palate-line px-5 py-4">
+                  <div className="text-[10px] font-semibold text-palate-mute tracking-widest uppercase mb-1">
+                    What you say
                   </div>
+                  <p className="text-palate-ink text-[15px] leading-snug line-through opacity-65">
+                    "I eat out maybe twice a week. Mostly cook at home."
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-palate-red/5 border border-palate-red/30 px-5 py-4">
+                  <div className="text-[10px] font-semibold text-palate-red tracking-widest uppercase mb-1">
+                    What your behavior proves
+                  </div>
+                  <p className="text-palate-ink text-[15px] leading-snug font-medium">
+                    5.9 times. <span className="text-palate-red">$73 this week.</span> 18 different spots.
+                  </p>
                 </div>
               </div>
-              <div className="mt-2">
-                <div className="text-base font-semibold">Your weekly Wrapped</div>
+              <div className="mt-6">
+                <div className="text-base font-semibold">The honest mirror</div>
                 <p className="text-palate-mute text-sm mt-1 leading-relaxed">
-                  A shareable card that turns last week into a personality.
+                  Most people guess wrong about themselves. Palate doesn't.
                 </p>
               </div>
             </div>
 
-            {/* Card 3: Personality reveal */}
-            <div className="rounded-3xl border border-palate-line bg-white p-6 ease-card card-hover">
-              <div className="flex flex-col items-center text-center justify-center py-10 px-4 min-h-[540px]">
-                <div className="text-xs font-semibold text-palate-mute tracking-widest uppercase">
-                  Sunday morning
+            {/* Card 3: "How patterns become personality" — light, transformation flow */}
+            <div className="rounded-3xl border border-palate-line bg-white p-6 ease-card card-hover flex flex-col">
+              <div className="text-xs font-semibold text-palate-mute tracking-widest uppercase">
+                The translation
+              </div>
+              <h3 className="mt-3 text-2xl font-semibold tracking-tightish leading-snug">
+                Patterns become personality.
+              </h3>
+              <div className="mt-8 space-y-5 flex-1">
+                {/* Step 1: visits */}
+                <div className="flex items-center gap-4">
+                  <div className="flex gap-1 flex-shrink-0">
+                    {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                      <span
+                        key={i}
+                        className={`w-2.5 h-2.5 rounded-full ${i < 5 ? "bg-palate-red" : "bg-palate-line"}`}
+                      />
+                    ))}
+                  </div>
+                  <div className="text-sm text-palate-ink">
+                    <span className="font-semibold">5 visits this week</span>
+                    <div className="text-palate-mute text-xs">3× Sweetgreen, 2× Cava</div>
+                  </div>
                 </div>
-                <div className="mt-3 text-2xl font-semibold tracking-tightish leading-tight">
-                  You are
+                <div className="flex justify-center text-palate-mute text-lg">↓</div>
+                {/* Step 2: pattern detected */}
+                <div className="rounded-2xl border border-palate-line bg-palate-soft px-5 py-4">
+                  <div className="text-[10px] font-semibold text-palate-mute tracking-widest uppercase mb-1">
+                    Pattern
+                  </div>
+                  <p className="text-sm text-palate-ink">
+                    Healthy + fast + intentional. Repeat-rate 60%.
+                  </p>
                 </div>
-                <div className="mt-2 text-4xl font-extrabold tracking-tightest text-palate-red leading-tight">
-                  The Café<br />Dweller
-                </div>
-                <div className="mt-6 text-sm text-palate-mute max-w-[220px] leading-relaxed">
-                  "Five out of seven days, you started the week at Blue Bottle. Bold."
-                </div>
-                <div className="mt-8 flex gap-2">
-                  <span className="rounded-full bg-palate-soft px-3 py-1 text-xs font-medium">☕ Coffee</span>
-                  <span className="rounded-full bg-palate-soft px-3 py-1 text-xs font-medium">🥐 Pastries</span>
+                <div className="flex justify-center text-palate-mute text-lg">↓</div>
+                {/* Step 3: identity */}
+                <div className="rounded-2xl border-2 border-palate-red bg-white px-5 py-4 text-center">
+                  <div className="text-[10px] font-semibold text-palate-red tracking-widest uppercase mb-1">
+                    Your Palate
+                  </div>
+                  <p className="text-xl font-extrabold tracking-tightish text-palate-red">
+                    The Fast Casual Regular
+                  </p>
                 </div>
               </div>
-              <div className="mt-2">
-                <div className="text-base font-semibold">A personality, every Sunday</div>
+              <div className="mt-6">
+                <div className="text-base font-semibold">From data to identity</div>
                 <p className="text-palate-mute text-sm mt-1 leading-relaxed">
-                  Five archetypes. The honest one usually surprises you.
+                  We turn what you do into who you are, every Sunday.
                 </p>
               </div>
             </div>

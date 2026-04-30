@@ -18,7 +18,8 @@ export type Signal =
   | "late_night"
   | "flavor_driven"
   | "no_friction"
-  | "intentional";
+  | "intentional"
+  | "comfort_food";
 
 export type SignalDefinition = {
   key: Signal;
@@ -40,4 +41,5 @@ export const SIGNALS: Record<Signal, SignalDefinition> = {
   flavor_driven:  { key: "flavor_driven",  label: "Flavor-driven",        short: "Specific cravings, not just calories." },
   no_friction:    { key: "no_friction",    label: "Low decision effort",  short: "Don't make me think." },
   intentional:    { key: "intentional",    label: "Intentional",          short: "Picks on purpose, not by drift." },
+  comfort_food:   { key: "comfort_food",   label: "Comfort-leaning",      short: "Familiar food, familiar feeling." },
 };
