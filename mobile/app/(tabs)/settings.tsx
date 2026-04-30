@@ -47,7 +47,7 @@ export default function Settings() {
       await Share.share({
         title: "Palate",
         message:
-          "I've been using this app called Palate — it tells you what your eating habits actually say about you. No public profile, no rating anything, just an honest weekly read of where you actually go. You should try it: https://palate.app",
+          "I've been using this app called Palate — it tells you what your eating habits actually say about you. Patterns, not ratings. You can see how your friends actually eat too. You should try it: https://palate.app",
       });
     } catch {
       // user cancelled — silent
@@ -258,7 +258,7 @@ export default function Settings() {
         </Section>
 
         <Section title="About">
-          <Note>Palate v0.1 — built for you, no ads, no selling, no social anything.</Note>
+          <Note>Palate v0.1 — no ads, we don't sell your data, you control what's public.</Note>
         </Section>
       </ScrollView>
     </SafeAreaView>

@@ -513,8 +513,8 @@ export default async function Page() {
             Palate just wants <span className="text-palate-red">your week.</span>
           </p>
           <p className="mt-8 text-white/70 text-lg max-w-xl mx-auto leading-relaxed">
-            No reviews. No followers. No public profile. Just a quiet record of where you actually
-            went, and a personality reveal every Sunday.
+            Less rating, more reading. Your weekly identity, your actual patterns,
+            and a way to see how your friends really eat.
           </p>
         </div>
       </section>
@@ -534,7 +534,7 @@ export default async function Page() {
             <Step
               n={1}
               title="We see where you actually eat"
-              body="You tap once when you arrive. Palate captures the spot, the time, the format — no check-ins, no photos, no rating anything."
+              body="You tap once when you arrive. Palate captures the spot, the time, the format — no photos, no five-star reviews, just behavior."
             />
             <Step
               n={2}
@@ -706,8 +706,8 @@ export default async function Page() {
             Palate measures your <span className="text-palate-red">patterns.</span>
           </h2>
           <p className="mt-6 text-palate-mute text-lg leading-relaxed">
-            No reviews to write. No followers to grow. No feed to scroll.
-            Just a quiet record of where you actually went, and a personality reveal every Sunday morning.
+            No stars. No 1-10 ranking. Just an honest read of where you actually go —
+            in your profile, and in your friends'.
           </p>
         </div>
       </section>
@@ -723,14 +723,14 @@ export default async function Page() {
               Your data, your call.
             </h2>
             <p className="mt-3 text-palate-mute">
-              Palate is for <em>you</em>. There's no public profile, no friends, no comments. We don't sell your data and we don't show ads.
+              Palate is yours. <em>You</em> decide what's public, what's shared with friends, and what stays private. We don't sell your data and we don't show ads — that part isn't a setting, it's a promise.
             </p>
           </div>
           <div className="grid md:grid-cols-4 gap-4 mt-10">
             <PrivacyCard title="Pause anytime" body="Switch off location with one tap. Past visits stay; nothing new is recorded." />
             <PrivacyCard title="Delete what you want" body="Single visits, a week, or every byte we have on you." />
             <PrivacyCard title="No selling. Ever." body="Restaurants don't see your name or email. We don't share or sell." />
-            <PrivacyCard title="No social anything" body="No feed, no followers, no likes. Just you and your week." />
+            <PrivacyCard title="You control what's public" body="Profile visibility, friend list, what shows up in feeds — your call, every time." />
           </div>
           <div className="mt-8">
             <Link href="/privacy" className="text-sm font-semibold text-palate-red hover:underline">
@@ -793,7 +793,7 @@ export default async function Page() {
             />
           </div>
           <p className="mt-8 text-sm text-palate-mute">
-            Comparison is opt-in, anonymous, and never on a public feed. No followers. No likes. No leaderboard.
+            Profiles, friends, and comparison features are opt-in. You'll always control what's visible — and we'll always measure what you do, never what you'd rate.
           </p>
         </div>
       </section>
@@ -928,7 +928,7 @@ export default async function Page() {
           </div>
           <div className="mt-12 pt-6 border-t border-palate-line flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-palate-mute">
             <span>© 2026 Palate. All rights reserved.</span>
-            <span>Made with care · No ads · No selling · No social anything</span>
+            <span>Made with care · No ads · We don't sell your data · You own your patterns</span>
           </div>
         </div>
       </footer>

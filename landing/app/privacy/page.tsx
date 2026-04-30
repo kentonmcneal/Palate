@@ -47,7 +47,7 @@ export default function PrivacyPage() {
               You can pause tracking any time and delete everything in two taps. "Delete" really deletes.
             </li>
             <li>We don't run ads, ever. The plan is a small future subscription.</li>
-            <li>No public profile, no friends, no comments. Palate is just for you.</li>
+            <li>You control what's public — profile visibility, friend list, and what shows up in any feed are all your call.</li>
           </ul>
         </div>
 

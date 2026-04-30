@@ -14,7 +14,7 @@ const FACTS = [
   { label: "Price", value: "Free during beta · always a free tier" },
   { label: "Category", value: "Food · Lifestyle · Quantified-self" },
   { label: "Identity", value: "9 distinct eating personas, revealed every Sunday" },
-  { label: "Privacy", value: "No ads, no data sales, no public profiles" },
+  { label: "Privacy", value: "No ads, no data sales, you control what's shared" },
   { label: "Founder", value: "Kenton C. McNeal · Wharton MBA '26" },
 ];
 
@@ -57,7 +57,7 @@ export default function PressPage() {
 
         <h2 className="mt-14 text-2xl font-semibold tracking-tightish">The 30-second pitch</h2>
         <p className="mt-3 leading-relaxed text-palate-ink max-w-3xl">
-          Palate is a privacy-first iOS app that turns your real eating week into a taste identity. One tap when you arrive somewhere, and every Sunday you get a personality reveal — The Convenience Loyalist, The Explorer, The Café Dweller, and six others. There's no public profile, no following, no reviews. The bet: most people radically underestimate how often and where they actually eat, and a clear identity is more useful than another rating system.
+          Palate is an iOS app that turns your real eating week into a taste identity. One tap when you arrive somewhere, and every Sunday you get a personality reveal — The Convenience Loyalist, The Explorer, The Café Dweller, and six others. The bet: most people radically underestimate where they actually eat, and a clear identity built from behavior is more useful than another star rating. Profiles, friends, and a behavior-based feed are part of the product — measured by where you actually go, never by what you'd rate.
         </p>
         <p className="mt-4 leading-relaxed text-palate-mute max-w-3xl italic">
           Other apps measure your opinions. Palate measures your patterns.
@@ -136,7 +136,7 @@ export default function PressPage() {
 
         <h2 className="mt-14 text-2xl font-semibold tracking-tightish">Boilerplate</h2>
         <pre className="mt-3 rounded-2xl bg-palate-soft border border-palate-line p-5 text-sm leading-relaxed text-palate-ink whitespace-pre-wrap">
-          Palate is a privacy-first iOS app that turns your real eating week into a taste identity. One tap when you arrive at a restaurant — and every Sunday you get a personality reveal: are you The Convenience Loyalist, The Explorer, The Comfort Connoisseur? Nine distinct identities, computed from your actual visits, never from your ratings. No public profile. No followers. No selling your data.
+          Palate is an iOS app that turns your real eating week into a taste identity. One tap when you arrive at a restaurant — and every Sunday you get a personality reveal: are you The Convenience Loyalist, The Explorer, The Comfort Connoisseur? Nine distinct identities, computed from your actual visits, never from your ratings. Includes a profile, a friends layer, and a feed — all built on behavior data, not opinions. We don't sell your data.
         </pre>
 
         <h2 className="mt-14 text-2xl font-semibold tracking-tightish">Contact</h2>

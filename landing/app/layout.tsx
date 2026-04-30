@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://palate.app"),
   title: "Palate — See what you actually eat",
   description:
-    "Your eating habits have a pattern. Palate tells you what it means. A weekly identity reveal of your real eating life — privacy-first, no public profiles. iOS coming soon.",
+    "Your eating habits have a pattern. Palate tells you what it means. A weekly identity reveal — plus a behavior-based feed of how your friends actually eat. iOS coming soon.",
   icons: {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
     apple: "/favicon.svg",
@@ -52,7 +52,7 @@ const STRUCTURED_DATA = {
   applicationCategory: "LifestyleApplication",
   operatingSystem: "iOS",
   description:
-    "Palate is a taste-identity system. Tap once when you arrive somewhere; every Sunday, get a personality reveal — 1 of 9 eating identities — built from your actual visits. Privacy-first, no ads, no public profiles.",
+    "Palate is a taste-identity system. Tap once when you arrive somewhere; every Sunday, get a personality reveal — 1 of 9 eating identities — built from your actual visits. Profile, friends, and feed all measured by behavior, not opinions. No ads. We don't sell your data.",
   offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
   publisher: { "@type": "Organization", name: "Palate", url: "https://palate.app" },
 };

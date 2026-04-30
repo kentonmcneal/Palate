@@ -12,8 +12,9 @@ export default function PrivacyScreen() {
         <Text style={styles.h1}>Your data, your call.</Text>
         <Spacer />
         <Text style={styles.p}>
-          Palate is for you. There's no public profile, no friends, no comments.
-          We don't sell your data and we don't show ads.
+          You decide what's public. Profile visibility, your friends list, what
+          shows up in any feed — all your call. We don't sell your data and we
+          don't show ads.
         </Text>
         <Spacer size={32} />
         <Row title="Pause anytime" body="Toggle off location tracking from Settings." />

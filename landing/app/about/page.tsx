@@ -71,8 +71,9 @@ export default function AboutPage() {
                 actually go. McDonald&apos;s counts. Coffee counts. The fancy place counts. All of it.
               </p>
               <p>
-                Palate is the app I wanted to exist. No public profile. No feed. No rating anything. Just an honest
-                mirror, every Sunday morning, of the week you actually had.
+                Palate is the app I wanted to exist. A profile built from where you actually go,
+                not from what you'd rate. A feed of how your friends really eat — not what they'd
+                post about. An honest mirror, every Sunday morning, of the week you actually had.
               </p>
             </div>
 
@@ -130,8 +131,8 @@ export default function AboutPage() {
             <span className="text-palate-red">honest with yourself.</span>
           </p>
           <p className="mt-6 text-palate-mute leading-relaxed max-w-2xl">
-            No reviews to write. No followers to grow. No feed to scroll. Just a quiet record of where you actually go,
-            and a personality reveal every Sunday morning. That&apos;s the whole product.
+            No five-star ratings to write. No 1-10 ranking. Just a quiet record of where you actually go,
+            a personality reveal every Sunday, and the option to see how your friends really eat too.
           </p>
         </section>
       </main>

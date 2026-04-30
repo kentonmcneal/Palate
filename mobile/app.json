@@ -9,7 +9,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
     "primaryColor": "#FF3008",
-    "description": "See what you actually eat. A weekly Wrapped of your real eating life — privacy-first, no public profiles.",
+    "description": "See what you actually eat. A weekly identity reveal of your real eating life — plus a behavior-based profile and feed.",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
