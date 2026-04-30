@@ -476,6 +476,30 @@ export default async function Page() {
         </div>
       </section>
 
+      {/* ============== DARK MOMENT — patterns vs opinions ============== */}
+      <section className="relative overflow-hidden text-white">
+        <div
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(135deg,#1A1A1A,#0E0E0E)" }}
+          aria-hidden="true"
+        />
+        <div className="glow-r absolute -top-32 -right-32 w-[480px] h-[480px]" aria-hidden="true" />
+        <div className="relative max-w-4xl mx-auto px-6 py-32 sm:py-40 text-center">
+          <div className="text-[11px] font-semibold tracking-widest uppercase text-white/55">
+            The whole point
+          </div>
+          <p className="mt-6 text-4xl sm:text-6xl font-semibold tracking-tightest leading-[1.05]">
+            Most apps want your <span className="text-white/40">opinion.</span>
+            <br />
+            Palate just wants <span className="text-palate-red">your week.</span>
+          </p>
+          <p className="mt-8 text-white/70 text-lg max-w-xl mx-auto leading-relaxed">
+            No reviews. No followers. No public profile. Just a quiet record of where you actually
+            went, and a personality reveal every Sunday.
+          </p>
+        </div>
+      </section>
+
       {/* ============== HOW IT WORKS ============== */}
       <section id="how" className="bg-palate-soft">
         <div className="max-w-7xl mx-auto px-6 py-24">

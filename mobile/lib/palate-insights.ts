@@ -542,3 +542,43 @@ export async function addToWishlist(googlePlaceId: string): Promise<void> {
   // Ignore unique-violation: re-saving is a no-op.
   if (error && !`${error.message}`.includes("duplicate")) throw error;
 }
+
+// ============================================================================
+// Public: list + remove for the Wishlist tab
+// ============================================================================
+
+export type WishlistEntry = {
+  id: string;
+  added_at: string;
+  source: string | null;
+  restaurant: {
+    id: string;
+    google_place_id: string;
+    name: string;
+    cuisine_type: string | null;
+    neighborhood: string | null;
+    address: string | null;
+    primary_type: string | null;
+    price_level: number | null;
+  } | null;
+};
+
+export async function listWishlist(): Promise<WishlistEntry[]> {
+  const { data, error } = await supabase
+    .from("wishlist")
+    .select(`
+      id, added_at, source,
+      restaurant:restaurants (
+        id, google_place_id, name, cuisine_type, neighborhood,
+        address, primary_type, price_level
+      )
+    `)
+    .order("added_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as unknown as WishlistEntry[];
+}
+
+export async function removeFromWishlist(wishlistId: string): Promise<void> {
+  const { error } = await supabase.from("wishlist").delete().eq("id", wishlistId);
+  if (error) throw error;
+}

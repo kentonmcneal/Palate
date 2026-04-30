@@ -155,14 +155,17 @@ function ResultCard({
       : `/api/palate-card/${personaKey}`;
 
   async function handleShare() {
-    const shareText = `${persona.label} — "${persona.tagline}". Find your Palate at palate.app.`;
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://palate.app";
+    // Share a link to the per-persona landing page so previews render the OG card.
+    const shareUrl = `${origin}/share/${personaKey}`;
+    const shareText = `I'm ${persona.label}: "${persona.tagline}". Find your Palate at`;
     QuizEvents.shareCardClicked({ persona: personaKey, method: "native" });
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({
           title: `My Palate: ${persona.label}`,
           text: shareText,
-          url: typeof window !== "undefined" ? window.location.origin : "https://palate.app",
+          url: shareUrl,
         });
         return;
       } catch {
@@ -170,9 +173,7 @@ function ResultCard({
       }
     }
     try {
-      await navigator.clipboard.writeText(
-        `${shareText}\n${typeof window !== "undefined" ? window.location.origin : "https://palate.app"}`,
-      );
+      await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
       QuizEvents.shareCardClicked({ persona: personaKey, method: "copy" });
       setShareLabel("Copied to clipboard");
       setTimeout(() => setShareLabel("Share my Palate"), 2200);

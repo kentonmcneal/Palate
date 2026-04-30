@@ -1,0 +1,32 @@
+name: Build verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  landing-build:
+    name: Landing — Next.js build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: landing/package-lock.json
+
+      - name: Install dependencies
+        working-directory: landing
+        run: npm ci --silent
+
+      - name: Build
+        working-directory: landing
+        # Dummy public env vars so client-side modules that read them at build
+        # time don't fail. Real values are configured in Vercel for prod.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co'
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: 'ci-build-stub-key'
+        run: npx next build
