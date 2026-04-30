@@ -77,19 +77,52 @@ export default function WrappedTab() {
             <Button title="Refresh" variant="ghost" onPress={generate} loading={loading} />
           </>
         ) : (
-          <View style={styles.empty}>
-            <Text style={type.subtitle}>No Wrapped yet</Text>
-            <Text style={[type.body, { color: colors.mute, marginTop: 6 }]}>
-              Add a few visits, then tap below to generate this week's Wrapped.
-            </Text>
+          <>
+            <Text style={[type.micro, { marginBottom: 10 }]}>PREVIEW · what your Sunday will look like</Text>
+            <View style={{ opacity: 0.55 }} pointerEvents="none">
+              <WrappedCard data={SAMPLE_WRAPPED} />
+            </View>
             <Spacer />
-            <Button title={loading ? "Generating…" : "Generate now"} onPress={generate} loading={loading} />
-          </View>
+            <View style={styles.empty}>
+              <Text style={type.subtitle}>No Wrapped yet</Text>
+              <Text style={[type.body, { color: colors.mute, marginTop: 6 }]}>
+                Add a few visits this week, then tap below to generate yours.
+              </Text>
+              <Spacer />
+              <Button title={loading ? "Generating…" : "Generate now"} onPress={generate} loading={loading} />
+            </View>
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const SAMPLE_WRAPPED: Wrapped = {
+  id: "sample",
+  user_id: "sample",
+  week_start: new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10),
+  week_end: new Date().toISOString().slice(0, 10),
+  total_visits: 12,
+  unique_restaurants: 7,
+  top_restaurant: "Sweetgreen",
+  top_category: "fast_casual",
+  repeat_rate: 0.42,
+  personality_label: "The Fast Casual Regular",
+  wrapped_json: {
+    total_visits: 12,
+    unique_restaurants: 7,
+    top_restaurant: "Sweetgreen",
+    top_category: "fast_casual",
+    repeat_rate: 0.42,
+    personality_label: "The Fast Casual Regular",
+    top_three: [
+      { name: "Sweetgreen", count: 4 },
+      { name: "Joe & The Juice", count: 2 },
+      { name: "Joe's Pizza", count: 2 },
+    ],
+  },
+};
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.paper },

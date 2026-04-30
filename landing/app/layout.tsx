@@ -45,6 +45,18 @@ const PLAUSIBLE_DOMAIN = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN;
 const useUmami = !POSTHOG_KEY && !!UMAMI_WEBSITE_ID;
 const usePlausible = !POSTHOG_KEY && !UMAMI_WEBSITE_ID && !!PLAUSIBLE_DOMAIN;
 
+const STRUCTURED_DATA = {
+  "@context": "https://schema.org",
+  "@type": "MobileApplication",
+  name: "Palate",
+  applicationCategory: "LifestyleApplication",
+  operatingSystem: "iOS",
+  description:
+    "Palate turns your real eating week into a beautiful, shareable Wrapped — privacy-first, no ads, no public profiles.",
+  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+  publisher: { "@type": "Organization", name: "Palate", url: "https://palate.app" },
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
@@ -53,6 +65,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <a href="#main" className="skip-link">
           Skip to content
         </a>
+        <Script
+          id="ld-json-app"
+          type="application/ld+json"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(STRUCTURED_DATA) }}
+        />
         {children}
 
         {/*
