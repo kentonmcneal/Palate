@@ -55,12 +55,13 @@ export type PalateRecommendations = {
 };
 
 // ============================================================================
-// Cuisine + trait inference
+// Cuisine + trait inference (fallback path)
 // ----------------------------------------------------------------------------
-// We don't have a real cuisine column populated yet (places-proxy leaves it
-// null). Until that changes, infer from restaurant name + chain + primary_type
-// using a keyword table. Imperfect, but gives a meaningful signal in NYC/SF
-// where most restaurant names hint at their cuisine.
+// places-proxy now populates cuisine_type, neighborhood, and tags from
+// Google's types[] + addressComponents. Restaurants written before that
+// change will still have nulls, so we fall back to keyword matching on
+// name + chain. The keyword table also catches edge cases Google misses
+// (e.g. "Joe & The Juice" → healthy; "Levain" → bakery).
 // ============================================================================
 
 const CUISINE_KEYWORDS: Array<[RegExp, string]> = [
@@ -87,7 +88,10 @@ const CUISINE_KEYWORDS: Array<[RegExp, string]> = [
   [/wine\s*bar|cocktail|tavern|pub|brewery/i, "bar"],
 ];
 
-function inferCuisine(r: Pick<Restaurant, "name" | "chain_name" | "primary_type">): string | null {
+function inferCuisine(r: Pick<Restaurant, "name" | "chain_name" | "primary_type" | "cuisine_type">): string | null {
+  // Prefer the value populated by places-proxy (from Google's types[]).
+  if (r.cuisine_type) return r.cuisine_type;
+
   const text = `${r.name ?? ""} ${r.chain_name ?? ""}`;
   for (const [pattern, cuisine] of CUISINE_KEYWORDS) {
     if (pattern.test(text)) return cuisine;
@@ -102,9 +106,19 @@ function inferCuisine(r: Pick<Restaurant, "name" | "chain_name" | "primary_type"
 }
 
 function inferTraits(
-  r: Pick<Restaurant, "name" | "chain_name" | "primary_type" | "price_level">,
+  r: Pick<Restaurant, "name" | "chain_name" | "primary_type" | "price_level" | "tags">,
   cuisine: string | null,
 ): PalateTrait[] {
+  // Prefer tags populated server-side by places-proxy.
+  if (r.tags && r.tags.length) {
+    // Filter to known PalateTrait values (defensive against future server tags).
+    const known = new Set<string>([
+      "spicy", "casual", "upscale", "comfort", "late-night", "quick-service",
+      "brunch", "seafood", "healthy", "sweet", "shareable", "date-night",
+      "group-friendly", "café",
+    ]);
+    return r.tags.filter((t) => known.has(t)) as PalateTrait[];
+  }
   const traits = new Set<PalateTrait>();
   const price = r.price_level ?? 2;
 
@@ -215,6 +229,9 @@ type WeeklyVisitRow = {
     name: string;
     chain_name: string | null;
     primary_type: string | null;
+    cuisine_type: string | null;
+    neighborhood: string | null;
+    tags: string[] | null;
     price_level: number | null;
     rating: number | null;
     address: string | null;
@@ -237,6 +254,7 @@ export async function analyzeWeeklyPalate(
       visited_at, restaurant_id,
       restaurant:restaurants (
         google_place_id, name, chain_name, primary_type,
+        cuisine_type, neighborhood, tags,
         price_level, rating, address, latitude, longitude
       )
     `)
@@ -320,7 +338,14 @@ export async function getPalateRecommendations(
   insight: PalateInsight,
   fallbackAnchor?: { lat: number; lng: number },
 ): Promise<PalateRecommendations> {
-  const anchor = insight.anchorLatLng ?? fallbackAnchor ?? null;
+  // Anchor priority:
+  //   1. Most-recent visit *this week* with a real lat/lng (set by analyzer)
+  //   2. Caller-supplied current-location fallback
+  //   3. Most-recent ping in location_events for this user (no permission ask)
+  let anchor = insight.anchorLatLng ?? fallbackAnchor ?? null;
+  if (!anchor) {
+    anchor = await lastKnownLocation();
+  }
   if (!anchor) {
     return { similar: [], stretch: null };
   }
@@ -388,7 +413,8 @@ function toRec(place: Restaurant, cuisine: string | null, reason: string): Resta
     google_place_id: place.google_place_id,
     name: place.name,
     cuisine,
-    neighborhood: neighborhoodFromAddress(place.address),
+    // Prefer the server-populated neighborhood; parse the address as fallback.
+    neighborhood: place.neighborhood ?? neighborhoodFromAddress(place.address),
     reason,
     price_level: place.price_level ?? null,
     rating: place.rating ?? null,
@@ -415,6 +441,22 @@ function stretchReasonFor(cuisine: string | null, i: PalateInsight): string {
     return `${display} — a new lane for your Palate`;
   }
   return "Worth a left turn this week";
+}
+
+/**
+ * Most recent location ping for the signed-in user. Uses already-collected
+ * data from `location_events` — does NOT trigger a fresh permission prompt.
+ * Returns null if the user has never granted location.
+ */
+async function lastKnownLocation(): Promise<{ lat: number; lng: number } | null> {
+  const { data } = await supabase
+    .from("location_events")
+    .select("latitude, longitude")
+    .order("captured_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data || data.latitude == null || data.longitude == null) return null;
+  return { lat: data.latitude as number, lng: data.longitude as number };
 }
 
 async function getVisitedPlaceIds(weekStart: string, weekEnd: string): Promise<Set<string>> {

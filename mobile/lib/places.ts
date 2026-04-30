@@ -9,6 +9,9 @@ export type Restaurant = {
   latitude?: number | null;
   longitude?: number | null;
   primary_type?: string | null;
+  cuisine_type?: string | null;
+  neighborhood?: string | null;
+  tags?: string[] | null;
   rating?: number | null;
   price_level?: number | null;
 };
