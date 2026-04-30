@@ -1,27 +1,30 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from "react-native";
 import { colors, spacing, type } from "../theme";
+import { addToWishlist, type RestaurantRecommendation } from "../lib/palate-insights";
 import {
-  analyzeWeeklyPalate,
-  getPalateRecommendations,
-  addToWishlist,
-  type PalateInsight,
-  type PalateRecommendations,
-  type RestaurantRecommendation,
-} from "../lib/palate-insights";
+  generateWeeklyPalatePersona,
+  getPersonaRecommendations,
+  type PalatePersona,
+} from "../lib/palate-persona";
 import { Spacer } from "./Button";
 
 type Props = {
   weekStart: string;
   weekEnd: string;
-  /** Optional fallback location used only when the user has zero anchored visits. */
+  /** Optional fallback location used only when no week-anchor exists. */
   fallbackAnchor?: { lat: number; lng: number };
 };
 
 type LoadState =
   | { kind: "loading" }
+  | { kind: "empty" } // 0 visits this week
   | { kind: "error"; message: string }
-  | { kind: "ready"; insight: PalateInsight; recs: PalateRecommendations };
+  | {
+      kind: "ready";
+      persona: PalatePersona;
+      recs: { similar: RestaurantRecommendation[]; stretch: RestaurantRecommendation | null };
+    };
 
 export function WeeklyPalateInsights({ weekStart, weekEnd, fallbackAnchor }: Props) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
@@ -29,9 +32,13 @@ export function WeeklyPalateInsights({ weekStart, weekEnd, fallbackAnchor }: Pro
   const load = useCallback(async () => {
     setState({ kind: "loading" });
     try {
-      const insight = await analyzeWeeklyPalate(weekStart, weekEnd);
-      const recs = await getPalateRecommendations(insight, fallbackAnchor);
-      setState({ kind: "ready", insight, recs });
+      const persona = await generateWeeklyPalatePersona(weekStart, weekEnd);
+      if (!persona) {
+        setState({ kind: "empty" });
+        return;
+      }
+      const recs = await getPersonaRecommendations(persona, weekStart, weekEnd, fallbackAnchor);
+      setState({ kind: "ready", persona, recs });
     } catch (e: any) {
       setState({ kind: "error", message: e?.message ?? "Couldn't analyze your week" });
     }
@@ -50,6 +57,15 @@ export function WeeklyPalateInsights({ weekStart, weekEnd, fallbackAnchor }: Pro
         </View>
       )}
 
+      {state.kind === "empty" && (
+        <View style={styles.warmingCard}>
+          <Text style={type.subtitle}>Your Palate is still warming up.</Text>
+          <Text style={[type.small, { marginTop: 6 }]}>
+            Visit a few more spots to unlock your identity.
+          </Text>
+        </View>
+      )}
+
       {state.kind === "error" && (
         <View style={styles.errorCard}>
           <Text style={type.subtitle}>Couldn't load insights</Text>
@@ -59,29 +75,48 @@ export function WeeklyPalateInsights({ weekStart, weekEnd, fallbackAnchor }: Pro
         </View>
       )}
 
-      {state.kind === "ready" && (
-        <ReadyView insight={state.insight} recs={state.recs} />
-      )}
+      {state.kind === "ready" && <ReadyView persona={state.persona} recs={state.recs} />}
     </View>
   );
 }
 
-function ReadyView({ insight, recs }: { insight: PalateInsight; recs: PalateRecommendations }) {
-  const noRecs = recs.similar.length === 0 && !recs.stretch;
+// ============================================================================
+// Persona reveal
+// ============================================================================
+
+function ReadyView({
+  persona,
+  recs,
+}: {
+  persona: PalatePersona;
+  recs: { similar: RestaurantRecommendation[]; stretch: RestaurantRecommendation | null };
+}) {
+  const lowConfidence = persona.confidenceScore < 0.4;
 
   return (
     <>
-      <Text style={styles.copy}>{insight.copy}</Text>
+      <Text style={styles.personaLabel}>{persona.label}</Text>
+      <Text style={styles.personaTagline}>"{persona.tagline}"</Text>
+      <Text style={styles.personaDescription}>{persona.description}</Text>
 
-      {insight.isLowData && noRecs && (
-        <Text style={[type.small, { marginTop: 10 }]}>
-          Once you've logged a few spots near home, we'll surface places to try.
+      {persona.evidence.length > 0 && (
+        <View style={styles.evidenceBox}>
+          <Text style={styles.evidenceLabel}>WHY THIS WEEK</Text>
+          {persona.evidence.map((line) => (
+            <Text key={line} style={styles.evidenceItem}>• {line}</Text>
+          ))}
+        </View>
+      )}
+
+      {lowConfidence && (
+        <Text style={[type.small, { marginTop: 12, fontStyle: "italic" }]}>
+          (Early read — your Palate sharpens with more visits.)
         </Text>
       )}
 
       {recs.similar.length > 0 && (
         <View style={{ marginTop: spacing.xl }}>
-          <Text style={styles.sectionLabel}>3 places you might like to try</Text>
+          <Text style={styles.sectionLabel}>Try next — places you'll probably like</Text>
           <Spacer size={10} />
           {recs.similar.map((r) => (
             <RecCard key={r.google_place_id} rec={r} kind="similar" />
@@ -91,7 +126,7 @@ function ReadyView({ insight, recs }: { insight: PalateInsight; recs: PalateReco
 
       {recs.stretch && (
         <View style={{ marginTop: spacing.xl }}>
-          <Text style={styles.sectionLabel}>1 place to stretch your Palate</Text>
+          <Text style={styles.sectionLabel}>One place to stretch your Palate</Text>
           <Spacer size={10} />
           <RecCard rec={recs.stretch} kind="stretch" />
         </View>
@@ -156,11 +191,37 @@ const styles = StyleSheet.create({
     backgroundColor: colors.faint,
   },
   eyebrow: { ...type.micro },
-  copy: {
-    ...type.subtitle,
-    marginTop: 8,
-    lineHeight: 26,
+  personaLabel: {
+    marginTop: 10,
+    color: colors.red,
+    fontSize: 30,
+    fontWeight: "800",
+    letterSpacing: -0.6,
+    lineHeight: 34,
+  },
+  personaTagline: {
+    marginTop: 4,
     color: colors.ink,
+    fontSize: 17,
+    fontStyle: "italic",
+  },
+  personaDescription: {
+    marginTop: 14,
+    color: colors.ink,
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  evidenceBox: {
+    marginTop: 18,
+    paddingTop: 14,
+    borderTopColor: colors.line,
+    borderTopWidth: 1,
+  },
+  evidenceLabel: { ...type.micro, marginBottom: 6 },
+  evidenceItem: {
+    color: colors.mute,
+    fontSize: 14,
+    lineHeight: 22,
   },
   sectionLabel: {
     ...type.micro,
@@ -211,6 +272,14 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingVertical: 30,
     alignItems: "center",
+  },
+  warmingCard: {
+    marginTop: 14,
+    padding: spacing.md,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.paper,
   },
   errorCard: {
     marginTop: 16,
