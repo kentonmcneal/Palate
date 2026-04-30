@@ -49,31 +49,29 @@ export default function AboutPage() {
               Founder
             </div>
             <h2 className="mt-2 text-3xl font-semibold tracking-tightish">Kenton C. McNeal</h2>
-            <p className="mt-2 text-palate-mute">Wharton MBA &apos;26 · Memphis-raised · Food connoisseur</p>
+            <p className="mt-2 text-palate-mute">Founder, Palate · Wharton MBA &apos;26 · Memphis-raised</p>
 
             <div className="mt-8 space-y-5 text-[17px] leading-relaxed text-palate-ink">
               <p>
-                I grew up in Memphis, Tennessee — a city where food is a love language and a Sunday plate is sacred.
-                I attended Overton High School as Valedictorian, and was classically trained in their piano program for
-                seven years. That kind of discipline — show up, repeat, get a little better every week — is the same
-                rhythm Palate is built on.
+                I grew up in Memphis, where food is its own love language. I graduated Valedictorian of Overton High
+                School and trained classically on piano there for seven years — the discipline of practicing the same
+                eight bars until they sound right shows up in everything I&apos;ve built since.
               </p>
               <p>
-                I went on to Morehouse College, graduating <em>summa cum laude</em> with a B.A. in Psychology, then
-                spent four years at Deloitte Consulting in Atlanta leading strategy and operations work for some of the
-                largest tech and healthcare companies in the country. Today I&apos;m an MBA candidate at The Wharton School
-                (Strategic Management &amp; Entrepreneurship), and most recently spent the summer on the Strategic Finance
-                &amp; Analytics team at Airbnb.
+                From Memphis I went to Morehouse College, graduating <em>summa cum laude</em> in Psychology. Four years
+                at Deloitte Consulting followed, leading strategy and operations engagements for Fortune 50 tech and
+                healthcare clients. I&apos;m now finishing my MBA at The Wharton School in Strategic Management &amp;
+                Entrepreneurship, fresh off a summer on Airbnb&apos;s Strategic Finance &amp; Analytics team.
               </p>
               <p>
-                I built Palate because I had no idea I went to Sweetgreen{" "}
-                <span className="text-palate-red font-medium">fourteen times</span> last month. Not because I love it —
-                because it was on the way. We deserve to see our patterns honestly. McDonald&apos;s counts. Coffee counts.
-                The fancy place counts. All of it.
+                I built Palate because I had no idea I&apos;d been to Sweetgreen{" "}
+                <span className="text-palate-red font-medium">fourteen times</span> last month — not because I love it,
+                but because it was on the way. Most of us radically underestimate where our money, time, and attention
+                actually go. McDonald&apos;s counts. Coffee counts. The fancy place counts. All of it.
               </p>
               <p>
-                Palate is the app I wished existed: quiet, private, no public profiles, no influencer feed — just you
-                and the truth of where you actually went this week.
+                Palate is the app I wanted to exist. No public profile. No feed. No rating anything. Just an honest
+                mirror, every Sunday morning, of the week you actually had.
               </p>
             </div>
 
