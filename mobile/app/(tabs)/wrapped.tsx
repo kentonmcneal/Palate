@@ -63,7 +63,7 @@ export default function WrappedTab() {
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={type.title}>Your Wrapped</Text>
         <Text style={[type.body, { color: colors.mute, marginTop: 4 }]}>
-          A look at your real eating week.
+          What your week says about how you eat.
         </Text>
         <Spacer size={20} />
 

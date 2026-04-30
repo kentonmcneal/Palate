@@ -98,6 +98,9 @@ function ReadyView({
       <Text style={styles.personaLabel}>{persona.label}</Text>
       <Text style={styles.personaTagline}>"{persona.tagline}"</Text>
       <Text style={styles.personaDescription}>{persona.description}</Text>
+      <Text style={styles.proves}>
+        Not what you said. <Text style={styles.provesAccent}>What your behavior proved.</Text>
+      </Text>
 
       {persona.evidence.length > 0 && (
         <View style={styles.evidenceBox}>
@@ -211,6 +214,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
   },
+  proves: {
+    marginTop: 14,
+    color: colors.mute,
+    fontSize: 13,
+    fontStyle: "italic",
+    lineHeight: 18,
+  },
+  provesAccent: { color: colors.red, fontWeight: "700" },
   evidenceBox: {
     marginTop: 18,
     paddingTop: 14,

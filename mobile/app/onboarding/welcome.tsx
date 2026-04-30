@@ -15,8 +15,11 @@ export default function Welcome() {
         <Text style={styles.h1}>See what you actually eat.</Text>
         <Spacer />
         <Text style={styles.p}>
-          Palate quietly notices when you're at a restaurant and asks if you're eating
-          there. Every Sunday you get a beautiful Wrapped of your real eating week.
+          Your eating habits have a pattern. Palate tells you what it means.
+        </Text>
+        <Spacer size={12} />
+        <Text style={[styles.p, { fontStyle: "italic", color: colors.mute }]}>
+          Not what you say you like. What your behavior proves.
         </Text>
       </View>
       <View style={styles.cta}>

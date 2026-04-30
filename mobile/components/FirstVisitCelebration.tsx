@@ -46,7 +46,7 @@ export function FirstVisitCelebration({ visible, restaurantName, onDismiss }: Pr
           <Text style={styles.body}>
             You just logged{" "}
             <Text style={styles.bodyStrong}>{restaurantName}</Text>. From here, every visit
-            sharpens your weekly Wrapped — your real eating personality, by Sunday.
+            sharpens your taste identity. Your first reveal lands Sunday morning.
           </Text>
           <Pressable onPress={onDismiss} style={styles.cta} accessibilityRole="button">
             <Text style={styles.ctaText}>Let's go</Text>
