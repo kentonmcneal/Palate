@@ -15,6 +15,8 @@ import {
   disableSundayWrappedReminder,
 } from "../../lib/notifications";
 import { loadAnalytics, type AnalyticsSummary } from "../../lib/analytics-stats";
+import { getMyProfile, setProfileVisibility, type ProfileVisibility } from "../../lib/profile";
+import { listIncomingRequests } from "../../lib/friends";
 
 const CUISINE_LABELS: Record<string, string> = {
   italian: "Italian", mexican: "Mexican", japanese: "Japanese", chinese: "Chinese",
@@ -33,14 +35,26 @@ export default function Settings() {
   const [email, setEmail] = useState<string | null>(null);
   const [sundayReminder, setSundayReminder] = useState(false);
   const [stats, setStats] = useState<AnalyticsSummary | null>(null);
+  const [visibility, setVisibility] = useState<ProfileVisibility>("friends");
+  const [pendingRequestCount, setPendingRequestCount] = useState(0);
 
   useEffect(() => {
     AsyncStorage.getItem(PAUSE_KEY).then((v) => setTracking(v !== "1"));
     supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
     isReminderEnabled().then(setSundayReminder);
-    // Lightweight all-time analytics for the profile snapshot
     loadAnalytics("all").then(setStats).catch(() => {});
+    getMyProfile().then((p) => p && setVisibility(p.profile_visibility)).catch(() => {});
+    listIncomingRequests().then((rs) => setPendingRequestCount(rs.length)).catch(() => {});
   }, []);
+
+  async function changeVisibility(next: ProfileVisibility) {
+    setVisibility(next); // optimistic
+    try {
+      await setProfileVisibility(next);
+    } catch (e: any) {
+      Alert.alert("Couldn't update", e.message ?? "Try again");
+    }
+  }
 
   async function inviteFriends() {
     try {
@@ -210,11 +224,46 @@ export default function Settings() {
           </Pressable>
         </View>
 
-        <Section title="Invite friends">
-          <Button title="Share Palate with someone" onPress={inviteFriends} />
+        <Section title="Friends">
+          <Button
+            title={`Manage friends${pendingRequestCount > 0 ? ` · ${pendingRequestCount} request${pendingRequestCount === 1 ? "" : "s"}` : ""}`}
+            onPress={() => router.push("/friends")}
+          />
+          <Spacer />
+          <Button title="Share Palate with someone" onPress={inviteFriends} variant="ghost" />
           <Note>
-            Opens your share sheet. Send the link via iMessage, WhatsApp,
-            wherever — your friends can join the waitlist with one tap.
+            Manage friend requests + add friends by email. Or share Palate via
+            iMessage / WhatsApp from the share sheet.
+          </Note>
+        </Section>
+
+        <Section title="Try List">
+          <Button
+            title="View places you've saved"
+            onPress={() => router.push("/(tabs)/wishlist")}
+            variant="ghost"
+          />
+          <Note>Spots you've saved from your weekly Palate insights.</Note>
+        </Section>
+
+        <Section title="Profile visibility">
+          <View style={styles.visRow}>
+            {(["public", "friends", "private"] as ProfileVisibility[]).map((v) => (
+              <Pressable
+                key={v}
+                onPress={() => changeVisibility(v)}
+                style={[styles.visBtn, visibility === v && styles.visBtnActive]}
+              >
+                <Text style={[styles.visText, visibility === v && styles.visTextActive]}>
+                  {v[0].toUpperCase() + v.slice(1)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Note>
+            {visibility === "public" && "Anyone on Palate can see your profile and persona."}
+            {visibility === "friends" && "Only your accepted friends can see your profile and persona."}
+            {visibility === "private" && "Nothing is visible to anyone but you."}
           </Note>
         </Section>
 
@@ -339,6 +388,20 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   profileLinkText: { fontSize: 13, fontWeight: "700", color: colors.red },
+
+  // Visibility selector
+  visRow: { flexDirection: "row", gap: 8 },
+  visBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: colors.faint,
+    borderWidth: 1, borderColor: colors.line,
+    alignItems: "center",
+  },
+  visBtnActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  visText: { fontSize: 13, fontWeight: "700", color: colors.mute },
+  visTextActive: { color: "#fff" },
   row: {
     flexDirection: "row",
     alignItems: "center",

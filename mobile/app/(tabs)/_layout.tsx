@@ -35,17 +35,24 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="wishlist"
+        name="feed"
         options={{
-          title: "Try List",
-          tabBarIcon: ({ color }) => <TabIcon glyph="♡" color={color} />,
+          title: "Feed",
+          tabBarIcon: ({ color }) => <TabIcon glyph="◉" color={color} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Settings",
-          tabBarIcon: ({ color }) => <TabIcon glyph="⚙" color={color} />,
+          title: "Profile",
+          tabBarIcon: ({ color }) => <TabIcon glyph="◐" color={color} />,
+        }}
+      />
+      {/* Try List moved into Profile tab as a section; route still exists for direct nav */}
+      <Tabs.Screen
+        name="wishlist"
+        options={{
+          href: null, // hide from tab bar
         }}
       />
     </Tabs>

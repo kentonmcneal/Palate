@@ -8,6 +8,7 @@ import { generateForCurrentWeek, latestWrapped, type Wrapped } from "../../lib/w
 import { WrappedCard } from "../../components/WrappedCard";
 import { WeeklyPalateInsights } from "../../components/WeeklyPalateInsights";
 import { Confetti } from "../../components/Confetti";
+import { shareWrappedToFeed } from "../../lib/feed";
 import ViewShot, { captureRef } from "react-native-view-shot";
 
 export default function WrappedTab() {
@@ -65,6 +66,23 @@ export default function WrappedTab() {
     }
   }
 
+  async function shareToFeed() {
+    if (!data) return;
+    try {
+      await shareWrappedToFeed({
+        personaLabel: data.personality_label ?? "Your Palate",
+        tagline: data.wrapped_json?.personality_label ?? "",
+        weekStart: data.week_start,
+        weekEnd: data.week_end,
+        totalVisits: data.total_visits,
+        topRestaurant: data.top_restaurant,
+      });
+      Alert.alert("Posted to feed", "Your friends will see it in their Feed tab.");
+    } catch (e: any) {
+      Alert.alert("Couldn't post", e.message ?? "Try again");
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <Confetti fire={confettiKey > 0} count={180} />
@@ -93,7 +111,9 @@ export default function WrappedTab() {
             </ViewShot>
             <WeeklyPalateInsights weekStart={data.week_start} weekEnd={data.week_end} />
             <Spacer />
-            <Button title="Share" onPress={share} />
+            <Button title="Post to Feed" onPress={shareToFeed} />
+            <Spacer />
+            <Button title="Share image" variant="ghost" onPress={share} />
             <Spacer />
             <Button title="Refresh" variant="ghost" onPress={generate} loading={loading} />
           </>
