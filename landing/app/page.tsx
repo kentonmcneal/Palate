@@ -170,7 +170,10 @@ export default async function Page() {
             <span className="text-palate-red">actually</span> eat.
           </h1>
           <p className="mt-6 text-lg sm:text-xl text-palate-mute max-w-2xl mx-auto leading-relaxed">
-            One tap when you arrive at a restaurant, café, food truck, or drive-thru — and your week becomes a beautiful, shareable Wrapped.
+            Your eating habits have a pattern. Palate tells you what it means.
+          </p>
+          <p className="mt-3 text-sm text-palate-mute max-w-xl mx-auto">
+            Not what you say you like. What your behavior proves.
           </p>
 
           <HeroWaitlist initialCount={waitlistCount} />
@@ -508,30 +511,33 @@ export default async function Page() {
               How it works
             </div>
             <h2 className="mt-3 text-3xl sm:text-4xl font-semibold tracking-tightest">
-              Three steps. Then it just runs.
+              Three steps to your taste identity.
             </h2>
           </div>
           <div className="grid md:grid-cols-3 gap-6 mt-12">
             <Step
               n={1}
-              title="One tap, that's it"
-              body="When you arrive somewhere, open Palate and tap once. We use your location to find what's around you — no check-ins, no photos, no rating anything."
+              title="We see where you actually eat"
+              body="You tap once when you arrive. Palate captures the spot, the time, the format — no check-ins, no photos, no rating anything."
             />
             <Step
               n={2}
-              title="Confirm the spot"
+              title="We find the patterns in your behavior"
               body={
                 <>
-                  Palate shows the most likely place and asks: <em>Are you eating here?</em> Yes, no, or pick the right place.
+                  Repeats. New spots. Time-of-day rhythms. The cuisines you keep returning to. The lane you live in <em>and</em> the lane you drift into.
                 </>
               }
             />
             <Step
               n={3}
-              title="Your Wrapped"
-              body="Every Sunday, get a shareable summary of your real eating week — repeats, new spots, the stat that makes you laugh."
+              title="We translate that into a clear identity"
+              body="Every Sunday morning, your week becomes a personality reveal — and a card you'll actually want to share."
             />
           </div>
+          <p className="mt-10 text-center text-lg sm:text-xl font-medium tracking-tightish text-palate-ink">
+            Not what you say you like. <span className="text-palate-red">What your behavior proves.</span>
+          </p>
         </div>
       </section>
 
@@ -543,55 +549,75 @@ export default async function Page() {
               Sample Wrapped
             </div>
             <h2 className="mt-3 text-3xl sm:text-4xl font-semibold tracking-tightest">
-              Three real weeks, three different lives.
+              Four real weeks. Four different identities.
             </h2>
-            <p className="mt-3 text-palate-mute">A glimpse of what Sunday morning looks like.</p>
+            <p className="mt-3 text-palate-mute">
+              The same data — restaurant visits — read four different ways. Same person, different week, different read.
+            </p>
           </div>
-          <div className="mt-12 grid md:grid-cols-3 gap-6">
+          <div className="mt-12 grid md:grid-cols-2 gap-6">
             <SampleWrapped
-              title="The Loyalist"
+              title="The Convenience Loyalist"
+              tagline="Speed and familiarity, no thinking required."
               stats={[
-                { v: "18", l: "visits" },
-                { v: "4", l: "places" },
-                { v: "78%", l: "repeat" },
+                { v: "9", l: "visits" },
+                { v: "2", l: "places" },
+                { v: "89%", l: "repeat" },
               ]}
               listLabel="Top spots"
               items={[
-                { n: "1", name: "Sweetgreen", count: "×8" },
-                { n: "2", name: "Joe & The Juice", count: "×5" },
-                { n: "3", name: "Joe's Pizza", count: "×3" },
+                { n: "1", name: "McDonald's", count: "×6" },
+                { n: "2", name: "Starbucks", count: "×3" },
               ]}
-              caption="When you find your spots and stick with them."
+              body="You leaned heavily on consistency this week. Six visits to McDonald's say you prioritize speed, familiarity, and meals that require no second-guessing — that's not a rut, that's a system."
             />
             <SampleWrapped
-              title="The Explorer"
+              title="The Flavor Loyalist"
+              tagline="You know what you want, and you go get it."
+              stats={[
+                { v: "7", l: "visits" },
+                { v: "3", l: "places" },
+                { v: "67%", l: "repeat" },
+              ]}
+              listLabel="Top spots"
+              items={[
+                { n: "1", name: "Burger King", count: "×3" },
+                { n: "2", name: "Popeyes", count: "×2" },
+                { n: "3", name: "Five Guys", count: "×2" },
+              ]}
+              body="You showed a clear preference for bold, flame-grilled flavors. This wasn't convenience — you had a specific craving and you fed it three different ways."
+            />
+            <SampleWrapped
+              title="The Practical Variety Seeker"
+              tagline="You eat a little bit of everything — on purpose."
               stats={[
                 { v: "11", l: "visits" },
-                { v: "10", l: "places" },
-                { v: "9%", l: "repeat" },
+                { v: "8", l: "places" },
+                { v: "27%", l: "repeat" },
               ]}
-              listLabel="New this week"
+              listLabel="Across the week"
               items={[
-                { n: "·", name: "Bonnie's", count: "new" },
-                { n: "·", name: "Le Crocodile", count: "new" },
-                { n: "·", name: "Shukette", count: "new" },
+                { n: "·", name: "Sweetgreen", count: "healthy" },
+                { n: "·", name: "Panda Express", count: "indulgent" },
+                { n: "·", name: "Joe's Pizza", count: "comfort" },
               ]}
-              caption="When you can't help trying the new place."
+              body="You balanced convenience, comfort, and variety this week. You moved between healthy bowls, fast food, and bold takeout without sticking to one lane — that's not indecision, that's range."
             />
             <SampleWrapped
-              title="The Café Dweller"
+              title="The Fast Casual Regular"
+              tagline="Healthy-ish, fast, on the way."
               stats={[
-                { v: "14", l: "visits" },
-                { v: "3", l: "places" },
-                { v: "5/7", l: "mornings" },
+                { v: "12", l: "visits" },
+                { v: "7", l: "places" },
+                { v: "42%", l: "repeat" },
               ]}
-              listLabel="Your morning crew"
+              listLabel="Top spots"
               items={[
-                { n: "1", name: "Blue Bottle", count: "×7" },
-                { n: "2", name: "Devoción", count: "×4" },
-                { n: "3", name: "Maman", count: "×3" },
+                { n: "1", name: "Sweetgreen", count: "×4" },
+                { n: "2", name: "Cava", count: "×3" },
+                { n: "3", name: "Joe & The Juice", count: "×2" },
               ]}
-              caption="When the latte is the routine."
+              body="You optimize for speed without giving up the plot. Bowls and counter service across Sweetgreen, Cava, and Joe & The Juice — efficient, but intentional."
             />
           </div>
         </div>
@@ -705,28 +731,33 @@ export default async function Page() {
       {/* ============== ROADMAP ============== */}
       <section className="bg-white">
         <div className="max-w-5xl mx-auto px-6 py-24">
-          <div className="text-xs font-semibold text-palate-mute tracking-widest uppercase">Roadmap</div>
-          <h2 className="mt-3 text-3xl sm:text-4xl font-semibold tracking-tightest">What's coming next.</h2>
+          <div className="text-xs font-semibold text-palate-mute tracking-widest uppercase">What's next</div>
+          <h2 className="mt-3 text-3xl sm:text-4xl font-semibold tracking-tightest">
+            Coming soon: see how your <span className="text-palate-red">Palate</span> compares.
+          </h2>
+          <p className="mt-4 text-palate-mute max-w-2xl">
+            Identity is interesting on its own. It gets more interesting when you see how it stacks up against the people, the city, and the patterns around you — privately, on your terms.
+          </p>
           <div className="mt-10 grid md:grid-cols-3 gap-6">
             <RoadmapCard
               eyebrow="Now"
               eyebrowAccent
-              title="Wrapped, every Sunday"
-              body="Visit detection, manual add, weekly Wrapped, personality reveal. iOS only."
+              title="Your weekly identity"
+              body="Tap-to-log visits, Sunday Wrapped, persona reveal. iOS first."
             />
             <RoadmapCard
               eyebrow="Next"
-              title="Background detection"
-              body="Auto-prompts when you arrive somewhere. Year in Review. Android."
+              title="See how your Palate compares"
+              body="How your week stacks up against your friends who opt in. What patterns your city has. Where your taste is rare."
             />
             <RoadmapCard
               eyebrow="Later"
-              title="Opt-in friends mode"
-              body="Share Wrapped with a chosen group. Dining-out budget. Travel mode."
+              title="Year in Palate"
+              body="A December reveal of your year in restaurants — a card you'll text someone."
             />
           </div>
           <p className="mt-8 text-sm text-palate-mute">
-            No ads, no public feed, ever. That's not on the roadmap because it's not a roadmap item — it's a foundation.
+            Comparison is opt-in, anonymous, and never on a public feed. No followers. No likes. No leaderboard.
           </p>
         </div>
       </section>
@@ -920,16 +951,18 @@ function RoadmapCard({
 
 function SampleWrapped({
   title,
+  tagline,
   stats,
   listLabel,
   items,
-  caption,
+  body,
 }: {
   title: string;
+  tagline: string;
   stats: { v: string; l: string }[];
   listLabel: string;
   items: { n: string; name: string; count: string }[];
-  caption: string;
+  body: string;
 }) {
   return (
     <div className="rounded-3xl border border-palate-line bg-white p-6 ease-card card-hover">
@@ -948,6 +981,9 @@ function SampleWrapped({
             <div className="text-[10px] tracking-widest uppercase opacity-70">You are</div>
             <div className="text-2xl font-extrabold tracking-tightish text-palate-red leading-tight">
               {title}
+            </div>
+            <div className="mt-1 text-[12px] italic opacity-85 leading-snug">
+              "{tagline}"
             </div>
             <div className="mt-4 grid grid-cols-3 gap-1.5">
               {stats.map((s) => (
@@ -978,9 +1014,9 @@ function SampleWrapped({
           </div>
         </div>
       </div>
-      <div className="mt-4 text-center">
-        <div className="text-sm font-semibold">{caption}</div>
-      </div>
+      <p className="mt-5 text-[15px] leading-relaxed text-palate-ink">
+        {body}
+      </p>
     </div>
   );
 }

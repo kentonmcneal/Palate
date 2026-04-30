@@ -233,11 +233,18 @@ function ResultCard({
           </p>
         </div>
 
-        {/* Starter vs Weekly framing — explicit */}
-        <p className="mt-6 text-xs text-white/55 max-w-md mx-auto">
-          This is your <span className="text-white/80 font-semibold">Starter Palate</span> — a
-          30-second guess. The real one unlocks after a week of actual visits.
-        </p>
+        {/* Starter vs Weekly framing — three punchy lines */}
+        <div className="mt-6 max-w-md mx-auto space-y-1">
+          <p className="text-sm text-white/85 font-semibold">
+            This is your Starter Palate.
+          </p>
+          <p className="text-sm text-white/65">
+            Your real Palate is built from where you actually go.
+          </p>
+          <p className="text-sm text-white/65">
+            After one week of visits, you'll unlock your first Weekly Wrapped.
+          </p>
+        </div>
 
         {/* CTAs */}
         <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
