@@ -102,7 +102,7 @@ export default function ProfileSetup() {
       </View>
 
       <View style={styles.cta}>
-        <Button title={saving ? "Saving…" : "Continue"} onPress={next} loading={saving} />
+        <Button title={saving ? "Saving…" : "See your Starter Palate"} onPress={next} loading={saving} />
         <Spacer size={8} />
         <Pressable onPress={skip} style={styles.skipBtn}>
           <Text style={styles.skipText}>Skip for now</Text>

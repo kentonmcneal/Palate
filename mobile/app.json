@@ -9,7 +9,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
     "primaryColor": "#FF3008",
-    "description": "See what you actually eat. A weekly identity reveal of your real eating life — plus a behavior-based profile and feed.",
+    "description": "Start to see how you actually eat. A weekly identity read of your real eating life — plus a habit-based profile and feed.",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -18,7 +18,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.palate.ios",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Palate uses your location only when the app is open, to detect which restaurant or café you may be eating at. We never share or sell your location.",
         "NSUserNotificationsUsageDescription": "We send a single notification on Sunday morning when your weekly Wrapped is ready. You can turn this off in Settings.",

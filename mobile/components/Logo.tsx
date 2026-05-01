@@ -2,7 +2,14 @@ import Svg, { Rect, Path } from "react-native-svg";
 import { View, Text, StyleSheet } from "react-native";
 import { colors } from "../theme";
 
-export function Logo({ size = 40 }: { size?: number }) {
+// Standardized sizes — keep usage to these values so the brand mark looks
+// consistent across surfaces. Hero = onboarding/sign-in; In-app = tab headers.
+export const LOGO_SIZE = {
+  hero: 56,
+  inApp: 32,
+} as const;
+
+export function Logo({ size = LOGO_SIZE.hero }: { size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64">
       <Rect width="64" height="64" rx="16" fill={colors.red} />
@@ -19,11 +26,14 @@ export function Logo({ size = 40 }: { size?: number }) {
   );
 }
 
-export function Wordmark() {
+// Wordmark scales the text alongside the icon so spacing stays consistent
+// at any size.
+export function Wordmark({ size = LOGO_SIZE.inApp }: { size?: number }) {
+  const textSize = Math.round(size * 0.69);
   return (
     <View style={styles.row}>
-      <Logo size={32} />
-      <Text style={styles.text}>palate</Text>
+      <Logo size={size} />
+      <Text style={[styles.text, { fontSize: textSize }]}>palate</Text>
     </View>
   );
 }
@@ -31,7 +41,6 @@ export function Wordmark() {
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
   text: {
-    fontSize: 22,
     fontWeight: "700",
     letterSpacing: -0.6,
     color: colors.ink,

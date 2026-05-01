@@ -24,6 +24,20 @@ export type FormatSlice   = { format: RestaurantFormat; count: number; pct: numb
 export type MealTimeSlice = { meal: "breakfast" | "lunch" | "dinner" | "snack"; count: number };
 export type TopSpot       = { name: string; count: number; cuisine: string | null };
 
+export type HourlyPattern =
+  | "late_night"        // ≥30% of visits after 9pm
+  | "early_riser"       // ≥30% before 9am
+  | "tight_window"      // 80%+ of visits within a 4-hour window
+  | "irregular"         // visits spread across >8 distinct hours
+  | "midday_anchor"     // strong 12–2pm cluster
+  | "evening_anchor";   // strong 6–8pm cluster
+
+export type HourlyInsight = {
+  pattern: HourlyPattern;
+  /** Plain-English copy for the insight card. */
+  text: string;
+};
+
 export type AnalyticsSummary = {
   totalVisits: number;
   uniqueRestaurants: number;
@@ -36,6 +50,10 @@ export type AnalyticsSummary = {
   mealTimeBreakdown: MealTimeSlice[];
   /** Sun=0 … Sat=6, count per day-of-week. */
   dayOfWeekCounts: number[];
+  /** 24-bin count of visits, indexed by hour-of-day (0..23). */
+  hourlyCounts: number[];
+  /** Plain-English insights derived from the hourly distribution. */
+  hourlyInsights: HourlyInsight[];
   brandTierMix: Record<BrandTier, number>;
 
   topSpots: TopSpot[];
@@ -138,6 +156,7 @@ export function aggregate(
     breakfast: 0, lunch: 0, dinner: 0, snack: 0,
   };
   const dowCounts = [0, 0, 0, 0, 0, 0, 0];
+  const hourlyCounts = new Array<number>(24).fill(0);
   const tierCounts: Record<BrandTier, number> = {
     value: 0, mainstream: 0, premium_fast_casual: 0, upscale: 0, luxury: 0,
   };
@@ -165,9 +184,10 @@ export function aggregate(
     const meal = (v.meal_type ?? "snack") as MealTimeSlice["meal"];
     if (meal in mealCounts) mealCounts[meal]++;
 
-    // Day-of-week (local time)
+    // Day-of-week + hour-of-day (local time)
     const d = new Date(v.visited_at);
     dowCounts[d.getDay()]++;
+    hourlyCounts[d.getHours()]++;
 
     // Span tracking
     const ms = d.getTime();
@@ -191,6 +211,8 @@ export function aggregate(
   const varietyScore = uniqueRestaurants / totalVisits;
   const loyaltyScore = topSpots.length > 0 ? topSpots[0].count / totalVisits : 0;
 
+  const hourlyInsights = deriveHourlyInsights(hourlyCounts, totalVisits);
+
   return {
     totalVisits,
     uniqueRestaurants,
@@ -200,11 +222,113 @@ export function aggregate(
     formatBreakdown,
     mealTimeBreakdown,
     dayOfWeekCounts: dowCounts,
+    hourlyCounts,
+    hourlyInsights,
     brandTierMix: tierCounts,
     topSpots,
     varietyScore,
     loyaltyScore,
   };
+}
+
+// ----------------------------------------------------------------------------
+// Hourly pattern detection — turns the 24-bin histogram into 1–3 plain-English
+// insights. Tone is observational ("you tend to…"), not judgmental.
+// ----------------------------------------------------------------------------
+function deriveHourlyInsights(hours: number[], total: number): HourlyInsight[] {
+  if (total < 3) return []; // need at least 3 visits to read a pattern
+
+  const out: HourlyInsight[] = [];
+
+  // Late night: ≥30% of visits at 9pm or later
+  const lateNight = sumRange(hours, 21, 23) + sumRange(hours, 0, 2);
+  if (lateNight / total >= 0.3) {
+    out.push({
+      pattern: "late_night",
+      text: "A meaningful slice of your eating happens late at night.",
+    });
+  }
+
+  // Early morning: ≥30% before 9am
+  const earlyMorning = sumRange(hours, 5, 8);
+  if (earlyMorning / total >= 0.3) {
+    out.push({
+      pattern: "early_riser",
+      text: "You tend to eat earlier than most — before 9am shows up a lot.",
+    });
+  }
+
+  // Tight window: 80% inside any rolling 4-hour band
+  const tight = findTightWindow(hours, total, 4, 0.8);
+  if (tight) {
+    out.push({
+      pattern: "tight_window",
+      text: `Your eating clusters tightly between ${formatHour(tight.start)} and ${formatHour((tight.start + 4) % 24)}.`,
+    });
+  }
+
+  // Midday anchor: 12–2pm holds ≥35% of visits
+  const midday = sumRange(hours, 12, 14);
+  if (midday / total >= 0.35) {
+    out.push({
+      pattern: "midday_anchor",
+      text: `You mostly eat between ${formatHour(12)} and ${formatHour(14)}.`,
+    });
+  }
+
+  // Evening anchor: 6–8pm holds ≥35%
+  const evening = sumRange(hours, 18, 20);
+  if (evening / total >= 0.35) {
+    out.push({
+      pattern: "evening_anchor",
+      text: `You have a strong ${formatHour(18)} routine.`,
+    });
+  }
+
+  // Irregular: visits spread across many hours and no other pattern fired
+  const distinctHours = hours.filter((c) => c > 0).length;
+  if (out.length === 0 && distinctHours >= 8) {
+    out.push({
+      pattern: "irregular",
+      text: "Your eating times are pretty spread out — no single hour dominates.",
+    });
+  }
+
+  // Cap at 3 to keep the insight card scannable
+  return out.slice(0, 3);
+}
+
+function sumRange(hours: number[], startHour: number, endHour: number): number {
+  let s = 0;
+  for (let h = startHour; h <= endHour; h++) s += hours[h] ?? 0;
+  return s;
+}
+
+/** Smallest n-hour window containing pct% of all visits. Returns null if none. */
+function findTightWindow(
+  hours: number[],
+  total: number,
+  windowSize: number,
+  pctThreshold: number,
+): { start: number; pct: number } | null {
+  let best: { start: number; pct: number } | null = null;
+  for (let start = 0; start < 24; start++) {
+    let sum = 0;
+    for (let i = 0; i < windowSize; i++) sum += hours[(start + i) % 24];
+    const pct = sum / total;
+    if (pct >= pctThreshold && (!best || pct > best.pct)) {
+      best = { start, pct };
+    }
+  }
+  return best;
+}
+
+/** "12pm", "9am", "12am" — short labels for axis + insight text. */
+export function formatHour(h: number): string {
+  if (h === 0) return "12am";
+  if (h === 12) return "12pm";
+  if (h < 12) return `${h}am`;
+  return `${h - 12}pm`;
 }
 
 function sortedSlices(counts: Map<string, number>, total: number): CuisineSlice[] {
@@ -242,6 +366,8 @@ function emptySummary(): AnalyticsSummary {
     formatBreakdown: [],
     mealTimeBreakdown: [],
     dayOfWeekCounts: [0, 0, 0, 0, 0, 0, 0],
+    hourlyCounts: new Array(24).fill(0),
+    hourlyInsights: [],
     brandTierMix: { value: 0, mainstream: 0, premium_fast_casual: 0, upscale: 0, luxury: 0 },
     topSpots: [],
     varietyScore: 0,

@@ -8,6 +8,7 @@ import { loadAnalytics, type AnalyticsSummary, type TimeRange } from "../lib/ana
 import { DonutChart, type DonutSlice } from "../components/charts/DonutChart";
 import { HorizontalBars, type BarRow } from "../components/charts/HorizontalBars";
 import { VerticalBars, type VBar } from "../components/charts/VerticalBars";
+import { HourlyHistogram } from "../components/charts/HourlyHistogram";
 
 const RANGE_OPTIONS: Array<{ key: TimeRange; short: string; long: string }> = [
   { key: "week",    short: "Week",    long: "this week" },
@@ -185,10 +186,6 @@ function Dashboard({ data, range }: { data: AnalyticsSummary; range: TimeRange }
     label: MEAL_LABELS[m.meal],
     value: m.count,
   }));
-  const mealAccentIndex = mealBars.reduce(
-    (best, cur, i, arr) => (cur.value > arr[best].value ? i : best),
-    0,
-  );
 
   // ---------------- Day of week bars ----------------
   const dowBars: VBar[] = data.dayOfWeekCounts.map((c, i) => ({
@@ -248,9 +245,27 @@ function Dashboard({ data, range }: { data: AnalyticsSummary; range: TimeRange }
         <HorizontalBars data={formatRows} />
       </Section>
 
-      {/* Meal time */}
-      <Section title="When you eat" subtitle="Breakfast, lunch, dinner, snack">
-        <VerticalBars data={mealBars} accentIndex={mealAccentIndex} height={170} />
+      {/* WHEN you eat — hourly distribution is now the primary view. */}
+      <Section title="When you eat" subtitle="Hour-by-hour across the day">
+        <HourlyHistogram data={data.hourlyCounts} />
+        {data.hourlyInsights.length > 0 && (
+          <View style={styles.hourlyInsights}>
+            {data.hourlyInsights.map((ins) => (
+              <Text key={ins.pattern} style={styles.hourlyInsightText}>
+                · {ins.text}
+              </Text>
+            ))}
+          </View>
+        )}
+        {/* Meal buckets demoted to a compact summary row below the histogram. */}
+        <View style={styles.mealRow}>
+          {mealBars.map((m) => (
+            <View key={m.label} style={styles.mealChip}>
+              <Text style={styles.mealChipValue}>{m.value}</Text>
+              <Text style={styles.mealChipLabel}>{m.label}</Text>
+            </View>
+          ))}
+        </View>
       </Section>
 
       {/* Day of week */}
@@ -421,6 +436,33 @@ const styles = StyleSheet.create({
   legendLabel: { flex: 1, fontSize: 14, color: colors.ink, fontWeight: "500" },
   legendValue: { ...type.small, fontWeight: "700" },
 
+  hourlyInsights: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: colors.faint,
+    borderWidth: 1,
+    borderColor: colors.line,
+    gap: 4,
+  },
+  hourlyInsightText: { fontSize: 13, color: colors.ink, lineHeight: 19 },
+  mealRow: {
+    marginTop: 14,
+    flexDirection: "row",
+    gap: 8,
+  },
+  mealChip: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: colors.paper,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+  },
+  mealChipValue: { fontSize: 18, fontWeight: "800", color: colors.ink },
+  mealChipLabel: { fontSize: 11, fontWeight: "600", color: colors.mute, marginTop: 2, letterSpacing: 0.3 },
   topRow: {
     flexDirection: "row",
     alignItems: "center",

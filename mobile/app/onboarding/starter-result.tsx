@@ -14,6 +14,14 @@ export default function StarterResultScreen() {
     try { return JSON.parse(chips ?? "[]"); } catch { return []; }
   })();
 
+  // Build the expectation sentence safely. If we somehow lost the persona
+  // name, fall back to a clean "Starter Palate" string instead of rendering
+  // an incomplete sentence.
+  const starterName = p?.label ?? "Starter Palate";
+  const expectationLine = p?.label
+    ? `This is your Starter Palate — ${starterName}. Your real Palate emerges from where you actually go. By Sunday, we'll know more.`
+    : "This is your Starter Palate. Your real Palate emerges from where you actually go. By Sunday, we'll know more.";
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.body}>
@@ -79,15 +87,12 @@ export default function StarterResultScreen() {
 
         <View style={styles.expectation}>
           <Text style={styles.expectationEyebrow}>HEADS UP</Text>
-          <Text style={styles.expectationBody}>
-            This is your <Text style={{ fontWeight: "800", color: colors.ink }}>Starter Palate</Text>.
-            Your real Palate is based on where you actually go — by Sunday, we'll know more.
-          </Text>
+          <Text style={styles.expectationBody}>{expectationLine}</Text>
         </View>
       </ScrollView>
 
       <View style={styles.cta}>
-        <Button title="Continue" onPress={() => router.replace("/onboarding/taste-preferences")} />
+        <Button title="See what happens this week" onPress={() => router.replace("/onboarding/taste-preferences")} />
       </View>
     </SafeAreaView>
   );

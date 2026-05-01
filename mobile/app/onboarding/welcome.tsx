@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Logo } from "../../components/Logo";
+import { Logo, LOGO_SIZE } from "../../components/Logo";
 import { Button, Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 
@@ -10,16 +10,16 @@ export default function Welcome() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.body}>
-        <Logo size={64} />
+        <Logo size={LOGO_SIZE.hero} />
         <Spacer size={32} />
-        <Text style={styles.h1}>See what you actually eat.</Text>
+        <Text style={styles.h1}>Start to see how you actually eat.</Text>
         <Spacer />
         <Text style={styles.p}>
-          Your eating habits have a pattern. Palate tells you what it means.
+          Your eating habits have a pattern. Palate helps you notice it.
         </Text>
         <Spacer size={12} />
         <Text style={[styles.p, { fontStyle: "italic", color: colors.mute }]}>
-          Not what you say you like. What your behavior proves.
+          Not what you say you like. What your habits start to reveal.
         </Text>
       </View>
       <View style={styles.cta}>

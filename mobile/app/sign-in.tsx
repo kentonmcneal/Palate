@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View, Text, TextInput, StyleSheet, Alert, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Logo, Wordmark } from "../components/Logo";
+import { Logo, Wordmark, LOGO_SIZE } from "../components/Logo";
 import { Button, Spacer } from "../components/Button";
 import { colors, spacing, type } from "../theme";
 import { sendMagicLink, verifyEmailCode } from "../lib/auth";
@@ -52,10 +52,10 @@ export default function SignIn() {
       >
         <View style={styles.container}>
           <View style={{ alignItems: "center" }}>
-            <Logo size={56} />
+            <Logo size={LOGO_SIZE.hero} />
             <Spacer size={20} />
             <Text style={styles.h1}>Welcome to Palate</Text>
-            <Text style={styles.sub}>See what you actually eat.</Text>
+            <Text style={styles.sub}>Start to see how you actually eat.</Text>
           </View>
 
           <View style={{ marginTop: spacing.xxl }}>
