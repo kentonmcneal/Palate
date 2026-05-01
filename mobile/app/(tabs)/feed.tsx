@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Spacer } from "../../components/Button";
+import { Avatar } from "../../components/Avatar";
 import { colors, spacing, type } from "../../theme";
 import { listFeed, toggleLike, type FeedEvent } from "../../lib/feed";
 import { listIncomingRequests } from "../../lib/friends";
@@ -120,7 +121,6 @@ export default function FeedTab() {
 function FeedRow({ event, onLike }: { event: FeedEvent; onLike: () => void }) {
   const router = useRouter();
   const name = event.user?.display_name || (event.user?.email ? event.user.email.split("@")[0] : "Someone");
-  const initial = name[0]?.toUpperCase() ?? "•";
   const when = relativeTime(event.created_at);
 
   return (
@@ -129,9 +129,7 @@ function FeedRow({ event, onLike }: { event: FeedEvent; onLike: () => void }) {
         style={styles.row}
         onPress={() => event.user_id && router.push(`/profile/${event.user_id}`)}
       >
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initial}</Text>
-        </View>
+        <Avatar uri={event.user?.avatar_url} name={event.user?.display_name} email={event.user?.email} size={40} />
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>{name}</Text>
           <Text style={styles.when}>{when}</Text>

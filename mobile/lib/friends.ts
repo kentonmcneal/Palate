@@ -25,6 +25,7 @@ export type FriendProfile = {
   id: string;
   email: string | null;
   display_name: string | null;
+  avatar_url: string | null;
   profile_visibility: "private" | "friends" | "public";
 };
 
@@ -135,8 +136,8 @@ export async function listFriends(): Promise<FriendListItem[]> {
     .from("friendships")
     .select(`
       *,
-      requester:profiles!friendships_requester_id_fkey ( id, email, display_name, profile_visibility ),
-      addressee:profiles!friendships_addressee_id_fkey ( id, email, display_name, profile_visibility )
+      requester:profiles!friendships_requester_id_fkey ( id, email, display_name, avatar_url, profile_visibility ),
+      addressee:profiles!friendships_addressee_id_fkey ( id, email, display_name, avatar_url, profile_visibility )
     `)
     .eq("status", "accepted")
     .or(`requester_id.eq.${me},addressee_id.eq.${me}`)
@@ -162,7 +163,7 @@ export async function listIncomingRequests(): Promise<FriendListItem[]> {
     .from("friendships")
     .select(`
       *,
-      requester:profiles!friendships_requester_id_fkey ( id, email, display_name, profile_visibility )
+      requester:profiles!friendships_requester_id_fkey ( id, email, display_name, avatar_url, profile_visibility )
     `)
     .eq("status", "pending")
     .eq("addressee_id", me)
@@ -188,7 +189,7 @@ export async function listOutgoingRequests(): Promise<FriendListItem[]> {
     .from("friendships")
     .select(`
       *,
-      addressee:profiles!friendships_addressee_id_fkey ( id, email, display_name, profile_visibility )
+      addressee:profiles!friendships_addressee_id_fkey ( id, email, display_name, avatar_url, profile_visibility )
     `)
     .eq("status", "pending")
     .eq("requester_id", me)

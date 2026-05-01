@@ -3,8 +3,10 @@ import { View, Text, StyleSheet, Switch, Alert, Linking, ScrollView, Share, Pres
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
+import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Button, Spacer } from "../../components/Button";
+import { Avatar } from "../../components/Avatar";
 import { colors, spacing, type } from "../../theme";
 import { supabase } from "../../lib/supabase";
 import { signOut } from "../../lib/auth";
@@ -15,7 +17,7 @@ import {
   disableSundayWrappedReminder,
 } from "../../lib/notifications";
 import { loadAnalytics, type AnalyticsSummary } from "../../lib/analytics-stats";
-import { getMyProfile, setProfileVisibility, setDisplayName, type ProfileVisibility } from "../../lib/profile";
+import { getMyProfile, setProfileVisibility, setDisplayName, uploadAvatar, type ProfileVisibility } from "../../lib/profile";
 import { listIncomingRequests } from "../../lib/friends";
 
 const CUISINE_LABELS: Record<string, string> = {
@@ -37,6 +39,8 @@ export default function Settings() {
   const [stats, setStats] = useState<AnalyticsSummary | null>(null);
   const [visibility, setVisibility] = useState<ProfileVisibility>("friends");
   const [displayName, setDisplayNameState] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState("");
@@ -50,9 +54,37 @@ export default function Settings() {
       if (!p) return;
       setVisibility(p.profile_visibility);
       setDisplayNameState(p.display_name);
+      setAvatarUrl(p.avatar_url);
     }).catch(() => {});
     listIncomingRequests().then((rs) => setPendingRequestCount(rs.length)).catch(() => {});
   }, []);
+
+  async function pickAvatar() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Photo access off", "Allow photo library access in Settings → Palate to choose a profile photo.", [
+        { text: "Open Settings", onPress: () => Linking.openSettings() },
+        { text: "Not now" },
+      ]);
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    setUploadingAvatar(true);
+    try {
+      const url = await uploadAvatar(result.assets[0].uri);
+      setAvatarUrl(url);
+    } catch (e: any) {
+      Alert.alert("Couldn't upload", e?.message ?? "Try again");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
 
   function openNameEditor() {
     setDraftName(displayName ?? "");
@@ -181,11 +213,12 @@ export default function Settings() {
         {/* Profile snapshot */}
         <View style={styles.profileCard}>
           <View style={styles.profileHead}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {email ? email[0].toUpperCase() : "•"}
-              </Text>
-            </View>
+            <Pressable onPress={pickAvatar} accessibilityLabel="Change profile photo">
+              <Avatar uri={avatarUrl} name={displayName} email={email} size={64} />
+              <View style={styles.avatarBadge}>
+                <Text style={styles.avatarBadgeText}>{uploadingAvatar ? "…" : avatarUrl ? "✎" : "+"}</Text>
+              </View>
+            </Pressable>
             <View style={{ flex: 1 }}>
               <Text style={type.title}>{displayName || "You"}</Text>
               {email && (
@@ -404,12 +437,20 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   profileHead: { flexDirection: "row", alignItems: "center", gap: 14 },
-  avatar: {
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: colors.red,
-    alignItems: "center", justifyContent: "center",
+  avatarBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.ink,
+    borderWidth: 2,
+    borderColor: colors.faint,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  avatarText: { color: "#fff", fontSize: 22, fontWeight: "800" },
+  avatarBadgeText: { color: "#fff", fontSize: 11, fontWeight: "800" },
   profileBlock: {
     marginTop: 18,
     paddingTop: 14,

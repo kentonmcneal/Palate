@@ -6,6 +6,7 @@ import { Logo, Wordmark } from "../components/Logo";
 import { Button, Spacer } from "../components/Button";
 import { colors, spacing, type } from "../theme";
 import { sendMagicLink, verifyEmailCode } from "../lib/auth";
+import { getQuizPersona } from "../lib/profile";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
@@ -32,8 +33,10 @@ export default function SignIn() {
     setLoading(true);
     try {
       await verifyEmailCode(email.trim(), code.trim());
-      // Brand new account → run onboarding.
-      router.replace("/onboarding/welcome");
+      // Returning users (already finished the Starter Palate quiz) skip
+      // onboarding and land in the tabs. Otherwise run the wizard.
+      const { persona } = await getQuizPersona();
+      router.replace(persona ? "/(tabs)" : "/onboarding/welcome");
     } catch (e: any) {
       Alert.alert("Couldn't sign in", e.message ?? "Wrong code?");
     } finally {

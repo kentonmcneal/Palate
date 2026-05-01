@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, Linking, Platform } from "react-native";
 import { colors, spacing, type } from "../theme";
 import { isoWeekStart } from "../lib/wrapped";
 import {
@@ -106,6 +106,13 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
     }
   }
 
+  function openInMaps() {
+    const url = mapsUrlFor(rec.name, rec.neighborhood ?? "");
+    Linking.openURL(url).catch(() => {
+      Alert.alert("Couldn't open Maps", "Try searching for it directly in Maps.");
+    });
+  }
+
   return (
     <View style={styles.row}>
       <View style={{ flex: 1 }}>
@@ -116,6 +123,9 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
             .join(" · ") || "Nearby"}
         </Text>
         <Text style={styles.reason}>{rec.reason}</Text>
+        <Pressable onPress={openInMaps} style={styles.mapsLink} accessibilityRole="link">
+          <Text style={styles.mapsLinkText}>Open in Maps →</Text>
+        </Pressable>
       </View>
       <Pressable
         onPress={save}
@@ -128,6 +138,14 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
       </Pressable>
     </View>
   );
+}
+
+function mapsUrlFor(name: string, address: string): string {
+  const query = encodeURIComponent(address ? `${name}, ${address}` : name);
+  if (Platform.OS === "ios") {
+    return `maps://?q=${query}`;
+  }
+  return `https://www.google.com/maps/search/?api=1&query=${query}`;
 }
 
 function capitalize(s: string): string {
@@ -159,6 +177,17 @@ const styles = StyleSheet.create({
   name: { fontSize: 16, fontWeight: "700", color: colors.ink },
   sub: { ...type.small, marginTop: 2 },
   reason: { fontSize: 13, color: colors.mute, marginTop: 6, fontStyle: "italic", lineHeight: 18 },
+
+  mapsLink: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+  },
+  mapsLinkText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.red,
+    letterSpacing: 0.3,
+  },
 
   saveBtn: {
     paddingHorizontal: 14, height: 32, borderRadius: 16,

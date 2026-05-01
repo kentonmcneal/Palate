@@ -25,13 +25,15 @@ export default function RootLayout() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  // Route guard: kick to /sign-in if not authed; into /(tabs) once authed.
+  // Route guard: kick to /sign-in if not authed; bounce away from /sign-in
+  // once authed. Signed-in users are allowed to be in /onboarding so brand-new
+  // accounts can finish setup before landing in the tabs.
   useEffect(() => {
     if (!loaded) return;
     const inAuthGroup = segments[0] === "sign-in" || segments[0] === "onboarding";
     if (!session && !inAuthGroup) {
       router.replace("/sign-in");
-    } else if (session && inAuthGroup) {
+    } else if (session && segments[0] === "sign-in") {
       router.replace("/(tabs)");
     }
   }, [session, loaded, segments]);

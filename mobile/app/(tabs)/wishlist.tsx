@@ -8,13 +8,15 @@ import {
   Pressable,
   Alert,
   ActivityIndicator,
+  Linking,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { listWishlist, removeFromWishlist, type WishlistEntry } from "../../lib/palate-insights";
-import { saveVisit } from "../../lib/visits";
+import { saveVisit, rewardCopy } from "../../lib/visits";
 
 type GroupBy = "recent" | "cuisine" | "neighborhood";
 
@@ -66,14 +68,15 @@ export default function WishlistTab() {
   async function handleLogVisit(entry: WishlistEntry) {
     if (!entry.restaurant) return;
     try {
-      await saveVisit({
+      const result = await saveVisit({
         googlePlaceId: entry.restaurant.google_place_id,
         source: "manual",
       });
       // Remove from wishlist after successful visit log — they've been now
       await removeFromWishlist(entry.id);
       setEntries((curr) => curr.filter((e) => e.id !== entry.id));
-      Alert.alert("Logged", `${entry.restaurant.name} saved as today's visit.`);
+      const r = rewardCopy(result.totalVisits);
+      Alert.alert(r.title, r.message);
     } catch (e: any) {
       Alert.alert("Couldn't log visit", e.message ?? "Try again");
     }
@@ -188,12 +191,25 @@ function WishlistRow({
         <Pressable onPress={onLog} style={styles.btnPrimary}>
           <Text style={styles.btnPrimaryText}>I went here</Text>
         </Pressable>
+        <Pressable onPress={() => openInMaps(r.name, r.neighborhood)} style={styles.btnGhost}>
+          <Text style={styles.btnGhostText}>Maps</Text>
+        </Pressable>
         <Pressable onPress={onRemove} style={styles.btnGhost}>
           <Text style={styles.btnGhostText}>Remove</Text>
         </Pressable>
       </View>
     </View>
   );
+}
+
+function openInMaps(name: string, neighborhood: string | null) {
+  const query = encodeURIComponent(neighborhood ? `${name}, ${neighborhood}` : name);
+  const url = Platform.OS === "ios"
+    ? `maps://?q=${query}`
+    : `https://www.google.com/maps/search/?api=1&query=${query}`;
+  Linking.openURL(url).catch(() => {
+    Alert.alert("Couldn't open Maps", "Try searching for it directly in Maps.");
+  });
 }
 
 function capitalize(s: string): string {

@@ -22,7 +22,7 @@ export default function PrivacyScreen() {
         <Row title="No selling, ever" body="Restaurants don't see your name or email." />
       </View>
       <View style={styles.cta}>
-        <Button title="Let's eat" onPress={() => router.push("/onboarding/taste-preferences")} />
+        <Button title="Let's eat" onPress={() => router.replace("/(tabs)")} />
       </View>
     </SafeAreaView>
   );

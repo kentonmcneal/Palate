@@ -288,7 +288,12 @@ export async function generateWeeklyPalatePersona(
   weekEnd: string,
 ): Promise<PalatePersona | null> {
   const visits = await loadWeekVisits(weekStart, weekEnd);
-  if (!visits.length) return null;
+
+  // Fallback: no visits yet → use the Starter Palate quiz result if we have it.
+  // Lets Wrapped + Recommendations stay alive on day one.
+  if (!visits.length) {
+    return await starterPalateFallback();
+  }
 
   const ctx = makeContext(weekStart, weekEnd, visits);
   const def = PERSONAS.find((d) => d.matches(ctx)) ?? PERSONAS[PERSONAS.length - 1];
@@ -307,6 +312,40 @@ export async function generateWeeklyPalatePersona(
     dominantSignals,
     recommendationStrategy: def.recommendationStrategy,
     confidenceScore,
+  };
+}
+
+async function starterPalateFallback(): Promise<PalatePersona | null> {
+  const { getQuizPersona } = await import("./profile");
+  const { STARTER_PERSONAS } = await import("./starter-quiz");
+  const { persona, chips } = await getQuizPersona();
+  if (!persona) return null;
+
+  const sp = (STARTER_PERSONAS as any)[persona];
+  if (!sp) return null;
+
+  // Map starter persona to a recommendation strategy used downstream.
+  const strategyMap: Record<string, RecommendationStrategy> = {
+    convenience_loyalist:     "convenience",
+    flavor_loyalist:          "flavor_loyal",
+    premium_comfort_loyalist: "premium",
+    practical_variety_seeker: "balanced",
+    explorer:                 "explore",
+    cafe_dweller:             "morning",
+    comfort_connoisseur:      "flavor_loyal",
+    fast_casual_regular:      "wellness",
+    social_diner:             "balanced",
+  };
+
+  return {
+    key: (persona as PersonaKey),
+    label: sp.label,
+    tagline: sp.tagline,
+    description: sp.insight,
+    evidence: chips.length ? chips : sp.insights.slice(0, 2),
+    dominantSignals: [],
+    recommendationStrategy: strategyMap[persona] ?? "balanced",
+    confidenceScore: 0.2, // low — this is just a starter
   };
 }
 

@@ -18,14 +18,14 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.palate.ios",
-      "buildNumber": "1",
+      "buildNumber": "3",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Palate uses your location only when the app is open, to detect which restaurant or café you may be eating at. We never share or sell your location.",
         "NSUserNotificationsUsageDescription": "We send a single notification on Sunday morning when your weekly Wrapped is ready. You can turn this off in Settings.",
+        "NSPhotoLibraryUsageDescription": "Palate uses your photos only when you choose a profile picture.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "associatedDomains": [
-        "applinks:palate.app",
         "applinks:palate.app"
       ]
     },
@@ -37,10 +37,6 @@
         "backgroundColor": "#FF3008"
       },
       "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",

@@ -17,6 +17,9 @@ import {
 } from "../../lib/palate-insights";
 import { isoWeekStart } from "../../lib/wrapped";
 import { RecommendationsCard } from "../../components/RecommendationsCard";
+import { GettingStarted } from "../../components/GettingStarted";
+import { WrappedProgress } from "../../components/WrappedProgress";
+import { AutoDetectPrompt } from "../../components/AutoDetectPrompt";
 import { Confetti } from "../../components/Confetti";
 
 const STREAK_MILESTONES = [7, 14, 30, 50, 100, 200, 365];
@@ -109,6 +112,7 @@ export default function Home() {
   return (
     <SafeAreaView style={styles.safe}>
       <Confetti fire={milestoneConfetti > 0} count={150} />
+      <AutoDetectPrompt visitsTotal={visits.length} />
       <ScrollView
         contentContainerStyle={styles.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
@@ -122,6 +126,8 @@ export default function Home() {
           <WeekSoFarCard insight={weekInsight} onPress={() => router.push("/(tabs)/wrapped")} />
         )}
 
+        <WrappedProgress visitsTotal={visits.length} />
+
         <RecommendationsCard />
 
         <View style={styles.heroCard}>
@@ -134,14 +140,19 @@ export default function Home() {
           <Button title={checking ? "Checking…" : "Check now"} onPress={handleCheckNow} loading={checking} />
         </View>
 
+        {visits.length === 0 && (
+          <View style={{ marginTop: spacing.xxl }}>
+            <GettingStarted />
+          </View>
+        )}
+
         <View style={{ marginTop: spacing.xxl }}>
           <Text style={type.title}>Recent</Text>
           <Spacer size={12} />
           {visits.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Text style={type.subtitle}>No visits yet.</Text>
-              <Text style={[type.small, { marginTop: 4 }]}>
-                Tap "Check now" or use the + tab to add one manually.
+              <Text style={[type.small, { lineHeight: 20 }]}>
+                Logged visits show up here. Each one sharpens your weekly Wrapped.
               </Text>
             </View>
           ) : (

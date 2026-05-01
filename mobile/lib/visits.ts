@@ -21,7 +21,42 @@ function mealTypeFor(date: Date): Visit["meal_type"] {
   return "snack";
 }
 
-export type SaveVisitResult = Visit & { isFirstVisit: boolean };
+export type SaveVisitResult = Visit & {
+  isFirstVisit: boolean;
+  totalVisits: number;
+};
+
+const VISITS_BEFORE_WRAPPED = 3;
+
+export function visitsToWrapped(currentTotal: number): number {
+  return Math.max(0, VISITS_BEFORE_WRAPPED - currentTotal);
+}
+
+/** Micro-reward copy for the save toast. */
+export function rewardCopy(totalVisits: number): { title: string; message: string } {
+  if (totalVisits === 1) {
+    return {
+      title: "+1 data point",
+      message: "We're starting to learn your patterns. Two more visits to unlock your first Weekly Palate.",
+    };
+  }
+  if (totalVisits === 2) {
+    return {
+      title: "+1 data point",
+      message: "One more visit and your first Weekly Palate unlocks.",
+    };
+  }
+  if (totalVisits === VISITS_BEFORE_WRAPPED) {
+    return {
+      title: "Weekly Palate unlocked 🔓",
+      message: "Open the Wrapped tab to see what your week is starting to say.",
+    };
+  }
+  return {
+    title: "+1 data point",
+    message: "Each visit sharpens your Palate.",
+  };
+}
 
 export async function saveVisit(opts: {
   googlePlaceId: string;
@@ -35,8 +70,6 @@ export async function saveVisit(opts: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not signed in");
 
-  // Cheap pre-insert count so the caller can show the first-visit celebration.
-  // Done before insert so we don't double-count the new row.
   const { count: priorCount } = await supabase
     .from("visits")
     .select("id", { count: "exact", head: true })
@@ -57,7 +90,8 @@ export async function saveVisit(opts: {
     .single();
 
   if (error) throw error;
-  return { ...(data as Visit), isFirstVisit: (priorCount ?? 0) === 0 };
+  const total = (priorCount ?? 0) + 1;
+  return { ...(data as Visit), isFirstVisit: total === 1, totalVisits: total };
 }
 
 export async function recentVisits(limit = 20) {

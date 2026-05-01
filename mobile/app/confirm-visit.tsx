@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button, Spacer } from "../components/Button";
 import { colors, spacing, type } from "../theme";
-import { saveVisit, recordPromptDecision } from "../lib/visits";
+import { saveVisit, recordPromptDecision, rewardCopy } from "../lib/visits";
 import { FirstVisitCelebration } from "../components/FirstVisitCelebration";
 import type { Restaurant } from "../lib/places";
 
@@ -34,7 +34,8 @@ export default function ConfirmVisit() {
         setCelebration({ name: params.name as string });
       } else {
         router.back();
-        setTimeout(() => Alert.alert("Saved", `${params.name} added to your week.`), 250);
+        const r = rewardCopy(result.totalVisits);
+        setTimeout(() => Alert.alert(r.title, r.message), 250);
       }
     } catch (e: any) {
       Alert.alert("Couldn't save", e.message ?? "Try again");
@@ -62,7 +63,8 @@ export default function ConfirmVisit() {
         setCelebration({ name: p.name });
       } else {
         router.back();
-        setTimeout(() => Alert.alert("Saved", `${p.name} added.`), 250);
+        const r = rewardCopy(result.totalVisits);
+        setTimeout(() => Alert.alert(r.title, r.message), 250);
       }
     } catch (e: any) {
       Alert.alert("Couldn't save", e.message ?? "Try again");

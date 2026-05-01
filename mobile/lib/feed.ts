@@ -31,6 +31,7 @@ export type FeedEvent = {
     id: string;
     email: string | null;
     display_name: string | null;
+    avatar_url: string | null;
   } | null;
   /** True if current user has liked this event. */
   iLiked: boolean;
@@ -51,7 +52,7 @@ export async function listFeed(limit = 50): Promise<FeedEvent[]> {
     .from("feed_events")
     .select(`
       id, user_id, kind, payload, created_at,
-      user:profiles!feed_events_user_id_fkey ( id, email, display_name )
+      user:profiles!feed_events_user_id_fkey ( id, email, display_name, avatar_url )
     `)
     .order("created_at", { ascending: false })
     .limit(limit);

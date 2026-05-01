@@ -49,7 +49,7 @@ export default function TastePreferencesScreen() {
     setSaving(true);
     try {
       await saveTastePreferences([...selected]);
-      router.replace("/(tabs)");
+      router.push("/onboarding/why-location");
     } catch (e: any) {
       Alert.alert("Couldn't save", e.message ?? "Try again");
     } finally {
@@ -58,7 +58,7 @@ export default function TastePreferencesScreen() {
   }
 
   function skip() {
-    router.replace("/(tabs)");
+    router.push("/onboarding/why-location");
   }
 
   const enough = selected.size >= MIN_SELECTION;

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Spacer } from "../../components/Button";
+import { Avatar } from "../../components/Avatar";
 import { colors, spacing, type } from "../../theme";
 import { getFriendProfileSnapshot, type FriendProfileSnapshot } from "../../lib/profile";
 import { requestFriendship, unfriend } from "../../lib/friends";
@@ -93,11 +94,7 @@ export default function FriendProfileScreen() {
           <>
             {/* Identity card */}
             <View style={styles.idCard}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {(snapshot.display_name || snapshot.email || "·")[0].toUpperCase()}
-                </Text>
-              </View>
+              <Avatar uri={snapshot.avatar_url} name={snapshot.display_name} email={snapshot.email} size={80} />
               <Text style={styles.name}>
                 {snapshot.display_name ||
                   (snapshot.email ? snapshot.email.split("@")[0] : "Unknown")}

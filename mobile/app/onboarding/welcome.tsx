@@ -23,7 +23,7 @@ export default function Welcome() {
         </Text>
       </View>
       <View style={styles.cta}>
-        <Button title="Get started" onPress={() => router.push("/onboarding/why-location")} />
+        <Button title="Get started" onPress={() => router.push("/onboarding/profile-setup")} />
       </View>
     </SafeAreaView>
   );

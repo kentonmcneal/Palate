@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Spacer } from "../components/Button";
+import { Avatar } from "../components/Avatar";
 import { colors, spacing, type } from "../theme";
 import {
   listFriends, listIncomingRequests, listOutgoingRequests,
@@ -272,7 +273,6 @@ function FriendRow({
 }: { friend: FriendProfile; actions?: Action[]; sublabel?: string }) {
   const router = useRouter();
   const name = friend.display_name || (friend.email ? friend.email.split("@")[0] : "Unknown");
-  const initial = name[0]?.toUpperCase() ?? "•";
   const subtext = sublabel ?? friend.email ?? "";
 
   return (
@@ -280,9 +280,7 @@ function FriendRow({
       style={styles.friendRow}
       onPress={() => router.push(`/profile/${friend.id}`)}
     >
-      <View style={styles.friendAvatar}>
-        <Text style={styles.friendAvatarText}>{initial}</Text>
-      </View>
+      <Avatar uri={friend.avatar_url} name={friend.display_name} email={friend.email} size={44} />
       <View style={{ flex: 1 }}>
         <Text style={styles.friendName} numberOfLines={1}>{name}</Text>
         {subtext ? (

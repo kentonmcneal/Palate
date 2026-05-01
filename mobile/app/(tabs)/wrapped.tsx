@@ -7,6 +7,7 @@ import { colors, spacing, type } from "../../theme";
 import { generateForCurrentWeek, latestWrapped, type Wrapped } from "../../lib/wrapped";
 import { WrappedCard } from "../../components/WrappedCard";
 import { WeeklyPalateInsights } from "../../components/WeeklyPalateInsights";
+import { WrappedCharts } from "../../components/WrappedCharts";
 import { Confetti } from "../../components/Confetti";
 import { shareWrappedToFeed } from "../../lib/feed";
 import ViewShot, { captureRef } from "react-native-view-shot";
@@ -109,6 +110,7 @@ export default function WrappedTab() {
             <ViewShot ref={cardRef as any} options={{ format: "png", quality: 1 }}>
               <WrappedCard data={data} />
             </ViewShot>
+            <WrappedCharts />
             <WeeklyPalateInsights weekStart={data.week_start} weekEnd={data.week_end} />
             <Spacer />
             <Button title="Post to Feed" onPress={shareToFeed} />

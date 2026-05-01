@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import { Button, Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { searchRestaurants, type Restaurant } from "../../lib/places";
-import { saveVisit } from "../../lib/visits";
+import { saveVisit, rewardCopy } from "../../lib/visits";
 import { getCurrentLocation } from "../../lib/location";
 import { FirstVisitCelebration } from "../../components/FirstVisitCelebration";
 
@@ -42,7 +42,8 @@ export default function AddTab() {
       if (result.isFirstVisit) {
         setCelebration({ name: p.name });
       } else {
-        Alert.alert("Saved", `${p.name} added.`, [
+        const r = rewardCopy(result.totalVisits);
+        Alert.alert(r.title, r.message, [
           { text: "OK", onPress: () => router.replace("/(tabs)") },
         ]);
       }
