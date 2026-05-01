@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, Linking, Platform } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from "react-native";
 import { colors, spacing, type } from "../theme";
 import { isoWeekStart } from "../lib/wrapped";
 import {
@@ -11,6 +11,12 @@ import {
   type RestaurantRecommendation,
   type AspirationTag,
 } from "../lib/palate-insights";
+import { computeTasteVector } from "../lib/taste-vector";
+import { scoreMatch, distanceKm, formatDistance } from "../lib/match-score";
+import { getCurrentLocation } from "../lib/location";
+import { triggerHapticSuccess } from "../lib/haptics";
+import { pickSaveCopy } from "../lib/save-copy";
+import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
 
 // ============================================================================
 // RecommendationsCard — always-visible spot suggestions on the Home tab.
@@ -43,21 +49,45 @@ export function RecommendationsCard() {
   const [recs, setRecs] = useState<RestaurantRecommendation[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [earlyEstimate, setEarlyEstimate] = useState(false);
   const tod = timeOfDay();
 
   const load = useCallback(async () => {
     try {
       const start = isoWeekStart();
       const end = new Date().toISOString().slice(0, 10);
-      const persona = await generateWeeklyPalatePersona(start, end);
+      const [persona, vector, here] = await Promise.all([
+        generateWeeklyPalatePersona(start, end),
+        computeTasteVector().catch(() => null),
+        getCurrentLocation().catch(() => null),
+      ]);
       if (!persona) {
         setRecs([]);
         return;
       }
+      // "Early estimate" = we have <5 visits to read from (the persona engine
+      // is leaning heavily on the quiz fallback at this point).
+      if (vector && vector.visitCount < 5) setEarlyEstimate(true);
       const result = await getPersonaRecommendations(persona, start, end);
       const all = [...(result.similar ?? [])];
       if (result.stretch) all.push(result.stretch);
-      setRecs(all.slice(0, 2));
+
+      // Enrich every rec with match score + distance + a sharper "why" line.
+      const enriched: RestaurantRecommendation[] = all.slice(0, 3).map((r) => {
+        let matchScore: number | null = null;
+        let reason = r.reason;
+        if (vector) {
+          const m = scoreMatch(vector, r);
+          matchScore = m.score;
+          if (m.reasons[0]) reason = m.reasons[0];
+        }
+        let dKm: number | null = null;
+        if (here && r.latitude != null && r.longitude != null) {
+          dKm = distanceKm({ lat: here.lat, lng: here.lng }, { lat: r.latitude, lng: r.longitude });
+        }
+        return { ...r, matchScore, distanceKm: dKm, reason };
+      });
+      setRecs(enriched);
     } catch {
       setError(true);
     } finally {
@@ -79,6 +109,11 @@ export function RecommendationsCard() {
           <Text style={styles.eyebrow}>RECOMMENDED</Text>
           <Text style={styles.title}>{HEADLINES[tod]}</Text>
           <Text style={styles.blurb}>{BLURBS[tod]}</Text>
+          {earlyEstimate && (
+            <View style={styles.earlyBadge}>
+              <Text style={styles.earlyBadgeText}>EARLY ESTIMATE · sharper after a few more visits</Text>
+            </View>
+          )}
         </View>
       </View>
       <View style={{ marginTop: 16 }}>
@@ -102,7 +137,12 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
         source: "recommendation",
         aspirationTags: inferAspirationTags(rec),
       });
+      void triggerHapticSuccess();
       setSaved(true);
+      const c = pickSaveCopy();
+      // Brief toast — Alert is the simplest way to surface without adding a
+      // toast lib. Auto-dismiss happens on user tap; iOS native styling.
+      setTimeout(() => Alert.alert(c.title, c.body), 200);
     } catch (e: any) {
       Alert.alert("Couldn't save", e?.message ?? "Try again");
     } finally {
@@ -110,26 +150,36 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
     }
   }
 
-  function openInMaps() {
-    const url = mapsUrlFor(rec.name, rec.neighborhood ?? "");
-    Linking.openURL(url).catch(() => {
-      Alert.alert("Couldn't open Maps", "Try searching for it directly in Maps.");
-    });
-  }
+  function openApple() { openInAppleMaps(rec.name, rec.neighborhood); }
+  function openGoogle() { openInGoogleMaps(rec.name, rec.neighborhood); }
 
   return (
     <View style={styles.row}>
       <View style={{ flex: 1 }}>
-        <Text style={styles.name}>{rec.name}</Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.name} numberOfLines={2}>{rec.name}</Text>
+          {rec.matchScore != null && (
+            <View style={styles.matchBadge}>
+              <Text style={styles.matchBadgeText}>{rec.matchScore}% match</Text>
+            </View>
+          )}
+        </View>
         <Text style={styles.sub}>
-          {[rec.cuisine ? capitalize(rec.cuisine) : null, rec.neighborhood]
-            .filter(Boolean)
-            .join(" · ") || "Nearby"}
+          {[
+            rec.cuisine ? capitalize(rec.cuisine) : null,
+            rec.neighborhood,
+            rec.distanceKm != null ? formatDistance(rec.distanceKm) : null,
+          ].filter(Boolean).join(" · ") || "Nearby"}
         </Text>
         <Text style={styles.reason}>{rec.reason}</Text>
-        <Pressable onPress={openInMaps} style={styles.mapsLink} accessibilityRole="link">
-          <Text style={styles.mapsLinkText}>Open in Maps →</Text>
-        </Pressable>
+        <View style={styles.mapsRow}>
+          <Pressable onPress={openApple} style={styles.mapsBtn} accessibilityRole="button">
+            <Text style={styles.mapsBtnText}>Apple Maps</Text>
+          </Pressable>
+          <Pressable onPress={openGoogle} style={styles.mapsBtn} accessibilityRole="button">
+            <Text style={styles.mapsBtnText}>Google Maps</Text>
+          </Pressable>
+        </View>
       </View>
       <Pressable
         onPress={save}
@@ -167,14 +217,6 @@ function inferAspirationTags(rec: RestaurantRecommendation): AspirationTag[] {
   return [...tags];
 }
 
-function mapsUrlFor(name: string, address: string): string {
-  const query = encodeURIComponent(address ? `${name}, ${address}` : name);
-  if (Platform.OS === "ios") {
-    return `maps://?q=${query}`;
-  }
-  return `https://www.google.com/maps/search/?api=1&query=${query}`;
-}
-
 function capitalize(s: string): string {
   return s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, " ") : s;
 }
@@ -192,6 +234,14 @@ const styles = StyleSheet.create({
   eyebrow: { ...type.micro },
   title: { fontSize: 18, fontWeight: "700", color: colors.ink, marginTop: 6, letterSpacing: -0.3 },
   blurb: { ...type.small, marginTop: 4 },
+  earlyBadge: {
+    marginTop: 8, alignSelf: "flex-start",
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: colors.faint,
+    borderWidth: 1, borderColor: colors.line,
+  },
+  earlyBadgeText: { fontSize: 10, fontWeight: "700", color: colors.mute, letterSpacing: 0.5 },
 
   row: {
     flexDirection: "row",
@@ -201,20 +251,25 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     gap: 12,
   },
-  name: { fontSize: 16, fontWeight: "700", color: colors.ink },
+  nameRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  name: { flex: 1, fontSize: 16, fontWeight: "700", color: colors.ink },
+  matchBadge: {
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "#FFF1EE",
+    borderWidth: 1, borderColor: "#FFD7CE",
+  },
+  matchBadgeText: { fontSize: 11, fontWeight: "800", color: colors.red },
   sub: { ...type.small, marginTop: 2 },
   reason: { fontSize: 13, color: colors.mute, marginTop: 6, fontStyle: "italic", lineHeight: 18 },
 
-  mapsLink: {
-    marginTop: 8,
-    alignSelf: "flex-start",
+  mapsRow: { flexDirection: "row", gap: 6, marginTop: 10 },
+  mapsBtn: {
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
+    backgroundColor: colors.faint,
+    borderWidth: 1, borderColor: colors.line,
   },
-  mapsLinkText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.red,
-    letterSpacing: 0.3,
-  },
+  mapsBtnText: { fontSize: 11, fontWeight: "700", color: colors.ink },
 
   saveBtn: {
     paddingHorizontal: 14, height: 32, borderRadius: 16,

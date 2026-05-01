@@ -47,6 +47,12 @@ export type RestaurantRecommendation = {
   reason: string;
   price_level?: number | null;
   rating?: number | null;
+  /** % match for the user (0..100). Computed against the taste vector. */
+  matchScore?: number | null;
+  /** Distance in km from the user's last known location. */
+  distanceKm?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 export type PalateRecommendations = {

@@ -100,7 +100,7 @@ export async function shareWrappedToFeed(opts: {
 }): Promise<void> {
   const me = await currentUserId();
   if (!me) throw new Error("Not signed in");
-  const { error } = await supabase.from("feed_events").insert({
+  const { data, error } = await supabase.from("feed_events").insert({
     user_id: me,
     kind: "wrapped_shared",
     payload: {
@@ -111,8 +111,27 @@ export async function shareWrappedToFeed(opts: {
       total_visits: opts.totalVisits,
       top_restaurant: opts.topRestaurant,
     },
-  });
+  }).select("id").single();
   if (error) throw error;
+
+  // Fire-and-forget push notification fanout. Failures don't block the share.
+  void supabase.functions.invoke("notify-feed-post", {
+    body: { feed_event_id: data.id },
+  });
+}
+
+export async function postMilestoneAndNotify(streakDays: number): Promise<void> {
+  const me = await currentUserId();
+  if (!me) throw new Error("Not signed in");
+  const { data, error } = await supabase.from("feed_events").insert({
+    user_id: me,
+    kind: "milestone",
+    payload: { streak_days: streakDays },
+  }).select("id").single();
+  if (error) throw error;
+  void supabase.functions.invoke("notify-feed-post", {
+    body: { feed_event_id: data.id },
+  });
 }
 
 export async function postMilestone(streakDays: number): Promise<void> {

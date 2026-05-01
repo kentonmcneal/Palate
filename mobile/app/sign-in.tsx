@@ -5,9 +5,11 @@ import { useRouter } from "expo-router";
 import { Logo, Wordmark, LOGO_SIZE } from "../components/Logo";
 import { Button, Spacer } from "../components/Button";
 import { colors, spacing, type } from "../theme";
+import * as Linking from "expo-linking";
 import { sendMagicLink, verifyEmailCode } from "../lib/auth";
 import { getQuizPersona } from "../lib/profile";
 import { track } from "../lib/analytics";
+import { recordReferral } from "../lib/referrals";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
@@ -36,6 +38,20 @@ export default function SignIn() {
     try {
       await verifyEmailCode(email.trim(), code.trim());
       void track("sign_in_verified");
+
+      // Claim a referral if the user arrived via a ?ref= link (handled by
+      // expo-linking — works for universal links + custom-scheme deep links).
+      try {
+        const initialUrl = await Linking.getInitialURL();
+        if (initialUrl) {
+          const parsed = Linking.parse(initialUrl);
+          const ref = (parsed.queryParams?.ref ?? null) as string | null;
+          if (ref) await recordReferral(ref);
+        }
+      } catch {
+        // silent — referral is best-effort
+      }
+
       // Returning users (already finished the Starter Palate quiz) skip
       // onboarding and land in the tabs. Otherwise run the wizard.
       const { persona } = await getQuizPersona();

@@ -511,6 +511,8 @@ function toRec(place: Restaurant, profile: RestaurantProfile, reason: string): R
     reason,
     price_level: place.price_level ?? null,
     rating: place.rating ?? null,
+    latitude: place.latitude ?? null,
+    longitude: place.longitude ?? null,
   };
 }
 

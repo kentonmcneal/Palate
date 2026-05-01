@@ -18,11 +18,13 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.palate.ios",
-      "buildNumber": "8",
+      "buildNumber": "12",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Palate uses your location only when the app is open, to detect which restaurant or café you may be eating at. We never share or sell your location.",
         "NSUserNotificationsUsageDescription": "We send a single notification on Sunday morning when your weekly Wrapped is ready. You can turn this off in Settings.",
         "NSPhotoLibraryUsageDescription": "Palate uses your photos only when you choose a profile picture.",
+        "NSCameraUsageDescription": "Palate uses your camera only when you take a photo of a meal.",
+        "LSApplicationQueriesSchemes": ["comgooglemaps", "instagram", "instagram-stories"],
         "ITSAppUsesNonExemptEncryption": false
       },
       "associatedDomains": [

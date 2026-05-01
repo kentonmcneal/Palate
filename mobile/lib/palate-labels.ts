@@ -762,3 +762,140 @@ function fallback(v: TasteVector, opts?: { mood?: boolean }): PalateIdentity {
 
 /** Exposed for diagnostics / admin. */
 export const FALLBACK_LABEL_COUNT = FALLBACK_RULES.length;
+
+// ============================================================================
+// Wrapped Lore — a single narrative sentence read off the vector. Different
+// from `evidence[]` which is bullet-form. Lore is the "voice over" line that
+// makes the Wrapped feel like a story, not a stat dashboard.
+//
+// Examples:
+//   "Three weeks running, you've leaned harder into ramen than any other lane."
+//   "You're spending more weeknights solo at a counter — and the data says you like it."
+// ============================================================================
+
+export function generateLore(v: TasteVector, primary: PalateIdentity): string {
+  const repeatHigh = v.repeatRate >= 0.55;
+  const exploreHigh = v.explorationRate >= 0.65;
+  const lateNight =
+    v.hourly.reduce((s, n) => s + n, 0) > 0 &&
+    (v.hourly[21] + v.hourly[22] + v.hourly[23] + v.hourly[0]) /
+      v.hourly.reduce((s, n) => s + n, 0) >= 0.3;
+  const weekendHeavy = v.weekendShare >= 0.55;
+  const tightHood = v.neighborhoodLoyalty >= 0.6;
+  const bigSpread = v.geographicSpreadKm >= 8;
+  const pricey = v.averagePriceLevel >= 3;
+  const cheap = v.averagePriceLevel > 0 && v.averagePriceLevel <= 1.5;
+  const topSubregion = topKey(v.cuisineSubregion);
+  const topRegion = topKey(v.cuisineRegion);
+
+  // Compose lore from the strongest 1-2 signals. Always references the persona
+  // so it feels woven together.
+  const tail = primary.label.toLowerCase();
+
+  if (lateNight && (topSubregion || topRegion)) {
+    const c = topSubregion ?? topRegion ?? "your usual";
+    return `Most of your eating life happens after dark — ${humanizeKey(c)} keeps showing up, and the rhythm sticks.`;
+  }
+  if (tightHood && repeatHigh) {
+    return `You're not roaming far. The same block, the same handful of spots — that's not laziness, that's a system.`;
+  }
+  if (bigSpread && exploreHigh) {
+    return `You're moving — across neighborhoods, across cuisines. The map of where you eat is getting bigger every week.`;
+  }
+  if (repeatHigh && (topSubregion || topRegion)) {
+    const c = topSubregion ?? topRegion ?? "your usual";
+    return `${humanizeKey(c)} is doing a lot of work for you this week. Loyalty isn't laziness — it's a verified hit.`;
+  }
+  if (exploreHigh) {
+    return `New spots are winning over familiar ones. You're collecting places, not patterns.`;
+  }
+  if (weekendHeavy) {
+    return `Your week peaks on the weekend — eating out is something you save for when it counts.`;
+  }
+  if (pricey) {
+    return `You've been spending up — fewer visits, more deliberate ones. The bar got higher.`;
+  }
+  if (cheap) {
+    return `Quick, casual, in and out. You're optimizing for the day, not the meal.`;
+  }
+  return `You're eating like a ${tail}. Your week tells the story your menu wouldn't.`;
+}
+
+function humanizeKey(s: string): string {
+  return s.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+// ============================================================================
+// Lore — longer, archetype-specific narrative for the Wrapped story.
+// Returns: { story, behavior } — story is the meaning, behavior is what
+// people who score this way tend to do.
+// ============================================================================
+
+export type PalateLore = {
+  story: string;     // "What this identity means" — 1-2 sentences
+  behavior: string;  // "How people like this behave" — 1-2 sentences
+};
+
+export function expandedLore(primary: PalateIdentity): PalateLore {
+  const archetype = lastWord(primary.label);
+  return ARCHETYPE_LORE[archetype] ?? ARCHETYPE_LORE.Default;
+}
+
+const ARCHETYPE_LORE: Record<string, PalateLore> = {
+  Loyalist: {
+    story: "You've already done the homework — and you trust your homework. Loyalists turn favorites into rituals.",
+    behavior: "Same spots, same dishes, dialed-in by repetition. Variety isn't the point — verified-good is.",
+  },
+  Regular: {
+    story: "You return to places that earn it. Not stuck — settled. Three or four spots carry most of your week.",
+    behavior: "Steady cadence. Familiar staff. The kind of person who gets a 'the usual?' nod at the door.",
+  },
+  Ritualist: {
+    story: "Your eating life has rhythm — same hours, same places, by design. The pattern is the point.",
+    behavior: "Lunch at 1:15, coffee on the way in, dinner before 8. Calendar runs the menu.",
+  },
+  Seeker: {
+    story: "New is winning over familiar. You're collecting first impressions, not building loyalty — yet.",
+    behavior: "More opens-in-Maps than re-saves. The pattern: try it once, decide, move on.",
+  },
+  Cartographer: {
+    story: "You're building a map, not a list. Every neighborhood gets a turn. Repeats feel like wasted effort.",
+    behavior: "Wide spread across cities + cuisines. Rarely double-dips. Probably has 30+ saved spots untouched.",
+  },
+  Explorer: {
+    story: "Curiosity is your operating system. You'd rather try and miss than repeat and feel safe.",
+    behavior: "Reads menus end-to-end. Asks the server. Will take the recommendation that no one else takes.",
+  },
+  Devotee: {
+    story: "One cuisine, deep. You're not narrow — you're focused. The thing you love, you love precisely.",
+    behavior: "Knows the regional differences within their cuisine. Has opinions about sub-styles. Remembers chefs.",
+  },
+  Connoisseur: {
+    story: "Quality before quantity. Fewer meals, more deliberate ones. The bar is high and the bar is yours.",
+    behavior: "Books in advance. Researches the wine list. Treats dining as a craft, not a habit.",
+  },
+  Tastemaker: {
+    story: "You move between casual and upscale fluently. You like the high and the low — both done well.",
+    behavior: "Could rec you a $9 taco AND a $200 tasting menu in the same conversation. Range is the move.",
+  },
+  Socialite: {
+    story: "Food is the excuse, the table is the point. Your best meals are about who, not what.",
+    behavior: "Long dinners. Plates passed around. Remembers the conversation more than the order.",
+  },
+  Curator: {
+    story: "Few visits, none wasted. You're picking the meals you'll remember — not filling time.",
+    behavior: "Skips the obvious. Reads reviews carefully. Goes once, knows whether to go back.",
+  },
+  Pilgrim: {
+    story: "You'll cross town for the right bite. Distance isn't the constraint — quality is.",
+    behavior: "Has a list of 'worth-the-trip' spots. Will take a 30-min walk for a slice they trust.",
+  },
+  Patron: {
+    story: "Same upmarket spots, on rotation. Loyalty + spending power, channeled at the places worth it.",
+    behavior: "Bartender knows their drink. Knows the Tuesday menu. Tips well, comes back monthly.",
+  },
+  Default: {
+    story: "Your eating pattern is starting to take shape. Each visit sharpens it.",
+    behavior: "Keep logging — by week three, the picture gets specific.",
+  },
+};

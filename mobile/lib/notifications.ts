@@ -78,6 +78,64 @@ export async function enableSundayWrappedReminder(): Promise<{ ok: boolean; reas
   return { ok: true };
 }
 
+/**
+ * Register an Expo push token for the signed-in user. Idempotent — only
+ * writes to profiles when the token actually changed. Safe to call on every
+ * app launch from the root layout.
+ */
+export async function registerPushToken(): Promise<void> {
+  const Notifications = await loadNotificationsLib();
+  if (!Notifications) return;
+  const Device = await loadDeviceLib();
+  // Push notifications don't work in iOS Simulator. Bail silently — local
+  // notifications and the rest of the app keep working.
+  if (Device && !Device.isDevice) return;
+
+  // Need notification permission first
+  const perm = await Notifications.getPermissionsAsync();
+  let granted = perm.granted;
+  if (!granted) {
+    const ask = await Notifications.requestPermissionsAsync();
+    granted = ask.granted;
+  }
+  if (!granted) return;
+
+  try {
+    const Constants = await import("expo-constants");
+    const projectId =
+      Constants.default.expoConfig?.extra?.eas?.projectId ??
+      Constants.default.easConfig?.projectId;
+    const tokenData = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined,
+    );
+    const token = tokenData.data;
+
+    const { supabase } = await import("./supabase");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Only update if the token actually changed.
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("push_token")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (prof?.push_token === token) return;
+
+    const Platform = (await import("react-native")).Platform;
+    await supabase.from("profiles").update({
+      push_token: token,
+      push_platform: Platform.OS === "ios" ? "ios" : "android",
+    }).eq("id", user.id);
+  } catch (err) {
+    console.warn("[notifications] push token register failed", err);
+  }
+}
+
+async function loadDeviceLib(): Promise<typeof import("expo-device") | null> {
+  try { return await import("expo-device"); } catch { return null; }
+}
+
 export async function disableSundayWrappedReminder(): Promise<void> {
   const Notifications = await loadNotificationsLib();
   if (!Notifications) return;

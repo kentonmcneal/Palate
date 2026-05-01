@@ -8,6 +8,7 @@ import { supabase } from "../lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { colors } from "../theme";
 import { initObservability } from "../lib/observability";
+import { registerPushToken } from "../lib/notifications";
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
@@ -21,7 +22,11 @@ export default function RootLayout() {
       setSession(data.session);
       setLoaded(true);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      setSession(s);
+      // Register push token whenever a session shows up.
+      if (s?.user) void registerPushToken();
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -59,6 +64,10 @@ export default function RootLayout() {
           <Stack.Screen name="insights" options={{ presentation: "modal" }} />
           <Stack.Screen name="friends" options={{ presentation: "modal" }} />
           <Stack.Screen name="profile/[id]" options={{ presentation: "modal" }} />
+          <Stack.Screen name="visit/[id]" options={{ presentation: "modal" }} />
+          <Stack.Screen name="all-visits" options={{ presentation: "modal" }} />
+          <Stack.Screen name="restaurant/[place_id]" options={{ presentation: "modal" }} />
+          <Stack.Screen name="photos" options={{ presentation: "modal" }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

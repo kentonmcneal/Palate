@@ -25,6 +25,7 @@ export type FriendProfile = {
   id: string;
   email: string | null;
   display_name: string | null;
+  username: string | null;
   avatar_url: string | null;
   profile_visibility: "private" | "friends" | "public";
 };
@@ -144,8 +145,8 @@ export async function listFriends(): Promise<FriendListItem[]> {
     .from("friendships")
     .select(`
       *,
-      requester:profiles!friendships_requester_id_fkey ( id, email, display_name, avatar_url, profile_visibility ),
-      addressee:profiles!friendships_addressee_id_fkey ( id, email, display_name, avatar_url, profile_visibility )
+      requester:profiles!friendships_requester_id_fkey ( id, email, display_name, username, avatar_url, profile_visibility ),
+      addressee:profiles!friendships_addressee_id_fkey ( id, email, display_name, username, avatar_url, profile_visibility )
     `)
     .eq("status", "accepted")
     .or(`requester_id.eq.${me},addressee_id.eq.${me}`)
@@ -171,7 +172,7 @@ export async function listIncomingRequests(): Promise<FriendListItem[]> {
     .from("friendships")
     .select(`
       *,
-      requester:profiles!friendships_requester_id_fkey ( id, email, display_name, avatar_url, profile_visibility )
+      requester:profiles!friendships_requester_id_fkey ( id, email, display_name, username, avatar_url, profile_visibility )
     `)
     .eq("status", "pending")
     .eq("addressee_id", me)
@@ -191,13 +192,34 @@ export async function listIncomingRequests(): Promise<FriendListItem[]> {
   }));
 }
 
+// ----------------------------------------------------------------------------
+// Friends leaderboard — pulls a single RPC that returns visit + persona stats
+// for every accepted friend (gated by their visibility setting).
+// ----------------------------------------------------------------------------
+export type LeaderboardEntry = {
+  user_id: string;
+  display_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  persona_label: string | null;
+  total_visits: number;
+  visits_this_week: number;
+  unique_cuisines: number;
+};
+
+export async function loadFriendsLeaderboard(): Promise<LeaderboardEntry[]> {
+  const { data, error } = await supabase.rpc("friends_leaderboard");
+  if (error) throw error;
+  return (data ?? []) as LeaderboardEntry[];
+}
+
 export async function listOutgoingRequests(): Promise<FriendListItem[]> {
   const me = await currentUserId();
   const { data, error } = await supabase
     .from("friendships")
     .select(`
       *,
-      addressee:profiles!friendships_addressee_id_fkey ( id, email, display_name, avatar_url, profile_visibility )
+      addressee:profiles!friendships_addressee_id_fkey ( id, email, display_name, username, avatar_url, profile_visibility )
     `)
     .eq("status", "pending")
     .eq("requester_id", me)

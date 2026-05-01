@@ -30,6 +30,20 @@ export async function getCurrentLocation(): Promise<LatLng> {
   };
 }
 
+// Confidence threshold (meters). Above this and we don't trust the fix enough
+// to silently auto-detect — we ask the user "inside or nearby?" instead.
+export const HIGH_CONFIDENCE_ACCURACY_M = 50;
+export const LOW_CONFIDENCE_ACCURACY_M = 200;
+
+export type DetectionConfidence = "high" | "medium" | "low";
+
+export function classifyAccuracy(accuracyM: number | undefined | null): DetectionConfidence {
+  if (accuracyM == null) return "low";
+  if (accuracyM <= HIGH_CONFIDENCE_ACCURACY_M) return "high";
+  if (accuracyM <= LOW_CONFIDENCE_ACCURACY_M) return "medium";
+  return "low";
+}
+
 /** Records a location event for the current user (used to rate-limit + audit). */
 export async function logLocationEvent(loc: LatLng, nearestPlaceId?: string | null) {
   const user = (await supabase.auth.getUser()).data.user;

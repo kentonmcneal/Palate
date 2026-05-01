@@ -11,11 +11,11 @@ import { colors, spacing, type } from "../theme";
 import {
   listFriends, listIncomingRequests, listOutgoingRequests,
   searchUsers, requestFriendship, acceptFriendship,
-  declineFriendship, unfriend,
-  type FriendListItem, type FriendProfile,
+  declineFriendship, unfriend, loadFriendsLeaderboard,
+  type FriendListItem, type FriendProfile, type LeaderboardEntry,
 } from "../lib/friends";
 
-type Tab = "friends" | "requests" | "find";
+type Tab = "friends" | "leaderboard" | "requests" | "find";
 
 export default function FriendsScreen() {
   const router = useRouter();
@@ -23,6 +23,7 @@ export default function FriendsScreen() {
   const [friends, setFriends] = useState<FriendListItem[]>([]);
   const [incoming, setIncoming] = useState<FriendListItem[]>([]);
   const [outgoing, setOutgoing] = useState<FriendListItem[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [query, setQuery] = useState("");
@@ -31,10 +32,11 @@ export default function FriendsScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [f, i, o] = await Promise.all([
+      const [f, i, o, lb] = await Promise.all([
         listFriends(), listIncomingRequests(), listOutgoingRequests(),
+        loadFriendsLeaderboard().catch(() => []),
       ]);
-      setFriends(f); setIncoming(i); setOutgoing(o);
+      setFriends(f); setIncoming(i); setOutgoing(o); setLeaderboard(lb);
     } catch (e: any) {
       console.warn("friends load", e?.message);
     } finally {
@@ -133,6 +135,7 @@ export default function FriendsScreen() {
       {/* Tabs */}
       <View style={styles.tabs}>
         <TabButton label="Friends" count={friends.length} active={tab === "friends"} onPress={() => setTab("friends")} />
+        <TabButton label="Board" active={tab === "leaderboard"} onPress={() => setTab("leaderboard")} />
         <TabButton label="Requests" count={incoming.length} active={tab === "requests"} onPress={() => setTab("requests")} accent />
         <TabButton label="Find" active={tab === "find"} onPress={() => setTab("find")} />
       </View>
@@ -159,6 +162,50 @@ export default function FriendsScreen() {
                 actions={[{ label: "Remove", style: "ghost", onPress: () => handleUnfriend(item) }]}
               />
             ))
+          )
+        )}
+
+        {/* LEADERBOARD TAB */}
+        {!loading && tab === "leaderboard" && (
+          leaderboard.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={type.subtitle}>No board yet.</Text>
+              <Text style={[type.small, { marginTop: 6 }]}>
+                Once you add a few friends, you'll see who's eating where this week.
+              </Text>
+            </View>
+          ) : (
+            <View>
+              <Text style={[type.small, { marginBottom: 10 }]}>
+                Sorted by visits this week. Tap a row to see their full profile.
+              </Text>
+              {leaderboard.map((row, i) => (
+                <Pressable
+                  key={row.user_id}
+                  onPress={() => router.push(`/profile/${row.user_id}`)}
+                  style={styles.lbRow}
+                >
+                  <Text style={styles.lbRank}>{i + 1}</Text>
+                  <Avatar uri={row.avatar_url} name={row.display_name} email={row.email} size={40} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.lbName} numberOfLines={1}>
+                      {row.display_name || (row.email ? row.email.split("@")[0] : "Friend")}
+                    </Text>
+                    {row.persona_label && (
+                      <Text style={styles.lbPersona} numberOfLines={1}>{row.persona_label}</Text>
+                    )}
+                  </View>
+                  <View style={styles.lbStats}>
+                    <Text style={styles.lbStatBig}>{row.visits_this_week}</Text>
+                    <Text style={styles.lbStatLabel}>this wk</Text>
+                  </View>
+                  <View style={styles.lbStats}>
+                    <Text style={styles.lbStatBig}>{row.unique_cuisines}</Text>
+                    <Text style={styles.lbStatLabel}>cuisines</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
           )
         )}
 
@@ -200,13 +247,13 @@ export default function FriendsScreen() {
         {!loading && tab === "find" && (
           <View>
             <Text style={[type.small, { marginBottom: 8, lineHeight: 20 }]}>
-              Search by email or display name. Need at least 2 characters.
+              Search by username, email, or display name. Need at least 2 characters.
             </Text>
             <View style={styles.searchRow}>
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder="email or name…"
+                placeholder="@username, email, or name…"
                 placeholderTextColor={colors.mute}
                 style={styles.searchInput}
                 autoCapitalize="none"
@@ -382,4 +429,17 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   searchBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+
+  lbRow: {
+    flexDirection: "row", alignItems: "center",
+    paddingVertical: 12, paddingHorizontal: 4,
+    borderBottomColor: colors.line, borderBottomWidth: 1,
+    gap: 12,
+  },
+  lbRank: { width: 18, fontSize: 14, fontWeight: "800", color: colors.mute },
+  lbName: { fontSize: 15, fontWeight: "700", color: colors.ink },
+  lbPersona: { fontSize: 12, color: colors.red, fontWeight: "600", marginTop: 2 },
+  lbStats: { alignItems: "center", minWidth: 50 },
+  lbStatBig: { fontSize: 16, fontWeight: "800", color: colors.ink },
+  lbStatLabel: { fontSize: 10, fontWeight: "600", color: colors.mute, marginTop: 1, letterSpacing: 0.4 },
 });

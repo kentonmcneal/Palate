@@ -15,6 +15,7 @@ export default function ConfirmVisit() {
     name: string;
     address?: string;
     alternates?: string;
+    confidence?: "high" | "medium" | "low";
   }>();
 
   const [showAlts, setShowAlts] = useState(false);
@@ -105,19 +106,25 @@ export default function ConfirmVisit() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.body}>
-        <Text style={type.micro}>WE THINK YOU'RE AT</Text>
+        <Text style={type.micro}>
+          {params.confidence === "medium" ? "MIGHT BE NEARBY" : "WE THINK YOU'RE AT"}
+        </Text>
         <Spacer size={6} />
         <Text style={styles.h1}>{params.name}</Text>
         {params.address && <Text style={[type.body, { color: colors.mute, marginTop: 6 }]}>{params.address}</Text>}
 
         <Spacer size={32} />
-        <Text style={[type.body, { color: colors.ink }]}>Are you eating here?</Text>
+        <Text style={[type.body, { color: colors.ink }]}>
+          {params.confidence === "medium"
+            ? "Are you inside, or just nearby?"
+            : "Are you eating here?"}
+        </Text>
         <Spacer />
-        <Button title="Yes, save it" onPress={handleYes} loading={busy} />
+        <Button title={params.confidence === "medium" ? "Yes, I'm here" : "Yes, save it"} onPress={handleYes} loading={busy} />
         <Spacer />
         <Button title="Wrong restaurant" variant="ghost" onPress={handleWrong} />
         <Spacer />
-        <Button title="Not right now" variant="ghost" onPress={handleNotNow} />
+        <Button title="Just nearby — not now" variant="ghost" onPress={handleNotNow} />
       </View>
       <FirstVisitCelebration
         visible={!!celebration}

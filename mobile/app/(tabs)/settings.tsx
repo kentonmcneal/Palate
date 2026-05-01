@@ -17,8 +17,9 @@ import {
   disableSundayWrappedReminder,
 } from "../../lib/notifications";
 import { loadAnalytics, type AnalyticsSummary } from "../../lib/analytics-stats";
-import { getMyProfile, setProfileVisibility, setDisplayName, uploadAvatar, type ProfileVisibility } from "../../lib/profile";
+import { getMyProfile, setProfileVisibility, setDisplayName, setUsername, uploadAvatar, type ProfileVisibility } from "../../lib/profile";
 import { listIncomingRequests } from "../../lib/friends";
+import { generateInviteLink, inviteShareMessage, getMyReferralCount } from "../../lib/referrals";
 
 const CUISINE_LABELS: Record<string, string> = {
   italian: "Italian", mexican: "Mexican", japanese: "Japanese", chinese: "Chinese",
@@ -39,11 +40,16 @@ export default function Settings() {
   const [stats, setStats] = useState<AnalyticsSummary | null>(null);
   const [visibility, setVisibility] = useState<ProfileVisibility>("friends");
   const [displayName, setDisplayNameState] = useState<string | null>(null);
+  const [username, setUsernameState] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
+  const [referralCount, setReferralCount] = useState(0);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState("");
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [draftUsername, setDraftUsername] = useState("");
+  const [usernameError, setUsernameError] = useState<string | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(PAUSE_KEY).then((v) => setTracking(v !== "1"));
@@ -54,9 +60,11 @@ export default function Settings() {
       if (!p) return;
       setVisibility(p.profile_visibility);
       setDisplayNameState(p.display_name);
+      setUsernameState(p.username);
       setAvatarUrl(p.avatar_url);
     }).catch(() => {});
     listIncomingRequests().then((rs) => setPendingRequestCount(rs.length)).catch(() => {});
+    getMyReferralCount().then(setReferralCount).catch(() => {});
   }, []);
 
   async function pickAvatar() {
@@ -101,6 +109,25 @@ export default function Settings() {
     }
   }
 
+  function openUsernameEditor() {
+    setDraftUsername(username ?? "");
+    setUsernameError(null);
+    setEditingUsername(true);
+  }
+
+  async function saveUsernameHandle() {
+    const result = await setUsername(draftUsername);
+    if (!result.ok) {
+      if (result.reason === "taken") setUsernameError("That handle is taken.");
+      else if (result.reason === "invalid") setUsernameError("3-20 chars, letters/numbers/underscores only.");
+      else setUsernameError("Couldn't save. Try again.");
+      return;
+    }
+    setUsernameState(draftUsername.trim().toLowerCase().replace(/[^a-z0-9_]/g, ""));
+    setUsernameError(null);
+    setEditingUsername(false);
+  }
+
   async function changeVisibility(next: ProfileVisibility) {
     setVisibility(next); // optimistic
     try {
@@ -112,10 +139,11 @@ export default function Settings() {
 
   async function inviteFriends() {
     try {
+      const link = await generateInviteLink();
       await Share.share({
         title: "Palate",
-        message:
-          "I've been using this app called Palate — it tells you what your eating habits actually say about you. Patterns, not ratings. You can see how your friends actually eat too. You should try it: https://palate.app",
+        message: inviteShareMessage(link),
+        url: link,
       });
     } catch {
       // user cancelled — silent
@@ -221,6 +249,11 @@ export default function Settings() {
             </Pressable>
             <View style={{ flex: 1 }}>
               <Text style={type.title}>{displayName || "You"}</Text>
+              <Pressable onPress={openUsernameEditor}>
+                <Text style={[type.small, { marginTop: 2, color: username ? colors.red : colors.mute, fontWeight: "700" }]}>
+                  {username ? `@${username}` : "Set a username"}
+                </Text>
+              </Pressable>
               {email && (
                 <Text style={[type.small, { marginTop: 2 }]} numberOfLines={1}>
                   {email}
@@ -288,20 +321,34 @@ export default function Settings() {
             onPress={() => router.push("/friends")}
           />
           <Spacer />
-          <Button title="Share Palate with someone" onPress={inviteFriends} variant="ghost" />
+          <Button
+            title={referralCount > 0 ? `Share Palate · ${referralCount} invited` : "Share Palate with someone"}
+            onPress={inviteFriends}
+            variant="ghost"
+          />
           <Note>
-            Manage friend requests + add friends by email. Or share Palate via
-            iMessage / WhatsApp from the share sheet.
+            {referralCount > 0
+              ? `${referralCount} ${referralCount === 1 ? "person has" : "people have"} signed up from your invites. Your invite link auto-credits when they join.`
+              : "Send a personal invite link. We'll credit you when they sign up."}
           </Note>
         </Section>
 
-        <Section title="Try List">
+        <Section title="Next Moves">
           <Button
             title="View places you've saved"
             onPress={() => router.push("/(tabs)/wishlist")}
             variant="ghost"
           />
-          <Note>Spots you've saved from your weekly Palate insights.</Note>
+          <Note>Spots worth a visit. We'll surface them on Home when you're nearby.</Note>
+        </Section>
+
+        <Section title="Photos">
+          <Button
+            title="Your meal photos"
+            onPress={() => router.push("/photos")}
+            variant="ghost"
+          />
+          <Note>Every photo you've added to a visit, in one grid.</Note>
         </Section>
 
         <Section title="Profile visibility">
@@ -400,6 +447,44 @@ export default function Settings() {
           </Note>
         </Section>
       </ScrollView>
+
+      {/* Username editor */}
+      <Modal visible={editingUsername} transparent animationType="fade" onRequestClose={() => setEditingUsername(false)}>
+        <View style={styles.modalScrim}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Your username</Text>
+            <Text style={styles.modalBody}>
+              Friends can find you by @handle. Letters, numbers, underscores only. 3-20 characters.
+            </Text>
+            <TextInput
+              value={draftUsername}
+              onChangeText={(t) => { setDraftUsername(t); setUsernameError(null); }}
+              placeholder="kenton"
+              placeholderTextColor={colors.mute}
+              maxLength={20}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoFocus
+              style={styles.modalInput}
+              returnKeyType="done"
+              onSubmitEditing={saveUsernameHandle}
+            />
+            {usernameError && (
+              <Text style={{ color: colors.red, fontSize: 12, marginTop: 6, fontWeight: "600" }}>
+                {usernameError}
+              </Text>
+            )}
+            <View style={styles.modalRow}>
+              <Pressable onPress={() => setEditingUsername(false)} style={styles.modalCancel}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={saveUsernameHandle} style={styles.modalSave}>
+                <Text style={styles.modalSaveText}>Save</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Display name editor */}
       <Modal visible={editingName} transparent animationType="fade" onRequestClose={() => setEditingName(false)}>

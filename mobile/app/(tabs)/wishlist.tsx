@@ -118,9 +118,9 @@ export default function WishlistTab() {
           />
         }
       >
-        <Text style={type.title}>Try List</Text>
+        <Text style={type.title}>Next Moves</Text>
         <Text style={[type.body, { color: colors.mute, marginTop: 4 }]}>
-          Spots you've saved from your weekly Palate insights.
+          Spots worth a visit. We'll resurface them when you're nearby.
         </Text>
 
         {entries.length > 0 && (

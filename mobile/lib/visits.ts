@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 import { getRestaurantIdByPlaceId, type Restaurant } from "./places";
 import { track } from "./analytics";
+import { triggerHapticSuccess } from "./haptics";
 
 export type Visit = {
   id: string;
@@ -11,6 +12,7 @@ export type Visit = {
   detection_source: "auto" | "manual";
   confirmed_by_user: boolean;
   notes: string | null;
+  photo_url: string | null;
   restaurant?: Restaurant;
 };
 
@@ -59,6 +61,11 @@ export function rewardCopy(totalVisits: number): { title: string; message: strin
   };
 }
 
+// How long after a visit to the same restaurant counts as the "same session"
+// rather than a new visit. Stops double-logging when a user taps Save twice
+// or auto-detect re-fires within the same meal.
+const VISIT_DEDUP_WINDOW_HOURS = 4;
+
 export async function saveVisit(opts: {
   googlePlaceId: string;
   visitedAt?: Date;
@@ -70,6 +77,31 @@ export async function saveVisit(opts: {
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not signed in");
+
+  // Dedup: if the user already logged this restaurant within the window,
+  // return that existing row instead of creating a duplicate.
+  const dedupCutoff = new Date(visitedAt.getTime() - VISIT_DEDUP_WINDOW_HOURS * 3_600_000);
+  const { data: existing } = await supabase
+    .from("visits")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("restaurant_id", restaurantId)
+    .gte("visited_at", dedupCutoff.toISOString())
+    .order("visited_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) {
+    const { count } = await supabase
+      .from("visits")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id);
+    return {
+      ...(existing as Visit),
+      isFirstVisit: false,
+      totalVisits: count ?? 1,
+    };
+  }
 
   const { count: priorCount } = await supabase
     .from("visits")
@@ -93,6 +125,7 @@ export async function saveVisit(opts: {
   if (error) throw error;
   const total = (priorCount ?? 0) + 1;
   void track("visit_logged", { source: opts.source, visit_total: total });
+  void triggerHapticSuccess();
   return { ...(data as Visit), isFirstVisit: total === 1, totalVisits: total };
 }
 
@@ -101,7 +134,7 @@ export async function recentVisits(limit = 20) {
     .from("visits")
     .select(`
       id, user_id, restaurant_id, visited_at, meal_type, detection_source,
-      confirmed_by_user, notes,
+      confirmed_by_user, notes, photo_url,
       restaurant:restaurants ( id, name, chain_name, address, primary_type, google_place_id )
     `)
     .order("visited_at", { ascending: false })
@@ -111,9 +144,86 @@ export async function recentVisits(limit = 20) {
   return (data ?? []) as unknown as Visit[];
 }
 
+// ----------------------------------------------------------------------------
+// Edit + photo
+// ----------------------------------------------------------------------------
+
+export async function updateVisit(
+  id: string,
+  patch: { googlePlaceId?: string; visitedAt?: Date; notes?: string | null },
+): Promise<void> {
+  const update: Record<string, unknown> = {};
+  if (patch.visitedAt) {
+    update.visited_at = patch.visitedAt.toISOString();
+    update.meal_type = mealTypeFor(patch.visitedAt);
+  }
+  if (patch.notes !== undefined) update.notes = patch.notes;
+  if (patch.googlePlaceId) {
+    update.restaurant_id = await getRestaurantIdByPlaceId(patch.googlePlaceId);
+  }
+  if (Object.keys(update).length === 0) return;
+  const { error } = await supabase.from("visits").update(update).eq("id", id);
+  if (error) throw error;
+}
+
+export async function attachPhotoToVisit(visitId: string, fileUri: string): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not signed in");
+
+  const ext = (fileUri.split(".").pop() || "jpg").toLowerCase().slice(0, 4);
+  const path = `${user.id}/${visitId}-${Date.now()}.${ext}`;
+
+  const resp = await fetch(fileUri);
+  const buf = await resp.arrayBuffer();
+
+  const { error: upErr } = await supabase.storage
+    .from("visit-photos")
+    .upload(path, buf, {
+      contentType: ext === "png" ? "image/png" : "image/jpeg",
+      upsert: false,
+    });
+  if (upErr) throw upErr;
+
+  const { data: pub } = supabase.storage.from("visit-photos").getPublicUrl(path);
+  const url = pub.publicUrl;
+
+  const { error: updateErr } = await supabase
+    .from("visits")
+    .update({ photo_url: url })
+    .eq("id", visitId);
+  if (updateErr) throw updateErr;
+
+  return url;
+}
+
 export async function deleteVisit(id: string) {
   const { error } = await supabase.from("visits").delete().eq("id", id);
   if (error) throw error;
+}
+
+/**
+ * Soft-delete-with-undo: stash the row contents, delete it, return a
+ * function that re-creates it. Caller is responsible for showing UI within
+ * an undo window.
+ */
+export async function deleteVisitWithUndo(id: string): Promise<{ undo: () => Promise<void> }> {
+  const { data: row, error: fetchErr } = await supabase
+    .from("visits")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchErr || !row) throw fetchErr ?? new Error("Visit not found");
+
+  const { error: delErr } = await supabase.from("visits").delete().eq("id", id);
+  if (delErr) throw delErr;
+
+  return {
+    undo: async () => {
+      const { id: _id, ...rest } = row as Record<string, unknown>;
+      // Reinsert with the original id so any references (photos, etc.) still match.
+      await supabase.from("visits").insert({ id, ...rest });
+    },
+  };
 }
 
 /** Was the user already prompted for this place recently? Used to suppress repeats. */

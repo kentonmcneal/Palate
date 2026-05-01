@@ -13,6 +13,7 @@ export type Profile = {
   id: string;
   email: string | null;
   display_name: string | null;
+  username: string | null;
   avatar_url: string | null;
   taste_preferences: string[];
   profile_visibility: ProfileVisibility;
@@ -24,11 +25,29 @@ export async function getMyProfile(): Promise<Profile | null> {
   if (!user) return null;
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, email, display_name, avatar_url, taste_preferences, profile_visibility, created_at")
+    .select("id, email, display_name, username, avatar_url, taste_preferences, profile_visibility, created_at")
     .eq("id", user.id)
     .maybeSingle();
   if (error || !data) return null;
   return data as Profile;
+}
+
+export async function setUsername(handle: string): Promise<{ ok: true } | { ok: false; reason: "taken" | "invalid" | "error" }> {
+  const cleaned = handle.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+  if (cleaned.length < 3 || cleaned.length > 20) return { ok: false, reason: "invalid" };
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, reason: "error" };
+  const { error } = await supabase
+    .from("profiles")
+    .update({ username: cleaned })
+    .eq("id", user.id);
+  if (error) {
+    if ((error as any).code === "23505" || `${error.message}`.toLowerCase().includes("unique")) {
+      return { ok: false, reason: "taken" };
+    }
+    return { ok: false, reason: "error" };
+  }
+  return { ok: true };
 }
 
 export async function setProfileVisibility(v: ProfileVisibility): Promise<void> {

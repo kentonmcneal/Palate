@@ -400,7 +400,7 @@ function AspirationalCard({
 }) {
   return (
     <View style={[styles.section, { backgroundColor: colors.ink }]}>
-      <Text style={[type.micro, { color: "rgba(255,255,255,0.65)" }]}>ASPIRATIONAL PALATE</Text>
+      <Text style={[type.micro, { color: "rgba(255,255,255,0.65)" }]}>YOUR NEXT ERA</Text>
       <Spacer size={10} />
       <Text style={styles.aspInsight}>{aspirational.insight}</Text>
 

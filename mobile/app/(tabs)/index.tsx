@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, Alert, ScrollView, RefreshControl, Pressable } from "react-native";
+import { View, Text, StyleSheet, Alert, ScrollView, RefreshControl, Pressable, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Button, Spacer } from "../../components/Button";
 import { Wordmark } from "../../components/Logo";
 import { colors, spacing, type } from "../../theme";
-import { getCurrentLocation, logLocationEvent, requestForegroundPermission } from "../../lib/location";
+import { getCurrentLocation, logLocationEvent, requestForegroundPermission, classifyAccuracy } from "../../lib/location";
 import { nearbyRestaurants, type Restaurant } from "../../lib/places";
-import { recentlyPrompted, recentVisits, deleteVisit, type Visit } from "../../lib/visits";
+import { recentlyPrompted, recentVisits, deleteVisitWithUndo, type Visit } from "../../lib/visits";
 import { computeStreak, type StreakInfo } from "../../lib/streak";
 import {
   analyzeWeeklyPalate,
@@ -17,6 +17,9 @@ import {
 } from "../../lib/palate-insights";
 import { isoWeekStart } from "../../lib/wrapped";
 import { RecommendationsCard } from "../../components/RecommendationsCard";
+import { SavedNearbyCard } from "../../components/SavedNearbyCard";
+import { SkipNudgeCard } from "../../components/SkipNudgeCard";
+import { SwapNudgeCard } from "../../components/SwapNudgeCard";
 import { GettingStarted } from "../../components/GettingStarted";
 import { WrappedProgress } from "../../components/WrappedProgress";
 import { Confetti } from "../../components/Confetti";
@@ -73,6 +76,14 @@ export default function Home() {
       }
 
       const loc = await getCurrentLocation();
+      const confidence = classifyAccuracy(loc.accuracy);
+      if (confidence === "low") {
+        Alert.alert(
+          "Can't quite see you",
+          "Your location signal is fuzzy right now — usually means you're indoors or moving. Step outside or try again in a minute.",
+        );
+        return;
+      }
       const places = await nearbyRestaurants(loc.lat, loc.lng);
       await logLocationEvent(loc, places[0]?.google_place_id ?? null);
 
@@ -99,6 +110,7 @@ export default function Home() {
           name: target.name,
           address: target.address ?? "",
           alternates: JSON.stringify(places.slice(0, 6).filter((p) => p.google_place_id !== target!.google_place_id)),
+          confidence,
         },
       });
     } catch (e: any) {
@@ -117,7 +129,16 @@ export default function Home() {
       >
         <View style={styles.header}>
           <Wordmark />
-          {streak && streak.current > 0 && <StreakChip count={streak.current} loggedToday={streak.loggedToday} />}
+          <View style={styles.headerActions}>
+            {streak && streak.current > 0 && <StreakChip count={streak.current} loggedToday={streak.loggedToday} />}
+            <Pressable
+              onPress={() => router.push("/(tabs)/add")}
+              style={styles.addBtn}
+              accessibilityLabel="Add a visit"
+            >
+              <Text style={styles.addBtnText}>+</Text>
+            </Pressable>
+          </View>
         </View>
 
         {weekInsight && weekInsight.visitCount > 0 && (
@@ -125,6 +146,10 @@ export default function Home() {
         )}
 
         <WrappedProgress visitsTotal={visits.length} />
+
+        <SavedNearbyCard />
+        <SkipNudgeCard />
+        <SwapNudgeCard />
 
         <RecommendationsCard />
 
@@ -145,7 +170,14 @@ export default function Home() {
         )}
 
         <View style={{ marginTop: spacing.xxl }}>
-          <Text style={type.title}>Recent</Text>
+          <View style={styles.recentHead}>
+            <Text style={type.title}>Recent</Text>
+            {visits.length > 0 && (
+              <Pressable onPress={() => router.push("/all-visits")}>
+                <Text style={styles.viewAll}>View all →</Text>
+              </Pressable>
+            )}
+          </View>
           <Spacer size={12} />
           {visits.length === 0 ? (
             <View style={styles.emptyCard}>
@@ -158,6 +190,7 @@ export default function Home() {
               <VisitRow
                 key={v.id}
                 v={v}
+                onPress={() => router.push(`/visit/${v.id}`)}
                 onLongPress={() => {
                   Alert.alert(
                     "Delete this visit?",
@@ -169,8 +202,28 @@ export default function Home() {
                         style: "destructive",
                         onPress: async () => {
                           try {
-                            await deleteVisit(v.id);
+                            const removed = v;
+                            const { undo } = await deleteVisitWithUndo(v.id);
                             setVisits((curr) => curr.filter((x) => x.id !== v.id));
+                            // 6-second undo window via Alert
+                            Alert.alert(
+                              "Visit deleted",
+                              `Removed ${removed.restaurant?.name ?? "visit"}.`,
+                              [
+                                { text: "OK", style: "default" },
+                                {
+                                  text: "Undo",
+                                  onPress: async () => {
+                                    try {
+                                      await undo();
+                                      setVisits((curr) => [removed, ...curr]);
+                                    } catch (e: any) {
+                                      Alert.alert("Couldn't undo", e?.message ?? "Try again");
+                                    }
+                                  },
+                                },
+                              ],
+                            );
                           } catch (e: any) {
                             Alert.alert("Couldn't delete", e.message ?? "Try again");
                           }
@@ -247,17 +300,22 @@ function WeekSoFarCard({ insight, onPress }: { insight: PalateInsight; onPress: 
   );
 }
 
-function VisitRow({ v, onLongPress }: { v: Visit; onLongPress: () => void }) {
+function VisitRow({ v, onPress, onLongPress }: { v: Visit; onPress: () => void; onLongPress: () => void }) {
   const r = v.restaurant;
   const date = new Date(v.visited_at);
   return (
     <Pressable
+      onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={400}
       style={({ pressed }) => [styles.visit, pressed && { opacity: 0.5 }]}
-      accessibilityHint="Long-press to delete"
+      accessibilityHint="Tap to edit · long-press to delete"
     >
-      <View style={styles.visitDot} />
+      {v.photo_url ? (
+        <Image source={{ uri: v.photo_url }} style={styles.visitThumb} />
+      ) : (
+        <View style={styles.visitDot} />
+      )}
       <View style={{ flex: 1 }}>
         <Text style={styles.visitName}>{r?.name ?? "Unknown"}</Text>
         <Text style={type.small}>
@@ -283,6 +341,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+  addBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: colors.red,
+    alignItems: "center", justifyContent: "center",
+  },
+  addBtnText: { color: "#fff", fontSize: 22, fontWeight: "800", marginTop: -2 },
   streakChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -353,5 +418,13 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: colors.red,
   },
+  visitThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: colors.faint,
+  },
+  recentHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  viewAll: { color: colors.red, fontSize: 13, fontWeight: "700" },
   visitName: { ...type.subtitle },
 });
