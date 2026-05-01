@@ -4,6 +4,7 @@ import { Text, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "../../theme";
 import { latestWrapped } from "../../lib/wrapped";
+import { triggerHapticSelection } from "../../lib/haptics";
 
 export const LAST_SEEN_WRAPPED_KEY = "palate.wrapped.lastSeen";
 
@@ -39,6 +40,9 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: colors.mute,
         tabBarStyle: { borderTopColor: colors.line, height: 84, paddingTop: 8 },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+      }}
+      screenListeners={{
+        tabPress: () => { void triggerHapticSelection(); },
       }}
     >
       <Tabs.Screen

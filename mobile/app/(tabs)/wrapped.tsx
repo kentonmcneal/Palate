@@ -18,6 +18,7 @@ import { computeTasteVector, type TasteVector } from "../../lib/taste-vector";
 import { generateIdentitySet, generateLore, expandedLore, type PalateIdentitySet } from "../../lib/palate-labels";
 import { generatePercentileCards, generateCohortInsightAsync, type CohortInsight } from "../../lib/population-stats";
 import { useEffect as useEffectReact } from "react";
+import { AnimatedNumber } from "../../components/AnimatedNumber";
 import ViewShot, { captureRef } from "react-native-view-shot";
 
 export default function WrappedTab() {
@@ -277,7 +278,10 @@ function PercentileRow({
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 10 }}>
         {cards.map((c, i) => (
           <View key={i} style={styles.percentileCard}>
-            <Text style={styles.percentileBig}>{c.headline}</Text>
+            <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+              <Text style={styles.percentileBig}>Top </Text>
+              <AnimatedNumber value={c.percentile} suffix="%" duration={900} style={styles.percentileBig} />
+            </View>
             <Text style={styles.percentileBody}>{c.body}</Text>
           </View>
         ))}

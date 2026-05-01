@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, Alert } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { View, Text, StyleSheet, Pressable, Alert, Animated, Easing } from "react-native";
 import { useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import type { RankedRestaurant } from "../lib/restaurant-ranking";
@@ -9,6 +9,9 @@ import { pickSaveCopy } from "../lib/save-copy";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
 import { trackRecEvent, type RecEventContext } from "../lib/recommendation-events";
 import { formatDistance } from "../lib/match-score";
+import { AnimatedNumber } from "./AnimatedNumber";
+import { SaveBurst } from "./SaveBurst";
+import { TapCard } from "./TapCard";
 
 // ============================================================================
 // RestaurantCompatibilityCard — single card UI used everywhere a restaurant
@@ -28,7 +31,18 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [burstKey, setBurstKey] = useState(0);
   const m = restaurant.match;
+
+  // Spring entrance — fade + slide up the first time the card mounts.
+  const enter = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(enter, { toValue: 1, duration: 360, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [enter]);
+  const enterStyle = {
+    opacity: enter,
+    transform: [{ translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+  };
 
   if (dismissed) return null;
 
@@ -54,8 +68,9 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
         surface, bucket, matchScore: m.score,
       });
       setSaved(true);
+      setBurstKey((k) => k + 1);
       const c = pickSaveCopy();
-      setTimeout(() => Alert.alert(c.title, c.body), 200);
+      setTimeout(() => Alert.alert(c.title, c.body), 350);
     } catch (e: any) {
       Alert.alert("Couldn't save", e?.message ?? "Try again");
     } finally {
@@ -79,14 +94,15 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
   ].filter(Boolean).join(" · ");
 
   return (
-    <Pressable onPress={openDetail} style={styles.card}>
+    <Animated.View style={enterStyle}>
+    <TapCard onPress={openDetail} style={styles.card}>
       <View style={styles.head}>
         <View style={{ flex: 1 }}>
           <Text style={styles.name} numberOfLines={2}>{restaurant.name}</Text>
           <Text style={styles.sub}>{subline || "Nearby"}</Text>
         </View>
         <View style={styles.scoreCol}>
-          <Text style={styles.scoreNum}>{m.score}</Text>
+          <AnimatedNumber value={m.score} duration={750} style={styles.scoreNum} />
           <Text style={styles.scoreLabel}>match</Text>
           {m.confidence === "low" && (
             <Text style={styles.confLow}>early read</Text>
@@ -116,15 +132,18 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
       )}
 
       <View style={styles.actions}>
-        <Pressable
-          onPress={(e) => { e.stopPropagation(); save(); }}
-          disabled={saved}
-          style={[styles.btnPrimary, saved && styles.btnDone]}
-        >
-          <Text style={[styles.btnPrimaryText, saved && styles.btnDoneText]}>
-            {saving ? "…" : saved ? "Saved" : "Save"}
-          </Text>
-        </Pressable>
+        <View>
+          <Pressable
+            onPress={(e) => { e.stopPropagation(); save(); }}
+            disabled={saved}
+            style={[styles.btnPrimary, saved && styles.btnDone]}
+          >
+            <Text style={[styles.btnPrimaryText, saved && styles.btnDoneText]}>
+              {saving ? "…" : saved ? "Saved" : "Save"}
+            </Text>
+          </Pressable>
+          <SaveBurst fire={burstKey} />
+        </View>
         <Pressable
           onPress={(e) => { e.stopPropagation(); openInAppleMaps(restaurant.name, restaurant.neighborhood); }}
           style={styles.btnGhost}
@@ -144,7 +163,8 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
           <Text style={styles.btnSubtleText}>Not for me</Text>
         </Pressable>
       </View>
-    </Pressable>
+    </TapCard>
+    </Animated.View>
   );
 }
 

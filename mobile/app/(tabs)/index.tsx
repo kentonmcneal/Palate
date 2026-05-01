@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, Alert, ScrollView, RefreshControl, Pressable, Image } from "react-native";
+import { View, Text, StyleSheet, Alert, ScrollView, RefreshControl, Pressable, Image, Animated, Easing } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Button, Spacer } from "../../components/Button";
 import { Wordmark } from "../../components/Logo";
+import { LinearGradient } from "expo-linear-gradient";
 import { colors, spacing, type } from "../../theme";
 import { getCurrentLocation, logLocationEvent, requestForegroundPermission, classifyAccuracy } from "../../lib/location";
 import { nearbyRestaurants, type Restaurant } from "../../lib/places";
 import { recentlyPrompted, recentVisits, deleteVisitWithUndo, type Visit } from "../../lib/visits";
 import { openInAppleMaps } from "../../lib/maps";
+import { AnimatedNumber } from "../../components/AnimatedNumber";
 import { computeStreak, type StreakInfo } from "../../lib/streak";
 import {
   analyzeWeeklyPalate,
@@ -147,6 +149,13 @@ export default function Home() {
 
         {/* Right Now — primary action, always at top */}
         <View style={styles.heroCard}>
+          <LinearGradient
+            colors={["#FFF1EE", colors.faint]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.heroGlow} />
           <Text style={styles.heroEyebrow}>RIGHT NOW</Text>
           <Text style={styles.heroTitle}>Are you eating somewhere?</Text>
           <Text style={styles.heroBody}>
@@ -263,13 +272,28 @@ async function loadCurrentWeekInsight(): Promise<PalateInsight | null> {
 }
 
 function StreakChip({ count, loggedToday }: { count: number; loggedToday: boolean }) {
+  // When the streak is at risk (today not logged), slowly pulse the chip so
+  // it's harder to ignore. When safe, render statically.
+  const pulse = useState(() => new Animated.Value(1))[0];
+  useEffect(() => {
+    if (loggedToday) { pulse.setValue(1); return; }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.08, duration: 800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [loggedToday, pulse]);
+
   return (
-    <View style={[styles.streakChip, !loggedToday && styles.streakChipAtRisk]}>
+    <Animated.View style={[styles.streakChip, !loggedToday && styles.streakChipAtRisk, { transform: [{ scale: pulse }] }]}>
       <Text style={styles.streakEmoji}>🔥</Text>
       <Text style={[styles.streakText, !loggedToday && styles.streakTextAtRisk]}>
         {count}
       </Text>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -290,7 +314,7 @@ function WeekSoFarCard({ insight, onPress }: { insight: PalateInsight; onPress: 
       <Text style={styles.weekEyebrow}>YOUR WEEK SO FAR</Text>
       <View style={styles.weekRow}>
         <View style={styles.weekStat}>
-          <Text style={styles.weekStatValue}>{insight.visitCount}</Text>
+          <AnimatedNumber value={insight.visitCount} duration={650} style={styles.weekStatValue} />
           <Text style={styles.weekStatLabel}>visits</Text>
         </View>
         {cuisineLabel && (
@@ -422,6 +446,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.faint,
     borderRadius: 24,
     padding: spacing.lg,
+    overflow: "hidden",
+  },
+  heroGlow: {
+    position: "absolute",
+    top: -60, right: -50,
+    width: 180, height: 180, borderRadius: 999,
+    backgroundColor: colors.red,
+    opacity: 0.12,
   },
   heroEyebrow: { ...type.micro },
   heroTitle: { ...type.title, marginTop: 6 },

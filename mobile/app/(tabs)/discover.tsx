@@ -24,6 +24,7 @@ import { pickSaveCopy } from "../../lib/save-copy";
 import { rankRestaurantsForDiscovery, type DiscoveryBuckets, type RankedRestaurant } from "../../lib/restaurant-ranking";
 import { trackImpressions } from "../../lib/recommendation-events";
 import { RestaurantCompatibilityCard } from "../../components/RestaurantCompatibilityCard";
+import { Shimmer, CardSkeleton, ListSkeleton } from "../../components/Shimmer";
 
 // ============================================================================
 // Discover tab — three sections:
@@ -193,8 +194,20 @@ export default function DiscoverTab() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.center}><ActivityIndicator color={colors.red} /></View>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <View style={styles.body}>
+          <Shimmer height={28} width="40%" />
+          <View style={{ height: 8 }} />
+          <Shimmer height={16} width="70%" />
+          <View style={{ height: 20 }} />
+          <Shimmer height={240} borderRadius={18} />
+          <View style={{ height: 32 }} />
+          <Shimmer height={18} width="50%" />
+          <View style={{ height: 12 }} />
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+        </View>
       </SafeAreaView>
     );
   }

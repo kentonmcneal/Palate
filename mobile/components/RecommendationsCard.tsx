@@ -17,6 +17,8 @@ import { getCurrentLocation } from "../lib/location";
 import { triggerHapticSuccess } from "../lib/haptics";
 import { pickSaveCopy } from "../lib/save-copy";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
+import { AnimatedNumber } from "./AnimatedNumber";
+import { SaveBurst } from "./SaveBurst";
 
 // ============================================================================
 // RecommendationsCard — always-visible spot suggestions on the Home tab.
@@ -128,6 +130,7 @@ export function RecommendationsCard() {
 function RecRow({ rec }: { rec: RestaurantRecommendation }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [burstKey, setBurstKey] = useState(0);
 
   async function save() {
     if (saved || saving) return;
@@ -139,10 +142,9 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
       });
       void triggerHapticSuccess();
       setSaved(true);
+      setBurstKey((k) => k + 1);
       const c = pickSaveCopy();
-      // Brief toast — Alert is the simplest way to surface without adding a
-      // toast lib. Auto-dismiss happens on user tap; iOS native styling.
-      setTimeout(() => Alert.alert(c.title, c.body), 200);
+      setTimeout(() => Alert.alert(c.title, c.body), 350);
     } catch (e: any) {
       Alert.alert("Couldn't save", e?.message ?? "Try again");
     } finally {
@@ -160,7 +162,7 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
           <Text style={styles.name} numberOfLines={2}>{rec.name}</Text>
           {rec.matchScore != null && (
             <View style={styles.matchBadge}>
-              <Text style={styles.matchBadgeText}>{rec.matchScore}% match</Text>
+              <AnimatedNumber value={rec.matchScore} suffix="% match" duration={650} style={styles.matchBadgeText} />
             </View>
           )}
         </View>
@@ -181,15 +183,18 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
           </Pressable>
         </View>
       </View>
-      <Pressable
-        onPress={save}
-        style={[styles.saveBtn, saved && styles.saveBtnDone]}
-        accessibilityRole="button"
-      >
-        <Text style={[styles.saveText, saved && styles.saveTextDone]}>
-          {saving ? "…" : saved ? "Saved" : "Save"}
-        </Text>
-      </Pressable>
+      <View>
+        <Pressable
+          onPress={save}
+          style={[styles.saveBtn, saved && styles.saveBtnDone]}
+          accessibilityRole="button"
+        >
+          <Text style={[styles.saveText, saved && styles.saveTextDone]}>
+            {saving ? "…" : saved ? "Saved" : "Save"}
+          </Text>
+        </Pressable>
+        <SaveBurst fire={burstKey} />
+      </View>
     </View>
   );
 }

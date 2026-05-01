@@ -26,11 +26,21 @@ export const radius = {
   full: 999,
 };
 
+// Font families come from @expo-google-fonts/inter — loaded in app/_layout.tsx.
+// Mapped per weight because RN doesn't synth Inter weights well.
+export const fonts = {
+  regular: "Inter_400Regular",
+  medium: "Inter_500Medium",
+  semibold: "Inter_600SemiBold",
+  bold: "Inter_700Bold",
+  heavy: "Inter_800ExtraBold",
+};
+
 export const type = {
-  display: { fontSize: 36, fontWeight: "800" as const, letterSpacing: -1.2 },
-  title: { fontSize: 24, fontWeight: "700" as const, letterSpacing: -0.6 },
-  subtitle: { fontSize: 18, fontWeight: "600" as const, letterSpacing: -0.3 },
-  body: { fontSize: 16, fontWeight: "400" as const },
-  small: { fontSize: 14, fontWeight: "400" as const, color: colors.mute },
-  micro: { fontSize: 12, fontWeight: "500" as const, letterSpacing: 1, textTransform: "uppercase" as const, color: colors.mute },
+  display: { fontFamily: fonts.heavy, fontSize: 36, letterSpacing: -1.2 },
+  title: { fontFamily: fonts.bold, fontSize: 24, letterSpacing: -0.6 },
+  subtitle: { fontFamily: fonts.semibold, fontSize: 18, letterSpacing: -0.3 },
+  body: { fontFamily: fonts.regular, fontSize: 16 },
+  small: { fontFamily: fonts.regular, fontSize: 14, color: colors.mute },
+  micro: { fontFamily: fonts.medium, fontSize: 12, letterSpacing: 1, textTransform: "uppercase" as const, color: colors.mute },
 };
