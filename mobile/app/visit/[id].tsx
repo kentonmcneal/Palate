@@ -18,6 +18,7 @@ import {
   type Visit,
 } from "../../lib/visits";
 import { searchRestaurants, type Restaurant } from "../../lib/places";
+import { openInAppleMaps, openInGoogleMaps } from "../../lib/maps";
 
 export default function VisitDetailScreen() {
   const router = useRouter();
@@ -216,6 +217,16 @@ export default function VisitDetailScreen() {
               <Text style={styles.editPillText}>Change</Text>
             </Pressable>
           </View>
+          {r?.name && (
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+              <Pressable onPress={() => openInAppleMaps(r.name, r.neighborhood ?? r.address)} style={styles.mapsBtnInline}>
+                <Text style={styles.mapsBtnInlineText}>Apple Maps</Text>
+              </Pressable>
+              <Pressable onPress={() => openInGoogleMaps(r.name, r.neighborhood ?? r.address)} style={styles.mapsBtnInline}>
+                <Text style={styles.mapsBtnInlineText}>Google Maps</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
 
         {/* When */}
@@ -441,4 +452,9 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.line, borderBottomWidth: 1,
   },
   add: { fontSize: 24, color: colors.red, fontWeight: "700", marginLeft: 12 },
+  mapsBtnInline: {
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999,
+    backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
+  },
+  mapsBtnInlineText: { fontSize: 12, fontWeight: "700", color: colors.ink },
 });

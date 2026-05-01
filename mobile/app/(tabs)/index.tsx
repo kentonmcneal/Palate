@@ -8,6 +8,7 @@ import { colors, spacing, type } from "../../theme";
 import { getCurrentLocation, logLocationEvent, requestForegroundPermission, classifyAccuracy } from "../../lib/location";
 import { nearbyRestaurants, type Restaurant } from "../../lib/places";
 import { recentlyPrompted, recentVisits, deleteVisitWithUndo, type Visit } from "../../lib/visits";
+import { openInAppleMaps } from "../../lib/maps";
 import { computeStreak, type StreakInfo } from "../../lib/streak";
 import {
   analyzeWeeklyPalate,
@@ -20,6 +21,9 @@ import { RecommendationsCard } from "../../components/RecommendationsCard";
 import { SavedNearbyCard } from "../../components/SavedNearbyCard";
 import { SkipNudgeCard } from "../../components/SkipNudgeCard";
 import { SwapNudgeCard } from "../../components/SwapNudgeCard";
+import { NextMovesPreview } from "../../components/NextMovesPreview";
+import { AspirationalPreview } from "../../components/AspirationalPreview";
+import { PalateExplainer } from "../../components/PalateExplainer";
 import { GettingStarted } from "../../components/GettingStarted";
 import { WrappedProgress } from "../../components/WrappedProgress";
 import { Confetti } from "../../components/Confetti";
@@ -141,8 +145,21 @@ export default function Home() {
           </View>
         </View>
 
+        {/* Right Now — primary action, always at top */}
+        <View style={styles.heroCard}>
+          <Text style={styles.heroEyebrow}>RIGHT NOW</Text>
+          <Text style={styles.heroTitle}>Are you eating somewhere?</Text>
+          <Text style={styles.heroBody}>
+            Tap to check what's around you. We'll ask before saving anything.
+          </Text>
+          <Spacer />
+          <Button title={checking ? "Checking…" : "Check now"} onPress={handleCheckNow} loading={checking} />
+        </View>
+
         {weekInsight && weekInsight.visitCount > 0 && (
-          <WeekSoFarCard insight={weekInsight} onPress={() => router.push("/(tabs)/wrapped")} />
+          <View style={{ marginTop: spacing.xl }}>
+            <WeekSoFarCard insight={weekInsight} onPress={() => router.push("/(tabs)/wrapped")} />
+          </View>
         )}
 
         <WrappedProgress visitsTotal={visits.length} />
@@ -153,15 +170,9 @@ export default function Home() {
 
         <RecommendationsCard />
 
-        <View style={styles.heroCard}>
-          <Text style={styles.heroEyebrow}>RIGHT NOW</Text>
-          <Text style={styles.heroTitle}>Are you eating somewhere?</Text>
-          <Text style={styles.heroBody}>
-            Tap to check what's around you. We'll ask before saving anything.
-          </Text>
-          <Spacer />
-          <Button title={checking ? "Checking…" : "Check now"} onPress={handleCheckNow} loading={checking} />
-        </View>
+        <NextMovesPreview />
+        <AspirationalPreview />
+        <PalateExplainer />
 
         {visits.length === 0 && (
           <View style={{ marginTop: spacing.xxl }}>
@@ -308,22 +319,39 @@ function VisitRow({ v, onPress, onLongPress }: { v: Visit; onPress: () => void; 
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={400}
-      style={({ pressed }) => [styles.visit, pressed && { opacity: 0.5 }]}
-      accessibilityHint="Tap to edit · long-press to delete"
+      style={({ pressed }) => [styles.visitCard, pressed && { opacity: 0.6 }]}
+      accessibilityHint="Tap for details · long-press to delete"
     >
       {v.photo_url ? (
-        <Image source={{ uri: v.photo_url }} style={styles.visitThumb} />
+        <Image source={{ uri: v.photo_url }} style={styles.visitCardThumb} />
       ) : (
-        <View style={styles.visitDot} />
+        <View style={styles.visitCardThumbEmpty}>
+          <Text style={styles.visitCardThumbInitial}>
+            {(r?.name ?? "?")[0].toUpperCase()}
+          </Text>
+        </View>
       )}
       <View style={{ flex: 1 }}>
-        <Text style={styles.visitName}>{r?.name ?? "Unknown"}</Text>
-        <Text style={type.small}>
-          {date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} ·{" "}
-          {date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-          {r?.primary_type ? ` · ${prettyType(r.primary_type)}` : ""}
+        <Text style={styles.visitCardName} numberOfLines={1}>{r?.name ?? "Unknown"}</Text>
+        <Text style={[type.small, { marginTop: 3 }]}>
+          {date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} · {date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
         </Text>
+        {(r?.cuisine_type || r?.neighborhood) && (
+          <Text style={[type.small, { marginTop: 3, color: colors.mute }]} numberOfLines={1}>
+            {[r?.cuisine_type ? prettyType(r.cuisine_type) : null, r?.neighborhood].filter(Boolean).join(" · ")}
+          </Text>
+        )}
       </View>
+      <Pressable
+        onPress={(e) => {
+          e.stopPropagation();
+          if (r?.name) openInAppleMaps(r.name, r.neighborhood ?? null);
+        }}
+        style={styles.visitMapsBtn}
+        accessibilityLabel="Open in Maps"
+      >
+        <Text style={styles.visitMapsBtnText}>Maps</Text>
+      </Pressable>
     </Pressable>
   );
 }
@@ -404,27 +432,30 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     padding: spacing.lg,
   },
-  visit: {
+  visitCard: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
-    borderBottomColor: colors.line,
-    borderBottomWidth: 1,
     gap: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderRadius: 16,
+    backgroundColor: colors.paper,
+    borderWidth: 1,
+    borderColor: colors.line,
   },
-  visitDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.red,
+  visitCardThumb: { width: 56, height: 56, borderRadius: 12, backgroundColor: colors.faint },
+  visitCardThumbEmpty: {
+    width: 56, height: 56, borderRadius: 12,
+    backgroundColor: "#FFF1EE",
+    alignItems: "center", justifyContent: "center",
   },
-  visitThumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: colors.faint,
+  visitCardThumbInitial: { fontSize: 20, fontWeight: "800", color: colors.red },
+  visitCardName: { fontSize: 16, fontWeight: "700", color: colors.ink },
+  visitMapsBtn: {
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
+    backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
   },
+  visitMapsBtnText: { fontSize: 12, fontWeight: "700", color: colors.ink },
   recentHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   viewAll: { color: colors.red, fontSize: 13, fontWeight: "700" },
-  visitName: { ...type.subtitle },
 });

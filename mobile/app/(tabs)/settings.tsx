@@ -351,6 +351,18 @@ export default function Settings() {
           <Note>Every photo you've added to a visit, in one grid.</Note>
         </Section>
 
+        <Section title="About you">
+          <Button
+            title="Demographics & background"
+            onPress={() => router.push("/demographics")}
+            variant="ghost"
+          />
+          <Note>
+            Optional. Powers "Top Palates in your demographic" — never sold,
+            never shown publicly.
+          </Note>
+        </Section>
+
         <Section title="Profile visibility">
           <View style={styles.visRow}>
             {(["public", "friends", "private"] as ProfileVisibility[]).map((v) => (

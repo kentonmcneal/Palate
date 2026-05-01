@@ -9,6 +9,16 @@ import { supabase } from "./supabase";
 
 export type ProfileVisibility = "private" | "friends" | "public";
 
+export type AgeRange = "under_18" | "18_24" | "25_34" | "35_44" | "45_54" | "55_64" | "65_plus";
+
+export type Demographics = {
+  age_range: AgeRange | null;
+  gender_identity: string | null;
+  race_ethnicity: string[];
+  hometown: string | null;
+  current_city: string | null;
+};
+
 export type Profile = {
   id: string;
   email: string | null;
@@ -17,6 +27,11 @@ export type Profile = {
   avatar_url: string | null;
   taste_preferences: string[];
   profile_visibility: ProfileVisibility;
+  age_range: AgeRange | null;
+  gender_identity: string | null;
+  race_ethnicity: string[];
+  hometown: string | null;
+  current_city: string | null;
   created_at: string;
 };
 
@@ -25,11 +40,18 @@ export async function getMyProfile(): Promise<Profile | null> {
   if (!user) return null;
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, email, display_name, username, avatar_url, taste_preferences, profile_visibility, created_at")
+    .select("id, email, display_name, username, avatar_url, taste_preferences, profile_visibility, age_range, gender_identity, race_ethnicity, hometown, current_city, created_at")
     .eq("id", user.id)
     .maybeSingle();
   if (error || !data) return null;
   return data as Profile;
+}
+
+export async function saveDemographics(d: Partial<Demographics>): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not signed in");
+  const { error } = await supabase.from("profiles").update(d).eq("id", user.id);
+  if (error) throw error;
 }
 
 export async function setUsername(handle: string): Promise<{ ok: true } | { ok: false; reason: "taken" | "invalid" | "error" }> {

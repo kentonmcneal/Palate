@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
+import { MatchMarker, TopMatchMarker } from "../../components/MatchMarker";
 import { Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { nearbyRestaurants } from "../../lib/places";
@@ -204,21 +205,29 @@ export default function DiscoverTab() {
               showsUserLocation
               showsMyLocationButton={false}
             >
-              {places
-                .filter((p) => p.latitude != null && p.longitude != null)
-                .slice(0, 30)
-                .map((p) => {
-                  const high = (p.matchScore ?? 0) >= HIGH_MATCH_THRESHOLD;
+              {(() => {
+                const visible = places
+                  .filter((p) => p.latitude != null && p.longitude != null)
+                  .slice(0, 30);
+                // Identify the top-match place so we can render it as a flame.
+                const topScore = visible.reduce((m, p) => Math.max(m, p.matchScore ?? 0), 0);
+                return visible.map((p) => {
+                  const isTop = p.matchScore != null && p.matchScore === topScore && topScore >= HIGH_MATCH_THRESHOLD;
                   return (
                     <Marker
                       key={p.google_place_id}
                       coordinate={{ latitude: p.latitude!, longitude: p.longitude! }}
-                      pinColor={high ? colors.red : colors.mute}
                       title={p.name}
                       description={p.matchScore ? `${p.matchScore}% match` : undefined}
-                    />
+                      anchor={{ x: 0.5, y: 0.5 }}
+                    >
+                      {isTop
+                        ? <TopMatchMarker score={p.matchScore!} />
+                        : <MatchMarker score={p.matchScore} />}
+                    </Marker>
                   );
-                })}
+                });
+              })()}
             </MapView>
             <View style={styles.mapLegend}>
               <View style={styles.mapLegendDot} />
