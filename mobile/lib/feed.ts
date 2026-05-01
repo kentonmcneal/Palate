@@ -13,12 +13,13 @@
 
 import { supabase } from "./supabase";
 
-export type FeedEventKind = "wrapped_shared" | "persona_change" | "milestone";
+export type FeedEventKind = "wrapped_shared" | "persona_change" | "milestone" | "visit_logged";
 
 export type FeedEventPayload =
   | { kind: "wrapped_shared"; persona_label: string; tagline: string; week_start: string; week_end: string; total_visits: number; top_restaurant: string | null }
   | { kind: "persona_change"; from_persona: string | null; to_persona: string }
-  | { kind: "milestone"; streak_days: number };
+  | { kind: "milestone"; streak_days: number }
+  | { kind: "visit_logged"; restaurant_name: string; cuisine: string | null; neighborhood: string | null; google_place_id?: string };
 
 export type FeedEvent = {
   id: string;

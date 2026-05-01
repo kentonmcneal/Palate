@@ -41,7 +41,10 @@ export function PalateExplainer() {
 
       {area && area.palates.length > 0 && (
         <View style={styles.areaCard}>
-          <Text style={styles.areaEyebrow}>TOP PALATES IN {area.area.toUpperCase()} · preview data</Text>
+          <Text style={styles.areaEyebrow}>
+            TOP PALATES IN {area.area.toUpperCase()}
+            {area.source === "preview" ? " · preview data" : ""}
+          </Text>
           {area.palates.map((p, i) => (
             <View key={p.label} style={styles.areaRow}>
               <Text style={styles.areaRank}>{i + 1}</Text>

@@ -4,7 +4,7 @@ import {
   Pressable, ActivityIndicator, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Spacer } from "../components/Button";
 import { Avatar } from "../components/Avatar";
 import { colors, spacing, type } from "../theme";
@@ -19,7 +19,8 @@ type Tab = "friends" | "leaderboard" | "requests" | "find";
 
 export default function FriendsScreen() {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("friends");
+  const params = useLocalSearchParams<{ tab?: Tab }>();
+  const [tab, setTab] = useState<Tab>(params.tab ?? "friends");
   const [friends, setFriends] = useState<FriendListItem[]>([]);
   const [incoming, setIncoming] = useState<FriendListItem[]>([]);
   const [outgoing, setOutgoing] = useState<FriendListItem[]>([]);

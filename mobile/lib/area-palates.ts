@@ -1,15 +1,20 @@
 // ============================================================================
-// area-palates.ts — "Top Palates in your area" with FAKE preview data.
+// area-palates.ts — "Top Palates in your area"
 // ----------------------------------------------------------------------------
-// Returns a small ranked list of common Palate identities for the user's
-// region — labeled "preview data" until we have enough real users to compute
-// it for real. Same swap-out story as population-stats.ts.
+// Auto-swaps between FAKE preview data and REAL aggregated data:
+//   - If the user's city has >= REAL_DATA_THRESHOLD users with a palate set,
+//     we return real percentages from the population_city_palate_counts view.
+//   - Otherwise we return a curated city-specific mix (or a generic mix if
+//     we can't infer a city).
 //
-// Region detection is best-effort: we use the user's top-visited neighborhood
-// and bucket it into a city. If we can't infer one, we return a neutral mix.
+// The `source` field tells the UI whether to show the "preview data" label.
 // ============================================================================
 
 import { computeTasteVector } from "./taste-vector";
+import { supabase } from "./supabase";
+import { getMyProfile } from "./profile";
+
+const REAL_DATA_THRESHOLD = 25;
 
 export type AreaPalate = {
   label: string;
@@ -19,6 +24,7 @@ export type AreaPalate = {
 export type AreaPalateSummary = {
   area: string;
   palates: AreaPalate[];
+  source: "real" | "preview";
 };
 
 // Curated mix per city. When real data exists, swap this for an aggregator
@@ -104,16 +110,63 @@ const HOOD_TO_CITY: Array<{ match: RegExp; city: string }> = [
 ];
 
 export async function getAreaPalates(): Promise<AreaPalateSummary> {
-  const v = await computeTasteVector().catch(() => null);
-  const topHood = v?.topNeighborhoods[0]?.name ?? null;
+  // 1. Resolve a city, preferring user's self-reported current_city.
+  const profile = await getMyProfile().catch(() => null);
+  let city: string | null = profile?.current_city?.trim() || null;
 
-  let city: string | null = null;
-  if (topHood) {
-    for (const { match, city: c } of HOOD_TO_CITY) {
-      if (match.test(topHood)) { city = c; break; }
+  // Fall back to inferring from top neighborhood if no demographic city set.
+  if (!city) {
+    const v = await computeTasteVector().catch(() => null);
+    const topHood = v?.topNeighborhoods[0]?.name ?? null;
+    if (topHood) {
+      for (const { match, city: c } of HOOD_TO_CITY) {
+        if (match.test(topHood)) { city = c; break; }
+      }
     }
+    if (!city) return { area: topHood ?? "Your area", palates: DEFAULT_MIX, source: "preview" };
   }
 
-  if (!city) return { area: topHood ?? "Your area", palates: DEFAULT_MIX };
-  return { area: city, palates: CITY_MIXES[city] ?? DEFAULT_MIX };
+  // 2. Try to fetch real data for this city
+  const real = await tryRealAreaPalates(city);
+  if (real) return real;
+
+  // 3. Fall back to curated preview mix
+  return { area: city, palates: CITY_MIXES[city] ?? DEFAULT_MIX, source: "preview" };
+}
+
+async function tryRealAreaPalates(city: string): Promise<AreaPalateSummary | null> {
+  const { data, error } = await supabase
+    .from("population_city_palate_counts")
+    .select("city_label, palate_key, user_count")
+    .eq("city_key", city.toLowerCase());
+  if (error || !data) return null;
+
+  const total = data.reduce((s, r: any) => s + (r.user_count ?? 0), 0);
+  if (total < REAL_DATA_THRESHOLD) return null;
+
+  const sorted = (data as Array<{ city_label: string; palate_key: string; user_count: number }>)
+    .sort((a, b) => b.user_count - a.user_count)
+    .slice(0, 5)
+    .map((r) => ({
+      label: prettyPalateKey(r.palate_key),
+      share: r.user_count / total,
+    }));
+
+  return { area: data[0].city_label as string, palates: sorted, source: "real" };
+}
+
+function prettyPalateKey(k: string): string {
+  // Maps stored quiz_persona keys to display labels. Mirrors STARTER_PERSONAS.
+  const map: Record<string, string> = {
+    convenience_loyalist: "The Convenience Loyalist",
+    flavor_loyalist: "The Flavor Loyalist",
+    premium_comfort_loyalist: "The Premium Comfort Loyalist",
+    practical_variety_seeker: "The Practical Variety Seeker",
+    explorer: "The Explorer",
+    cafe_dweller: "The Café Dweller",
+    comfort_connoisseur: "The Comfort Food Connoisseur",
+    fast_casual_regular: "The Fast Casual Regular",
+    social_diner: "The Social Diner",
+  };
+  return map[k] ?? k.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 }

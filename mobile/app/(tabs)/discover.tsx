@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert, Linking, Platform, RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import { MatchMarker, TopMatchMarker } from "../../components/MatchMarker";
 import { Spacer } from "../../components/Button";
@@ -21,6 +21,9 @@ import { isoWeekStart } from "../../lib/wrapped";
 import { addToWishlist, type RestaurantRecommendation } from "../../lib/palate-insights";
 import { triggerHapticSuccess } from "../../lib/haptics";
 import { pickSaveCopy } from "../../lib/save-copy";
+import { rankRestaurantsForDiscovery, type DiscoveryBuckets, type RankedRestaurant } from "../../lib/restaurant-ranking";
+import { trackImpressions } from "../../lib/recommendation-events";
+import { RestaurantCompatibilityCard } from "../../components/RestaurantCompatibilityCard";
 
 // ============================================================================
 // Discover tab — three sections:
@@ -30,8 +33,9 @@ import { pickSaveCopy } from "../../lib/save-copy";
 //      (Late-night near you, Brunch picks, Date-night, Healthy-lunch)
 // ============================================================================
 
-const MAP_RADIUS_M = 1000;
+const MAP_RADIUS_M = 2500; // ~1.5mi — wide enough to fill shelves, tight enough to feel local
 const HIGH_MATCH_THRESHOLD = 75;
+const SHELF_TARGET = 7;
 
 type EnrichedPlace = {
   google_place_id: string;
@@ -52,12 +56,14 @@ type EnrichedPlace = {
 };
 
 export default function DiscoverTab() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
   const [places, setPlaces] = useState<EnrichedPlace[]>([]);
   const [forYou, setForYou] = useState<RestaurantRecommendation[]>([]);
+  const [buckets, setBuckets] = useState<DiscoveryBuckets | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -116,6 +122,43 @@ export default function DiscoverTab() {
         };
       });
       setPlaces(enriched);
+
+      // Bucketed discovery: feed all enriched places through the ranker.
+      // The ranker calls our PalateMatchScore + 80/20 mixing + diversity.
+      const bucketed = await rankRestaurantsForDiscovery({
+        vector,
+        candidates: nearby.map((p) => ({
+          google_place_id: p.google_place_id,
+          name: p.name,
+          cuisine_type: p.cuisine_type ?? null,
+          cuisine_region: (p as any).cuisine_region ?? null,
+          cuisine_subregion: (p as any).cuisine_subregion ?? null,
+          format_class: (p as any).format_class ?? null,
+          occasion_tags: (p as any).occasion_tags ?? null,
+          flavor_tags: (p as any).flavor_tags ?? null,
+          cultural_context: (p as any).cultural_context ?? null,
+          neighborhood: p.neighborhood ?? null,
+          price_level: p.price_level ?? null,
+          rating: p.rating ?? null,
+          user_rating_count: (p as any).user_rating_count ?? null,
+          latitude: p.latitude ?? null,
+          longitude: p.longitude ?? null,
+        })),
+        here: { lat: loc.lat, lng: loc.lng },
+        now: new Date(),
+        perBucket: 6,
+      });
+      setBuckets(bucketed);
+
+      // Fire impressions for everything we're about to show
+      const visiblePlaceIds = [
+        ...bucketed.safe.map((r) => r.google_place_id),
+        ...bucketed.stretch.map((r) => r.google_place_id),
+        ...bucketed.aspirational.map((r) => r.google_place_id),
+        ...bucketed.trending.map((r) => r.google_place_id),
+        ...bucketed.friends.map((r) => r.google_place_id),
+      ];
+      void trackImpressions(visiblePlaceIds, { surface: "discover_for_you" });
 
       // For You: pull persona-driven recs (already match-scored elsewhere)
       const start = isoWeekStart();
@@ -233,55 +276,95 @@ export default function DiscoverTab() {
               <View style={styles.mapLegendDot} />
               <Text style={styles.mapLegendText}>High match for you</Text>
             </View>
+            <Pressable onPress={() => router.push("/map")} style={styles.mapExpand}>
+              <Text style={styles.mapExpandText}>Expand ⤢</Text>
+            </Pressable>
           </View>
         )}
 
-        {/* For You */}
-        <Section title="For You" subtitle="Top picks ranked by your Palate">
-          {forYou.length === 0 ? (
-            <Text style={[type.small, { lineHeight: 20 }]}>
-              Log a few visits and we'll learn what to surface here.
-            </Text>
-          ) : (
-            forYou.slice(0, 6).map((r) => (
-              <PlaceRow
-                key={r.google_place_id}
-                place={{
-                  google_place_id: r.google_place_id,
-                  name: r.name,
-                  cuisine: r.cuisine,
-                  neighborhood: r.neighborhood,
-                  matchScore: r.matchScore ?? null,
-                  distanceKm: r.distanceKm ?? null,
-                  reason: r.reason,
-                  rating: r.rating ?? null,
-                }}
-              />
-            ))
-          )}
-        </Section>
+        {/* Bucketed Discovery — ranked feed in 5 named buckets. */}
+        {buckets && (
+          <>
+            <BucketSection
+              title="Safe Matches"
+              subtitle="Highly aligned with your current Palate."
+              items={buckets.safe}
+              bucket="safe"
+            />
+            <BucketSection
+              title="Stretch Picks"
+              subtitle="Slightly outside your pattern — but plausible."
+              items={buckets.stretch}
+              bucket="stretch"
+            />
+            <BucketSection
+              title="Your Next Era"
+              subtitle="Aligned with what you've been saving."
+              items={buckets.aspirational}
+              bucket="aspirational"
+            />
+            <BucketSection
+              title="Trending Around You"
+              subtitle="Popular nearby — fit-adjusted for you."
+              items={buckets.trending}
+              bucket="trending"
+            />
+            <BucketSection
+              title="Friends Like This"
+              subtitle="Where your friends have been."
+              items={buckets.friends}
+              bucket="friends"
+            />
+          </>
+        )}
 
         {/* Lists */}
         <Section title="Lists">
           <Shelf
             title="Late-night near you"
             blurb="Open after 9pm, walking distance."
-            items={filterShelf(places, "late_night")}
+            items={broadShelf(places, {
+              occasions: ["late_night"],
+              formats: ["bar", "wine_bar"],
+            })}
           />
           <Shelf
             title="Brunch picks"
             blurb="For a slow Saturday."
-            items={filterShelf(places, "brunch")}
+            items={broadShelf(places, {
+              occasions: ["brunch", "breakfast", "weekend_anchor"],
+              formats: ["café"],
+            })}
           />
           <Shelf
             title="Date-night nearby"
             blurb="Slightly more deliberate."
-            items={filterShelf(places, "date_night")}
+            items={broadShelf(places, {
+              occasions: ["date_night", "group_dinner"],
+              minPrice: 3,
+            })}
           />
           <Shelf
             title="Healthy-lunch picks"
             blurb="Fresh, fast, on the way."
-            items={filterShelfByCuisine(places, ["healthy"])}
+            items={broadShelf(places, {
+              cuisines: ["healthy", "mediterranean"],
+              flavors: ["fresh", "light"],
+            })}
+          />
+          <Shelf
+            title="Quick & on the way"
+            blurb="Counter-service, in and out."
+            items={broadShelf(places, {
+              formats: ["quick_service", "fast_casual"],
+            })}
+          />
+          <Shelf
+            title="Hidden gems near you"
+            blurb="Off the radar, low review count."
+            items={broadShelf(places, {
+              cultural: ["hidden"],
+            })}
           />
         </Section>
       </ScrollView>
@@ -292,6 +375,29 @@ export default function DiscoverTab() {
 // ----------------------------------------------------------------------------
 // Sub-components
 // ----------------------------------------------------------------------------
+
+function BucketSection({
+  title, subtitle, items, bucket,
+}: {
+  title: string;
+  subtitle: string;
+  items: RankedRestaurant[];
+  bucket: "safe" | "stretch" | "aspirational" | "trending" | "friends";
+}) {
+  if (items.length === 0) return null;
+  return (
+    <Section title={title} subtitle={subtitle}>
+      {items.map((r) => (
+        <RestaurantCompatibilityCard
+          key={r.google_place_id}
+          restaurant={r}
+          surface="discover_for_you"
+          bucket={bucket}
+        />
+      ))}
+    </Section>
+  );
+}
 
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
@@ -429,18 +535,65 @@ function PlaceRow({
 }
 
 // ----------------------------------------------------------------------------
-// Filters for the Lists shelves
+// Filters for the Lists shelves — broad multi-criteria, always tries to hit
+// SHELF_TARGET items by widening when the strict filter comes up short.
 // ----------------------------------------------------------------------------
-function filterShelf(places: EnrichedPlace[], occasion: string): EnrichedPlace[] {
-  return places
-    .filter((p) => (p.occasionTags ?? []).includes(occasion))
-    .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+
+type ShelfCriteria = {
+  occasions?: string[];
+  formats?: string[];
+  cuisines?: string[];
+  flavors?: string[];
+  cultural?: string[];
+  minPrice?: number;
+};
+
+function broadShelf(places: EnrichedPlace[], c: ShelfCriteria): EnrichedPlace[] {
+  // Pass 1: strict — match ANY criterion in EACH provided category.
+  const strict = places.filter((p) => {
+    if (c.occasions?.length && !p.occasionTags?.some((t) => c.occasions!.includes(t))) return false;
+    if (c.formats?.length && !c.formats.includes(p.formatClass ?? "")) return false;
+    if (c.cuisines?.length && !c.cuisines.includes(p.cuisine ?? "")) return false;
+    if (c.flavors?.length && !p.flavorTags?.some((f) => c.flavors!.includes(f))) return false;
+    if (c.cultural?.length) {
+      // cultural lives at the restaurant level — read via any-cast since not strongly typed here
+      const ctx = (p as any).culturalContext ?? null;
+      if (!c.cultural.includes(ctx)) return false;
+    }
+    if (c.minPrice != null && (p.price_level ?? 0) < c.minPrice) return false;
+    return true;
+  });
+
+  if (strict.length >= SHELF_TARGET) {
+    return sortByMatch(strict).slice(0, SHELF_TARGET + 3);
+  }
+
+  // Pass 2: loose — OR across all criteria so we fill the shelf with
+  // anything plausibly related rather than showing 2 items.
+  const loose = places.filter((p) => {
+    if (c.occasions?.some((o) => p.occasionTags?.includes(o))) return true;
+    if (c.formats?.includes(p.formatClass ?? "")) return true;
+    if (c.cuisines?.includes(p.cuisine ?? "")) return true;
+    if (c.flavors?.some((f) => p.flavorTags?.includes(f))) return true;
+    if (c.cultural?.includes((p as any).culturalContext ?? "")) return true;
+    if (c.minPrice != null && (p.price_level ?? 0) >= c.minPrice) return true;
+    return false;
+  });
+
+  // Combine, dedupe by id, prefer strict-matchers first
+  const seen = new Set<string>();
+  const out: EnrichedPlace[] = [];
+  for (const p of [...strict, ...sortByMatch(loose)]) {
+    if (seen.has(p.google_place_id)) continue;
+    seen.add(p.google_place_id);
+    out.push(p);
+    if (out.length >= SHELF_TARGET + 3) break;
+  }
+  return out;
 }
 
-function filterShelfByCuisine(places: EnrichedPlace[], cuisines: string[]): EnrichedPlace[] {
-  return places
-    .filter((p) => cuisines.includes(p.cuisine ?? ""))
-    .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+function sortByMatch(places: EnrichedPlace[]): EnrichedPlace[] {
+  return [...places].sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
 }
 
 function openInAppleMaps(p: { name: string; neighborhood: string | null }) {
@@ -484,6 +637,13 @@ const styles = StyleSheet.create({
   },
   mapLegendDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.red },
   mapLegendText: { fontSize: 11, fontWeight: "700", color: colors.ink },
+  mapExpand: {
+    position: "absolute", top: 10, right: 10,
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: colors.ink,
+  },
+  mapExpandText: { color: "#fff", fontSize: 11, fontWeight: "800", letterSpacing: 0.4 },
 
   shelf: { marginBottom: spacing.md },
   shelfTitle: { fontSize: 17, fontWeight: "800", color: colors.ink, letterSpacing: -0.3 },

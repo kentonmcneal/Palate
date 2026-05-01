@@ -81,11 +81,16 @@ export default function FeedTab() {
               How your friends actually eat.
             </Text>
           </View>
-          <Pressable onPress={() => router.push("/friends")} style={styles.friendsBtn}>
-            <Text style={styles.friendsBtnText}>
-              Friends{pendingCount > 0 ? ` · ${pendingCount}` : ""}
-            </Text>
-          </Pressable>
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            <Pressable onPress={() => router.push({ pathname: "/friends", params: { tab: "leaderboard" } })} style={styles.friendsBtn}>
+              <Text style={styles.friendsBtnText}>Board</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push("/friends")} style={styles.friendsBtn}>
+              <Text style={styles.friendsBtnText}>
+                Friends{pendingCount > 0 ? ` · ${pendingCount}` : ""}
+              </Text>
+            </Pressable>
+          </View>
         </View>
         <Spacer size={20} />
 
@@ -189,7 +194,27 @@ function FeedBody({ event }: { event: FeedEvent }) {
       </Text>
     );
   }
+  if (event.kind === "visit_logged") {
+    const p = event.payload as { restaurant_name: string; cuisine: string | null; neighborhood: string | null };
+    const cuisineLine = p.cuisine
+      ? `${cuisineArticle(p.cuisine)} ${prettyCuisine(p.cuisine)} spot`
+      : "a restaurant";
+    return (
+      <Text style={styles.bodyText}>
+        Logged <Text style={styles.bodyAccent}>{cuisineLine}</Text>{p.neighborhood ? ` in ${p.neighborhood}` : ""}
+        {" — "}<Text style={{ color: colors.mute, fontStyle: "italic" }}>{p.restaurant_name}</Text>
+      </Text>
+    );
+  }
   return null;
+}
+
+function prettyCuisine(c: string): string {
+  return c.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function cuisineArticle(c: string): string {
+  return /^[aeiou]/i.test(c) ? "an" : "a";
 }
 
 function relativeTime(iso: string): string {

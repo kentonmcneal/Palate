@@ -126,7 +126,35 @@ export async function saveVisit(opts: {
   const total = (priorCount ?? 0) + 1;
   void track("visit_logged", { source: opts.source, visit_total: total });
   void triggerHapticSuccess();
+
+  // Quietly drop a feed event so friends see "Kenton visited an American spot."
+  // No push notification — visit events are passive, not real-time.
+  void emitVisitFeedEvent(user.id, restaurantId, opts.googlePlaceId);
+
   return { ...(data as Visit), isFirstVisit: total === 1, totalVisits: total };
+}
+
+async function emitVisitFeedEvent(userId: string, restaurantId: string, googlePlaceId: string) {
+  try {
+    const { data: rest } = await supabase
+      .from("restaurants")
+      .select("name, cuisine_type, neighborhood")
+      .eq("id", restaurantId)
+      .maybeSingle();
+    if (!rest) return;
+    await supabase.from("feed_events").insert({
+      user_id: userId,
+      kind: "visit_logged",
+      payload: {
+        restaurant_name: rest.name,
+        cuisine: rest.cuisine_type,
+        neighborhood: rest.neighborhood,
+        google_place_id: googlePlaceId,
+      },
+    });
+  } catch {
+    // silent — feed event is best-effort
+  }
 }
 
 export async function recentVisits(limit = 20) {

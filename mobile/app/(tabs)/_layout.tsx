@@ -63,6 +63,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="feed"
+        options={{
+          title: "Feed",
+          tabBarIcon: ({ color }) => <TabIcon glyph="◉" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: "Profile",
@@ -71,7 +78,6 @@ export default function TabsLayout() {
       />
       {/* Hidden from tab bar but routes still exist for direct navigation */}
       <Tabs.Screen name="add" options={{ href: null }} />
-      <Tabs.Screen name="feed" options={{ href: null }} />
       <Tabs.Screen name="wishlist" options={{ href: null }} />
     </Tabs>
   );

@@ -317,8 +317,14 @@ export default function Settings() {
 
         <Section title="Friends">
           <Button
+            title="Leaderboard"
+            onPress={() => router.push({ pathname: "/friends", params: { tab: "leaderboard" } })}
+          />
+          <Spacer />
+          <Button
             title={`Manage friends${pendingRequestCount > 0 ? ` · ${pendingRequestCount} request${pendingRequestCount === 1 ? "" : "s"}` : ""}`}
             onPress={() => router.push("/friends")}
+            variant="ghost"
           />
           <Spacer />
           <Button

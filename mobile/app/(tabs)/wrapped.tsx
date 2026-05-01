@@ -16,7 +16,8 @@ import { shareWrappedToFeed } from "../../lib/feed";
 import { track } from "../../lib/analytics";
 import { computeTasteVector, type TasteVector } from "../../lib/taste-vector";
 import { generateIdentitySet, generateLore, expandedLore, type PalateIdentitySet } from "../../lib/palate-labels";
-import { generatePercentileCards, generateCohortInsight } from "../../lib/population-stats";
+import { generatePercentileCards, generateCohortInsightAsync, type CohortInsight } from "../../lib/population-stats";
+import { useEffect as useEffectReact } from "react";
 import ViewShot, { captureRef } from "react-native-view-shot";
 
 export default function WrappedTab() {
@@ -291,10 +292,19 @@ function CohortCard({
   primary: PalateIdentitySet["primary"];
   vector: TasteVector;
 }) {
-  const c = generateCohortInsight(primary, vector);
+  const [c, setC] = useState<CohortInsight | null>(null);
+  useEffectReact(() => {
+    let alive = true;
+    generateCohortInsightAsync(primary, vector).then((r) => { if (alive) setC(r); }).catch(() => {});
+    return () => { alive = false; };
+  }, [primary.label, vector.visitCount]);
+
+  if (!c) return null;
   return (
     <View style={styles.cohortCard}>
-      <Text style={styles.percentileEyebrow}>PEOPLE LIKE YOU · preview data</Text>
+      <Text style={styles.percentileEyebrow}>
+        PEOPLE LIKE YOU{c.source === "preview" ? " · preview data" : ""}
+      </Text>
       <Text style={styles.cohortBig}>{c.countLine}</Text>
       <Text style={styles.cohortLine}>· {c.paceLine}</Text>
       <Text style={styles.cohortLine}>· {c.citiesLine}</Text>

@@ -1,19 +1,19 @@
 // ============================================================================
-// population-stats.ts — FAKE aggregated "people like you" data.
+// population-stats.ts — percentiles + "people like you" cohort.
 // ----------------------------------------------------------------------------
-// Until we have real population statistics, we generate plausible-feeling
-// values from the user's own taste vector + persona key. This lets us
-// design + ship the percentile + cohort UX while we build a real aggregator
-// in the background.
-//
-// Marked "preview data" anywhere we surface these so testers don't think
-// they're querying a real population yet. Easy swap-out later: replace
-// the body of these functions with a real query against a server-side
-// aggregator job.
+// Auto-swaps fake → real:
+//   - When the real cohort (population_palate_counts view) reaches
+//     REAL_DATA_THRESHOLD users, the cohort line uses the real count.
+//   - Percentile cards always use vector-derived values for now (real
+//     percentile math needs population distributions for each metric, not
+//     just user counts — that's a future aggregator job).
 // ============================================================================
 
 import type { TasteVector } from "./taste-vector";
 import type { PalateIdentity } from "./palate-labels";
+import { supabase } from "./supabase";
+
+const REAL_DATA_THRESHOLD = 25;
 
 export type PercentileCard = {
   /** Short headline ("Top 12%") */
@@ -33,6 +33,8 @@ export type CohortInsight = {
   citiesLine: string;
   /** "Most-saved spot in the cohort: Lucali" */
   topSavedLine: string;
+  /** "real" once we have enough users; "preview" until then */
+  source: "real" | "preview";
 };
 
 // ----------------------------------------------------------------------------
@@ -123,19 +125,67 @@ function hashOffset(s: string): number {
 }
 
 // ----------------------------------------------------------------------------
-// "People like you" cohort — fake plausible values keyed on the persona label.
+// "People like you" cohort — synchronous (fake) version, kept for backwards
+// compat with existing UI calls.
 // ----------------------------------------------------------------------------
 export function generateCohortInsight(identity: PalateIdentity, v: TasteVector): CohortInsight {
+  return generateFakeCohort(identity, v);
+}
+
+/** Async version: tries real data first, falls back to fake. */
+export async function generateCohortInsightAsync(
+  identity: PalateIdentity, v: TasteVector,
+): Promise<CohortInsight> {
+  // Map an identity label down to a starter persona key when possible.
+  // Falls back to total-population count for anyone that didn't quiz in.
+  const personaKey = identityToQuizKey(identity.label);
+
+  try {
+    if (personaKey) {
+      const { data } = await supabase
+        .from("population_palate_counts")
+        .select("palate_key, user_count")
+        .eq("palate_key", personaKey)
+        .maybeSingle();
+      const count = (data as any)?.user_count ?? 0;
+      if (count >= REAL_DATA_THRESHOLD) {
+        const fake = generateFakeCohort(identity, v);
+        return {
+          ...fake,
+          countLine: `${count.toLocaleString()} Palate${count === 1 ? "" : "s"} share your starter persona`,
+          source: "real",
+        };
+      }
+    }
+    // No real data threshold met — try total-users line as a softer real signal.
+    const { data: totalRow } = await supabase
+      .from("population_total")
+      .select("total_users")
+      .maybeSingle();
+    const total = (totalRow as any)?.total_users ?? 0;
+    if (total >= REAL_DATA_THRESHOLD * 4) {
+      const fake = generateFakeCohort(identity, v);
+      return {
+        ...fake,
+        countLine: `${total.toLocaleString()} people on Palate so far`,
+        source: "real",
+      };
+    }
+  } catch {
+    // ignore — fall through to fake
+  }
+
+  return generateFakeCohort(identity, v);
+}
+
+function generateFakeCohort(identity: PalateIdentity, v: TasteVector): CohortInsight {
   const seed = hashOffset(identity.label) + identity.label.length;
 
-  // Cohort size — pretend Palate has ~50,000 users; cohort is a slice
   const cohortPct = 0.005 + (seed % 5) * 0.003;
   const cohortCount = Math.max(800, Math.round(50_000 * cohortPct));
 
-  // Pace
   const pace = (3.0 + ((seed * 7) % 30) / 10).toFixed(1);
 
-  // Top cities — pick from a fixed pool, slug-deterministic
   const cityPool = [
     ["Brooklyn", "Austin", "LA"],
     ["Manhattan", "Chicago", "SF"],
@@ -147,8 +197,6 @@ export function generateCohortInsight(identity: PalateIdentity, v: TasteVector):
   ];
   const cities = cityPool[(seed >>> 0) % cityPool.length];
 
-  // Top-saved exemplar — pull from the persona's stretch picks if available;
-  // otherwise generic.
   const exemplar = pickExemplar(identity.label, v);
 
   return {
@@ -156,7 +204,25 @@ export function generateCohortInsight(identity: PalateIdentity, v: TasteVector):
     paceLine: `They average ${pace} eating-out meals a week`,
     citiesLine: `Most concentrated in: ${cities.join(", ")}`,
     topSavedLine: `Top saved spot in this cohort: ${exemplar}`,
+    source: "preview",
   };
+}
+
+// Best-effort mapping from a composed identity label back to a starter persona
+// key. Used only for the real-data lookup; falls through to total-users when
+// no match.
+function identityToQuizKey(label: string): string | null {
+  const l = label.toLowerCase();
+  if (l.includes("convenience")) return "convenience_loyalist";
+  if (l.includes("flavor loyalist") || l.includes("flavor-loyal")) return "flavor_loyalist";
+  if (l.includes("premium") || l.includes("connoisseur")) return "premium_comfort_loyalist";
+  if (l.includes("variety")) return "practical_variety_seeker";
+  if (l.includes("explorer") || l.includes("cartographer") || l.includes("seeker")) return "explorer";
+  if (l.includes("café") || l.includes("cafe")) return "cafe_dweller";
+  if (l.includes("comfort")) return "comfort_connoisseur";
+  if (l.includes("fast-casual") || l.includes("fast casual")) return "fast_casual_regular";
+  if (l.includes("social") || l.includes("group")) return "social_diner";
+  return null;
 }
 
 function pickExemplar(label: string, v: TasteVector): string {

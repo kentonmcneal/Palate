@@ -21,26 +21,46 @@ export function MatchMarker({ score }: { score: number | null }) {
 }
 
 // ============================================================================
-// TopMatchMarker — your highest-match nearby spot. Animated red flame ring
-// pulses around a dark centerpiece showing the score. Eye-catcher.
+// TopMatchMarker — your highest-match nearby spot. Pulsing ring + a flame
+// that flickers and bobs. Eye-catcher meant to immediately pull attention.
 // ============================================================================
 
 export function TopMatchMarker({ score }: { score: number }) {
   const pulse = useRef(new Animated.Value(0)).current;
+  const flicker = useRef(new Animated.Value(0)).current;
+  const bob = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const loop = Animated.loop(
+    const ringLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 900, easing: Easing.in(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 1100, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1100, easing: Easing.in(Easing.ease), useNativeDriver: true }),
       ]),
     );
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
+    const flickerLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(flicker, { toValue: 1, duration: 280, useNativeDriver: true }),
+        Animated.timing(flicker, { toValue: 0.6, duration: 220, useNativeDriver: true }),
+        Animated.timing(flicker, { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.timing(flicker, { toValue: 0.8, duration: 320, useNativeDriver: true }),
+      ]),
+    );
+    const bobLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bob, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(bob, { toValue: 0, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    ringLoop.start();
+    flickerLoop.start();
+    bobLoop.start();
+    return () => { ringLoop.stop(); flickerLoop.stop(); bobLoop.stop(); };
+  }, [pulse, flicker, bob]);
 
-  const ringScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] });
-  const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] });
+  const ringScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.7] });
+  const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.65, 0] });
+  const flameScale = flicker.interpolate({ inputRange: [0.6, 1], outputRange: [0.9, 1.15] });
+  const flameTranslateY = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -4] });
 
   return (
     <View style={styles.topWrap}>
@@ -51,7 +71,14 @@ export function TopMatchMarker({ score }: { score: number }) {
         ]}
       />
       <View style={styles.topPin}>
-        <Text style={styles.flame}>🔥</Text>
+        <Animated.Text
+          style={[
+            styles.flame,
+            { transform: [{ scale: flameScale }, { translateY: flameTranslateY }] },
+          ]}
+        >
+          🔥
+        </Animated.Text>
         <Text style={styles.topScore}>{score}</Text>
       </View>
     </View>
