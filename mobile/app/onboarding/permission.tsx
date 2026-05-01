@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { Button, Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { requestForegroundPermission } from "../../lib/location";
+import { track } from "../../lib/analytics";
 
 export default function Permission() {
   const router = useRouter();
@@ -15,8 +16,10 @@ export default function Permission() {
     try {
       const { granted, status } = await requestForegroundPermission();
       if (granted) {
+        void track("permission_granted", { kind: "foreground" });
         router.push("/onboarding/privacy");
       } else if (status === "denied") {
+        void track("permission_denied", { kind: "foreground" });
         Alert.alert(
           "Location is off",
           "You can still use Palate by adding visits manually. To turn location on, open Settings → Palate → Location.",

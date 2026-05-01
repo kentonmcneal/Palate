@@ -79,6 +79,10 @@ export async function requestFriendship(targetId: string): Promise<void> {
     status: "pending",
   });
   if (error) throw error;
+  void (async () => {
+    const { track } = await import("./analytics");
+    track("friend_requested");
+  })();
 }
 
 export async function acceptFriendship(requesterId: string): Promise<void> {
@@ -89,6 +93,10 @@ export async function acceptFriendship(requesterId: string): Promise<void> {
     .eq("requester_id", requesterId)
     .eq("addressee_id", me);
   if (error) throw error;
+  void (async () => {
+    const { track } = await import("./analytics");
+    track("friend_accepted");
+  })();
 }
 
 export async function declineFriendship(requesterId: string): Promise<void> {

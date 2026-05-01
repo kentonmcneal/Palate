@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { getRestaurantIdByPlaceId, type Restaurant } from "./places";
+import { track } from "./analytics";
 
 export type Visit = {
   id: string;
@@ -91,6 +92,7 @@ export async function saveVisit(opts: {
 
   if (error) throw error;
   const total = (priorCount ?? 0) + 1;
+  void track("visit_logged", { source: opts.source, visit_total: total });
   return { ...(data as Visit), isFirstVisit: total === 1, totalVisits: total };
 }
 

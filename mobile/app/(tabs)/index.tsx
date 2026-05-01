@@ -19,7 +19,6 @@ import { isoWeekStart } from "../../lib/wrapped";
 import { RecommendationsCard } from "../../components/RecommendationsCard";
 import { GettingStarted } from "../../components/GettingStarted";
 import { WrappedProgress } from "../../components/WrappedProgress";
-import { AutoDetectPrompt } from "../../components/AutoDetectPrompt";
 import { Confetti } from "../../components/Confetti";
 
 const STREAK_MILESTONES = [7, 14, 30, 50, 100, 200, 365];
@@ -112,7 +111,6 @@ export default function Home() {
   return (
     <SafeAreaView style={styles.safe}>
       <Confetti fire={milestoneConfetti > 0} count={150} />
-      <AutoDetectPrompt visitsTotal={visits.length} />
       <ScrollView
         contentContainerStyle={styles.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}

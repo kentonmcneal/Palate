@@ -7,6 +7,7 @@ import { Button, Spacer } from "../../components/Button";
 import { Avatar } from "../../components/Avatar";
 import { colors, spacing, type } from "../../theme";
 import { setDisplayName, uploadAvatar } from "../../lib/profile";
+import { track } from "../../lib/analytics";
 
 export default function ProfileSetup() {
   const router = useRouter();
@@ -48,6 +49,7 @@ export default function ProfileSetup() {
       if (name.trim()) {
         await setDisplayName(name);
       }
+      void track("profile_setup_completed", { had_name: !!name.trim(), had_photo: !!avatarUrl });
       router.push("/onboarding/quiz");
     } catch (e: any) {
       Alert.alert("Couldn't save", e?.message ?? "Try again");

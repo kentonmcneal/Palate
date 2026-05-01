@@ -10,10 +10,14 @@ import { WeeklyPalateInsights } from "../../components/WeeklyPalateInsights";
 import { WrappedCharts } from "../../components/WrappedCharts";
 import { Confetti } from "../../components/Confetti";
 import { shareWrappedToFeed } from "../../lib/feed";
+import { track } from "../../lib/analytics";
+import { computeTasteVector } from "../../lib/taste-vector";
+import { generateIdentitySet, type PalateIdentitySet } from "../../lib/palate-labels";
 import ViewShot, { captureRef } from "react-native-view-shot";
 
 export default function WrappedTab() {
   const [data, setData] = useState<Wrapped | null>(null);
+  const [identities, setIdentities] = useState<PalateIdentitySet | null>(null);
   const [loading, setLoading] = useState(false);
   const [confettiKey, setConfettiKey] = useState(0);
   const cardRef = useRef<View>(null);
@@ -21,8 +25,13 @@ export default function WrappedTab() {
 
   const refresh = useCallback(async () => {
     try {
-      const latest = await latestWrapped();
+      const [latest, allTimeVec, weekVec] = await Promise.all([
+        latestWrapped(),
+        computeTasteVector().catch(() => null),
+        computeTasteVector({ sinceDays: 7 }).catch(() => null),
+      ]);
       setData(latest);
+      if (allTimeVec) setIdentities(generateIdentitySet(allTimeVec, weekVec ?? undefined));
     } catch (e: any) {
       console.warn("wrapped load", e?.message);
     }
@@ -48,7 +57,7 @@ export default function WrappedTab() {
         setData(w);
         // Celebrate the moment — bigger burst on the first-ever Wrapped reveal.
         setConfettiKey((k) => k + 1);
-        void wasFirstReveal;
+        void track("wrapped_generated", { first_reveal: wasFirstReveal });
       }
     } catch (e: any) {
       Alert.alert("Couldn't generate", e.message ?? "Try again");
@@ -78,6 +87,7 @@ export default function WrappedTab() {
         totalVisits: data.total_visits,
         topRestaurant: data.top_restaurant,
       });
+      void track("wrapped_posted_to_feed");
       Alert.alert("Posted to feed", "Your friends will see it in their Feed tab.");
     } catch (e: any) {
       Alert.alert("Couldn't post", e.message ?? "Try again");
@@ -108,8 +118,26 @@ export default function WrappedTab() {
         {data ? (
           <>
             <ViewShot ref={cardRef as any} options={{ format: "png", quality: 1 }}>
-              <WrappedCard data={data} />
+              <WrappedCard data={data} personaOverride={identities?.primary.label} />
             </ViewShot>
+            {identities && (
+              <View style={styles.identityFooter}>
+                <View style={styles.identityFooterCol}>
+                  <Text style={styles.identityFooterLabel}>ALSO</Text>
+                  <Text style={styles.identityFooterValue}>{identities.secondary[0].label}</Text>
+                </View>
+                <View style={styles.identityFooterCol}>
+                  <Text style={styles.identityFooterLabel}>AND</Text>
+                  <Text style={styles.identityFooterValue}>{identities.secondary[1].label}</Text>
+                </View>
+                <View style={styles.identityFooterCol}>
+                  <Text style={styles.identityFooterLabel}>THIS WEEK</Text>
+                  <Text style={[styles.identityFooterValue, { color: colors.red }]}>
+                    {identities.weeklyMood.label}
+                  </Text>
+                </View>
+              </View>
+            )}
             <WrappedCharts />
             <WeeklyPalateInsights weekStart={data.week_start} weekEnd={data.week_end} />
             <Spacer />
@@ -185,5 +213,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
     padding: spacing.lg,
+  },
+  identityFooter: {
+    marginTop: spacing.md,
+    flexDirection: "row",
+    gap: 8,
+  },
+  identityFooterCol: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: colors.faint,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  identityFooterLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: colors.mute,
+    letterSpacing: 1.3,
+  },
+  identityFooterValue: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: colors.ink,
+    marginTop: 4,
+    lineHeight: 17,
   },
 });

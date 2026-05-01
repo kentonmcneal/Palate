@@ -9,6 +9,7 @@ import {
 import {
   addToWishlist,
   type RestaurantRecommendation,
+  type AspirationTag,
 } from "../lib/palate-insights";
 
 // ============================================================================
@@ -97,7 +98,10 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
     if (saved || saving) return;
     setSaving(true);
     try {
-      await addToWishlist(rec.google_place_id);
+      await addToWishlist(rec.google_place_id, {
+        source: "recommendation",
+        aspirationTags: inferAspirationTags(rec),
+      });
       setSaved(true);
     } catch (e: any) {
       Alert.alert("Couldn't save", e?.message ?? "Try again");
@@ -138,6 +142,29 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
       </Pressable>
     </View>
   );
+}
+
+/**
+ * Heuristic auto-tagging when a user saves a recommendation. The persona engine
+ * already tells us why a place was picked via `rec.reason` ("Stretch:" prefix
+ * = adventurous; cuisine + price hints fill in the rest). Saves the user from
+ * manually tagging every save while still seeding the Aspirational Palate.
+ */
+function inferAspirationTags(rec: RestaurantRecommendation): AspirationTag[] {
+  const tags = new Set<AspirationTag>();
+  const reason = (rec.reason ?? "").toLowerCase();
+  const cuisine = rec.cuisine ?? "";
+
+  if (reason.includes("stretch") || reason.includes("level up")) tags.add("adventurous");
+  if (rec.price_level != null && rec.price_level >= 3) {
+    tags.add("upscale");
+    tags.add("date_night");
+  }
+  if (cuisine === "healthy") tags.add("healthy");
+  if (cuisine === "japanese" || cuisine === "korean" || cuisine === "vietnamese" || cuisine === "thai") {
+    tags.add("cultural");
+  }
+  return [...tags];
 }
 
 function mapsUrlFor(name: string, address: string): string {

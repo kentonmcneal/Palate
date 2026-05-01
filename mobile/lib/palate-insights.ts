@@ -523,7 +523,35 @@ export function daysUntilSundayWrap(now = new Date()): number {
 // Falls back to a friendly error message if the table isn't there yet.
 // ============================================================================
 
-export async function addToWishlist(googlePlaceId: string): Promise<void> {
+export type WishlistSource = "manual" | "recommendation" | "friend" | "trending";
+
+export type AspirationTag =
+  | "date_night"
+  | "upscale"
+  | "healthy"
+  | "social"
+  | "adventurous"
+  | "cultural"
+  | "chef_driven"
+  | "trendy"
+  | "neighborhood_explore";
+
+export const ASPIRATION_TAGS: { key: AspirationTag; label: string; emoji: string }[] = [
+  { key: "date_night",           label: "Date night",         emoji: "🕯️" },
+  { key: "upscale",              label: "Upscale",            emoji: "✨" },
+  { key: "healthy",              label: "Healthy",            emoji: "🥗" },
+  { key: "social",               label: "Social / group",     emoji: "🥂" },
+  { key: "adventurous",          label: "Adventurous",        emoji: "🌶️" },
+  { key: "cultural",             label: "Cultural",           emoji: "🌍" },
+  { key: "chef_driven",          label: "Chef-driven",        emoji: "👨‍🍳" },
+  { key: "trendy",               label: "Trendy",             emoji: "📸" },
+  { key: "neighborhood_explore", label: "New neighborhood",   emoji: "📍" },
+];
+
+export async function addToWishlist(
+  googlePlaceId: string,
+  opts: { source?: WishlistSource; aspirationTags?: AspirationTag[] } = {},
+): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not signed in");
 
@@ -534,13 +562,34 @@ export async function addToWishlist(googlePlaceId: string): Promise<void> {
     .single();
   if (lookupErr) throw lookupErr;
 
+  const source = opts.source ?? "recommendation";
+  const tags = opts.aspirationTags ?? [];
   const { error } = await supabase.from("wishlist").insert({
     user_id: user.id,
     restaurant_id: rest.id,
-    source: "palate_insights",
+    source,
+    aspiration_tags: tags,
   });
-  // Ignore unique-violation: re-saving is a no-op.
   if (error && !`${error.message}`.includes("duplicate")) throw error;
+  void (async () => {
+    const { track } = await import("./analytics");
+    track("wishlist_saved", { source, tag_count: tags.length });
+  })();
+}
+
+export async function setWishlistAspirationTags(
+  wishlistId: string,
+  tags: AspirationTag[],
+): Promise<void> {
+  const { error } = await supabase
+    .from("wishlist")
+    .update({ aspiration_tags: tags })
+    .eq("id", wishlistId);
+  if (error) throw error;
+  void (async () => {
+    const { track } = await import("./analytics");
+    track("wishlist_tagged", { tag_count: tags.length });
+  })();
 }
 
 // ============================================================================
@@ -551,6 +600,7 @@ export type WishlistEntry = {
   id: string;
   added_at: string;
   source: string | null;
+  aspiration_tags: AspirationTag[] | null;
   restaurant: {
     id: string;
     google_place_id: string;
@@ -560,6 +610,11 @@ export type WishlistEntry = {
     address: string | null;
     primary_type: string | null;
     price_level: number | null;
+    rating: number | null;
+    user_rating_count: number | null;
+    latitude: number | null;
+    longitude: number | null;
+    tags: string[] | null;
   } | null;
 };
 
@@ -567,10 +622,11 @@ export async function listWishlist(): Promise<WishlistEntry[]> {
   const { data, error } = await supabase
     .from("wishlist")
     .select(`
-      id, added_at, source,
+      id, added_at, source, aspiration_tags,
       restaurant:restaurants (
         id, google_place_id, name, cuisine_type, neighborhood,
-        address, primary_type, price_level
+        address, primary_type, price_level, rating, user_rating_count,
+        latitude, longitude, tags
       )
     `)
     .order("added_at", { ascending: false });

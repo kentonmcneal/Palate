@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { Button, Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { saveTastePreferences } from "../../lib/profile";
+import { track } from "../../lib/analytics";
 
 const CUISINES: Array<{ key: string; emoji: string; label: string }> = [
   { key: "italian",        emoji: "🍕", label: "Italian / pizza" },
@@ -49,6 +50,7 @@ export default function TastePreferencesScreen() {
     setSaving(true);
     try {
       await saveTastePreferences([...selected]);
+      void track("taste_prefs_completed", { count: selected.size });
       router.push("/onboarding/why-location");
     } catch (e: any) {
       Alert.alert("Couldn't save", e.message ?? "Try again");

@@ -3,9 +3,18 @@ import { LinearGradient } from "expo-linear-gradient";
 import { colors, radius } from "../theme";
 import type { Wrapped } from "../lib/wrapped";
 
-export function WrappedCard({ data }: { data: Wrapped }) {
+export function WrappedCard({
+  data,
+  personaOverride,
+}: {
+  data: Wrapped;
+  /** When provided, replaces the stored personality_label — used to render
+   * the Palate Feature Engine's composed identity. */
+  personaOverride?: string;
+}) {
   const j = data.wrapped_json;
   const top3 = j.top_three ?? [];
+  const personaLabel = personaOverride || data.personality_label;
 
   return (
     <View style={styles.card} collapsable={false}>
@@ -27,7 +36,7 @@ export function WrappedCard({ data }: { data: Wrapped }) {
       </View>
 
       <Text style={styles.youAre}>You are</Text>
-      <Text style={styles.persona}>{data.personality_label}</Text>
+      <Text style={styles.persona}>{personaLabel}</Text>
 
       <View style={styles.stats}>
         <Stat label="visits" value={String(data.total_visits)} />

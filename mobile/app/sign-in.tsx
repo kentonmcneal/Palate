@@ -7,6 +7,7 @@ import { Button, Spacer } from "../components/Button";
 import { colors, spacing, type } from "../theme";
 import { sendMagicLink, verifyEmailCode } from "../lib/auth";
 import { getQuizPersona } from "../lib/profile";
+import { track } from "../lib/analytics";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
@@ -20,6 +21,7 @@ export default function SignIn() {
     setLoading(true);
     try {
       await sendMagicLink(email.trim());
+      void track("sign_in_started");
       setStage("code");
       Alert.alert("Check your inbox", "We sent you a 6-digit code.");
     } catch (e: any) {
@@ -33,6 +35,7 @@ export default function SignIn() {
     setLoading(true);
     try {
       await verifyEmailCode(email.trim(), code.trim());
+      void track("sign_in_verified");
       // Returning users (already finished the Starter Palate quiz) skip
       // onboarding and land in the tabs. Otherwise run the wizard.
       const { persona } = await getQuizPersona();

@@ -5,6 +5,10 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Spacer } from "../components/Button";
 import { colors, spacing, type } from "../theme";
 import { loadAnalytics, type AnalyticsSummary, type TimeRange } from "../lib/analytics-stats";
+import { computeAspirationalPalate, type AspirationalPalate } from "../lib/aspirational-palate";
+import { computeLocationPatterns, type LocationPatternSummary } from "../lib/location-analytics";
+import { computeTasteVector } from "../lib/taste-vector";
+import { generateIdentitySet, type PalateIdentitySet } from "../lib/palate-labels";
 import { DonutChart, type DonutSlice } from "../components/charts/DonutChart";
 import { HorizontalBars, type BarRow } from "../components/charts/HorizontalBars";
 import { VerticalBars, type VBar } from "../components/charts/VerticalBars";
@@ -64,6 +68,9 @@ const MEAL_LABELS = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", 
 export default function InsightsScreen() {
   const router = useRouter();
   const [data, setData] = useState<AnalyticsSummary | null>(null);
+  const [aspirational, setAspirational] = useState<AspirationalPalate | null>(null);
+  const [location, setLocation] = useState<LocationPatternSummary | null>(null);
+  const [identities, setIdentities] = useState<PalateIdentitySet | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<TimeRange>("all");
@@ -72,7 +79,22 @@ export default function InsightsScreen() {
     setLoading(true);
     setError(null);
     try {
-      setData(await loadAnalytics(r));
+      // Stats are range-bound; identities + aspirational + location patterns
+      // are cross-range (always read all-time + this-week) so they don't need
+      // to refetch when the user toggles ranges.
+      const [stats, asp, loc, allTimeVec, weekVec] = await Promise.all([
+        loadAnalytics(r),
+        computeAspirationalPalate().catch(() => null),
+        computeLocationPatterns().catch(() => null),
+        computeTasteVector().catch(() => null),
+        computeTasteVector({ sinceDays: 7 }).catch(() => null),
+      ]);
+      setData(stats);
+      setAspirational(asp);
+      setLocation(loc);
+      if (allTimeVec) {
+        setIdentities(generateIdentitySet(allTimeVec, weekVec ?? undefined));
+      }
     } catch (e: any) {
       setError(e?.message ?? "Couldn't load your insights");
     } finally {
@@ -134,7 +156,7 @@ export default function InsightsScreen() {
           <View style={styles.errCard}>
             <Text style={type.subtitle}>{error}</Text>
             <Spacer />
-            <Pressable onPress={load} style={styles.retry}><Text style={styles.retryText}>Try again</Text></Pressable>
+            <Pressable onPress={() => load(range)} style={styles.retry}><Text style={styles.retryText}>Try again</Text></Pressable>
           </View>
         )}
 
@@ -150,7 +172,23 @@ export default function InsightsScreen() {
         )}
 
         {!loading && !error && data && data.totalVisits > 0 && (
-          <Dashboard data={data} range={range} />
+          <>
+            {identities && <PalateIdentityCard identities={identities} />}
+            <Dashboard
+              data={data}
+              range={range}
+              aspirational={aspirational}
+              location={location}
+            />
+          </>
+        )}
+
+        {!loading && !error && data && data.totalVisits === 0 && aspirational && (
+          // Even with no visits, if they've saved a few spots we can show their
+          // aspirational read alone — gives the screen something to live on.
+          <View style={{ marginTop: spacing.xl }}>
+            <AspirationalCard aspirational={aspirational} actualSummary={null} />
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -161,7 +199,17 @@ export default function InsightsScreen() {
 // Dashboard — rendered when we have actual data
 // ============================================================================
 
-function Dashboard({ data, range }: { data: AnalyticsSummary; range: TimeRange }) {
+function Dashboard({
+  data,
+  range,
+  aspirational,
+  location,
+}: {
+  data: AnalyticsSummary;
+  range: TimeRange;
+  aspirational: AspirationalPalate | null;
+  location: LocationPatternSummary | null;
+}) {
   const isAllTime = range === "all";
   const heroEyebrow = isAllTime
     ? "YOUR EATING LIFE · ALL TIME"
@@ -291,10 +339,169 @@ function Dashboard({ data, range }: { data: AnalyticsSummary; range: TimeRange }
         ))}
       </Section>
 
+      {/* Neighborhoods */}
+      {location && location.mostVisitedNeighborhoods.length > 0 && (
+        <NeighborhoodSection location={location} />
+      )}
+
+      {/* Aspirational Palate */}
+      {aspirational && (
+        <AspirationalCard aspirational={aspirational} actualSummary={data} />
+      )}
+
       <Text style={[type.small, { textAlign: "center", marginTop: 24, marginBottom: 12 }]}>
         These insights deepen with every visit you log.
       </Text>
     </>
+  );
+}
+
+// ============================================================================
+// Palate Identity card — primary + 2 secondary + weekly mood. Generated by
+// the Palate Feature Engine from the multi-dimensional taste vector.
+// ============================================================================
+function PalateIdentityCard({ identities }: { identities: PalateIdentitySet }) {
+  return (
+    <View style={styles.identityCard}>
+      <Text style={styles.identityEyebrow}>YOUR PALATE</Text>
+      <Text style={styles.identityPrimary}>{identities.primary.label}</Text>
+      {identities.primary.evidence.slice(0, 2).map((e, i) => (
+        <Text key={i} style={styles.identityEvidence}>· {e}</Text>
+      ))}
+
+      <View style={styles.identitySecondaryRow}>
+        <View style={styles.identitySecondaryCol}>
+          <Text style={styles.identitySubLabel}>ALSO</Text>
+          <Text style={styles.identitySecondary}>{identities.secondary[0].label}</Text>
+        </View>
+        <View style={styles.identitySecondaryCol}>
+          <Text style={styles.identitySubLabel}>AND</Text>
+          <Text style={styles.identitySecondary}>{identities.secondary[1].label}</Text>
+        </View>
+      </View>
+
+      <View style={styles.identityMood}>
+        <Text style={styles.identitySubLabel}>THIS WEEK</Text>
+        <Text style={styles.identityMoodText}>{identities.weeklyMood.label}</Text>
+      </View>
+    </View>
+  );
+}
+
+// ============================================================================
+// Aspirational Palate card — the gap between where you go and where you save.
+// ============================================================================
+function AspirationalCard({
+  aspirational,
+  actualSummary,
+}: {
+  aspirational: AspirationalPalate;
+  actualSummary: AnalyticsSummary | null;
+}) {
+  return (
+    <View style={[styles.section, { backgroundColor: colors.ink }]}>
+      <Text style={[type.micro, { color: "rgba(255,255,255,0.65)" }]}>ASPIRATIONAL PALATE</Text>
+      <Spacer size={10} />
+      <Text style={styles.aspInsight}>{aspirational.insight}</Text>
+
+      {aspirational.topAspirationTags.length > 0 && (
+        <>
+          <Spacer size={16} />
+          <Text style={styles.aspSubLabel}>WHAT YOU'RE SAVING FOR</Text>
+          <View style={styles.aspTagRow}>
+            {aspirational.topAspirationTags.map((t) => (
+              <View key={t.tag} style={styles.aspDarkChip}>
+                <Text style={styles.aspDarkChipText}>{t.tag.replace(/_/g, " ")}</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+
+      {aspirational.aspirationalCuisines.length > 0 && actualSummary && (
+        <>
+          <Spacer size={16} />
+          <View style={styles.aspCols}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.aspSubLabel}>YOU EAT</Text>
+              {aspirational.actualCuisines.slice(0, 3).map((c) => (
+                <Text key={c.cuisine} style={styles.aspMixLine}>
+                  {CUISINE_LABELS[c.cuisine] ?? c.cuisine} · {Math.round(c.pct * 100)}%
+                </Text>
+              ))}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.aspSubLabel}>YOU SAVE</Text>
+              {aspirational.aspirationalCuisines.slice(0, 3).map((c) => (
+                <Text key={c.cuisine} style={[styles.aspMixLine, { color: colors.red }]}>
+                  {CUISINE_LABELS[c.cuisine] ?? c.cuisine} · {Math.round(c.pct * 100)}%
+                </Text>
+              ))}
+            </View>
+          </View>
+        </>
+      )}
+
+      {aspirational.aspirationalNeighborhoods.length > 0 && (
+        <>
+          <Spacer size={14} />
+          <Text style={styles.aspSubLabel}>NEIGHBORHOODS YOU'RE EYEING</Text>
+          <View style={styles.aspTagRow}>
+            {aspirational.aspirationalNeighborhoods.slice(0, 4).map((n) => (
+              <View key={n} style={styles.aspDarkChip}>
+                <Text style={styles.aspDarkChipText}>{n}</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+    </View>
+  );
+}
+
+// ============================================================================
+// Neighborhood section — most visited, eating radius, new + aspirational.
+// ============================================================================
+function NeighborhoodSection({ location }: { location: LocationPatternSummary }) {
+  return (
+    <Section title="Where you eat (by area)">
+      {location.mostVisitedNeighborhoods.slice(0, 5).map((n) => (
+        <View key={n.neighborhood} style={styles.neighRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.neighName}>{n.neighborhood}</Text>
+            <Text style={[type.small, { color: colors.mute, marginTop: 2 }]}>
+              {Math.round(n.pct * 100)}% of visits
+            </Text>
+          </View>
+          <Text style={styles.neighCount}>×{n.count}</Text>
+        </View>
+      ))}
+
+      {location.eatingRadiusKm != null && location.eatingRadiusKm > 0 && (
+        <View style={styles.neighFooter}>
+          <Text style={type.micro}>EATING RADIUS</Text>
+          <Text style={styles.neighRadius}>
+            {location.eatingRadiusKm < 1
+              ? `${Math.round(location.eatingRadiusKm * 1000)} m`
+              : `${location.eatingRadiusKm.toFixed(1)} km`}
+            {" "}from your usual center
+          </Text>
+        </View>
+      )}
+
+      {location.newNeighborhoods.length > 0 && (
+        <View style={styles.neighFooter}>
+          <Text style={type.micro}>NEW IN THE LAST 30 DAYS</Text>
+          <View style={styles.neighChipRow}>
+            {location.newNeighborhoods.slice(0, 4).map((n) => (
+              <View key={n} style={styles.neighChip}>
+                <Text style={styles.neighChipText}>{n}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+    </Section>
   );
 }
 
@@ -473,4 +680,92 @@ const styles = StyleSheet.create({
   topRank: { ...type.small, fontWeight: "800", color: colors.mute, width: 20 },
   topName: { fontSize: 15, fontWeight: "600", color: colors.ink },
   topCount: { fontSize: 14, fontWeight: "700", color: colors.red },
+
+  // Palate Identity card (sits at top of dashboard)
+  identityCard: {
+    marginBottom: spacing.xl,
+    padding: spacing.lg,
+    borderRadius: 24,
+    backgroundColor: colors.ink,
+  },
+  identityEyebrow: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
+  identityPrimary: {
+    color: colors.red,
+    fontSize: 30,
+    fontWeight: "800",
+    letterSpacing: -0.7,
+    marginTop: 8,
+    lineHeight: 34,
+  },
+  identityEvidence: { color: "rgba(255,255,255,0.78)", fontSize: 13, marginTop: 6, lineHeight: 18 },
+  identitySecondaryRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 18,
+    paddingTop: 16,
+    borderTopColor: "rgba(255,255,255,0.12)",
+    borderTopWidth: 1,
+  },
+  identitySecondaryCol: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  identitySubLabel: { color: "rgba(255,255,255,0.55)", fontSize: 10, fontWeight: "700", letterSpacing: 1.4 },
+  identitySecondary: { color: "#fff", fontSize: 14, fontWeight: "700", marginTop: 4, lineHeight: 18 },
+  identityMood: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,48,8,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(255,48,8,0.3)",
+  },
+  identityMoodText: { color: "#fff", fontSize: 16, fontWeight: "800", marginTop: 4, letterSpacing: -0.3 },
+
+  // Aspirational Palate (dark card)
+  aspInsight: { color: "#fff", fontSize: 17, fontWeight: "700", lineHeight: 24, letterSpacing: -0.3 },
+  aspSubLabel: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "700", letterSpacing: 1.4, marginBottom: 8 },
+  aspMixLine: { color: "rgba(255,255,255,0.85)", fontSize: 13, lineHeight: 20, fontWeight: "500" },
+  aspCols: { flexDirection: "row", gap: 16 },
+  aspTagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  aspDarkChip: {
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  aspDarkChipText: { color: "#fff", fontSize: 11, fontWeight: "700" },
+
+  // Neighborhood rows
+  neighRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomColor: colors.line,
+    borderBottomWidth: 1,
+    gap: 10,
+  },
+  neighName: { fontSize: 15, fontWeight: "700", color: colors.ink },
+  neighCount: { fontSize: 14, fontWeight: "700", color: colors.red },
+  neighFooter: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopColor: colors.line,
+    borderTopWidth: 1,
+  },
+  neighRadius: { fontSize: 14, fontWeight: "600", color: colors.ink, marginTop: 4 },
+  neighChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  neighChip: {
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: colors.faint,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  neighChipText: { fontSize: 12, fontWeight: "600", color: colors.ink },
 });

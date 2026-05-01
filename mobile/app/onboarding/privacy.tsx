@@ -3,9 +3,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Button, Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
+import { track } from "../../lib/analytics";
 
 export default function PrivacyScreen() {
   const router = useRouter();
+  function finish() {
+    void track("onboarding_finished");
+    router.replace("/(tabs)");
+  }
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.body}>
@@ -22,7 +27,7 @@ export default function PrivacyScreen() {
         <Row title="No selling, ever" body="Restaurants don't see your name or email." />
       </View>
       <View style={styles.cta}>
-        <Button title="Let's eat" onPress={() => router.replace("/(tabs)")} />
+        <Button title="Let's eat" onPress={finish} />
       </View>
     </SafeAreaView>
   );

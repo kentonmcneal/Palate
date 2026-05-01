@@ -1,12 +1,15 @@
+import { useEffect } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Logo, LOGO_SIZE } from "../../components/Logo";
 import { Button, Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
+import { track } from "../../lib/analytics";
 
 export default function Welcome() {
   const router = useRouter();
+  useEffect(() => { void track("onboarding_started"); }, []);
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.body}>

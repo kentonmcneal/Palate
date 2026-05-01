@@ -364,8 +364,40 @@ export default function Settings() {
           <Button title="Sign out" onPress={async () => { await signOut(); router.replace("/sign-in"); }} variant="ghost" />
         </Section>
 
+        <Section title="Help">
+          <Button
+            title="Send feedback"
+            variant="ghost"
+            onPress={() => Linking.openURL("mailto:hello@palate.app?subject=Palate%20feedback").catch(() => {
+              Alert.alert("No email app", "Email us at hello@palate.app");
+            })}
+          />
+          <Spacer />
+          <Button
+            title="Report a bug"
+            variant="ghost"
+            onPress={() => Linking.openURL("mailto:hello@palate.app?subject=Palate%20bug%20report").catch(() => {
+              Alert.alert("No email app", "Email us at hello@palate.app");
+            })}
+          />
+        </Section>
+
         <Section title="About">
-          <Note>Palate v0.1 — no ads, we don't sell your data, you control what's public.</Note>
+          <Button
+            title="Privacy policy"
+            variant="ghost"
+            onPress={() => Linking.openURL("https://palate.app/privacy")}
+          />
+          <Spacer />
+          <Button
+            title="Terms of service"
+            variant="ghost"
+            onPress={() => Linking.openURL("https://palate.app/terms")}
+          />
+          <Note>
+            Palate v0.1 — no ads, we don't sell your data, you control what's
+            public. Questions? hello@palate.app.
+          </Note>
         </Section>
       </ScrollView>
 

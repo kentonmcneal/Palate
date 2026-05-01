@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -11,6 +11,7 @@ import {
   type QuizOption,
 } from "../../lib/starter-quiz";
 import { saveQuizResult } from "../../lib/profile";
+import { track } from "../../lib/analytics";
 
 export default function QuizScreen() {
   const router = useRouter();
@@ -21,6 +22,8 @@ export default function QuizScreen() {
 
   const total = QUIZ_QUESTIONS.length;
   const q = QUIZ_QUESTIONS[step];
+
+  useEffect(() => { void track("quiz_started"); }, []);
 
   async function pick(option: QuizOption) {
     const next = [...answers, option];
@@ -44,6 +47,7 @@ export default function QuizScreen() {
       const persona = tallyPersona(allAnswers);
       const chips = chipsFromAnswers(allAnswers);
       await saveQuizResult(persona, chips);
+      void track("quiz_completed", { persona });
       router.replace({
         pathname: "/onboarding/starter-result",
         params: { persona, chips: JSON.stringify(chips) },
