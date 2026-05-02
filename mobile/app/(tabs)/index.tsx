@@ -140,9 +140,9 @@ export default function Home() {
           </View>
         </View>
 
-        {/* HOME = ACTION ONLY. One job: what should I do right now?
-            Hero (Check now) + saved-nearby (contextual) + recs + recent.
-            Insights/identity/lore live in Profile. Wrapped lives in Wrapped. */}
+        {/* HOME = DECISION ONLY. Four sections, in this order:
+            Hero → Most Compatible → Places you've been meaning to go → Recent.
+            Analysis lives on Profile → Insights. Reflection lives on Wrapped. */}
         <View style={styles.heroCard}>
           <Text style={styles.heroEyebrow}>RIGHT NOW</Text>
           <Text style={styles.heroTitle}>Where are you eating?</Text>
@@ -150,10 +150,9 @@ export default function Home() {
           <Button title={checking ? "Checking…" : "Check now"} onPress={handleCheckNow} loading={checking} />
         </View>
 
-        {/* Only contextual time-sensitive cards survive on Home. */}
-        <SavedNearbyCard />
-
         <RecommendationsCard />
+
+        <SavedNearbyCard />
 
         {visits.length === 0 && (
           <View style={{ marginTop: spacing.xxl }}>

@@ -18,21 +18,23 @@ import { RestaurantCompatibilityCard } from "../../components/RestaurantCompatib
 import { CardSkeleton, Shimmer } from "../../components/Shimmer";
 
 // ============================================================================
-// Discover — three sub-tabs only:
-//   • Nearby   — sorted by distance
-//   • For You  — algorithmic feed (Safe + Stretch combined)
-//   • Trending — popular nearby (review count + match-adjusted)
-// Plus a search bar at the top. Map lives behind the "Map" pill on Nearby.
+// Discover — three sub-tabs:
+//   • Most Compatible — ranked high → low by palate fit
+//   • Trending        — Beli-style grouped category lists ("Top 10 Burgers"…)
+//   • Nearby          — sorted by distance
+// Search bar at top. Map lives behind the "Map" pill.
 // ============================================================================
 
 const NEARBY_RADIUS_M = 2500;
 const TOP_PER_TAB = 12;
+const TOP_PER_CATEGORY = 10;
+const MIN_PER_CATEGORY = 3;
 
-type SubTab = "nearby" | "for_you" | "trending";
+type SubTab = "most_compatible" | "trending" | "nearby";
 
 export default function DiscoverTab() {
   const router = useRouter();
-  const [tab, setTab] = useState<SubTab>("nearby");
+  const [tab, setTab] = useState<SubTab>("most_compatible");
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<RankedRestaurant[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -105,17 +107,13 @@ export default function DiscoverTab() {
       .slice(0, TOP_PER_TAB);
   }, [allNearby, vector, here]);
 
-  const trendingList = useMemo(() => {
-    return [...allNearby]
-      .filter((r) => (r.user_rating_count ?? 0) >= 200)
-      .sort((a, b) => (b.user_rating_count ?? 0) - (a.user_rating_count ?? 0))
-      .slice(0, TOP_PER_TAB)
-      .map((r) => buildRanked(r, vector, here));
-  }, [allNearby, vector, here]);
+  // Trending: grouped into Beli-style category shelves ("Top 10 Burgers"…)
+  // Only categories with at least MIN_PER_CATEGORY hits show up.
+  const trendingGroups = useMemo(() => buildTrendingGroups(allNearby, vector, here), [allNearby, vector, here]);
 
-  // For You: we use the bucketed ranker (Safe + Stretch combined) — but keep
-  // it simple: top-ranked overall, no bucket headers visible.
-  const [forYouList, setForYouList] = useState<RankedRestaurant[]>([]);
+  // Most Compatible: bucketed ranker (Safe + Stretch combined), no bucket
+  // headers — just one ranked list, highest match first.
+  const [mostCompatibleList, setMostCompatibleList] = useState<RankedRestaurant[]>([]);
   useFocusEffect(useCallback(() => {
     if (allNearby.length === 0) return;
     let alive = true;
@@ -130,7 +128,10 @@ export default function DiscoverTab() {
         if (seen.has(r.google_place_id)) return false;
         seen.add(r.google_place_id); return true;
       });
-      setForYouList(dedup.slice(0, TOP_PER_TAB));
+      // Force high → low match score sort (the bucketed ranker preserves bucket
+      // order, but on this surface the user wants pure compatibility ranking).
+      dedup.sort((a, b) => (b.match?.score ?? 0) - (a.match?.score ?? 0));
+      setMostCompatibleList(dedup.slice(0, TOP_PER_TAB));
     });
     return () => { alive = false; };
   }, [allNearby, vector, here]));
@@ -193,11 +194,11 @@ export default function DiscoverTab() {
           </View>
         ) : (
           <>
-            {/* Sub-tabs */}
+            {/* Sub-tabs — order: Most Compatible → Trending → Nearby */}
             <View style={styles.tabs}>
-              <SubTabBtn label="Nearby"   active={tab === "nearby"}   onPress={() => setTab("nearby")} />
-              <SubTabBtn label="For You"  active={tab === "for_you"}  onPress={() => setTab("for_you")} />
-              <SubTabBtn label="Trending" active={tab === "trending"} onPress={() => setTab("trending")} />
+              <SubTabBtn label="Most Compatible" active={tab === "most_compatible"} onPress={() => setTab("most_compatible")} />
+              <SubTabBtn label="Trending"        active={tab === "trending"}        onPress={() => setTab("trending")} />
+              <SubTabBtn label="Nearby"          active={tab === "nearby"}          onPress={() => setTab("nearby")} />
             </View>
 
             <Spacer size={16} />
@@ -218,9 +219,9 @@ export default function DiscoverTab() {
               </>
             ) : (
               <>
-                {tab === "nearby"   && <List items={nearbyList}   surface="discover_shelf" emptyMsg="Nothing nearby." />}
-                {tab === "for_you"  && <List items={forYouList}   surface="discover_for_you" emptyMsg="Log a few visits and we'll learn." />}
-                {tab === "trending" && <List items={trendingList} surface="discover_shelf" emptyMsg="No trending spots near you." />}
+                {tab === "most_compatible" && <List items={mostCompatibleList} surface="discover_for_you" emptyMsg="Log a few visits and we'll learn." />}
+                {tab === "trending"        && <TrendingGroups groups={trendingGroups} />}
+                {tab === "nearby"          && <List items={nearbyList} surface="discover_shelf" emptyMsg="Nothing nearby." />}
               </>
             )}
           </>
@@ -255,6 +256,25 @@ function List({ items, surface, emptyMsg }: {
   );
 }
 
+function TrendingGroups({ groups }: { groups: TrendingGroup[] }) {
+  if (groups.length === 0) {
+    return <Text style={[type.small, { lineHeight: 20 }]}>No trending categories near you yet.</Text>;
+  }
+  return (
+    <View>
+      {groups.map((g) => (
+        <View key={g.title} style={{ marginBottom: spacing.xl }}>
+          <Text style={styles.groupHead}>{g.title}</Text>
+          <Spacer size={10} />
+          {g.items.map((r) => (
+            <RestaurantCompatibilityCard key={r.google_place_id} restaurant={r} surface="discover_shelf" />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // ----------------------------------------------------------------------------
 // Helpers
 // ----------------------------------------------------------------------------
@@ -284,6 +304,78 @@ function buildRanked(r: RestaurantInput, vector: TasteVector | null, here: { lat
     ? distanceKm(here, { lat: r.latitude, lng: r.longitude })
     : null;
   return { ...r, match, distanceKm: km };
+}
+
+// ----------------------------------------------------------------------------
+// Trending categorization — Beli-style grouped lists.
+// ----------------------------------------------------------------------------
+
+type TrendingGroup = { title: string; items: RankedRestaurant[] };
+
+type CategoryDef = {
+  title: string;                              // "Top 10 Burgers"
+  match: (r: RestaurantInput) => boolean;
+};
+
+// Order matters — first matching category wins (a place is shelved into
+// exactly one bucket so the same name doesn't appear under multiple headers).
+const CATEGORIES: CategoryDef[] = [
+  { title: "Top 10 Burgers",      match: (r) => hasAny(r, ["burger", "burgers"]) },
+  { title: "Top 10 Pizza",        match: (r) => hasAny(r, ["pizza", "pizzeria", "italian_pizzeria", "italian_neapolitan", "pizza_nyc", "pizza_chicago"]) },
+  { title: "Top 10 Tacos",        match: (r) => hasAny(r, ["taco", "tacos", "taqueria", "mexican_taqueria", "mexican_regional", "mexican"]) },
+  { title: "Top 10 Sushi",        match: (r) => hasAny(r, ["sushi", "japanese_sushi"]) },
+  { title: "Top 10 Ramen",        match: (r) => hasAny(r, ["ramen", "japanese_ramen"]) },
+  { title: "Top 10 BBQ",          match: (r) => hasAny(r, ["bbq", "barbecue", "memphis_bbq", "texas_bbq", "kc_bbq"]) },
+  { title: "Top 10 Steakhouses",  match: (r) => hasAny(r, ["steak", "steakhouse"]) },
+  { title: "Top Cafés",           match: (r) => r.format_class === "café" || hasAny(r, ["café", "cafe", "coffee"]) },
+  { title: "Top Wine Bars",       match: (r) => r.format_class === "wine_bar" || hasAny(r, ["wine_bar", "wine bar"]) },
+  { title: "Top 10 Thai",         match: (r) => hasAny(r, ["thai"]) },
+  { title: "Top 10 Korean",       match: (r) => hasAny(r, ["korean", "korean_bbq"]) },
+  { title: "Top 10 Indian",       match: (r) => hasAny(r, ["indian", "indian_north", "indian_south"]) },
+  { title: "Top 10 Mediterranean", match: (r) => hasAny(r, ["mediterranean", "greek", "turkish", "lebanese", "israeli", "moroccan"]) },
+  { title: "Top 10 Brunch",       match: (r) => hasOccasion(r, "brunch") || hasAny(r, ["brunch_modern", "breakfast_diner"]) },
+];
+
+function hasAny(r: RestaurantInput, needles: string[]): boolean {
+  const fields = [r.cuisine_type, r.cuisine_subregion, r.cuisine_region, r.format_class].filter(Boolean) as string[];
+  const hay = fields.join(" ").toLowerCase();
+  return needles.some((n) => hay.includes(n.toLowerCase()));
+}
+
+function hasOccasion(r: RestaurantInput, tag: string): boolean {
+  return Array.isArray(r.occasion_tags) && r.occasion_tags.includes(tag);
+}
+
+function buildTrendingGroups(
+  candidates: RestaurantInput[],
+  vector: TasteVector | null,
+  here: { lat: number; lng: number } | null,
+): TrendingGroup[] {
+  // Only "trending" if there's enough social proof — keep the bar reasonable
+  // so new openings still surface.
+  const popular = candidates.filter((r) => (r.user_rating_count ?? 0) >= 100);
+
+  // Bucket each place into the FIRST matching category so we don't double-show.
+  const buckets = new Map<string, RestaurantInput[]>();
+  for (const r of popular) {
+    const cat = CATEGORIES.find((c) => c.match(r));
+    if (!cat) continue;
+    const arr = buckets.get(cat.title) ?? [];
+    arr.push(r);
+    buckets.set(cat.title, arr);
+  }
+
+  const groups: TrendingGroup[] = [];
+  for (const cat of CATEGORIES) {
+    const items = buckets.get(cat.title) ?? [];
+    if (items.length < MIN_PER_CATEGORY) continue;
+    items.sort((a, b) => (b.user_rating_count ?? 0) - (a.user_rating_count ?? 0));
+    groups.push({
+      title: cat.title,
+      items: items.slice(0, TOP_PER_CATEGORY).map((r) => buildRanked(r, vector, here)),
+    });
+  }
+  return groups;
 }
 
 const styles = StyleSheet.create({
@@ -328,4 +420,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.faint,
     borderWidth: 1, borderColor: colors.line,
   },
+
+  groupHead: { fontSize: 17, fontWeight: "800", color: colors.ink, letterSpacing: -0.3 },
 });

@@ -29,31 +29,15 @@ import { SaveBurst } from "./SaveBurst";
 // picks for fast scanning. Each row is tappable to save to wishlist.
 // ============================================================================
 
-function timeOfDay(now = new Date()): "morning" | "midday" | "evening" {
-  const h = now.getHours();
-  if (h < 11) return "morning";
-  if (h < 17) return "midday";
-  return "evening";
-}
-
-const HEADLINES = {
-  morning: "Spots for your morning",
-  midday:  "Lunch picks for you",
-  evening: "Dinner picks for you",
-};
-
-const BLURBS = {
-  morning: "Cafés and quick-stops your Palate would gravitate toward.",
-  midday:  "Bowls, counter service, and the quick-but-good lane.",
-  evening: "Where your Palate likes to land at the end of a day.",
-};
+// Card kept intentionally bare per the "Home = decision only" brief.
+// No time-of-day blurbs, no explanatory subtitles — the title and the rows
+// are the whole story.
 
 export function RecommendationsCard() {
   const [recs, setRecs] = useState<RestaurantRecommendation[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [earlyEstimate, setEarlyEstimate] = useState(false);
-  const tod = timeOfDay();
 
   const load = useCallback(async () => {
     try {
@@ -75,8 +59,8 @@ export function RecommendationsCard() {
       const all = [...(result.similar ?? [])];
       if (result.stretch) all.push(result.stretch);
 
-      // Enrich every rec with match score + distance + a sharper "why" line.
-      const enriched: RestaurantRecommendation[] = all.slice(0, 3).map((r) => {
+      // Enrich, then rank by match score (high → low) and cap at 5.
+      const enriched: RestaurantRecommendation[] = all.map((r) => {
         let matchScore: number | null = null;
         let reason = r.reason;
         if (vector) {
@@ -90,7 +74,8 @@ export function RecommendationsCard() {
         }
         return { ...r, matchScore, distanceKm: dKm, reason };
       });
-      setRecs(enriched);
+      enriched.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+      setRecs(enriched.slice(0, 5));
     } catch {
       setError(true);
     } finally {
@@ -109,9 +94,7 @@ export function RecommendationsCard() {
     <View style={styles.card}>
       <View style={styles.head}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>RECOMMENDED</Text>
-          <Text style={styles.title}>{HEADLINES[tod]}</Text>
-          <Text style={styles.blurb}>{BLURBS[tod]}</Text>
+          <Text style={styles.eyebrow}>MOST COMPATIBLE</Text>
           {earlyEstimate && (
             <View style={styles.earlyBadge}>
               <Text style={styles.earlyBadgeText}>EARLY ESTIMATE · sharper after a few more visits</Text>

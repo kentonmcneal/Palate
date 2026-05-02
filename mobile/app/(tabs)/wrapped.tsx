@@ -9,18 +9,24 @@ import { colors, spacing, type } from "../../theme";
 import { generateForCurrentWeek, latestWrapped, type Wrapped } from "../../lib/wrapped";
 import { WrappedCard } from "../../components/WrappedCard";
 import { WrappedStoryCard } from "../../components/WrappedStoryCard";
-import { WeeklyPalateInsights } from "../../components/WeeklyPalateInsights";
-import { WrappedCharts } from "../../components/WrappedCharts";
 import { Confetti } from "../../components/Confetti";
 import { shareWrappedToFeed } from "../../lib/feed";
 import { track } from "../../lib/analytics";
 import { computeTasteVector, type TasteVector } from "../../lib/taste-vector";
-import { generateIdentitySet, generateLore, expandedLore, type PalateIdentitySet } from "../../lib/palate-labels";
-import { generatePercentileCards, generateCohortInsightAsync, type CohortInsight } from "../../lib/population-stats";
-import { useEffect as useEffectReact } from "react";
-import { AnimatedNumber } from "../../components/AnimatedNumber";
+import { generateIdentitySet, generateLore, type PalateIdentitySet } from "../../lib/palate-labels";
 import { getSessionStage, type SessionStage } from "../../lib/session-stage";
 import ViewShot, { captureRef } from "react-native-view-shot";
+
+// ============================================================================
+// Wrapped — REFLECTION ONLY. One job: tell me what kind of eater I am.
+// Layout (4 visible sections, in order):
+//   1. Identity headline ("You're a Late-Night Explorer")
+//   2. Three stat tiles (Visits / Variety / Repeat %)
+//   3. One insight line
+//   4. Share + deep-insights links
+// Charts, percentiles, cohorts, "ALSO/AND/THIS WEEK" — all live on Profile →
+// Insights now. Wrapped stays scannable.
+// ============================================================================
 
 export default function WrappedTab() {
   const [data, setData] = useState<Wrapped | null>(null);
@@ -44,7 +50,6 @@ export default function WrappedTab() {
       setStage(st);
       setData(latest);
       if (latest?.week_start) {
-        // Tab badge clears once the user actually opens this tab.
         await AsyncStorage.setItem(LAST_SEEN_WRAPPED_KEY, latest.week_start);
       }
       setVector(allTimeVec ?? null);
@@ -54,25 +59,17 @@ export default function WrappedTab() {
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      refresh();
-    }, [refresh]),
-  );
+  useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
   async function generate() {
     setLoading(true);
     try {
       const w = await generateForCurrentWeek();
       if (!w) {
-        Alert.alert(
-          "Nothing yet",
-          "Add a visit or two this week and try again — we'll generate your Wrapped.",
-        );
+        Alert.alert("Nothing yet", "Add a visit or two this week and try again.");
       } else {
         const wasFirstReveal = !data;
         setData(w);
-        // Celebrate the moment — bigger burst on the first-ever Wrapped reveal.
         setConfettiKey((k) => k + 1);
         void track("wrapped_generated", { first_reveal: wasFirstReveal });
       }
@@ -83,7 +80,7 @@ export default function WrappedTab() {
     }
   }
 
-  async function share() {
+  async function shareImage() {
     if (!cardRef.current) return;
     try {
       const uri = await captureRef(cardRef, { format: "png", quality: 1 });
@@ -97,8 +94,6 @@ export default function WrappedTab() {
     if (!storyRef.current) return;
     try {
       const uri = await captureRef(storyRef, { format: "png", quality: 1 });
-      // iOS share sheet lets the user pick Instagram (Stories), iMessage, etc.
-      // Pre-rendered at 9:16 so IG accepts it as a story without cropping.
       await Share.share({ url: uri });
     } catch (e: any) {
       Alert.alert("Couldn't share", e.message ?? "Try again");
@@ -109,8 +104,8 @@ export default function WrappedTab() {
     if (!data) return;
     try {
       await shareWrappedToFeed({
-        personaLabel: data.personality_label ?? "Your Palate",
-        tagline: data.wrapped_json?.personality_label ?? "",
+        personaLabel: identityLabel(),
+        tagline: identities?.primary.secondary ?? "",
         weekStart: data.week_start,
         weekEnd: data.week_end,
         totalVisits: data.total_visits,
@@ -123,107 +118,86 @@ export default function WrappedTab() {
     }
   }
 
+  function identityLabel(): string {
+    if (stage >= 3 && identities) return identities.primary.label;
+    if (data?.personality_label) return data.personality_label;
+    return "Pattern Forming";
+  }
+
+  function insightLine(): string {
+    if (stage < 3) return "Your pattern is forming. The identity reveals at 3 visits.";
+    if (vector && identities) return generateLore(vector, identities.primary);
+    return "";
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <Confetti fire={confettiKey > 0} count={180} />
       <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={type.title}>Your Wrapped</Text>
-            <Text style={[type.body, { color: colors.mute, marginTop: 4 }]}>
-              What your week says about how you eat.
-            </Text>
-          </View>
-          <Pressable
-            onPress={() => router.push("/insights")}
-            style={styles.insightsBtn}
-            accessibilityLabel="Open detailed insights"
-          >
-            <Text style={styles.insightsBtnText}>Insights →</Text>
-          </Pressable>
-        </View>
+        <Text style={type.title}>Your Wrapped</Text>
         <Spacer size={20} />
 
         {data ? (
           <>
-            <ViewShot ref={cardRef as any} options={{ format: "png", quality: 1 }}>
-              {/* Identity reveal is staged: stage 3 (3+ visits) gets the
-                  dynamically composed persona; earlier stages see the stored
-                  generic label. We're proving the system before explaining it. */}
-              <WrappedCard
-                data={data}
-                personaOverride={stage >= 3 ? identities?.primary.label : undefined}
-              />
-            </ViewShot>
-            {stage >= 3 && identities && vector && (
-              <View style={styles.loreCard}>
-                <Text style={styles.loreText}>{generateLore(vector, identities.primary)}</Text>
+            {/* 1. Identity headline */}
+            <View style={styles.identityCard}>
+              <Text style={styles.identityEyebrow}>YOU'RE A</Text>
+              <Text style={styles.identityName}>{identityLabel()}</Text>
+            </View>
+
+            {/* 2. Three stats */}
+            <View style={styles.statRow}>
+              <Stat label="Visits" value={String(data.total_visits)} />
+              <Stat label="Variety" value={String(data.unique_restaurants)} />
+              <Stat label="Repeat" value={`${Math.round((data.repeat_rate ?? 0) * 100)}%`} />
+            </View>
+
+            {/* 3. One insight */}
+            {insightLine().length > 0 && (
+              <View style={styles.insightCard}>
+                <Text style={styles.insightText}>{insightLine()}</Text>
               </View>
             )}
-            {stage < 3 && (
-              <View style={styles.loreCard}>
-                <Text style={styles.loreText}>
-                  Your pattern is forming. The identity reveals at 3 visits.
-                </Text>
-              </View>
-            )}
-            {identities && (
-              <View style={styles.identityFooter}>
-                <View style={styles.identityFooterCol}>
-                  <Text style={styles.identityFooterLabel}>ALSO</Text>
-                  <Text style={styles.identityFooterValue}>{identities.secondary[0].label}</Text>
-                </View>
-                <View style={styles.identityFooterCol}>
-                  <Text style={styles.identityFooterLabel}>AND</Text>
-                  <Text style={styles.identityFooterValue}>{identities.secondary[1].label}</Text>
-                </View>
-                <View style={styles.identityFooterCol}>
-                  <Text style={styles.identityFooterLabel}>THIS WEEK</Text>
-                  <Text style={[styles.identityFooterValue, { color: colors.red }]}>
-                    {identities.weeklyMood.label}
-                  </Text>
-                </View>
-              </View>
-            )}
-            <WrappedCharts />
-            <WeeklyPalateInsights weekStart={data.week_start} weekEnd={data.week_end} />
-            <Spacer />
-            <Button title="Post to Feed" onPress={shareToFeed} />
-            <Spacer />
-            <Button title="Share to Instagram Story" onPress={shareToStory} />
-            <Spacer />
-            <Button title="Share image" variant="ghost" onPress={share} />
-            <Spacer />
+
+            {/* 4. Actions */}
+            <Spacer size={20} />
+            <Pressable onPress={() => router.push("/insights-deep")} style={styles.deepLink}>
+              <Text style={styles.deepLinkText}>See your full insights →</Text>
+            </Pressable>
+
+            <Spacer size={16} />
+            <Button title="Share" onPress={shareImage} />
+            <Spacer size={8} />
+            <Button title="Post to Feed" variant="ghost" onPress={shareToFeed} />
+            <Spacer size={8} />
+            <Button title="Share to Instagram Story" variant="ghost" onPress={shareToStory} />
+            <Spacer size={8} />
             <Button title="Refresh" variant="ghost" onPress={generate} loading={loading} />
 
-            {/* Off-screen render so view-shot can capture the 9:16 IG story
-                version without affecting layout. */}
+            {/* Off-screen share renderers — used for image capture only. */}
             <View style={{ position: "absolute", left: -9999, top: 0 }} pointerEvents="none">
+              <ViewShot ref={cardRef as any} options={{ format: "png", quality: 1 }}>
+                <WrappedCard data={data} personaOverride={identityLabel()} />
+              </ViewShot>
               <View ref={storyRef as any} collapsable={false}>
-                <WrappedStoryCard data={data} personaOverride={identities?.primary.label} />
+                <WrappedStoryCard data={data} personaOverride={identityLabel()} />
               </View>
             </View>
           </>
         ) : identities && vector && vector.visitCount > 0 ? (
-          // Week-1 mode: no weekly_wrapped row yet, but the user has visits.
-          // Show the identity + lore + percentiles based on the vector so the
-          // tab feels alive while we wait for Sunday.
+          // Pre-Sunday: visits exist but no Wrapped row yet. Show a stripped
+          // version so the tab feels alive while the user waits for Sunday.
           <>
-            <View style={styles.preWrappedCard}>
-              <Text style={styles.preEyebrow}>YOUR PALATE SO FAR</Text>
-              <Text style={styles.prePrimary}>{identities.primary.label}</Text>
-              <Text style={styles.preLore}>{generateLore(vector, identities.primary)}</Text>
-              <View style={styles.prePill}>
-                <Text style={styles.prePillText}>
-                  Your first official Wrapped lands Sunday
-                </Text>
-              </View>
+            <View style={styles.identityCard}>
+              <Text style={styles.identityEyebrow}>YOU'RE A</Text>
+              <Text style={styles.identityName}>{identityLabel()}</Text>
             </View>
-
-            <PalateLoreCard primary={identities.primary} />
-            <PercentileRow vector={vector} primary={identities.primary} />
-            <CohortCard primary={identities.primary} vector={vector} />
-
+            <View style={styles.insightCard}>
+              <Text style={styles.insightText}>{insightLine()}</Text>
+            </View>
+            <View style={styles.preWaitPill}>
+              <Text style={styles.preWaitText}>Your first official Wrapped lands Sunday.</Text>
+            </View>
             <Spacer />
             <Button title={loading ? "Generating…" : "Generate now"} onPress={generate} loading={loading} />
           </>
@@ -249,72 +223,11 @@ export default function WrappedTab() {
   );
 }
 
-// ============================================================================
-// Wrapped sub-cards
-// ============================================================================
-
-function PalateLoreCard({ primary }: { primary: PalateIdentitySet["primary"] }) {
-  const lore = expandedLore(primary);
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <View style={styles.loreExpanded}>
-      <Text style={styles.loreEyebrow}>PALATE LORE</Text>
-      <Text style={styles.loreSection}>What this means</Text>
-      <Text style={styles.loreBody}>{lore.story}</Text>
-      <Text style={styles.loreSection}>How {primary.label}s behave</Text>
-      <Text style={styles.loreBody}>{lore.behavior}</Text>
-    </View>
-  );
-}
-
-function PercentileRow({
-  vector, primary,
-}: {
-  vector: TasteVector;
-  primary: PalateIdentitySet["primary"];
-}) {
-  const cards = generatePercentileCards(vector, primary);
-  if (cards.length === 0) return null;
-  return (
-    <View style={{ marginTop: spacing.md }}>
-      <Text style={styles.percentileEyebrow}>WHERE YOU RANK · preview data</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 10 }}>
-        {cards.map((c, i) => (
-          <View key={i} style={styles.percentileCard}>
-            <View style={{ flexDirection: "row", alignItems: "baseline" }}>
-              <Text style={styles.percentileBig}>Top </Text>
-              <AnimatedNumber value={c.percentile} suffix="%" duration={900} style={styles.percentileBig} />
-            </View>
-            <Text style={styles.percentileBody}>{c.body}</Text>
-          </View>
-        ))}
-      </ScrollView>
-    </View>
-  );
-}
-
-function CohortCard({
-  primary, vector,
-}: {
-  primary: PalateIdentitySet["primary"];
-  vector: TasteVector;
-}) {
-  const [c, setC] = useState<CohortInsight | null>(null);
-  useEffectReact(() => {
-    let alive = true;
-    generateCohortInsightAsync(primary, vector).then((r) => { if (alive) setC(r); }).catch(() => {});
-    return () => { alive = false; };
-  }, [primary.label, vector.visitCount]);
-
-  if (!c) return null;
-  return (
-    <View style={styles.cohortCard}>
-      <Text style={styles.percentileEyebrow}>
-        PEOPLE LIKE YOU{c.source === "preview" ? " · preview data" : ""}
-      </Text>
-      <Text style={styles.cohortBig}>{c.countLine}</Text>
-      <Text style={styles.cohortLine}>· {c.paceLine}</Text>
-      <Text style={styles.cohortLine}>· {c.citiesLine}</Text>
-      <Text style={styles.cohortLine}>· {c.topSavedLine}</Text>
+    <View style={styles.statTile}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
@@ -348,118 +261,80 @@ const SAMPLE_WRAPPED: Wrapped = {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.paper },
   container: { padding: spacing.lg, paddingBottom: 100 },
-  headerRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  insightsBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
+
+  identityCard: {
+    padding: spacing.lg,
+    borderRadius: 22,
+    backgroundColor: colors.ink,
+    alignItems: "flex-start",
+  },
+  identityEyebrow: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
+  identityName: {
+    color: colors.red,
+    fontSize: 34,
+    fontWeight: "800",
+    letterSpacing: -0.7,
+    lineHeight: 38,
+    marginTop: 6,
+  },
+
+  statRow: {
+    marginTop: spacing.md,
+    flexDirection: "row",
+    gap: 8,
+  },
+  statTile: {
+    flex: 1,
+    padding: spacing.md,
+    borderRadius: 16,
+    backgroundColor: colors.paper,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: "center",
+  },
+  statValue: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: colors.ink,
+    letterSpacing: -0.5,
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.mute,
+    letterSpacing: 1.2,
+    marginTop: 4,
+  },
+
+  insightCard: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: 16,
     backgroundColor: colors.faint,
     borderWidth: 1,
     borderColor: colors.line,
   },
-  insightsBtnText: { fontSize: 13, fontWeight: "700", color: colors.ink },
+  insightText: { fontSize: 15, color: colors.ink, lineHeight: 21, fontStyle: "italic" },
+
+  deepLink: {
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  deepLinkText: { color: colors.red, fontSize: 14, fontWeight: "700" },
+
+  preWaitPill: {
+    marginTop: spacing.md,
+    alignSelf: "flex-start",
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999,
+    backgroundColor: colors.faint,
+    borderWidth: 1, borderColor: colors.line,
+  },
+  preWaitText: { color: colors.ink, fontSize: 12, fontWeight: "700" },
+
   empty: {
     borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.line,
     padding: spacing.lg,
-  },
-  loreCard: {
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: 18,
-    backgroundColor: colors.faint,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  loreText: { fontSize: 16, fontWeight: "700", color: colors.ink, lineHeight: 22, fontStyle: "italic" },
-  loreEvidence: { fontSize: 13, color: colors.mute, marginTop: 8, lineHeight: 18 },
-
-  loreExpanded: {
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: 18,
-    backgroundColor: colors.paper,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  loreEyebrow: { ...type.micro, color: colors.red },
-  loreSection: { fontSize: 11, fontWeight: "800", color: colors.mute, letterSpacing: 1.3, marginTop: 14 },
-  loreBody: { fontSize: 14, color: colors.ink, marginTop: 6, lineHeight: 20 },
-
-  percentileEyebrow: { ...type.micro },
-  percentileCard: {
-    width: 200,
-    padding: spacing.md,
-    borderRadius: 18,
-    backgroundColor: colors.ink,
-  },
-  percentileBig: {
-    color: colors.red,
-    fontSize: 28,
-    fontWeight: "800",
-    letterSpacing: -0.5,
-  },
-  percentileBody: { color: "rgba(255,255,255,0.85)", fontSize: 13, marginTop: 6, lineHeight: 18 },
-
-  cohortCard: {
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: 18,
-    backgroundColor: colors.faint,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  cohortBig: { fontSize: 20, fontWeight: "800", color: colors.ink, marginTop: 6, letterSpacing: -0.4 },
-  cohortLine: { fontSize: 13, color: colors.ink, marginTop: 6, lineHeight: 18 },
-
-  preWrappedCard: {
-    padding: spacing.lg,
-    borderRadius: 24,
-    backgroundColor: colors.ink,
-  },
-  preEyebrow: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
-  prePrimary: {
-    color: colors.red,
-    fontSize: 30,
-    fontWeight: "800",
-    letterSpacing: -0.7,
-    marginTop: 8,
-    lineHeight: 34,
-  },
-  preLore: { color: "rgba(255,255,255,0.85)", fontSize: 15, marginTop: 12, lineHeight: 22, fontStyle: "italic" },
-  prePill: {
-    marginTop: 16,
-    alignSelf: "flex-start",
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999,
-    backgroundColor: "rgba(255,48,8,0.18)",
-    borderWidth: 1, borderColor: "rgba(255,48,8,0.4)",
-  },
-  prePillText: { color: "#fff", fontSize: 12, fontWeight: "700" },
-  identityFooter: {
-    marginTop: spacing.md,
-    flexDirection: "row",
-    gap: 8,
-  },
-  identityFooterCol: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: colors.faint,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  identityFooterLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: colors.mute,
-    letterSpacing: 1.3,
-  },
-  identityFooterValue: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: colors.ink,
-    marginTop: 4,
-    lineHeight: 17,
   },
 });
