@@ -1,20 +1,20 @@
 import { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Animated, Easing } from "react-native";
 import { colors } from "../theme";
+import { matchScoreColor } from "../lib/match-score";
 
 // ============================================================================
-// MatchMarker — circular red pin showing the % match in the center.
-// Lower-match pins fade to a softer red. No match data → small gray dot.
+// MatchMarker — circular pin showing % match. Color is on a smooth gradient:
+// gray at 0%, brand red at 100%, ramp between. Same gradient as the score
+// badges throughout the app, so visual language is consistent.
 // ============================================================================
 
 export function MatchMarker({ score }: { score: number | null }) {
   if (score == null) {
     return <View style={styles.dot} />;
   }
-  const intensity = Math.min(1, Math.max(0.3, (score - 30) / 70));
-  const bg = `rgba(255, 48, 8, ${intensity})`;
   return (
-    <View style={[styles.pin, { backgroundColor: bg }]}>
+    <View style={[styles.pin, { backgroundColor: matchScoreColor(score) }]}>
       <Text style={styles.pinText}>{score}</Text>
     </View>
   );

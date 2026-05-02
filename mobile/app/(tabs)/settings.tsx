@@ -20,6 +20,7 @@ import { loadAnalytics, type AnalyticsSummary } from "../../lib/analytics-stats"
 import { getMyProfile, setProfileVisibility, setDisplayName, setUsername, uploadAvatar, type ProfileVisibility } from "../../lib/profile";
 import { listIncomingRequests } from "../../lib/friends";
 import { generateInviteLink, inviteShareMessage, getMyReferralCount } from "../../lib/referrals";
+import { GmailImportCard } from "../../components/GmailImportCard";
 
 const CUISINE_LABELS: Record<string, string> = {
   italian: "Italian", mexican: "Mexican", japanese: "Japanese", chinese: "Chinese",
@@ -314,6 +315,10 @@ export default function Settings() {
             <Text style={styles.profileLinkText}>See full insights →</Text>
           </Pressable>
         </View>
+
+        <Section title="Bring in your history">
+          <GmailImportCard />
+        </Section>
 
         <Section title="Friends">
           <Button

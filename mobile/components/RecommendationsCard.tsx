@@ -17,6 +17,7 @@ import { getCurrentLocation } from "../lib/location";
 import { triggerHapticSuccess } from "../lib/haptics";
 import { pickSaveCopy } from "../lib/save-copy";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
+import { matchScoreColor, matchScoreTint } from "../lib/match-score";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { SaveBurst } from "./SaveBurst";
 
@@ -161,8 +162,19 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={2}>{rec.name}</Text>
           {rec.matchScore != null && (
-            <View style={styles.matchBadge}>
-              <AnimatedNumber value={rec.matchScore} suffix="% match" duration={650} style={styles.matchBadgeText} />
+            <View style={[
+              styles.matchBadge,
+              {
+                backgroundColor: matchScoreTint(rec.matchScore),
+                borderColor: matchScoreColor(rec.matchScore),
+              },
+            ]}>
+              <AnimatedNumber
+                value={rec.matchScore}
+                suffix="% match"
+                duration={650}
+                style={[styles.matchBadgeText, { color: matchScoreColor(rec.matchScore) }]}
+              />
             </View>
           )}
         </View>

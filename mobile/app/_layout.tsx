@@ -12,8 +12,13 @@ import {
 import { supabase } from "../lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { colors } from "../theme";
+import * as WebBrowser from "expo-web-browser";
 import { initObservability } from "../lib/observability";
 import { registerPushToken } from "../lib/notifications";
+
+// Resolve any pending OAuth session (Gmail Connect) when the app is reopened
+// after the system browser hand-off.
+WebBrowser.maybeCompleteAuthSession();
 
 // Map RN font weights to the loaded Inter variants. Set once, applied app-wide
 // via Text.defaultProps below.

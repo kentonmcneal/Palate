@@ -8,7 +8,7 @@ import { triggerHapticSuccess, triggerHapticSelection } from "../lib/haptics";
 import { pickSaveCopy } from "../lib/save-copy";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
 import { trackRecEvent, type RecEventContext } from "../lib/recommendation-events";
-import { formatDistance } from "../lib/match-score";
+import { formatDistance, matchScoreColor } from "../lib/match-score";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { SaveBurst } from "./SaveBurst";
 import { TapCard } from "./TapCard";
@@ -102,7 +102,11 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
           <Text style={styles.sub}>{subline || "Nearby"}</Text>
         </View>
         <View style={styles.scoreCol}>
-          <AnimatedNumber value={m.score} duration={750} style={styles.scoreNum} />
+          <AnimatedNumber
+            value={m.score}
+            duration={750}
+            style={[styles.scoreNum, { color: matchScoreColor(m.score) }]}
+          />
           <Text style={styles.scoreLabel}>match</Text>
           {m.confidence === "low" && (
             <Text style={styles.confLow}>early read</Text>

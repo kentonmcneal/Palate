@@ -116,6 +116,33 @@ export function distanceKm(
   return 2 * R_EARTH_KM * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
+// ----------------------------------------------------------------------------
+// Color gradient — gray at 0%, brand red at 100%, smooth ramp between.
+// Used everywhere a Palate Match score is rendered (badges, map pins,
+// score bars). Linear interpolation in RGB space — visually clean enough.
+// ----------------------------------------------------------------------------
+const GRAY_RGB = [185, 185, 185];     // colors.mute-ish, soft and low-priority
+const RED_RGB  = [255, 48, 8];        // colors.red
+
+export function matchScoreColor(score: number | null | undefined): string {
+  if (score == null) return `rgb(${GRAY_RGB.join(",")})`;
+  const t = Math.min(1, Math.max(0, score / 100));
+  const r = Math.round(GRAY_RGB[0] + (RED_RGB[0] - GRAY_RGB[0]) * t);
+  const g = Math.round(GRAY_RGB[1] + (RED_RGB[1] - GRAY_RGB[1]) * t);
+  const b = Math.round(GRAY_RGB[2] + (RED_RGB[2] - GRAY_RGB[2]) * t);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/** Background tint (lighter version of the gradient color) for badges. */
+export function matchScoreTint(score: number | null | undefined): string {
+  if (score == null) return "rgba(185, 185, 185, 0.15)";
+  const t = Math.min(1, Math.max(0, score / 100));
+  const r = Math.round(GRAY_RGB[0] + (RED_RGB[0] - GRAY_RGB[0]) * t);
+  const g = Math.round(GRAY_RGB[1] + (RED_RGB[1] - GRAY_RGB[1]) * t);
+  const b = Math.round(GRAY_RGB[2] + (RED_RGB[2] - GRAY_RGB[2]) * t);
+  return `rgba(${r}, ${g}, ${b}, 0.12)`;
+}
+
 /** Format a distance for display: "0.3 mi" or "5 min walk". */
 export function formatDistance(km: number): string {
   const mi = km * 0.621371;
