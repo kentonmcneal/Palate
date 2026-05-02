@@ -114,8 +114,9 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
         </View>
       </View>
 
+      {/* Strict format: ONE descriptor, max 5 words. */}
       {m.reasons[0] && (
-        <Text style={styles.reason}>{m.reasons[0]}</Text>
+        <Text style={styles.reason}>{shortDescriptor(m.reasons[0])}</Text>
       )}
 
       <View style={styles.actions}>
@@ -153,6 +154,22 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
 
 function cap(s: string): string {
   return s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, " ") : s;
+}
+
+/**
+ * Squeeze the recommendation reason into the strict 5-word descriptor format.
+ * Strips punctuation, common filler ("Hits your", "Matches your"), trims
+ * to the first 5 meaningful words. Lowercases for tone.
+ */
+function shortDescriptor(raw: string): string {
+  const cleaned = raw
+    .replace(/^(hits|matches|in|right|same|fits)\s+(your|the)\s+/i, "")
+    .replace(/\s*pattern\.?$/i, "")
+    .replace(/\s*habit\.?$/i, "")
+    .replace(/\.$/, "")
+    .replace(/\bright now\b/i, "now");
+  const words = cleaned.split(/\s+/).slice(0, 5);
+  return words.join(" ").toLowerCase();
 }
 
 function humanize(s: string): string {

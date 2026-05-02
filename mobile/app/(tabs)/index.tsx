@@ -19,12 +19,8 @@ import {
 } from "../../lib/palate-insights";
 import { isoWeekStart } from "../../lib/wrapped";
 import { RecommendationsCard } from "../../components/RecommendationsCard";
-import { NudgeStack } from "../../components/NudgeStack";
-import { NextMovesPreview } from "../../components/NextMovesPreview";
-import { AspirationalPreview } from "../../components/AspirationalPreview";
-import { PalateExplainer } from "../../components/PalateExplainer";
+import { SavedNearbyCard } from "../../components/SavedNearbyCard";
 import { GettingStarted } from "../../components/GettingStarted";
-import { WrappedProgress } from "../../components/WrappedProgress";
 import { Confetti } from "../../components/Confetti";
 
 const STREAK_MILESTONES = [7, 14, 30, 50, 100, 200, 365];
@@ -144,43 +140,26 @@ export default function Home() {
           </View>
         </View>
 
-        {/* Right Now — primary action, always at top. Quiet card, no glow blob. */}
+        {/* HOME = ACTION ONLY. One job: what should I do right now?
+            Hero (Check now) + saved-nearby (contextual) + recs + recent.
+            Insights/identity/lore live in Profile. Wrapped lives in Wrapped. */}
         <View style={styles.heroCard}>
           <Text style={styles.heroEyebrow}>RIGHT NOW</Text>
-          <Text style={styles.heroTitle}>Are you eating somewhere?</Text>
-          <Text style={styles.heroBody}>
-            Tap to check what's around you.
-          </Text>
+          <Text style={styles.heroTitle}>Where are you eating?</Text>
           <Spacer />
           <Button title={checking ? "Checking…" : "Check now"} onPress={handleCheckNow} loading={checking} />
         </View>
 
-        {weekInsight && weekInsight.visitCount > 0 && (
-          <View style={{ marginTop: spacing.xl }}>
-            <WeekSoFarCard insight={weekInsight} onPress={() => router.push("/(tabs)/wrapped")} />
-          </View>
-        )}
-
-        <WrappedProgress visitsTotal={visits.length} />
-
-        {/* Surface only ONE nudge at a time — saved-nearby wins, then skip,
-            then swap. Reduces visual noise. */}
-        <NudgeStack />
+        {/* Only contextual time-sensitive cards survive on Home. */}
+        <SavedNearbyCard />
 
         <RecommendationsCard />
-
-        <NextMovesPreview />
 
         {visits.length === 0 && (
           <View style={{ marginTop: spacing.xxl }}>
             <GettingStarted />
           </View>
         )}
-
-        {/* Aspirational + explainer demoted to bottom — discoverable but not
-            competing with the primary actions above. */}
-        <AspirationalPreview />
-        <PalateExplainer />
 
         <View style={{ marginTop: spacing.xxl }}>
           <View style={styles.recentHead}>

@@ -117,30 +117,32 @@ export function distanceKm(
 }
 
 // ----------------------------------------------------------------------------
-// Color gradient — gray at 0%, brand red at 100%, smooth ramp between.
-// Used everywhere a Palate Match score is rendered (badges, map pins,
-// score bars). Linear interpolation in RGB space — visually clean enough.
+// Match score color tiers — 4-step function for instant visual hierarchy.
+// 80-100 → strong red    (this is for you)
+// 60-79  → lighter red   (probably for you)
+// 40-59  → light gray    (neutral)
+// 0-39   → gray          (probably not for you)
 // ----------------------------------------------------------------------------
-const GRAY_RGB = [185, 185, 185];     // colors.mute-ish, soft and low-priority
-const RED_RGB  = [255, 48, 8];        // colors.red
+const STRONG_RED  = "#FF3008";
+const LIGHTER_RED = "#FF8266";
+const LIGHT_GRAY  = "#B5B5B5";
+const GRAY        = "#8E8E8E";
 
 export function matchScoreColor(score: number | null | undefined): string {
-  if (score == null) return `rgb(${GRAY_RGB.join(",")})`;
-  const t = Math.min(1, Math.max(0, score / 100));
-  const r = Math.round(GRAY_RGB[0] + (RED_RGB[0] - GRAY_RGB[0]) * t);
-  const g = Math.round(GRAY_RGB[1] + (RED_RGB[1] - GRAY_RGB[1]) * t);
-  const b = Math.round(GRAY_RGB[2] + (RED_RGB[2] - GRAY_RGB[2]) * t);
-  return `rgb(${r}, ${g}, ${b})`;
+  if (score == null) return GRAY;
+  if (score >= 80) return STRONG_RED;
+  if (score >= 60) return LIGHTER_RED;
+  if (score >= 40) return LIGHT_GRAY;
+  return GRAY;
 }
 
-/** Background tint (lighter version of the gradient color) for badges. */
+/** Background tint — same tier mapping, low-opacity version. */
 export function matchScoreTint(score: number | null | undefined): string {
-  if (score == null) return "rgba(185, 185, 185, 0.15)";
-  const t = Math.min(1, Math.max(0, score / 100));
-  const r = Math.round(GRAY_RGB[0] + (RED_RGB[0] - GRAY_RGB[0]) * t);
-  const g = Math.round(GRAY_RGB[1] + (RED_RGB[1] - GRAY_RGB[1]) * t);
-  const b = Math.round(GRAY_RGB[2] + (RED_RGB[2] - GRAY_RGB[2]) * t);
-  return `rgba(${r}, ${g}, ${b}, 0.12)`;
+  if (score == null) return "rgba(142,142,142,0.10)";
+  if (score >= 80) return "rgba(255,48,8,0.12)";
+  if (score >= 60) return "rgba(255,130,102,0.12)";
+  if (score >= 40) return "rgba(181,181,181,0.18)";
+  return "rgba(142,142,142,0.10)";
 }
 
 /** Format a distance for display: "0.3 mi" or "5 min walk". */

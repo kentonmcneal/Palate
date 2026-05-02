@@ -19,12 +19,14 @@ import { generateIdentitySet, generateLore, expandedLore, type PalateIdentitySet
 import { generatePercentileCards, generateCohortInsightAsync, type CohortInsight } from "../../lib/population-stats";
 import { useEffect as useEffectReact } from "react";
 import { AnimatedNumber } from "../../components/AnimatedNumber";
+import { getSessionStage, type SessionStage } from "../../lib/session-stage";
 import ViewShot, { captureRef } from "react-native-view-shot";
 
 export default function WrappedTab() {
   const [data, setData] = useState<Wrapped | null>(null);
   const [identities, setIdentities] = useState<PalateIdentitySet | null>(null);
   const [vector, setVector] = useState<TasteVector | null>(null);
+  const [stage, setStage] = useState<SessionStage>(1);
   const [loading, setLoading] = useState(false);
   const [confettiKey, setConfettiKey] = useState(0);
   const cardRef = useRef<View>(null);
@@ -33,11 +35,13 @@ export default function WrappedTab() {
 
   const refresh = useCallback(async () => {
     try {
-      const [latest, allTimeVec, weekVec] = await Promise.all([
+      const [latest, allTimeVec, weekVec, st] = await Promise.all([
         latestWrapped(),
         computeTasteVector().catch(() => null),
         computeTasteVector({ sinceDays: 7 }).catch(() => null),
+        getSessionStage().catch(() => 1 as SessionStage),
       ]);
+      setStage(st);
       setData(latest);
       if (latest?.week_start) {
         // Tab badge clears once the user actually opens this tab.
@@ -143,27 +147,25 @@ export default function WrappedTab() {
         {data ? (
           <>
             <ViewShot ref={cardRef as any} options={{ format: "png", quality: 1 }}>
-              <WrappedCard data={data} personaOverride={identities?.primary.label} />
+              {/* Identity reveal is staged: stage 3 (3+ visits) gets the
+                  dynamically composed persona; earlier stages see the stored
+                  generic label. We're proving the system before explaining it. */}
+              <WrappedCard
+                data={data}
+                personaOverride={stage >= 3 ? identities?.primary.label : undefined}
+              />
             </ViewShot>
-            {identities && vector && (
-              <>
-                {/* Lore: narrative + archetype meaning */}
-                <View style={styles.loreCard}>
-                  <Text style={styles.loreText}>{generateLore(vector, identities.primary)}</Text>
-                  {identities.primary.evidence.slice(0, 2).map((ev, i) => (
-                    <Text key={i} style={styles.loreEvidence}>· {ev}</Text>
-                  ))}
-                </View>
-
-                {/* Palate Lore — expanded story + behavior */}
-                <PalateLoreCard primary={identities.primary} />
-
-                {/* Percentile rankings (preview data) */}
-                <PercentileRow vector={vector} primary={identities.primary} />
-
-                {/* People like you (preview data) */}
-                <CohortCard primary={identities.primary} vector={vector} />
-              </>
+            {stage >= 3 && identities && vector && (
+              <View style={styles.loreCard}>
+                <Text style={styles.loreText}>{generateLore(vector, identities.primary)}</Text>
+              </View>
+            )}
+            {stage < 3 && (
+              <View style={styles.loreCard}>
+                <Text style={styles.loreText}>
+                  Your pattern is forming. The identity reveals at 3 visits.
+                </Text>
+              </View>
             )}
             {identities && (
               <View style={styles.identityFooter}>

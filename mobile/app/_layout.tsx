@@ -108,6 +108,7 @@ export default function RootLayout() {
           <Stack.Screen name="photos" options={{ presentation: "modal" }} />
           <Stack.Screen name="demographics" options={{ presentation: "modal" }} />
           <Stack.Screen name="map" options={{ presentation: "modal" }} />
+          <Stack.Screen name="insights-deep" options={{ presentation: "modal" }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

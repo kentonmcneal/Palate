@@ -408,14 +408,19 @@ export default function Settings() {
           <Note>One reminder a week, Sunday at 9 AM. That's it.</Note>
         </Section>
 
-        <Section title="Wrapped">
-          <Button title="Generate this week's Wrapped" onPress={manualGenerate} variant="ghost" />
+        <Section title="Insights">
+          <Button title="Your Insights" onPress={() => router.push("/insights-deep")} />
+          <Note>Palate Lore, percentile rankings, people-like-you, your aspirational palate, top palates in your area.</Note>
           <Spacer />
           <Button
-            title="View detailed Insights"
+            title="Charts & analytics"
             onPress={() => router.push("/insights")}
             variant="ghost"
           />
+        </Section>
+
+        <Section title="Wrapped">
+          <Button title="Generate this week's Wrapped" onPress={manualGenerate} variant="ghost" />
           <Spacer />
           <Button
             title="Preview Year in Palate (December)"
