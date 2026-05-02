@@ -18,8 +18,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID")!;
-const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET")!;
+// iOS OAuth client ID — same one the mobile app uses. PKCE means no
+// client_secret is needed for the token exchange (Google rejects secrets
+// for native client IDs anyway).
+const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_IOS_CLIENT_ID")!;
 const GOOGLE_PLACES_API_KEY = Deno.env.get("GOOGLE_PLACES_API_KEY")!;
 
 const corsHeaders = {
@@ -76,16 +78,19 @@ serve(async (req) => {
 async function handleConnect(admin: ReturnType<typeof createClient>, userId: string, body: any) {
   const code = body.code as string | undefined;
   const redirect_uri = body.redirect_uri as string | undefined;
-  if (!code || !redirect_uri) return json({ error: "code + redirect_uri required" }, 400);
+  const code_verifier = body.code_verifier as string | undefined;
+  if (!code || !redirect_uri || !code_verifier) {
+    return json({ error: "code + redirect_uri + code_verifier required" }, 400);
+  }
 
-  // Exchange code for tokens
+  // Exchange code for tokens — PKCE flow, no client_secret needed.
   const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       code,
       client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
+      code_verifier,
       redirect_uri,
       grant_type: "authorization_code",
     }).toString(),
@@ -220,14 +225,13 @@ async function getValidAccessToken(admin: ReturnType<typeof createClient>, userI
     return (row as any).access_token;
   }
 
-  // Refresh
+  // Refresh — native client + PKCE, no client_secret.
   const r = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       refresh_token: (row as any).refresh_token,
       client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
       grant_type: "refresh_token",
     }).toString(),
   });
