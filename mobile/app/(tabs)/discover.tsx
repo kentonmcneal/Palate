@@ -25,6 +25,7 @@ import { rankRestaurantsForDiscovery, type DiscoveryBuckets, type RankedRestaura
 import { trackImpressions } from "../../lib/recommendation-events";
 import { RestaurantCompatibilityCard } from "../../components/RestaurantCompatibilityCard";
 import { Shimmer, CardSkeleton, ListSkeleton } from "../../components/Shimmer";
+import { getCachedNearby, setCachedNearby } from "../../lib/nearby-cache";
 
 // ============================================================================
 // Discover tab — three sections:
@@ -58,36 +59,46 @@ type EnrichedPlace = {
 
 export default function DiscoverTab() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  // Progressive loading: each section has its own state so we don't block
+  // the whole tab while one piece loads.
+  const [hereLoading, setHereLoading] = useState(true);
+  const [placesLoading, setPlacesLoading] = useState(true);
+  const [bucketsLoading, setBucketsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
   const [places, setPlaces] = useState<EnrichedPlace[]>([]);
-  const [forYou, setForYou] = useState<RestaurantRecommendation[]>([]);
   const [buckets, setBuckets] = useState<DiscoveryBuckets | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forceRefresh = false) => {
     try {
-      setLoading(true);
       setError(null);
+      setHereLoading(true);
+
+      // Step 1 — get location (fast, ~50-300ms)
       const loc = await getCurrentLocation().catch(() => null);
       if (!loc) {
         setError("Turn on location in Settings → Palate to see what's nearby.");
-        setLoading(false);
+        setHereLoading(false); setPlacesLoading(false); setBucketsLoading(false);
         return;
       }
       const conf = classifyAccuracy(loc.accuracy);
       if (conf === "low") {
         setError("Your location signal is fuzzy. Step outside and pull to refresh.");
-        setLoading(false);
+        setHereLoading(false); setPlacesLoading(false); setBucketsLoading(false);
         return;
       }
       setHere({ lat: loc.lat, lng: loc.lng });
+      setHereLoading(false);
 
-      const [nearby, vector] = await Promise.all([
-        nearbyRestaurants(loc.lat, loc.lng, MAP_RADIUS_M),
-        computeTasteVector().catch(() => null),
-      ]);
+      // Step 2 — nearby restaurants (cached up to 5 min). Render the map +
+      // shelves as soon as this lands; ranker can finish async after.
+      setPlacesLoading(true);
+      let nearby = forceRefresh ? null : await getCachedNearby(loc.lat, loc.lng, MAP_RADIUS_M);
+      if (!nearby) {
+        nearby = await nearbyRestaurants(loc.lat, loc.lng, MAP_RADIUS_M);
+        void setCachedNearby(loc.lat, loc.lng, MAP_RADIUS_M, nearby);
+      }
 
       const enriched: EnrichedPlace[] = nearby.map((p) => {
         const ctx = {
@@ -97,14 +108,6 @@ export default function DiscoverTab() {
           occasionTags: (p as any).occasion_tags ?? null,
           flavorTags: (p as any).flavor_tags ?? null,
         };
-        // scoreMatch expects RestaurantRecommendation field names; adapt the
-        // Restaurant DB row to that shape.
-        const recShape = {
-          cuisine: p.cuisine_type ?? null,
-          price_level: p.price_level ?? null,
-          neighborhood: p.neighborhood ?? null,
-        };
-        const m = vector ? scoreMatch(vector, recShape, ctx) : null;
         const km = p.latitude != null && p.longitude != null
           ? distanceKm({ lat: loc.lat, lng: loc.lng }, { lat: p.latitude, lng: p.longitude })
           : null;
@@ -117,15 +120,32 @@ export default function DiscoverTab() {
           longitude: p.longitude ?? null,
           rating: p.rating ?? null,
           price_level: p.price_level ?? null,
-          matchScore: m?.score ?? null,
+          matchScore: null, // filled in below once we have the vector
           distanceKm: km,
           ...ctx,
         };
       });
       setPlaces(enriched);
+      setPlacesLoading(false);
 
-      // Bucketed discovery: feed all enriched places through the ranker.
-      // The ranker calls our PalateMatchScore + 80/20 mixing + diversity.
+      // Step 3 — vector + ranker (heavier). Don't block earlier sections.
+      setBucketsLoading(true);
+      const vector = await computeTasteVector().catch(() => null);
+
+      // Score matches lazily for the map overlay — only top 30 by distance
+      const visibleForMap = enriched.slice(0, 30).map((p) => {
+        const recShape = { cuisine: p.cuisine, price_level: p.price_level, neighborhood: p.neighborhood };
+        const m = vector ? scoreMatch(vector, recShape, {
+          cuisineRegion: (p as any).cuisineRegion,
+          cuisineSubregion: (p as any).cuisineSubregion,
+          formatClass: (p as any).formatClass,
+          occasionTags: (p as any).occasionTags,
+          flavorTags: (p as any).flavorTags,
+        }) : null;
+        return { ...p, matchScore: m?.score ?? null };
+      });
+      setPlaces((prev) => prev.map((p) => visibleForMap.find((v) => v.google_place_id === p.google_place_id) ?? p));
+
       const bucketed = await rankRestaurantsForDiscovery({
         vector,
         candidates: nearby.map((p) => ({
@@ -150,67 +170,22 @@ export default function DiscoverTab() {
         perBucket: 6,
       });
       setBuckets(bucketed);
+      setBucketsLoading(false);
 
-      // Fire impressions for everything we're about to show
+      // Fire impressions for whatever we ended up surfacing
       const visiblePlaceIds = [
         ...bucketed.safe.map((r) => r.google_place_id),
         ...bucketed.stretch.map((r) => r.google_place_id),
         ...bucketed.aspirational.map((r) => r.google_place_id),
-        ...bucketed.trending.map((r) => r.google_place_id),
-        ...bucketed.friends.map((r) => r.google_place_id),
       ];
       void trackImpressions(visiblePlaceIds, { surface: "discover_for_you" });
-
-      // For You: pull persona-driven recs (already match-scored elsewhere)
-      const start = isoWeekStart();
-      const end = new Date().toISOString().slice(0, 10);
-      const persona = await generateWeeklyPalatePersona(start, end);
-      if (persona) {
-        const result = await getPersonaRecommendations(persona, start, end, { lat: loc.lat, lng: loc.lng });
-        const all: RestaurantRecommendation[] = [...(result.similar ?? [])];
-        if (result.stretch) all.push(result.stretch);
-        const enrichedForYou = all.slice(0, 10).map((r) => {
-          const m = vector ? scoreMatch(vector, r) : null;
-          const km = r.latitude != null && r.longitude != null
-            ? distanceKm({ lat: loc.lat, lng: loc.lng }, { lat: r.latitude, lng: r.longitude })
-            : null;
-          return {
-            ...r,
-            matchScore: m?.score ?? null,
-            distanceKm: km,
-            reason: m?.reasons[0] ?? r.reason,
-          };
-        });
-        setForYou(enrichedForYou);
-      }
     } catch (e: any) {
       setError(e?.message ?? "Couldn't load Discover");
-    } finally {
-      setLoading(false);
+      setHereLoading(false); setPlacesLoading(false); setBucketsLoading(false);
     }
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.safe} edges={["top"]}>
-        <View style={styles.body}>
-          <Shimmer height={28} width="40%" />
-          <View style={{ height: 8 }} />
-          <Shimmer height={16} width="70%" />
-          <View style={{ height: 20 }} />
-          <Shimmer height={240} borderRadius={18} />
-          <View style={{ height: 32 }} />
-          <Shimmer height={18} width="50%" />
-          <View style={{ height: 12 }} />
-          <CardSkeleton />
-          <CardSkeleton />
-          <CardSkeleton />
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   if (error) {
     return (
@@ -220,7 +195,7 @@ export default function DiscoverTab() {
             {error}
           </Text>
           <Spacer />
-          <Pressable onPress={load} style={styles.retry}>
+          <Pressable onPress={() => load(true)} style={styles.retry}>
             <Text style={styles.retryText}>Try again</Text>
           </Pressable>
         </View>
@@ -235,7 +210,7 @@ export default function DiscoverTab() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }}
+            onRefresh={async () => { setRefreshing(true); await load(true); setRefreshing(false); }}
           />
         }
       >
@@ -246,7 +221,10 @@ export default function DiscoverTab() {
 
         <Spacer size={20} />
 
-        {/* Map */}
+        {/* Map — show skeleton until location resolves */}
+        {hereLoading && !here && (
+          <Shimmer height={240} borderRadius={18} />
+        )}
         {here && (
           <View style={styles.mapWrap}>
             <MapView
@@ -295,7 +273,15 @@ export default function DiscoverTab() {
           </View>
         )}
 
-        {/* Bucketed Discovery — ranked feed in 5 named buckets. */}
+        {/* Bucketed Discovery — show skeleton cards while ranker runs */}
+        {bucketsLoading && !buckets && (
+          <View style={{ marginTop: spacing.xl }}>
+            <Text style={type.subtitle}>Safe Matches</Text>
+            <View style={{ height: 12 }} />
+            <CardSkeleton />
+            <CardSkeleton />
+          </View>
+        )}
         {buckets && (
           <>
             <BucketSection

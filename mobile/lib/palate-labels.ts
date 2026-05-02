@@ -45,14 +45,16 @@ export type PalateIdentitySet = {
 // Vocabulary tables — dimension → human-friendly modifier word.
 // ============================================================================
 
-// Cuisine subregion → display fragment ("Memphis Smoke", "Korean BBQ", "Halal Cart")
+// Cuisine subregion → display fragment. Regionalized — uses broad cues
+// (Southern, Northeast, Coastal) instead of hyper-local city names so the
+// labels read as culturally aware, not stereotyped.
 const SUBREGION_LABEL: Record<string, string> = {
-  memphis_bbq: "Memphis Smoke",
-  kc_bbq: "Kansas City BBQ",
-  texas_bbq: "Texas Smoke",
-  nashville_hot: "Nashville Hot",
-  cajun: "Cajun",
-  soul_food: "Soul Food",
+  memphis_bbq: "Southern BBQ",
+  kc_bbq: "Southern BBQ",
+  texas_bbq: "Southern BBQ",
+  nashville_hot: "Southern Heat",
+  cajun: "Southern Cajun",
+  soul_food: "Southern Soul",
   bbq_general: "BBQ",
 
   korean: "Korean",
@@ -112,11 +114,11 @@ const SUBREGION_LABEL: Record<string, string> = {
 
   american_diner: "Diner",
   deli_jewish: "Deli",
-  pizza_nyc: "NY Slice",
-  pizza_chicago: "Deep Dish",
+  pizza_nyc: "Northeast Slice",
+  pizza_chicago: "Midwest Deep Dish",
   breakfast_diner: "Diner Breakfast",
   burger: "Burger",
-  bodega_food: "Bodega",
+  bodega_food: "Corner Store",
 
   wine_bar_food: "Wine Bar",
   steakhouse: "Steakhouse",
@@ -561,10 +563,9 @@ const morningShare = (v: TasteVector) => {
 
 const FALLBACK_RULES: FallbackRule[] = [
   // ---- Highly specific cuisine + behavior combos -----------------------------
-  { label: "Memphis Smoke Loyalist",       match: (v) => subShare(v, "memphis_bbq") >= 0.3 && v.repeatRate >= 0.4 },
-  { label: "Texas Smoke Devotee",          match: (v) => subShare(v, "texas_bbq") >= 0.3 },
-  { label: "Kansas City BBQ Regular",      match: (v) => subShare(v, "kc_bbq") >= 0.3 },
-  { label: "Nashville Hot Seeker",         match: (v) => subShare(v, "nashville_hot") >= 0.25 },
+  { label: "Southern BBQ Loyalist",        match: (v) => (subShare(v, "memphis_bbq") + subShare(v, "texas_bbq") + subShare(v, "kc_bbq")) >= 0.3 && v.repeatRate >= 0.4 },
+  { label: "Southern BBQ Devotee",         match: (v) => (subShare(v, "memphis_bbq") + subShare(v, "texas_bbq") + subShare(v, "kc_bbq")) >= 0.3 },
+  { label: "Southern Heat Seeker",         match: (v) => subShare(v, "nashville_hot") >= 0.25 },
   { label: "Cajun Comfort Loyalist",       match: (v) => subShare(v, "cajun") >= 0.3 },
   { label: "Soul Food Regular",            match: (v) => subShare(v, "soul_food") >= 0.3 },
   { label: "Southern Comfort Weekday Regular", match: (v) => regionShare(v, "southern_us") >= 0.4 && v.weekendShare <= 0.3 },
@@ -622,13 +623,13 @@ const FALLBACK_RULES: FallbackRule[] = [
   { label: "African Diaspora Explorer",       match: (v) => regionShare(v, "african") >= 0.25 && v.explorationRate >= 0.5 },
 
   { label: "Diner Breakfast Ritualist",       match: (v) => subShare(v, "breakfast_diner") >= 0.25 || subShare(v, "american_diner") >= 0.3 },
-  { label: "Deli Pastrami Loyalist",          match: (v) => subShare(v, "deli_jewish") >= 0.2 },
-  { label: "NY Slice Loyalist",               match: (v) => subShare(v, "pizza_nyc") >= 0.3 },
-  { label: "Deep Dish Devotee",               match: (v) => subShare(v, "pizza_chicago") >= 0.2 },
+  { label: "Deli Loyalist",                   match: (v) => subShare(v, "deli_jewish") >= 0.2 },
+  { label: "Northeast Slice Loyalist",        match: (v) => subShare(v, "pizza_nyc") >= 0.3 },
+  { label: "Midwest Deep Dish Devotee",       match: (v) => subShare(v, "pizza_chicago") >= 0.2 },
   { label: "Burger Joint Regular",            match: (v) => subShare(v, "burger") >= 0.3 },
   { label: "Steakhouse Connoisseur",          match: (v) => subShare(v, "steakhouse") >= 0.2 && v.averagePriceLevel >= 3 },
-  { label: "Seafood Counter Regular",         match: (v) => subShare(v, "seafood_house") >= 0.2 },
-  { label: "Bodega Breakfast Loyalist",       match: (v) => (subShare(v, "bodega_food") >= 0.2 || formatShare(v, "bodega") >= 0.2) && morningShare(v) >= 0.3 },
+  { label: "Coastal Seafood Regular",         match: (v) => subShare(v, "seafood_house") >= 0.2 },
+  { label: "Corner Store Breakfast Loyalist", match: (v) => (subShare(v, "bodega_food") >= 0.2 || formatShare(v, "bodega") >= 0.2) && morningShare(v) >= 0.3 },
 
   // ---- Format / time-led ----------------------------------------------------
   { label: "Fast-Casual Ritualist",           match: (v) => formatShare(v, "fast_casual") >= 0.55 && v.repeatRate >= 0.4 },
@@ -649,7 +650,7 @@ const FALLBACK_RULES: FallbackRule[] = [
   { label: "Late-Night Bar-Snack Crew",       match: (v) => lateNightShare(v) >= 0.4 && formatShare(v, "bar") >= 0.2 },
   { label: "Late-Night Solo",                 match: (v) => lateNightShare(v) >= 0.4 && occShare(v, "casual_solo") >= 0.4 },
   { label: "Brunch Socialite",                match: (v) => occShare(v, "brunch") >= 0.4 && v.weekendShare >= 0.5 },
-  { label: "Atlanta Brunch Socialite",        match: (v) => occShare(v, "brunch") >= 0.3 && v.topNeighborhoods[0]?.name?.toLowerCase().includes("atlanta") === true },
+  { label: "Southern Brunch Socialite",       match: (v) => occShare(v, "brunch") >= 0.3 && regionShare(v, "southern_us") >= 0.25 },
   { label: "Weekend Brunch Loyalist",         match: (v) => occShare(v, "brunch") >= 0.3 && v.weekendShare >= 0.5 },
   { label: "Weekday Lunch-Hour Loyalist",     match: (v) => occShare(v, "working_lunch") >= 0.4 && v.weekendShare <= 0.25 },
   { label: "Working-Lunch Regular",           match: (v) => occShare(v, "working_lunch") >= 0.35 },
@@ -843,59 +844,59 @@ export function expandedLore(primary: PalateIdentity): PalateLore {
 
 const ARCHETYPE_LORE: Record<string, PalateLore> = {
   Loyalist: {
-    story: "You've already done the homework — and you trust your homework. Loyalists turn favorites into rituals.",
-    behavior: "Same spots, same dishes, dialed-in by repetition. Variety isn't the point — verified-good is.",
+    story: "Trusts the homework. Favorites become rituals.",
+    behavior: "Same spots, same dishes. Verified-good over variety.",
   },
   Regular: {
-    story: "You return to places that earn it. Not stuck — settled. Three or four spots carry most of your week.",
-    behavior: "Steady cadence. Familiar staff. The kind of person who gets a 'the usual?' nod at the door.",
+    story: "Settled, not stuck. A few spots carry the week.",
+    behavior: "Steady cadence. Gets the 'the usual?' nod.",
   },
   Ritualist: {
-    story: "Your eating life has rhythm — same hours, same places, by design. The pattern is the point.",
-    behavior: "Lunch at 1:15, coffee on the way in, dinner before 8. Calendar runs the menu.",
+    story: "Eating life has rhythm. The pattern is the point.",
+    behavior: "Same hours, same places, by design.",
   },
   Seeker: {
-    story: "New is winning over familiar. You're collecting first impressions, not building loyalty — yet.",
-    behavior: "More opens-in-Maps than re-saves. The pattern: try it once, decide, move on.",
+    story: "New beats familiar. Collecting first impressions.",
+    behavior: "Tries once, decides, moves on.",
   },
   Cartographer: {
-    story: "You're building a map, not a list. Every neighborhood gets a turn. Repeats feel like wasted effort.",
-    behavior: "Wide spread across cities + cuisines. Rarely double-dips. Probably has 30+ saved spots untouched.",
+    story: "Building a map, not a list. Every area gets a turn.",
+    behavior: "Wide spread, rare repeats.",
   },
   Explorer: {
-    story: "Curiosity is your operating system. You'd rather try and miss than repeat and feel safe.",
-    behavior: "Reads menus end-to-end. Asks the server. Will take the recommendation that no one else takes.",
+    story: "Curiosity-driven. Tries and misses over safe and same.",
+    behavior: "Reads menus end-to-end. Takes the off-list pick.",
   },
   Devotee: {
-    story: "One cuisine, deep. You're not narrow — you're focused. The thing you love, you love precisely.",
-    behavior: "Knows the regional differences within their cuisine. Has opinions about sub-styles. Remembers chefs.",
+    story: "One cuisine, deep. Focused, not narrow.",
+    behavior: "Knows the sub-styles. Has opinions.",
   },
   Connoisseur: {
-    story: "Quality before quantity. Fewer meals, more deliberate ones. The bar is high and the bar is yours.",
-    behavior: "Books in advance. Researches the wine list. Treats dining as a craft, not a habit.",
+    story: "Quality over quantity. Fewer meals, more deliberate.",
+    behavior: "Books ahead. Treats dining as craft.",
   },
   Tastemaker: {
-    story: "You move between casual and upscale fluently. You like the high and the low — both done well.",
-    behavior: "Could rec you a $9 taco AND a $200 tasting menu in the same conversation. Range is the move.",
+    story: "Moves between casual and upscale fluently.",
+    behavior: "$9 taco and $200 tasting in the same week.",
   },
   Socialite: {
-    story: "Food is the excuse, the table is the point. Your best meals are about who, not what.",
-    behavior: "Long dinners. Plates passed around. Remembers the conversation more than the order.",
+    story: "The table matters more than the menu.",
+    behavior: "Long dinners. Remembers the company, not the order.",
   },
   Curator: {
-    story: "Few visits, none wasted. You're picking the meals you'll remember — not filling time.",
-    behavior: "Skips the obvious. Reads reviews carefully. Goes once, knows whether to go back.",
+    story: "Few visits, none wasted.",
+    behavior: "Skips the obvious. Goes once, knows.",
   },
   Pilgrim: {
-    story: "You'll cross town for the right bite. Distance isn't the constraint — quality is.",
-    behavior: "Has a list of 'worth-the-trip' spots. Will take a 30-min walk for a slice they trust.",
+    story: "Crosses town for the right bite.",
+    behavior: "Distance isn't the constraint. Quality is.",
   },
   Patron: {
-    story: "Same upmarket spots, on rotation. Loyalty + spending power, channeled at the places worth it.",
-    behavior: "Bartender knows their drink. Knows the Tuesday menu. Tips well, comes back monthly.",
+    story: "Same upmarket spots, on rotation.",
+    behavior: "Loyalty plus spending power, channeled.",
   },
   Default: {
-    story: "Your eating pattern is starting to take shape. Each visit sharpens it.",
-    behavior: "Keep logging — by week three, the picture gets specific.",
+    story: "Your pattern is forming.",
+    behavior: "Keep logging. The picture gets specific by week three.",
   },
 };

@@ -4,7 +4,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Button, Spacer } from "../../components/Button";
 import { Wordmark } from "../../components/Logo";
-import { LinearGradient } from "expo-linear-gradient";
 import { colors, spacing, type } from "../../theme";
 import { getCurrentLocation, logLocationEvent, requestForegroundPermission, classifyAccuracy } from "../../lib/location";
 import { nearbyRestaurants, type Restaurant } from "../../lib/places";
@@ -20,9 +19,7 @@ import {
 } from "../../lib/palate-insights";
 import { isoWeekStart } from "../../lib/wrapped";
 import { RecommendationsCard } from "../../components/RecommendationsCard";
-import { SavedNearbyCard } from "../../components/SavedNearbyCard";
-import { SkipNudgeCard } from "../../components/SkipNudgeCard";
-import { SwapNudgeCard } from "../../components/SwapNudgeCard";
+import { NudgeStack } from "../../components/NudgeStack";
 import { NextMovesPreview } from "../../components/NextMovesPreview";
 import { AspirationalPreview } from "../../components/AspirationalPreview";
 import { PalateExplainer } from "../../components/PalateExplainer";
@@ -147,19 +144,12 @@ export default function Home() {
           </View>
         </View>
 
-        {/* Right Now — primary action, always at top */}
+        {/* Right Now — primary action, always at top. Quiet card, no glow blob. */}
         <View style={styles.heroCard}>
-          <LinearGradient
-            colors={["#FFF1EE", colors.faint]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          <View style={styles.heroGlow} />
           <Text style={styles.heroEyebrow}>RIGHT NOW</Text>
           <Text style={styles.heroTitle}>Are you eating somewhere?</Text>
           <Text style={styles.heroBody}>
-            Tap to check what's around you. We'll ask before saving anything.
+            Tap to check what's around you.
           </Text>
           <Spacer />
           <Button title={checking ? "Checking…" : "Check now"} onPress={handleCheckNow} loading={checking} />
@@ -173,21 +163,24 @@ export default function Home() {
 
         <WrappedProgress visitsTotal={visits.length} />
 
-        <SavedNearbyCard />
-        <SkipNudgeCard />
-        <SwapNudgeCard />
+        {/* Surface only ONE nudge at a time — saved-nearby wins, then skip,
+            then swap. Reduces visual noise. */}
+        <NudgeStack />
 
         <RecommendationsCard />
 
         <NextMovesPreview />
-        <AspirationalPreview />
-        <PalateExplainer />
 
         {visits.length === 0 && (
           <View style={{ marginTop: spacing.xxl }}>
             <GettingStarted />
           </View>
         )}
+
+        {/* Aspirational + explainer demoted to bottom — discoverable but not
+            competing with the primary actions above. */}
+        <AspirationalPreview />
+        <PalateExplainer />
 
         <View style={{ marginTop: spacing.xxl }}>
           <View style={styles.recentHead}>
@@ -272,28 +265,16 @@ async function loadCurrentWeekInsight(): Promise<PalateInsight | null> {
 }
 
 function StreakChip({ count, loggedToday }: { count: number; loggedToday: boolean }) {
-  // When the streak is at risk (today not logged), slowly pulse the chip so
-  // it's harder to ignore. When safe, render statically.
-  const pulse = useState(() => new Animated.Value(1))[0];
-  useEffect(() => {
-    if (loggedToday) { pulse.setValue(1); return; }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1.08, duration: 800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [loggedToday, pulse]);
-
+  // Constant pulse felt like noise. Now: static at rest. The "at risk" color
+  // change alone is enough signal — the chip turns gray when the streak's
+  // about to break.
   return (
-    <Animated.View style={[styles.streakChip, !loggedToday && styles.streakChipAtRisk, { transform: [{ scale: pulse }] }]}>
+    <View style={[styles.streakChip, !loggedToday && styles.streakChipAtRisk]}>
       <Text style={styles.streakEmoji}>🔥</Text>
       <Text style={[styles.streakText, !loggedToday && styles.streakTextAtRisk]}>
         {count}
       </Text>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -446,14 +427,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.faint,
     borderRadius: 24,
     padding: spacing.lg,
-    overflow: "hidden",
-  },
-  heroGlow: {
-    position: "absolute",
-    top: -60, right: -50,
-    width: 180, height: 180, borderRadius: 999,
-    backgroundColor: colors.red,
-    opacity: 0.12,
+    borderWidth: 1,
+    borderColor: colors.line,
   },
   heroEyebrow: { ...type.micro },
   heroTitle: { ...type.title, marginTop: 6 },

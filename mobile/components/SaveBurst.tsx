@@ -8,17 +8,17 @@ import { colors } from "../theme";
 // from 0 → n, the burst plays. Stays mounted invisibly when idle.
 // ============================================================================
 
-const PIECE_COUNT = 14;
-const COLORS = [colors.red, "#FF6B45", "#FFB68C", "#FFE3D9"];
+// Toned down for minimalism — fewer pieces, softer palette, shorter travel.
+const PIECE_COUNT = 7;
+const COLORS = [colors.red, "#FFB68C"];
 
 export function SaveBurst({ fire }: { fire: number }) {
   const pieces = useRef(
     Array.from({ length: PIECE_COUNT }).map((_, i) => ({
       progress: new Animated.Value(0),
-      // Distribute evenly around a circle with a little jitter
-      angle: (i / PIECE_COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.5,
-      distance: 60 + Math.random() * 40,
-      size: 5 + Math.random() * 4,
+      angle: (i / PIECE_COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.4,
+      distance: 36 + Math.random() * 24,
+      size: 4 + Math.random() * 3,
       color: COLORS[i % COLORS.length],
     })),
   ).current;

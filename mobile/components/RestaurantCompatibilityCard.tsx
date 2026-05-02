@@ -111,24 +111,7 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
       </View>
 
       {m.reasons[0] && (
-        <Text style={styles.reason}>"{m.reasons[0]}"</Text>
-      )}
-
-      {m.reasons.length > 1 && (
-        <View style={styles.tagRow}>
-          {m.matchedSignals.slice(0, 3).map((s) => (
-            <View key={s} style={styles.tag}>
-              <Text style={styles.tagText}>{humanize(s)}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {restaurant.rating != null && (
-        <Text style={styles.rating}>
-          ★ {restaurant.rating.toFixed(1)}
-          {restaurant.user_rating_count ? ` · ${formatCount(restaurant.user_rating_count)} reviews` : ""}
-        </Text>
+        <Text style={styles.reason}>{m.reasons[0]}</Text>
       )}
 
       <View style={styles.actions}>
@@ -146,21 +129,17 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
         </View>
         <Pressable
           onPress={(e) => { e.stopPropagation(); openInAppleMaps(restaurant.name, restaurant.neighborhood); }}
+          onLongPress={(e) => { e.stopPropagation(); openInGoogleMaps(restaurant.name, restaurant.neighborhood); }}
           style={styles.btnGhost}
         >
-          <Text style={styles.btnGhostText}>Apple</Text>
-        </Pressable>
-        <Pressable
-          onPress={(e) => { e.stopPropagation(); openInGoogleMaps(restaurant.name, restaurant.neighborhood); }}
-          style={styles.btnGhost}
-        >
-          <Text style={styles.btnGhostText}>Google</Text>
+          <Text style={styles.btnGhostText}>Maps</Text>
         </Pressable>
         <Pressable
           onPress={(e) => { e.stopPropagation(); dismiss(); }}
           style={styles.btnSubtle}
+          hitSlop={8}
         >
-          <Text style={styles.btnSubtleText}>Not for me</Text>
+          <Text style={styles.btnSubtleText}>Pass</Text>
         </Pressable>
       </View>
     </TapCard>

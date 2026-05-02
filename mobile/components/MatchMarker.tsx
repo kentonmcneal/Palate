@@ -21,66 +21,64 @@ export function MatchMarker({ score }: { score: number | null }) {
 }
 
 // ============================================================================
-// TopMatchMarker — your highest-match nearby spot. Pulsing ring + a flame
-// that flickers and bobs. Eye-catcher meant to immediately pull attention.
+// TopMatchMarker — abstract glowing flame for the top-match nearby spot.
+// No emoji. Built from layered Animated.Views: a soft outer halo that pulses
+// (heat shimmer), a tighter glow that breathes, and a solid red core that
+// subtly morphs vertically (organic flame motion). Tasteful, not cartoony.
 // ============================================================================
 
 export function TopMatchMarker({ score }: { score: number }) {
-  const pulse = useRef(new Animated.Value(0)).current;
-  const flicker = useRef(new Animated.Value(0)).current;
-  const bob = useRef(new Animated.Value(0)).current;
+  const halo = useRef(new Animated.Value(0)).current;
+  const breath = useRef(new Animated.Value(0)).current;
+  const morph = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const ringLoop = Animated.loop(
+    const haloLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1100, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 1100, easing: Easing.in(Easing.ease), useNativeDriver: true }),
+        Animated.timing(halo, { toValue: 1, duration: 1600, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(halo, { toValue: 0, duration: 1600, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       ]),
     );
-    const flickerLoop = Animated.loop(
+    const breathLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(flicker, { toValue: 1, duration: 280, useNativeDriver: true }),
-        Animated.timing(flicker, { toValue: 0.6, duration: 220, useNativeDriver: true }),
-        Animated.timing(flicker, { toValue: 1, duration: 180, useNativeDriver: true }),
-        Animated.timing(flicker, { toValue: 0.8, duration: 320, useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 0, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       ]),
     );
-    const bobLoop = Animated.loop(
+    const morphLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(bob, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(bob, { toValue: 0, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(morph, { toValue: 1, duration: 850, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(morph, { toValue: 0, duration: 850, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]),
     );
-    ringLoop.start();
-    flickerLoop.start();
-    bobLoop.start();
-    return () => { ringLoop.stop(); flickerLoop.stop(); bobLoop.stop(); };
-  }, [pulse, flicker, bob]);
+    haloLoop.start();
+    breathLoop.start();
+    morphLoop.start();
+    return () => { haloLoop.stop(); breathLoop.stop(); morphLoop.stop(); };
+  }, [halo, breath, morph]);
 
-  const ringScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.7] });
-  const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.65, 0] });
-  const flameScale = flicker.interpolate({ inputRange: [0.6, 1], outputRange: [0.9, 1.15] });
-  const flameTranslateY = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -4] });
+  const haloScale = halo.interpolate({ inputRange: [0, 1], outputRange: [1, 1.55] });
+  const haloOpacity = halo.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] });
+  const breathScale = breath.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] });
+  const breathOpacity = breath.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0.85] });
+  const coreScaleY = morph.interpolate({ inputRange: [0, 1], outputRange: [1, 1.1] });
+  const coreScaleX = morph.interpolate({ inputRange: [0, 1], outputRange: [1, 0.92] });
 
   return (
     <View style={styles.topWrap}>
+      {/* Outer heat halo — soft, slow pulse */}
+      <Animated.View style={[styles.halo, { transform: [{ scale: haloScale }], opacity: haloOpacity }]} />
+      {/* Mid breath glow */}
+      <Animated.View style={[styles.glow, { transform: [{ scale: breathScale }], opacity: breathOpacity }]} />
+      {/* Solid core that morphs vertically — flame-like organic motion */}
       <Animated.View
         style={[
-          styles.ring,
-          { transform: [{ scale: ringScale }], opacity: ringOpacity },
+          styles.core,
+          { transform: [{ scaleX: coreScaleX }, { scaleY: coreScaleY }] },
         ]}
-      />
-      <View style={styles.topPin}>
-        <Animated.Text
-          style={[
-            styles.flame,
-            { transform: [{ scale: flameScale }, { translateY: flameTranslateY }] },
-          ]}
-        >
-          🔥
-        </Animated.Text>
-        <Text style={styles.topScore}>{score}</Text>
-      </View>
+      >
+        <Text style={styles.coreScore}>{score}</Text>
+      </Animated.View>
     </View>
   );
 }
@@ -101,19 +99,27 @@ const styles = StyleSheet.create({
   },
   pinText: { color: "#fff", fontSize: 12, fontWeight: "800" },
 
-  topWrap: { width: 56, height: 56, alignItems: "center", justifyContent: "center" },
-  ring: {
+  topWrap: { width: 64, height: 64, alignItems: "center", justifyContent: "center" },
+  halo: {
     position: "absolute",
-    width: 56, height: 56, borderRadius: 28,
+    width: 64, height: 64, borderRadius: 32,
     backgroundColor: colors.red,
   },
-  topPin: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: colors.ink,
-    alignItems: "center", justifyContent: "center",
-    borderWidth: 2.5, borderColor: colors.red,
-    flexDirection: "column",
+  glow: {
+    position: "absolute",
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: "#FF6B45",
   },
-  flame: { fontSize: 14, marginTop: -2 },
-  topScore: { color: "#fff", fontSize: 9, fontWeight: "800", marginTop: -2 },
+  core: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: colors.red,
+    alignItems: "center", justifyContent: "center",
+    shadowColor: colors.red,
+    shadowOpacity: 0.7,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.85)",
+  },
+  coreScore: { color: "#fff", fontSize: 11, fontWeight: "800" },
 });
