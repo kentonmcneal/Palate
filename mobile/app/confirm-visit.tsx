@@ -21,7 +21,11 @@ export default function ConfirmVisit() {
 
   const [showAlts, setShowAlts] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [celebration, setCelebration] = useState<{ name: string } | null>(null);
+  const [celebration, setCelebration] = useState<{
+    name: string;
+    restaurantId: string;
+    visitId: string;
+  } | null>(null);
 
   const alternates: Restaurant[] = params.alternates
     ? JSON.parse(params.alternates as string)
@@ -33,11 +37,22 @@ export default function ConfirmVisit() {
       const result = await saveVisit({ googlePlaceId: params.place_id as string, source: "auto" });
       await recordPromptDecision(params.place_id as string, "confirmed");
       if (result.isFirstVisit) {
-        setCelebration({ name: params.name as string });
+        setCelebration({
+          name: params.name as string,
+          restaurantId: result.restaurant_id,
+          visitId: result.id,
+        });
       } else {
-        router.back();
-        const r = rewardCopy(result.totalVisits);
-        setTimeout(() => Alert.alert(r.title, r.message), 250);
+        // Skip the alert toast and go straight to "What did you get?". The
+        // rate-items screen is non-blocking — Skip is one tap.
+        router.replace({
+          pathname: "/rate-items",
+          params: {
+            restaurant_id: result.restaurant_id,
+            visit_id: result.id,
+            name: params.name as string,
+          },
+        });
       }
     } catch (e: any) {
       Alert.alert("Couldn't save", e.message ?? "Try again");
@@ -62,11 +77,20 @@ export default function ConfirmVisit() {
       const result = await saveVisit({ googlePlaceId: p.google_place_id, source: "auto" });
       await recordPromptDecision(p.google_place_id, "confirmed");
       if (result.isFirstVisit) {
-        setCelebration({ name: p.name });
+        setCelebration({
+          name: p.name,
+          restaurantId: result.restaurant_id,
+          visitId: result.id,
+        });
       } else {
-        router.back();
-        const r = rewardCopy(result.totalVisits);
-        setTimeout(() => Alert.alert(r.title, r.message), 250);
+        router.replace({
+          pathname: "/rate-items",
+          params: {
+            restaurant_id: result.restaurant_id,
+            visit_id: result.id,
+            name: p.name,
+          },
+        });
       }
     } catch (e: any) {
       Alert.alert("Couldn't save", e.message ?? "Try again");
@@ -139,7 +163,18 @@ export default function ConfirmVisit() {
       <FirstVisitCelebration
         visible={!!celebration}
         restaurantName={celebration?.name ?? ""}
-        onDismiss={() => { setCelebration(null); router.back(); }}
+        onDismiss={() => {
+          const c = celebration;
+          setCelebration(null);
+          if (c) {
+            router.replace({
+              pathname: "/rate-items",
+              params: { restaurant_id: c.restaurantId, visit_id: c.visitId, name: c.name },
+            });
+          } else {
+            router.back();
+          }
+        }}
       />
     </SafeAreaView>
   );

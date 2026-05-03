@@ -408,6 +408,19 @@ export default function Settings() {
           <Note>One reminder a week, Sunday at 9 AM. That's it.</Note>
         </Section>
 
+        <Section title="Your Wrapped">
+          <Button title="Open this week's Wrapped" onPress={() => router.push("/(tabs)/wrapped")} />
+          <Note>One-glance reflection: identity, three stats, one insight.</Note>
+          <Spacer />
+          <Button title="Generate this week's Wrapped" onPress={manualGenerate} variant="ghost" />
+          <Spacer />
+          <Button
+            title="Preview Year in Palate (December)"
+            onPress={() => router.push("/year-in-review")}
+            variant="ghost"
+          />
+        </Section>
+
         <Section title="Insights">
           <Button title="Your Insights" onPress={() => router.push("/insights-deep")} />
           <Note>Palate Lore, percentile rankings, people-like-you, your aspirational palate, top palates in your area.</Note>
@@ -415,16 +428,6 @@ export default function Settings() {
           <Button
             title="Charts & analytics"
             onPress={() => router.push("/insights")}
-            variant="ghost"
-          />
-        </Section>
-
-        <Section title="Wrapped">
-          <Button title="Generate this week's Wrapped" onPress={manualGenerate} variant="ghost" />
-          <Spacer />
-          <Button
-            title="Preview Year in Palate (December)"
-            onPress={() => router.push("/year-in-review")}
             variant="ghost"
           />
         </Section>

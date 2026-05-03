@@ -60,13 +60,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="wrapped"
-        options={{
-          title: "Wrapped",
-          tabBarIcon: ({ color }) => <TabIcon glyph="✦" color={color} dot={wrappedHasNew} />,
-        }}
-      />
-      <Tabs.Screen
         name="feed"
         options={{
           title: "Feed",
@@ -77,10 +70,13 @@ export default function TabsLayout() {
         name="settings"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) => <TabIcon glyph="◐" color={color} />,
+          // Wrapped now lives on Profile — surface its "new this week" dot here
+          // so users still get a glanceable nudge to open it on Sundays.
+          tabBarIcon: ({ color }) => <TabIcon glyph="◐" color={color} dot={wrappedHasNew} />,
         }}
       />
       {/* Hidden from tab bar but routes still exist for direct navigation */}
+      <Tabs.Screen name="wrapped" options={{ href: null }} />
       <Tabs.Screen name="add" options={{ href: null }} />
       <Tabs.Screen name="wishlist" options={{ href: null }} />
     </Tabs>

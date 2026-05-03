@@ -14,6 +14,10 @@ import { addToWishlist } from "../../lib/palate-insights";
 import { openInAppleMaps, openInGoogleMaps } from "../../lib/maps";
 import { triggerHapticSuccess } from "../../lib/haptics";
 import { pickSaveCopy } from "../../lib/save-copy";
+import {
+  myRatingsForRestaurant, topItemsForRestaurant,
+  type MyItemRating, type MenuItemSummary,
+} from "../../lib/menu-items";
 
 // ============================================================================
 // Restaurant detail — your full history at one place + match score + actions.
@@ -55,6 +59,8 @@ export default function RestaurantDetailScreen() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [alreadySaved, setAlreadySaved] = useState(false);
+  const [myItems, setMyItems] = useState<MyItemRating[]>([]);
+  const [topItems, setTopItems] = useState<MenuItemSummary[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -72,7 +78,7 @@ export default function RestaurantDetailScreen() {
       const r = rest as RestaurantRow;
       setRestaurant(r);
 
-      const [visitsRes, vector, wishRes] = await Promise.all([
+      const [visitsRes, vector, wishRes, mine, top] = await Promise.all([
         user ? supabase
           .from("visits")
           .select("id, visited_at, meal_type, notes, photo_url")
@@ -86,10 +92,14 @@ export default function RestaurantDetailScreen() {
           .eq("user_id", user.id)
           .eq("restaurant_id", r.id)
           .maybeSingle() : Promise.resolve({ data: null }),
+        myRatingsForRestaurant(r.id).catch(() => []),
+        topItemsForRestaurant(r.id, 5).catch(() => []),
       ]);
 
       setVisits((visitsRes as any).data ?? []);
       setAlreadySaved(!!(wishRes as any).data);
+      setMyItems(mine);
+      setTopItems(top);
       if (vector) {
         const m = scoreMatch(vector, {
           cuisine: r.cuisine_type,
@@ -205,6 +215,42 @@ export default function RestaurantDetailScreen() {
 
         <Spacer size={24} />
 
+        {/* Your items here — surfaces the post-visit ratings the user gave. */}
+        {myItems.length > 0 && (
+          <>
+            <Text style={type.micro}>YOUR ITEMS HERE</Text>
+            <Spacer size={8} />
+            {myItems.slice(0, 6).map((m) => (
+              <View key={m.item.id} style={styles.itemRow}>
+                <Text style={styles.itemName} numberOfLines={1}>{m.item.name}</Text>
+                <View style={[styles.ratingPill, ratingPillStyle(m.rating)]}>
+                  <Text style={[styles.ratingPillText, ratingPillTextStyle(m.rating)]}>
+                    {ratingLabel(m.rating)}
+                  </Text>
+                </View>
+              </View>
+            ))}
+            <Spacer size={20} />
+          </>
+        )}
+
+        {/* What people loved here — aggregate signal across all users. */}
+        {topItems.length > 0 && (
+          <>
+            <Text style={type.micro}>WHAT PEOPLE LOVED</Text>
+            <Spacer size={8} />
+            {topItems.slice(0, 5).map((it) => (
+              <View key={it.id} style={styles.itemRow}>
+                <Text style={styles.itemName} numberOfLines={1}>{it.name}</Text>
+                <Text style={styles.lovedCount}>
+                  ♥ {it.loved_count}
+                </Text>
+              </View>
+            ))}
+            <Spacer size={20} />
+          </>
+        )}
+
         {/* Your visits */}
         <Text style={type.micro}>YOUR HISTORY HERE</Text>
         <Spacer size={8} />
@@ -249,6 +295,24 @@ export default function RestaurantDetailScreen() {
 
 function cap(s: string): string {
   return s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, " ") : s;
+}
+
+function ratingLabel(r: "loved" | "ok" | "not_for_me"): string {
+  if (r === "loved") return "Loved";
+  if (r === "ok") return "OK";
+  return "Not for me";
+}
+
+function ratingPillStyle(r: "loved" | "ok" | "not_for_me") {
+  if (r === "loved") return { backgroundColor: "#FFF1EE", borderColor: "#FFD7CE" };
+  if (r === "ok") return { backgroundColor: "#F4F4F4", borderColor: "#E2E2E2" };
+  return { backgroundColor: "#FAFAFA", borderColor: "#E8E8E8" };
+}
+
+function ratingPillTextStyle(r: "loved" | "ok" | "not_for_me") {
+  if (r === "loved") return { color: "#FF3008" };
+  if (r === "ok") return { color: "#7A7A7A" };
+  return { color: "#A0A0A0" };
 }
 
 const styles = StyleSheet.create({
@@ -310,4 +374,19 @@ const styles = StyleSheet.create({
   visitDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.red },
   visitDate: { fontSize: 15, fontWeight: "700", color: colors.ink },
   visitNote: { fontSize: 13, color: colors.mute, marginTop: 4, fontStyle: "italic", lineHeight: 18 },
+
+  itemRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingVertical: 10,
+    borderBottomColor: colors.line, borderBottomWidth: 1,
+    gap: 12,
+  },
+  itemName: { flex: 1, fontSize: 14, fontWeight: "700", color: colors.ink },
+  ratingPill: {
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  ratingPillText: { fontSize: 11, fontWeight: "800", letterSpacing: 0.3 },
+  lovedCount: { fontSize: 12, fontWeight: "700", color: colors.red },
 });
