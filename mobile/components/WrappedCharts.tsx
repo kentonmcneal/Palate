@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, Pressable } from "react-native";
 import { colors, spacing, type } from "../theme";
 import { loadAnalytics, type AnalyticsSummary } from "../lib/analytics-stats";
 import { DonutChart, type DonutSlice } from "./charts/DonutChart";
@@ -23,6 +23,7 @@ const DOW_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 export function WrappedCharts() {
   const [data, setData] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [focusedSlice, setFocusedSlice] = useState<number | null>(null);
 
   useEffect(() => {
     loadAnalytics("week").then((d) => {
@@ -56,29 +57,60 @@ export function WrappedCharts() {
     0,
   );
 
+  // Center text: swaps to the focused slice's value when one is selected.
+  const centerVal = focusedSlice != null
+    ? String(cuisineSlices[focusedSlice]?.value ?? 0)
+    : String(data.totalVisits);
+  const centerLab = focusedSlice != null
+    ? cuisineSlices[focusedSlice]?.label.toLowerCase() ?? "visits"
+    : "visits";
+
   return (
     <View style={styles.wrap}>
       {cuisineSlices.length > 0 && (
         <View style={styles.card}>
-          <Text style={type.micro}>CUISINE THIS WEEK</Text>
+          <View style={styles.headRow}>
+            <Text style={type.micro}>CUISINE THIS WEEK</Text>
+            {focusedSlice != null && (
+              <Pressable onPress={() => setFocusedSlice(null)}>
+                <Text style={styles.clearLink}>Clear</Text>
+              </Pressable>
+            )}
+          </View>
           <View style={styles.donutRow}>
             <DonutChart
               data={cuisineSlices}
               size={140}
               thickness={18}
-              centerValue={String(data.totalVisits)}
-              centerLabel="visits"
+              centerValue={centerVal}
+              centerLabel={centerLab}
+              focusedIndex={focusedSlice}
             />
             <View style={{ flex: 1, marginLeft: 16 }}>
-              {cuisineSlices.slice(0, 4).map((s) => (
-                <View key={s.label} style={styles.legendRow}>
-                  <View style={[styles.dot, { backgroundColor: s.color }]} />
-                  <Text style={styles.legendLabel} numberOfLines={1}>{s.label}</Text>
-                  <Text style={styles.legendValue}>{s.value}</Text>
-                </View>
-              ))}
+              {cuisineSlices.slice(0, 4).map((s, i) => {
+                const isFocused = focusedSlice === i;
+                return (
+                  <Pressable
+                    key={s.label}
+                    onPress={() => setFocusedSlice((cur) => (cur === i ? null : i))}
+                    style={[styles.legendRow, isFocused && styles.legendRowActive]}
+                  >
+                    <View style={[styles.dot, { backgroundColor: s.color }]} />
+                    <Text
+                      style={[styles.legendLabel, isFocused && { color: colors.ink, fontWeight: "800" }]}
+                      numberOfLines={1}
+                    >
+                      {s.label}
+                    </Text>
+                    <Text style={[styles.legendValue, isFocused && { color: colors.red }]}>
+                      {s.value}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
+          <Text style={styles.hint}>Tap a cuisine to focus it.</Text>
         </View>
       )}
 
@@ -88,6 +120,7 @@ export function WrappedCharts() {
           <View style={{ marginTop: 12 }}>
             <VerticalBars data={dowBars} accentIndex={dowAccentIndex} height={110} />
           </View>
+          <Text style={styles.hint}>Tap a bar to focus.</Text>
         </View>
       )}
     </View>
@@ -104,6 +137,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
+  headRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  clearLink: { fontSize: 12, fontWeight: "700", color: colors.red },
   donutRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -112,9 +147,15 @@ const styles = StyleSheet.create({
   legendRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+  },
+  legendRowActive: {
+    backgroundColor: colors.faint,
   },
   dot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
   legendLabel: { flex: 1, fontSize: 13, color: colors.ink, fontWeight: "500" },
   legendValue: { fontSize: 13, fontWeight: "700", color: colors.mute },
+  hint: { fontSize: 11, color: colors.mute, marginTop: 10, fontStyle: "italic" },
 });

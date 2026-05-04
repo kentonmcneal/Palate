@@ -17,6 +17,8 @@ type Props = {
   /** Big number rendered in the center (e.g. "42 visits"). */
   centerValue?: string;
   centerLabel?: string;
+  /** Index of slice to highlight (other slices dim). null = all equal. */
+  focusedIndex?: number | null;
 };
 
 /**
@@ -30,6 +32,7 @@ export function DonutChart({
   thickness = 22,
   centerValue,
   centerLabel,
+  focusedIndex = null,
 }: Props) {
   const radius = (size - thickness) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -53,8 +56,9 @@ export function DonutChart({
         />
         {/* Slice arcs — rotated -90 so they start at 12 o'clock */}
         <G rotation={-90} originX={size / 2} originY={size / 2}>
-          {data.map((slice) => {
+          {data.map((slice, i) => {
             const len = (slice.value / total) * circumference;
+            const dim = focusedIndex != null && focusedIndex !== i;
             const node = (
               <Circle
                 key={slice.label}
@@ -62,11 +66,12 @@ export function DonutChart({
                 cy={size / 2}
                 r={radius}
                 stroke={slice.color}
-                strokeWidth={thickness}
+                strokeWidth={focusedIndex === i ? thickness + 4 : thickness}
                 strokeLinecap="butt"
                 fill="none"
                 strokeDasharray={`${len} ${circumference - len}`}
                 strokeDashoffset={-offset}
+                opacity={dim ? 0.25 : 1}
               />
             );
             offset += len;

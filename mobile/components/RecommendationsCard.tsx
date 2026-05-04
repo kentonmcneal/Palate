@@ -13,7 +13,7 @@ import {
 } from "../lib/palate-insights";
 import { computeTasteVector } from "../lib/taste-vector";
 import { scoreMatch, distanceKm, formatDistance } from "../lib/match-score";
-import { getCurrentLocation } from "../lib/location";
+import { getEffectiveLocation, useBrowsingCity } from "../lib/browsing-location";
 import { triggerHapticSuccess } from "../lib/haptics";
 import { pickSaveCopy } from "../lib/save-copy";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
@@ -38,6 +38,7 @@ export function RecommendationsCard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [earlyEstimate, setEarlyEstimate] = useState(false);
+  const [browsingCity] = useBrowsingCity();
 
   const load = useCallback(async () => {
     try {
@@ -46,7 +47,7 @@ export function RecommendationsCard() {
       const [persona, vector, here] = await Promise.all([
         generateWeeklyPalatePersona(start, end),
         computeTasteVector().catch(() => null),
-        getCurrentLocation().catch(() => null),
+        getEffectiveLocation().catch(() => null),
       ]);
       if (!persona) {
         setRecs([]);
@@ -83,7 +84,7 @@ export function RecommendationsCard() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, browsingCity?.id]);
 
   // Hide the card entirely until we know if we have anything to show — keeps
   // the Home tab from flashing a useless block on first load.

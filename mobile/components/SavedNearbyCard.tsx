@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, Linking, Platform, Alert } from "rea
 import { useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import { listWishlist, type WishlistEntry } from "../lib/palate-insights";
-import { getCurrentLocation } from "../lib/location";
+import { getEffectiveLocation, useBrowsingCity } from "../lib/browsing-location";
 import { distanceKm, formatDistance } from "../lib/match-score";
 
 // ============================================================================
@@ -19,6 +19,7 @@ type Pick = { entry: WishlistEntry; km: number | null };
 export function SavedNearbyCard() {
   const router = useRouter();
   const [picks, setPicks] = useState<Pick[]>([]);
+  const [browsingCity] = useBrowsingCity();
 
   useEffect(() => {
     let alive = true;
@@ -26,7 +27,7 @@ export function SavedNearbyCard() {
       try {
         const [entries, here] = await Promise.all([
           listWishlist(),
-          getCurrentLocation().catch(() => null),
+          getEffectiveLocation().catch(() => null),
         ]);
         if (!alive) return;
 
@@ -52,7 +53,7 @@ export function SavedNearbyCard() {
       }
     })();
     return () => { alive = false; };
-  }, []);
+  }, [browsingCity?.id]);
 
   if (picks.length === 0) return null;
 

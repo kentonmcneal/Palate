@@ -22,6 +22,7 @@ import { RecommendationsCard } from "../../components/RecommendationsCard";
 import { SavedNearbyCard } from "../../components/SavedNearbyCard";
 import { GettingStarted } from "../../components/GettingStarted";
 import { Confetti } from "../../components/Confetti";
+import { LocationPill } from "../../components/LocationPill";
 
 const STREAK_MILESTONES = [7, 14, 30, 50, 100, 200, 365];
 
@@ -138,6 +139,12 @@ export default function Home() {
               <Text style={styles.addBtnText}>+</Text>
             </Pressable>
           </View>
+        </View>
+
+        {/* Browsing-location toggle. Lets users plan trips to other cities
+            without breaking visit-logging (which still uses real GPS). */}
+        <View style={{ marginBottom: spacing.md }}>
+          <LocationPill />
         </View>
 
         {/* HOME = DECISION ONLY. Four sections, in this order:

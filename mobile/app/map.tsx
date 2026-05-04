@@ -5,11 +5,12 @@ import { useRouter } from "expo-router";
 import MapView, { Marker, PROVIDER_DEFAULT, type Region } from "react-native-maps";
 import { colors, spacing, type } from "../theme";
 import { nearbyRestaurants } from "../lib/places";
-import { getCurrentLocation } from "../lib/location";
+import { getEffectiveLocation, useBrowsingCity } from "../lib/browsing-location";
 import { computeTasteVector, type TasteVector } from "../lib/taste-vector";
 import { scoreMatch } from "../lib/match-score";
 import { MatchMarker, TopMatchMarker } from "../components/MatchMarker";
 import { getCachedNearby, setCachedNearby } from "../lib/nearby-cache";
+import { LocationPill } from "../components/LocationPill";
 
 // Wider radius than the Discover-tab embedded map — fullscreen invites
 // browsing further afield. The pan-to-refetch logic below also re-queries
@@ -33,6 +34,7 @@ type MapPlace = {
 
 export default function FullscreenMap() {
   const router = useRouter();
+  const [browsingCity] = useBrowsingCity();
   const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
   const [places, setPlaces] = useState<Map<string, MapPlace>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -40,6 +42,7 @@ export default function FullscreenMap() {
   const vectorRef = useRef<TasteVector | null>(null);
   const lastFetchCenter = useRef<{ lat: number; lng: number } | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapRef = useRef<MapView | null>(null);
 
   const fetchAt = useCallback(async (lat: number, lng: number, radius: number, isInitial = false) => {
     if (isInitial) setLoading(true); else setRefetching(true);
@@ -94,7 +97,8 @@ export default function FullscreenMap() {
 
   const initialLoad = useCallback(async () => {
     try {
-      const loc = await getCurrentLocation();
+      const loc = await getEffectiveLocation();
+      if (!loc) { setLoading(false); return; }
       setHere({ lat: loc.lat, lng: loc.lng });
       await fetchAt(loc.lat, loc.lng, INITIAL_RADIUS_M, true);
     } catch {
@@ -103,6 +107,24 @@ export default function FullscreenMap() {
   }, [fetchAt]);
 
   useEffect(() => { initialLoad(); }, [initialLoad]);
+
+  // When the user picks a different city, animate to it and clear stale
+  // markers so the new area's results aren't crowded out by the old ones.
+  useEffect(() => {
+    if (!browsingCity) return;
+    setPlaces(new Map());
+    lastFetchCenter.current = null;
+    setHere({ lat: browsingCity.lat, lng: browsingCity.lng });
+    if (mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: browsingCity.lat,
+        longitude: browsingCity.lng,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      }, 600);
+    }
+    void fetchAt(browsingCity.lat, browsingCity.lng, INITIAL_RADIUS_M, false);
+  }, [browsingCity?.id]);
 
   // Pan handler — debounced. When the user drags to a new neighborhood we
   // refetch for that area. Existing markers stay in place via the Map merge.
@@ -126,7 +148,7 @@ export default function FullscreenMap() {
         <Pressable onPress={() => router.back()} style={styles.closeBtn}>
           <Text style={styles.closeText}>←</Text>
         </Pressable>
-        <Text style={type.title}>Map</Text>
+        <LocationPill />
         <View style={{ width: 40 }} />
       </View>
       {loading || !here ? (
@@ -134,6 +156,7 @@ export default function FullscreenMap() {
       ) : (
         <View style={{ flex: 1 }}>
           <MapView
+            ref={mapRef}
             provider={PROVIDER_DEFAULT}
             style={{ flex: 1 }}
             initialRegion={{

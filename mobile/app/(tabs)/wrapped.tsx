@@ -9,6 +9,8 @@ import { colors, spacing, type } from "../../theme";
 import { generateForCurrentWeek, latestWrapped, type Wrapped } from "../../lib/wrapped";
 import { WrappedCard } from "../../components/WrappedCard";
 import { WrappedStoryCard } from "../../components/WrappedStoryCard";
+import { WrappedCharts } from "../../components/WrappedCharts";
+import { WeeklyPalateInsights } from "../../components/WeeklyPalateInsights";
 import { Confetti } from "../../components/Confetti";
 import { shareWrappedToFeed } from "../../lib/feed";
 import { track } from "../../lib/analytics";
@@ -159,7 +161,13 @@ export default function WrappedTab() {
               </View>
             )}
 
-            {/* 4. Actions */}
+            {/* 4. Interactive charts — tap-to-focus donut + day-of-week bars */}
+            <WrappedCharts />
+
+            {/* 5. Per-week palate insights (composed from the week's vector) */}
+            <WeeklyPalateInsights weekStart={data.week_start} weekEnd={data.week_end} />
+
+            {/* 6. Actions */}
             <Spacer size={20} />
             <Pressable onPress={() => router.push("/insights-deep")} style={styles.deepLink}>
               <Text style={styles.deepLinkText}>See your full insights →</Text>

@@ -9,6 +9,8 @@ import { Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { nearbyRestaurants, searchRestaurants, type Restaurant } from "../../lib/places";
 import { getCurrentLocation, classifyAccuracy } from "../../lib/location";
+import { getEffectiveLocation, useBrowsingCity } from "../../lib/browsing-location";
+import { LocationPill } from "../../components/LocationPill";
 import { computeTasteVector, type TasteVector } from "../../lib/taste-vector";
 import { distanceKm, formatDistance } from "../../lib/match-score";
 import { rankRestaurantsForDiscovery, type RankedRestaurant } from "../../lib/restaurant-ranking";
@@ -16,6 +18,7 @@ import { trackImpressions } from "../../lib/recommendation-events";
 import { calculatePalateMatchScore, type RestaurantInput } from "../../lib/palate-match-score";
 import { RestaurantCompatibilityCard } from "../../components/RestaurantCompatibilityCard";
 import { CardSkeleton, Shimmer } from "../../components/Shimmer";
+import { FeaturedLists } from "../../components/FeaturedLists";
 
 // ============================================================================
 // Discover — three sub-tabs:
@@ -35,6 +38,7 @@ type SubTab = "most_compatible" | "trending" | "nearby";
 export default function DiscoverTab() {
   const router = useRouter();
   const [tab, setTab] = useState<SubTab>("most_compatible");
+  const [browsingCity] = useBrowsingCity();
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<RankedRestaurant[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -51,13 +55,16 @@ export default function DiscoverTab() {
     try {
       setError(null);
       setHereLoading(true);
-      const loc = await getCurrentLocation().catch(() => null);
+      // Browse-side queries respect the location override (city picker).
+      // Real GPS is the fallback.
+      const loc = await getEffectiveLocation().catch(() => null);
       if (!loc) {
-        setError("Turn on location in Settings → Palate.");
+        setError("Turn on location in Settings → Palate, or pick a city to browse.");
         setHereLoading(false); setFeedLoading(false);
         return;
       }
-      if (classifyAccuracy(loc.accuracy) === "low") {
+      // Skip the accuracy gate when the user has explicitly picked a city.
+      if (!browsingCity && classifyAccuracy((loc as any).accuracy) === "low") {
         setError("Location signal is fuzzy. Step outside and pull to refresh.");
         setHereLoading(false); setFeedLoading(false);
         return;
@@ -82,7 +89,8 @@ export default function DiscoverTab() {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // Re-run load whenever the user picks a different city.
+  useFocusEffect(useCallback(() => { load(); }, [load, browsingCity?.id]));
 
   // ---- Search (debounced via submit, not keystroke — keeps it fast) ----
   async function runSearch() {
@@ -147,7 +155,10 @@ export default function DiscoverTab() {
           />
         }
       >
-        <Text style={type.title}>Discover</Text>
+        <View style={styles.titleRow}>
+          <Text style={type.title}>Discover</Text>
+          <LocationPill />
+        </View>
         <Spacer size={14} />
 
         {/* Search bar */}
@@ -194,6 +205,9 @@ export default function DiscoverTab() {
           </View>
         ) : (
           <>
+            {/* Featured Lists — Beli-style curated rows above the sub-tabs. */}
+            <FeaturedLists here={here} city={browsingCity?.name ?? null} />
+
             {/* Sub-tabs — order: Most Compatible → Trending → Nearby */}
             <View style={styles.tabs}>
               <SubTabBtn label="Most Compatible" active={tab === "most_compatible"} onPress={() => setTab("most_compatible")} />
@@ -422,4 +436,5 @@ const styles = StyleSheet.create({
   },
 
   groupHead: { fontSize: 17, fontWeight: "800", color: colors.ink, letterSpacing: -0.3 },
+  titleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
 });
