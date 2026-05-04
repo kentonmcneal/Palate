@@ -23,6 +23,8 @@ import { SavedNearbyCard } from "../../components/SavedNearbyCard";
 import { GettingStarted } from "../../components/GettingStarted";
 import { Confetti } from "../../components/Confetti";
 import { LocationPill } from "../../components/LocationPill";
+import { RightNowHero } from "../../components/RightNowHero";
+import { StretchPick } from "../../components/StretchPick";
 
 const STREAK_MILESTONES = [7, 14, 30, 50, 100, 200, 365];
 
@@ -147,18 +149,41 @@ export default function Home() {
           <LocationPill />
         </View>
 
-        {/* HOME = DECISION ONLY. Four sections, in this order:
-            Hero → Most Compatible → Places you've been meaning to go → Recent.
+        {/* HOME = DECISION ENGINE. Strict order per spec:
+            1. What should I eat right now (DOMINANT)
+            2. Places you'll probably like
+            3. One place to stretch your palate
+            4. Saved restaurants
+            (Recent stays at the bottom as a lightweight diary peek.)
             Analysis lives on Profile → Insights. Reflection lives on Wrapped. */}
-        <View style={styles.heroCard}>
-          <Text style={styles.heroEyebrow}>RIGHT NOW</Text>
-          <Text style={styles.heroTitle}>Where are you eating?</Text>
-          <Spacer />
-          <Button title={checking ? "Checking…" : "Check now"} onPress={handleCheckNow} loading={checking} />
+
+        {/* 1. The dominant decision card. */}
+        <RightNowHero />
+
+        {/* "Check now" stays as a secondary action — auto-detect path is still
+            valuable when you're already at a restaurant. Demoted from hero. */}
+        <View style={styles.checkNowRow}>
+          <Pressable
+            onPress={handleCheckNow}
+            style={styles.checkNowBtn}
+            disabled={checking}
+          >
+            <Text style={styles.checkNowText}>
+              {checking ? "Checking…" : "Already at a spot? Check now"}
+            </Text>
+          </Pressable>
         </View>
 
+        {/* 2. Places you'll probably like. */}
+        <Text style={styles.sectionHead}>Places you'll probably like</Text>
         <RecommendationsCard />
 
+        {/* 3. One stretch pick. */}
+        <View style={{ marginTop: spacing.xl }}>
+          <StretchPick />
+        </View>
+
+        {/* 4. Saved restaurants. */}
         <SavedNearbyCard />
 
         {visits.length === 0 && (
@@ -418,6 +443,20 @@ const styles = StyleSheet.create({
   heroEyebrow: { ...type.micro },
   heroTitle: { ...type.title, marginTop: 6 },
   heroBody: { ...type.body, color: colors.mute, marginTop: 6, lineHeight: 22 },
+
+  sectionHead: {
+    fontSize: 18, fontWeight: "800", color: colors.ink,
+    letterSpacing: -0.3,
+    marginTop: spacing.xl,
+    marginBottom: -4,  // RecommendationsCard already has its own marginTop
+  },
+  checkNowRow: { marginTop: spacing.sm, alignItems: "center" },
+  checkNowBtn: {
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: "transparent",
+  },
+  checkNowText: { color: colors.mute, fontSize: 12, fontWeight: "700" },
   emptyCard: {
     borderRadius: 18,
     borderWidth: 1,

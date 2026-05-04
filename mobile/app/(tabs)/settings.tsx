@@ -17,6 +17,8 @@ import {
   disableSundayWrappedReminder,
 } from "../../lib/notifications";
 import { loadAnalytics, type AnalyticsSummary } from "../../lib/analytics-stats";
+import { computeTasteVector } from "../../lib/taste-vector";
+import { generateIdentitySet, type PalateIdentitySet } from "../../lib/palate-labels";
 import { getMyProfile, setProfileVisibility, setDisplayName, setUsername, uploadAvatar, type ProfileVisibility } from "../../lib/profile";
 import { listIncomingRequests } from "../../lib/friends";
 import { generateInviteLink, inviteShareMessage, getMyReferralCount } from "../../lib/referrals";
@@ -39,6 +41,7 @@ export default function Settings() {
   const [email, setEmail] = useState<string | null>(null);
   const [sundayReminder, setSundayReminder] = useState(false);
   const [stats, setStats] = useState<AnalyticsSummary | null>(null);
+  const [identitySet, setIdentitySet] = useState<PalateIdentitySet | null>(null);
   const [visibility, setVisibility] = useState<ProfileVisibility>("friends");
   const [displayName, setDisplayNameState] = useState<string | null>(null);
   const [username, setUsernameState] = useState<string | null>(null);
@@ -57,6 +60,10 @@ export default function Settings() {
     supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
     isReminderEnabled().then(setSundayReminder);
     loadAnalytics("all").then(setStats).catch(() => {});
+    // Compute the user's overall (all-time) palate identity for the Profile.
+    computeTasteVector().then((v) => {
+      if (v && v.visitCount > 0) setIdentitySet(generateIdentitySet(v));
+    }).catch(() => {});
     getMyProfile().then((p) => {
       if (!p) return;
       setVisibility(p.profile_visibility);
@@ -265,6 +272,20 @@ export default function Settings() {
               <Text style={styles.editNameText}>{displayName ? "Edit name" : "Set name"}</Text>
             </Pressable>
           </View>
+
+          {/* Overall palate identity — promoted to the top of the Profile card.
+              Tap to dive into deep insights. */}
+          {identitySet && (
+            <Pressable
+              onPress={() => router.push("/insights-deep")}
+              style={styles.identityBlock}
+              accessibilityRole="button"
+            >
+              <Text style={styles.identityEyebrow}>YOUR PALATE</Text>
+              <Text style={styles.identityName}>{identitySet.primary.label}</Text>
+              <Text style={styles.identityDesc}>{identitySet.primary.description}</Text>
+            </Pressable>
+          )}
 
           {stats && stats.totalVisits > 0 && (
             <>
@@ -599,6 +620,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   avatarBadgeText: { color: "#fff", fontSize: 11, fontWeight: "800" },
+  identityBlock: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: colors.ink,
+  },
+  identityEyebrow: { color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
+  identityName: { color: colors.red, fontSize: 24, fontWeight: "800", letterSpacing: -0.5, marginTop: 4 },
+  identityDesc: { color: "rgba(255,255,255,0.78)", fontSize: 13, lineHeight: 18, marginTop: 6, fontWeight: "500" },
   profileBlock: {
     marginTop: 18,
     paddingTop: 14,

@@ -6,7 +6,8 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { LAST_SEEN_WRAPPED_KEY } from "./_layout";
 import { Button, Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
-import { generateForCurrentWeek, latestWrapped, type Wrapped } from "../../lib/wrapped";
+import { generateForCurrentWeek, latestWrapped, isoWeekStart, type Wrapped } from "../../lib/wrapped";
+import { STORY_LAST_SHOWN_KEY } from "../wrapped-story";
 import { WrappedCard } from "../../components/WrappedCard";
 import { WrappedStoryCard } from "../../components/WrappedStoryCard";
 import { WrappedCharts } from "../../components/WrappedCharts";
@@ -61,7 +62,23 @@ export default function WrappedTab() {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
+  useFocusEffect(useCallback(() => {
+    refresh();
+    // Show the 3-card story intro the first time per week. Gate via
+    // AsyncStorage so we only do it once per ISO week.
+    (async () => {
+      try {
+        const lastShown = await AsyncStorage.getItem(STORY_LAST_SHOWN_KEY);
+        const thisWeek = isoWeekStart();
+        if (lastShown !== thisWeek) {
+          // Delay slightly so the focus transition completes first.
+          setTimeout(() => router.push("/wrapped-story"), 80);
+        }
+      } catch {
+        // ignore — story is non-critical
+      }
+    })();
+  }, [refresh, router]));
 
   async function generate() {
     setLoading(true);
@@ -158,7 +175,11 @@ export default function WrappedTab() {
             {/* 1. The Wrapped card itself — black hero with identity, stats,
                 top spots. Same component used for sharing, just visible now. */}
             <ViewShot ref={cardRef as any} options={{ format: "png", quality: 1 }}>
-              <WrappedCard data={data} personaOverride={identityLabel()} />
+              <WrappedCard
+                data={data}
+                personaOverride={identityLabel()}
+                personaDescription={stage >= 3 && identities ? identities.primary.description : undefined}
+              />
             </ViewShot>
 
             {/* 2. One insight line */}

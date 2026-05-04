@@ -11,7 +11,7 @@ import { matchScoreColor } from "../lib/match-score";
 // them first when scanning the map.
 // ============================================================================
 
-const HIGH_MATCH = 60;
+const PULSE_THRESHOLD = 50;
 
 export function MatchMarker({ score }: { score: number | null }) {
   if (score == null) {
@@ -20,33 +20,48 @@ export function MatchMarker({ score }: { score: number | null }) {
   const base = matchScoreColor(score);
   const top = lighten(base, 0.18);
   const bottom = darken(base, 0.22);
-  const isHigh = score >= HIGH_MATCH;
-  return <PinBody score={score} top={top} bottom={bottom} glow={base} pulse={isHigh} />;
+  // Pulse strength scales with score: 50 → barely visible, 100 → strong.
+  // This gives instant visual hierarchy across the map.
+  const pulseStrength = score >= PULSE_THRESHOLD
+    ? Math.min(1, (score - PULSE_THRESHOLD) / 50)
+    : 0;
+  return <PinBody score={score} top={top} bottom={bottom} glow={base} pulseStrength={pulseStrength} />;
 }
 
-function PinBody({ score, top, bottom, glow, pulse }: {
-  score: number; top: string; bottom: string; glow: string; pulse: boolean;
+function PinBody({ score, top, bottom, glow, pulseStrength }: {
+  score: number; top: string; bottom: string; glow: string;
+  /** 0..1 — controls halo size, opacity, and breath duration. */
+  pulseStrength: number;
 }) {
   const breath = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!pulse) return;
+    if (pulseStrength <= 0) return;
+    // Faster breath for higher scores so the most compatible spots feel alive.
+    const duration = 1500 - pulseStrength * 600; // 1500ms at 50, 900ms at 100
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(breath, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(breath, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 1, duration, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 0, duration, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       ]),
     );
     loop.start();
     return () => loop.stop();
-  }, [pulse, breath]);
+  }, [pulseStrength, breath]);
 
-  const haloScale = breath.interpolate({ inputRange: [0, 1], outputRange: [1, 1.4] });
-  const haloOpacity = breath.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] });
+  // Bigger halo + higher peak opacity for higher pulseStrength.
+  const haloScale = breath.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.25 + 0.35 * pulseStrength], // 1.25 at 50, 1.6 at 100
+  });
+  const haloOpacity = breath.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.25 + 0.4 * pulseStrength, 0],
+  });
 
   return (
     <View style={styles.wrap}>
-      {pulse && (
+      {pulseStrength > 0 && (
         <Animated.View
           style={[
             styles.halo,
@@ -54,7 +69,7 @@ function PinBody({ score, top, bottom, glow, pulse }: {
           ]}
         />
       )}
-      <View style={[styles.pinShadow, { shadowColor: glow }]}>
+      <View style={[styles.pinShadow, { shadowColor: glow, shadowOpacity: 0.4 + 0.4 * pulseStrength }]}>
         <View style={styles.pin}>
           <LinearGradient
             colors={[top, bottom]}

@@ -35,10 +35,19 @@ const TOP_PER_CATEGORY = 10;
 const MIN_PER_CATEGORY = 3;
 
 type SubTab = "most_compatible" | "trending" | "nearby";
+type SortKey = "compat_high" | "compat_low" | "distance" | "stretch";
+
+const SORT_LABEL: Record<SortKey, string> = {
+  compat_high: "Highest match",
+  compat_low: "Lowest match",
+  distance: "Closest",
+  stretch: "Stretch",
+};
 
 export default function DiscoverTab() {
   const router = useRouter();
   const [tab, setTab] = useState<SubTab>("most_compatible");
+  const [sort, setSort] = useState<SortKey>("compat_high");
   const [browsingCity] = useBrowsingCity();
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<RankedRestaurant[] | null>(null);
@@ -126,31 +135,51 @@ export default function DiscoverTab() {
     [allNearby, vector, here, personal],
   );
 
-  // Most Compatible: bucketed ranker (Safe + Stretch combined), no bucket
-  // headers — just one ranked list, highest match first.
-  const [mostCompatibleList, setMostCompatibleList] = useState<RankedRestaurant[]>([]);
+  // Most Compatible: bucketed ranker. Store a flagged pool (safe vs stretch)
+  // so the sort selector can re-order without re-fetching.
+  const [mcPool, setMcPool] = useState<{ r: RankedRestaurant; isStretch: boolean }[]>([]);
   useFocusEffect(useCallback(() => {
     if (allNearby.length === 0) return;
     let alive = true;
     rankRestaurantsForDiscovery({
       vector, candidates: allNearby, here: here ?? undefined,
-      now: new Date(), perBucket: 8,
+      now: new Date(), perBucket: 12,
     }).then((b) => {
       if (!alive) return;
-      const merged = [...b.safe, ...b.stretch];
       const seen = new Set<string>();
-      const dedup = merged.filter((r) => {
-        if (seen.has(r.google_place_id)) return false;
-        seen.add(r.google_place_id); return true;
-      });
-      // Re-score with the personal layer (anti-staleness ON for the
-      // recommendations surface) and re-sort high → low.
-      const rescored = dedup.map((r) => buildRankedWithStaleness(r, vector, here, personal));
-      rescored.sort((a, b) => (b.match?.score ?? 0) - (a.match?.score ?? 0));
-      setMostCompatibleList(rescored.slice(0, TOP_PER_TAB));
+      const pool: { r: RankedRestaurant; isStretch: boolean }[] = [];
+      for (const r of b.safe) {
+        if (seen.has(r.google_place_id)) continue;
+        seen.add(r.google_place_id);
+        pool.push({ r: buildRankedWithStaleness(r, vector, here, personal), isStretch: false });
+      }
+      for (const r of b.stretch) {
+        if (seen.has(r.google_place_id)) continue;
+        seen.add(r.google_place_id);
+        pool.push({ r: buildRankedWithStaleness(r, vector, here, personal), isStretch: true });
+      }
+      setMcPool(pool);
     });
     return () => { alive = false; };
   }, [allNearby, vector, here, personal]));
+
+  const mostCompatibleList = useMemo(() => {
+    const arr = [...mcPool];
+    if (sort === "compat_high") {
+      arr.sort((a, b) => (b.r.match?.score ?? 0) - (a.r.match?.score ?? 0));
+    } else if (sort === "compat_low") {
+      arr.sort((a, b) => (a.r.match?.score ?? 0) - (b.r.match?.score ?? 0));
+    } else if (sort === "distance") {
+      arr.sort((a, b) => (a.r.distanceKm ?? 999) - (b.r.distanceKm ?? 999));
+    } else if (sort === "stretch") {
+      // Stretch first, then by score desc within group.
+      arr.sort((a, b) => {
+        if (a.isStretch !== b.isStretch) return a.isStretch ? -1 : 1;
+        return (b.r.match?.score ?? 0) - (a.r.match?.score ?? 0);
+      });
+    }
+    return arr.map((x) => x.r).slice(0, TOP_PER_TAB);
+  }, [mcPool, sort]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -241,9 +270,15 @@ export default function DiscoverTab() {
               </>
             ) : (
               <>
-                {tab === "most_compatible" && <List items={mostCompatibleList} surface="discover_for_you" emptyMsg="Log a few visits and we'll learn." />}
-                {tab === "trending"        && <TrendingGroups groups={trendingGroups} />}
-                {tab === "nearby"          && <List items={nearbyList} surface="discover_shelf" emptyMsg="Nothing nearby." />}
+                {tab === "most_compatible" && (
+                  <>
+                    <SortRow value={sort} onChange={setSort} />
+                    <Spacer size={10} />
+                    <List items={mostCompatibleList} surface="discover_for_you" emptyMsg="Log a few visits and we'll learn." />
+                  </>
+                )}
+                {tab === "trending" && <TrendingGroups groups={trendingGroups} />}
+                {tab === "nearby"   && <List items={nearbyList} surface="discover_shelf" emptyMsg="Nothing nearby." />}
               </>
             )}
           </>
@@ -262,6 +297,22 @@ function SubTabBtn({ label, active, onPress }: { label: string; active: boolean;
     <Pressable onPress={onPress} style={[styles.tabBtn, active && styles.tabBtnActive]}>
       <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
     </Pressable>
+  );
+}
+
+function SortRow({ value, onChange }: { value: SortKey; onChange: (k: SortKey) => void }) {
+  const order: SortKey[] = ["compat_high", "compat_low", "distance", "stretch"];
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow}>
+      {order.map((k) => {
+        const active = k === value;
+        return (
+          <Pressable key={k} onPress={() => onChange(k)} style={[styles.sortChip, active && styles.sortChipActive]}>
+            <Text style={[styles.sortChipText, active && styles.sortChipTextActive]}>{SORT_LABEL[k]}</Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
   );
 }
 
@@ -472,4 +523,15 @@ const styles = StyleSheet.create({
 
   groupHead: { fontSize: 17, fontWeight: "800", color: colors.ink, letterSpacing: -0.3 },
   titleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+
+  sortRow: { gap: 8, paddingRight: spacing.lg },
+  sortChip: {
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: colors.faint,
+    borderWidth: 1, borderColor: colors.line,
+  },
+  sortChipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  sortChipText: { fontSize: 12, fontWeight: "700", color: colors.ink },
+  sortChipTextActive: { color: "#fff" },
 });

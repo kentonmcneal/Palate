@@ -227,7 +227,11 @@ function scoreBehavior(
     score += overlap * 0.4; weight += 0.4;
     if (overlap >= 0.25) {
       const top = r.flavor_tags.find((f) => (v.flavor[f] ?? 0) > 0);
-      if (top) matched.push({ key: "flavor_match", reason: `${humanize(top)}-forward — your kind of bite.`, strength: overlap });
+      if (top) matched.push({
+        key: "flavor_match",
+        reason: `Leans on ${humanize(top).toLowerCase()} flavors — you order that often.`,
+        strength: overlap,
+      });
     }
   }
   return weight > 0 ? Math.min(1, score / weight) : 0.5;

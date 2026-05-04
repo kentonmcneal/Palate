@@ -60,7 +60,7 @@ export function SavedNearbyCard() {
   return (
     <View style={styles.card}>
       <View style={styles.head}>
-        <Text style={styles.eyebrow}>PLACES YOU'VE BEEN MEANING TO GO</Text>
+        <Text style={styles.eyebrow}>SAVED RESTAURANTS</Text>
         <Pressable onPress={() => router.push("/(tabs)/wishlist")}>
           <Text style={styles.viewAll}>View all →</Text>
         </Pressable>

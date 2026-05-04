@@ -14,6 +14,7 @@ import { addToWishlist } from "../../lib/palate-insights";
 import { openInAppleMaps, openInGoogleMaps } from "../../lib/maps";
 import { triggerHapticSuccess } from "../../lib/haptics";
 import { pickSaveCopy } from "../../lib/save-copy";
+import { Confetti } from "../../components/Confetti";
 import {
   myRatingsForRestaurant, topItemsForRestaurant,
   type MyItemRating, type MenuItemSummary,
@@ -61,6 +62,7 @@ export default function RestaurantDetailScreen() {
   const [alreadySaved, setAlreadySaved] = useState(false);
   const [myItems, setMyItems] = useState<MyItemRating[]>([]);
   const [topItems, setTopItems] = useState<MenuItemSummary[]>([]);
+  const [confettiKey, setConfettiKey] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -131,6 +133,7 @@ export default function RestaurantDetailScreen() {
       await addToWishlist(restaurant.google_place_id, { source: "manual" });
       void triggerHapticSuccess();
       setSaved(true);
+      setConfettiKey((k) => k + 1);
       const c = pickSaveCopy();
       setTimeout(() => Alert.alert(c.title, c.body), 200);
     } catch (e: any) {
@@ -163,6 +166,7 @@ export default function RestaurantDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <Confetti fire={confettiKey > 0} count={90} />
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.closeBtn}>
           <Text style={styles.closeText}>←</Text>

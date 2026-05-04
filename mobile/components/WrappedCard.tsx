@@ -6,11 +6,15 @@ import type { Wrapped } from "../lib/wrapped";
 export function WrappedCard({
   data,
   personaOverride,
+  personaDescription,
 }: {
   data: Wrapped;
   /** When provided, replaces the stored personality_label — used to render
    * the Palate Feature Engine's composed identity. */
   personaOverride?: string;
+  /** One-line description of what the persona means. Surfaces below the
+   *  identity label as a calm, premium subtitle. */
+  personaDescription?: string;
 }) {
   const j = data.wrapped_json;
   const top3 = j.top_three ?? [];
@@ -35,8 +39,11 @@ export function WrappedCard({
         </Text>
       </View>
 
-      <Text style={styles.youAre}>You are</Text>
+      <Text style={styles.youAre}>YOUR PALATE THIS WEEK</Text>
       <Text style={styles.persona}>{personaLabel}</Text>
+      {personaDescription ? (
+        <Text style={styles.personaDescription}>{personaDescription}</Text>
+      ) : null}
 
       <View style={styles.stats}>
         <Stat label="visits" value={String(data.total_visits)} />
@@ -127,6 +134,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: -0.6,
     marginTop: 4,
+  },
+  personaDescription: {
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 8,
+    fontWeight: "500",
   },
   stats: { flexDirection: "row", gap: 10, marginTop: 24 },
   stat: {
