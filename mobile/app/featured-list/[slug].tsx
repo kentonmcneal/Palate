@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -6,32 +6,68 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { RestaurantCompatibilityCard } from "../../components/RestaurantCompatibilityCard";
-import type { FeaturedList } from "../../lib/featured-lists";
+import {
+  getCachedFeaturedList, buildFeaturedLists, type FeaturedList,
+} from "../../lib/featured-lists";
+import { getEffectiveLocation, useBrowsingCity } from "../../lib/browsing-location";
 import type { RankedRestaurant } from "../../lib/restaurant-ranking";
 
 // ============================================================================
-// Featured list detail — opens when a user taps a Featured Lists card.
-// We take the full payload via params (no second fetch needed) and render the
-// ranked restaurants using the same card style as Discover.
+// Featured list detail — pulls from the in-memory cache populated by the
+// Discover row. Cold-deep-link path: rebuild lists, then look up by slug.
 // ============================================================================
 
 export default function FeaturedListScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ slug: string; title?: string; payload?: string }>();
+  const params = useLocalSearchParams<{ slug: string }>();
+  const slug = params.slug as string;
+  const [browsingCity] = useBrowsingCity();
 
-  const list: FeaturedList | null = useMemo(() => {
-    try {
-      return params.payload ? JSON.parse(params.payload as string) : null;
-    } catch {
-      return null;
-    }
-  }, [params.payload]);
+  const [list, setList] = useState<FeaturedList | null>(() => getCachedFeaturedList(slug));
+  const [loading, setLoading] = useState(false);
+  const [missing, setMissing] = useState(false);
 
-  if (!list) {
+  useEffect(() => {
+    if (list) return;
+    let alive = true;
+    (async () => {
+      setLoading(true);
+      try {
+        const here = await getEffectiveLocation().catch(() => null);
+        if (!here) { if (alive) { setMissing(true); setLoading(false); } return; }
+        await buildFeaturedLists({ here, city: browsingCity?.name ?? null });
+        const found = getCachedFeaturedList(slug);
+        if (alive) {
+          if (found) setList(found);
+          else setMissing(true);
+          setLoading(false);
+        }
+      } catch {
+        if (alive) { setMissing(true); setLoading(false); }
+      }
+    })();
+    return () => { alive = false; };
+  }, [slug, browsingCity?.id]);
+
+  if (loading) {
     return (
       <SafeAreaView style={styles.safe}>
+        <View style={styles.center}><Text style={[type.body, { color: colors.mute }]}>Loading list…</Text></View>
+      </SafeAreaView>
+    );
+  }
+
+  if (missing || !list) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.header}>
+          <Pressable onPress={() => router.back()} style={styles.closeBtn}>
+            <Text style={styles.closeText}>←</Text>
+          </Pressable>
+          <View style={{ width: 40 }} />
+        </View>
         <View style={styles.center}>
-          <Text style={[type.body, { color: colors.mute }]}>List not found.</Text>
+          <Text style={[type.body, { color: colors.mute }]}>This list isn't available here yet.</Text>
         </View>
       </SafeAreaView>
     );

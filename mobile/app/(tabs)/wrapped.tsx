@@ -136,44 +136,46 @@ export default function WrappedTab() {
     <SafeAreaView style={styles.safe}>
       <Confetti fire={confettiKey > 0} count={180} />
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={type.title}>Your Wrapped</Text>
-        <Spacer size={20} />
+        {/* Header — matches the screenshot: title + subtitle on the left,
+            "Insights →" pill on the right. */}
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={type.title}>Your Wrapped</Text>
+            <Text style={styles.subtitle}>What your week says about how you eat.</Text>
+          </View>
+          <Pressable
+            onPress={() => router.push("/insights-deep")}
+            style={styles.insightsBtn}
+            accessibilityLabel="Open detailed insights"
+          >
+            <Text style={styles.insightsBtnText}>Insights →</Text>
+          </Pressable>
+        </View>
+        <Spacer size={16} />
 
         {data ? (
           <>
-            {/* 1. Identity headline */}
-            <View style={styles.identityCard}>
-              <Text style={styles.identityEyebrow}>YOU'RE A</Text>
-              <Text style={styles.identityName}>{identityLabel()}</Text>
-            </View>
+            {/* 1. The Wrapped card itself — black hero with identity, stats,
+                top spots. Same component used for sharing, just visible now. */}
+            <ViewShot ref={cardRef as any} options={{ format: "png", quality: 1 }}>
+              <WrappedCard data={data} personaOverride={identityLabel()} />
+            </ViewShot>
 
-            {/* 2. Three stats */}
-            <View style={styles.statRow}>
-              <Stat label="Visits" value={String(data.total_visits)} />
-              <Stat label="Variety" value={String(data.unique_restaurants)} />
-              <Stat label="Repeat" value={`${Math.round((data.repeat_rate ?? 0) * 100)}%`} />
-            </View>
-
-            {/* 3. One insight */}
+            {/* 2. One insight line */}
             {insightLine().length > 0 && (
               <View style={styles.insightCard}>
                 <Text style={styles.insightText}>{insightLine()}</Text>
               </View>
             )}
 
-            {/* 4. Interactive charts — tap-to-focus donut + day-of-week bars */}
+            {/* 3. Interactive charts — tap-to-focus donut + day-of-week bars */}
             <WrappedCharts />
 
-            {/* 5. Per-week palate insights (composed from the week's vector) */}
+            {/* 4. Per-week palate insights (composed from the week's vector) */}
             <WeeklyPalateInsights weekStart={data.week_start} weekEnd={data.week_end} />
 
-            {/* 6. Actions */}
+            {/* 5. Actions */}
             <Spacer size={20} />
-            <Pressable onPress={() => router.push("/insights-deep")} style={styles.deepLink}>
-              <Text style={styles.deepLinkText}>See your full insights →</Text>
-            </Pressable>
-
-            <Spacer size={16} />
             <Button title="Share" onPress={shareImage} />
             <Spacer size={8} />
             <Button title="Post to Feed" variant="ghost" onPress={shareToFeed} />
@@ -182,11 +184,9 @@ export default function WrappedTab() {
             <Spacer size={8} />
             <Button title="Refresh" variant="ghost" onPress={generate} loading={loading} />
 
-            {/* Off-screen share renderers — used for image capture only. */}
+            {/* Off-screen story renderer — kept hidden so view-shot can grab a
+                9:16 IG variant without affecting on-screen layout. */}
             <View style={{ position: "absolute", left: -9999, top: 0 }} pointerEvents="none">
-              <ViewShot ref={cardRef as any} options={{ format: "png", quality: 1 }}>
-                <WrappedCard data={data} personaOverride={identityLabel()} />
-              </ViewShot>
               <View ref={storyRef as any} collapsable={false}>
                 <WrappedStoryCard data={data} personaOverride={identityLabel()} />
               </View>
@@ -231,15 +231,6 @@ export default function WrappedTab() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.statTile}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
 const SAMPLE_WRAPPED: Wrapped = {
   id: "sample",
   user_id: "sample",
@@ -269,6 +260,16 @@ const SAMPLE_WRAPPED: Wrapped = {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.paper },
   container: { padding: spacing.lg, paddingBottom: 100 },
+
+  headerRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  subtitle: { ...type.body, color: colors.mute, marginTop: 4, lineHeight: 20 },
+  insightsBtn: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.faint,
+    borderWidth: 1, borderColor: colors.line,
+  },
+  insightsBtnText: { fontSize: 13, fontWeight: "700", color: colors.ink },
 
   identityCard: {
     padding: spacing.lg,

@@ -19,6 +19,7 @@ import { calculatePalateMatchScore, type RestaurantInput } from "../../lib/palat
 import { RestaurantCompatibilityCard } from "../../components/RestaurantCompatibilityCard";
 import { CardSkeleton, Shimmer } from "../../components/Shimmer";
 import { FeaturedLists } from "../../components/FeaturedLists";
+import { loadPersonalSignal, type PersonalSignal } from "../../lib/personal-signal";
 
 // ============================================================================
 // Discover — three sub-tabs:
@@ -50,6 +51,7 @@ export default function DiscoverTab() {
   const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
   const [vector, setVector] = useState<TasteVector | null>(null);
   const [allNearby, setAllNearby] = useState<RestaurantInput[]>([]);
+  const [personal, setPersonal] = useState<PersonalSignal | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -73,11 +75,13 @@ export default function DiscoverTab() {
       setHereLoading(false);
 
       setFeedLoading(true);
-      const [nearby, vec] = await Promise.all([
+      const [nearby, vec, sig] = await Promise.all([
         nearbyRestaurants(loc.lat, loc.lng, NEARBY_RADIUS_M),
         computeTasteVector().catch(() => null),
+        loadPersonalSignal().catch(() => null),
       ]);
       setVector(vec);
+      setPersonal(sig);
       setAllNearby(nearby.map(toInput));
       setFeedLoading(false);
 
@@ -110,14 +114,17 @@ export default function DiscoverTab() {
   // ---- Tabs derived from allNearby ----
   const nearbyList = useMemo(() => {
     return [...allNearby]
-      .map((r) => buildRanked(r, vector, here))
+      .map((r) => buildRanked(r, vector, here, personal))
       .sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999))
       .slice(0, TOP_PER_TAB);
-  }, [allNearby, vector, here]);
+  }, [allNearby, vector, here, personal]);
 
   // Trending: grouped into Beli-style category shelves ("Top 10 Burgers"…)
   // Only categories with at least MIN_PER_CATEGORY hits show up.
-  const trendingGroups = useMemo(() => buildTrendingGroups(allNearby, vector, here), [allNearby, vector, here]);
+  const trendingGroups = useMemo(
+    () => buildTrendingGroups(allNearby, vector, here, personal),
+    [allNearby, vector, here, personal],
+  );
 
   // Most Compatible: bucketed ranker (Safe + Stretch combined), no bucket
   // headers — just one ranked list, highest match first.
@@ -136,13 +143,14 @@ export default function DiscoverTab() {
         if (seen.has(r.google_place_id)) return false;
         seen.add(r.google_place_id); return true;
       });
-      // Force high → low match score sort (the bucketed ranker preserves bucket
-      // order, but on this surface the user wants pure compatibility ranking).
-      dedup.sort((a, b) => (b.match?.score ?? 0) - (a.match?.score ?? 0));
-      setMostCompatibleList(dedup.slice(0, TOP_PER_TAB));
+      // Re-score with the personal layer (anti-staleness ON for the
+      // recommendations surface) and re-sort high → low.
+      const rescored = dedup.map((r) => buildRankedWithStaleness(r, vector, here, personal));
+      rescored.sort((a, b) => (b.match?.score ?? 0) - (a.match?.score ?? 0));
+      setMostCompatibleList(rescored.slice(0, TOP_PER_TAB));
     });
     return () => { alive = false; };
-  }, [allNearby, vector, here]));
+  }, [allNearby, vector, here, personal]));
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -206,7 +214,7 @@ export default function DiscoverTab() {
         ) : (
           <>
             {/* Featured Lists — Beli-style curated rows above the sub-tabs. */}
-            <FeaturedLists here={here} city={browsingCity?.name ?? null} />
+            <FeaturedLists here={here} city={browsingCity?.name ?? null} vector={vector} personal={personal} />
 
             {/* Sub-tabs — order: Most Compatible → Trending → Nearby */}
             <View style={styles.tabs}>
@@ -312,12 +320,38 @@ function toInput(p: Restaurant): RestaurantInput {
   };
 }
 
-function buildRanked(r: RestaurantInput, vector: TasteVector | null, here: { lat: number; lng: number } | null): RankedRestaurant {
-  const match = calculatePalateMatchScore(vector, r, { here: here ?? undefined, now: new Date() });
+function buildRanked(
+  r: RestaurantInput,
+  vector: TasteVector | null,
+  here: { lat: number; lng: number } | null,
+  personal?: PersonalSignal | null,
+): RankedRestaurant {
+  const match = calculatePalateMatchScore(vector, r, {
+    here: here ?? undefined,
+    now: new Date(),
+    personal: personal ?? undefined,
+    applyStaleness: false,
+  });
   const km = (here && r.latitude != null && r.longitude != null)
     ? distanceKm(here, { lat: r.latitude, lng: r.longitude })
     : null;
   return { ...r, match, distanceKm: km };
+}
+
+/** Same as buildRanked but with anti-staleness ON — for the recs feed. */
+function buildRankedWithStaleness(
+  r: RankedRestaurant,
+  vector: TasteVector | null,
+  here: { lat: number; lng: number } | null,
+  personal?: PersonalSignal | null,
+): RankedRestaurant {
+  const match = calculatePalateMatchScore(vector, r, {
+    here: here ?? undefined,
+    now: new Date(),
+    personal: personal ?? undefined,
+    applyStaleness: true,
+  });
+  return { ...r, match };
 }
 
 // ----------------------------------------------------------------------------
@@ -364,6 +398,7 @@ function buildTrendingGroups(
   candidates: RestaurantInput[],
   vector: TasteVector | null,
   here: { lat: number; lng: number } | null,
+  personal?: PersonalSignal | null,
 ): TrendingGroup[] {
   // Only "trending" if there's enough social proof — keep the bar reasonable
   // so new openings still surface.
@@ -386,7 +421,7 @@ function buildTrendingGroups(
     items.sort((a, b) => (b.user_rating_count ?? 0) - (a.user_rating_count ?? 0));
     groups.push({
       title: cat.title,
-      items: items.slice(0, TOP_PER_CATEGORY).map((r) => buildRanked(r, vector, here)),
+      items: items.slice(0, TOP_PER_CATEGORY).map((r) => buildRanked(r, vector, here, personal)),
     });
   }
   return groups;

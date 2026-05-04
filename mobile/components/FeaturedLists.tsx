@@ -4,6 +4,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import { buildFeaturedLists, type FeaturedList } from "../lib/featured-lists";
+import type { TasteVector } from "../lib/taste-vector";
+import type { PersonalSignal } from "../lib/personal-signal";
 
 // ============================================================================
 // FeaturedLists — Beli-style horizontal carousel of curated category lists.
@@ -14,9 +16,11 @@ import { buildFeaturedLists, type FeaturedList } from "../lib/featured-lists";
 type Props = {
   here: { lat: number; lng: number } | null;
   city?: string | null;
+  vector?: TasteVector | null;
+  personal?: PersonalSignal | null;
 };
 
-export function FeaturedLists({ here, city }: Props) {
+export function FeaturedLists({ here, city, vector, personal }: Props) {
   const router = useRouter();
   const [lists, setLists] = useState<FeaturedList[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -24,13 +28,13 @@ export function FeaturedLists({ here, city }: Props) {
   useEffect(() => {
     if (!here) return;
     let alive = true;
-    buildFeaturedLists({ here, city }).then((l) => {
+    buildFeaturedLists({ here, city, vector, personal }).then((l) => {
       if (!alive) return;
       setLists(l);
       setLoaded(true);
     }).catch(() => { if (alive) setLoaded(true); });
     return () => { alive = false; };
-  }, [here?.lat, here?.lng, city]);
+  }, [here?.lat, here?.lng, city, vector, personal]);
 
   if (!loaded || lists.length === 0) return null;
 
@@ -50,7 +54,7 @@ export function FeaturedLists({ here, city }: Props) {
             style={styles.card}
             onPress={() => router.push({
               pathname: "/featured-list/[slug]",
-              params: { slug: l.slug, title: l.title, payload: JSON.stringify(l) },
+              params: { slug: l.slug },
             })}
           >
             <LinearGradient

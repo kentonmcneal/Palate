@@ -14,12 +14,32 @@
 
 import type { TasteVector } from "./taste-vector";
 import type { RestaurantRecommendation } from "./palate-insights";
+import {
+  type PersonalSignal, personalAdjustment, timeOfDayBoost,
+} from "./personal-signal";
 
 const R_EARTH_KM = 6371;
 
 export type MatchExplanation = {
   score: number;        // 0..100
   reasons: string[];    // 1-3 short why-bullets
+};
+
+export type ScoreMatchOptions = {
+  /** Per-user signal layer — visit counts, dismissals, item ratings, friend
+   *  visits. Pass when you have it; omit for stateless scoring. */
+  personal?: PersonalSignal;
+  /** google_place_id of the candidate — required to look up personal signals. */
+  googlePlaceId?: string;
+  /** restaurants.id — required for item-level sentiment lookup. */
+  restaurantId?: string | null;
+  /** Apply anti-staleness penalty for already-visited places. Turn ON for
+   *  recommendation feeds (Home recs, Discover For-You); OFF for restaurant
+   *  detail, search results, and the user's saved list. */
+  applyStaleness?: boolean;
+  /** When provided, factors a small "good for right now" boost from the
+   *  restaurant's occasion tags vs. the current hour/day. */
+  now?: Date;
 };
 
 export function scoreMatch(
@@ -33,6 +53,7 @@ export function scoreMatch(
     occasionTags?: string[] | null;
     flavorTags?: string[] | null;
   },
+  options?: ScoreMatchOptions,
 ): MatchExplanation {
   const reasons: string[] = [];
   let raw = 0;
@@ -90,18 +111,41 @@ export function scoreMatch(
 
   // Default floor: if no signal at all, give 50% (neutral) — never zero, that
   // would imply we know it's a bad match. We don't.
-  const score = totalWeight > 0
+  let score = totalWeight > 0
     ? Math.round((raw / totalWeight) * 100)
     : 50;
 
+  // ---- Personal signal layer ------------------------------------------------
+  // Pull anti-staleness, dismissals, item-level loved/not-for-me, friend visits,
+  // and item↔cuisine cross-learning into the composite. Bounded so no single
+  // signal can dominate the base attribute fit.
+  if (options?.personal && options.googlePlaceId) {
+    const adj = personalAdjustment({
+      signal: options.personal,
+      googlePlaceId: options.googlePlaceId,
+      restaurantId: options.restaurantId ?? null,
+      cuisineType: rec.cuisine ?? null,
+      applyStaleness: options.applyStaleness ?? false,
+    });
+    score += adj.delta;
+    for (const note of adj.notes) reasons.push(note);
+  }
+
+  // ---- Time-of-day boost ----------------------------------------------------
+  // Soft lift for restaurants whose occasion tags align with the current hour.
+  // Cap intentionally low (≤6) so a "right now" match never overshadows fit.
+  if (options?.now && context?.occasionTags) {
+    score += timeOfDayBoost(context.occasionTags, options.now);
+  }
+
   // Cap at 99 — we never claim perfect match, that's not honest.
-  const capped = Math.min(99, Math.max(35, score));
+  const capped = Math.min(99, Math.max(20, score));
 
   // If we couldn't generate any reason, fall back to a generic but honest one.
   if (reasons.length === 0) {
     reasons.push("Looks like the kind of place you usually pick");
   }
-  return { score: capped, reasons: reasons.slice(0, 2) };
+  return { score: capped, reasons: reasons.slice(0, 3) };
 }
 
 export function distanceKm(

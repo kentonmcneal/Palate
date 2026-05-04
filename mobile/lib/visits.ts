@@ -126,6 +126,9 @@ export async function saveVisit(opts: {
   const total = (priorCount ?? 0) + 1;
   void track("visit_logged", { source: opts.source, visit_total: total });
   void triggerHapticSuccess();
+  // Invalidate the personal-signal cache so the next recs / scoring pass sees
+  // the new visit (anti-staleness + friend signal stay accurate in real time).
+  try { (await import("./personal-signal")).invalidatePersonalSignal(); } catch {}
 
   // Quietly drop a feed event so friends see "Kenton visited an American spot."
   // No push notification — visit events are passive, not real-time.

@@ -21,6 +21,7 @@
 // ============================================================================
 
 import type { TasteVector } from "./taste-vector";
+import { type PersonalSignal, personalAdjustment } from "./personal-signal";
 
 export type MatchConfidence = "low" | "medium" | "high";
 
@@ -53,6 +54,13 @@ export type ScoreContext = {
   dayOfWeek?: number;
   /** Force "stretch" mode — caller knows this is a stretch slot */
   intent?: "safe" | "stretch" | "aspirational" | "neutral";
+  /** Per-user signal layer — visit counts, dismissals, item ratings, friend
+   *  visits, item↔cuisine cross-learning. */
+  personal?: PersonalSignal;
+  /** restaurants.id for item-level lookups. */
+  restaurantId?: string | null;
+  /** When true, anti-staleness penalizes already-visited spots. */
+  applyStaleness?: boolean;
 };
 
 export type SignalHit = {
@@ -127,7 +135,23 @@ export function calculatePalateMatchScore(
 
   // Map 0..1 to a "trustworthy" 35..99 range. We never claim 100% match —
   // it's not honest, and we never claim < 35% — implies we know it's bad.
-  const score = Math.round(35 + composite * 64);
+  let score = Math.round(35 + composite * 64);
+
+  // ---- Personal signal layer ------------------------------------------------
+  // Apply anti-staleness, dismissals, item-level loved/not-for-me, friend
+  // boost, and item↔cuisine cross-learning. Bounded inside personalAdjustment
+  // so a single signal can't dominate the composite.
+  if (context.personal) {
+    const adj = personalAdjustment({
+      signal: context.personal,
+      googlePlaceId: restaurant.google_place_id,
+      restaurantId: context.restaurantId ?? null,
+      cuisineType: restaurant.cuisine_type ?? null,
+      applyStaleness: context.applyStaleness ?? false,
+    });
+    score += adj.delta;
+    for (const note of adj.notes) matched.push({ key: "personal", reason: note, strength: 0.5 });
+  }
 
   const confidence = computeConfidence(vector, matched.length);
 
@@ -137,7 +161,7 @@ export function calculatePalateMatchScore(
   const reasons = uniq(matched.sort((a, b) => b.strength - a.strength).map((s) => s.reason)).slice(0, 3);
 
   return {
-    score: Math.min(99, Math.max(35, score)),
+    score: Math.min(99, Math.max(20, score)),
     confidence,
     reasons: reasons.length > 0 ? reasons : ["Worth a look — this fits the kind of place you usually pick."],
     matchedSignals,

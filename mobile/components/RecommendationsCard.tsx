@@ -14,6 +14,7 @@ import {
 import { computeTasteVector } from "../lib/taste-vector";
 import { scoreMatch, distanceKm, formatDistance } from "../lib/match-score";
 import { getEffectiveLocation, useBrowsingCity } from "../lib/browsing-location";
+import { loadPersonalSignal } from "../lib/personal-signal";
 import { triggerHapticSuccess } from "../lib/haptics";
 import { pickSaveCopy } from "../lib/save-copy";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
@@ -44,10 +45,11 @@ export function RecommendationsCard() {
     try {
       const start = isoWeekStart();
       const end = new Date().toISOString().slice(0, 10);
-      const [persona, vector, here] = await Promise.all([
+      const [persona, vector, here, personal] = await Promise.all([
         generateWeeklyPalatePersona(start, end),
         computeTasteVector().catch(() => null),
         getEffectiveLocation().catch(() => null),
+        loadPersonalSignal().catch(() => null),
       ]);
       if (!persona) {
         setRecs([]);
@@ -61,11 +63,21 @@ export function RecommendationsCard() {
       if (result.stretch) all.push(result.stretch);
 
       // Enrich, then rank by match score (high → low) and cap at 5.
+      // Anti-staleness ON for the Home recs feed — frequently-visited spots
+      // get a soft penalty so the card doesn't keep recommending the same
+      // place. Personal signal also pulls in dismissals, item ratings,
+      // friend visits, and item↔cuisine cross-learning.
+      const now = new Date();
       const enriched: RestaurantRecommendation[] = all.map((r) => {
         let matchScore: number | null = null;
         let reason = r.reason;
         if (vector) {
-          const m = scoreMatch(vector, r);
+          const m = scoreMatch(vector, r, undefined, {
+            personal: personal ?? undefined,
+            googlePlaceId: r.google_place_id,
+            applyStaleness: true,
+            now,
+          });
           matchScore = m.score;
           if (m.reasons[0]) reason = m.reasons[0];
         }

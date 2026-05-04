@@ -11,6 +11,7 @@
 // ============================================================================
 
 import { supabase } from "./supabase";
+import { invalidatePersonalSignal } from "./personal-signal";
 
 export type ItemRating = "loved" | "ok" | "not_for_me";
 
@@ -139,6 +140,8 @@ export async function rateItem(opts: {
     notes: opts.notes ?? null,
   });
   if (error) throw error;
+  // The next scoring pass should reflect this rating — bust the cache.
+  invalidatePersonalSignal();
 }
 
 /** Convenience for the post-visit flow: create item + rating in one call. */
