@@ -19,7 +19,6 @@ import {
 } from "../../lib/palate-insights";
 import { isoWeekStart } from "../../lib/wrapped";
 import { RecommendationsCard } from "../../components/RecommendationsCard";
-import { SavedNearbyCard } from "../../components/SavedNearbyCard";
 import { GettingStarted } from "../../components/GettingStarted";
 import { Confetti } from "../../components/Confetti";
 import { LocationPill } from "../../components/LocationPill";
@@ -160,31 +159,28 @@ export default function Home() {
         {/* 1. The dominant decision card. */}
         <RightNowHero />
 
-        {/* "Check now" stays as a secondary action — auto-detect path is still
-            valuable when you're already at a restaurant. Demoted from hero. */}
-        <View style={styles.checkNowRow}>
-          <Pressable
+        {/* 2. Visible "Are you eating somewhere?" entry — auto-detect path is
+            the primary way to log a visit. Demoting it to a tiny ghost link
+            killed visit logging — back to a real button. */}
+        <View style={styles.checkNowCard}>
+          <Text style={styles.checkNowEyebrow}>ARE YOU EATING SOMEWHERE?</Text>
+          <Spacer size={8} />
+          <Button
+            title={checking ? "Checking…" : "Check now"}
             onPress={handleCheckNow}
-            style={styles.checkNowBtn}
-            disabled={checking}
-          >
-            <Text style={styles.checkNowText}>
-              {checking ? "Checking…" : "Already at a spot? Check now"}
-            </Text>
-          </Pressable>
+            loading={checking}
+          />
         </View>
 
-        {/* 2. Places you'll probably like. */}
+        {/* 3. Places you'll probably like — 3 picks. */}
         <Text style={styles.sectionHead}>Places you'll probably like</Text>
         <RecommendationsCard />
 
-        {/* 3. One stretch pick. */}
-        <View style={{ marginTop: spacing.xl }}>
-          <StretchPick />
-        </View>
+        {/* 4. One stretch pick — explicitly its own block AFTER the recs. */}
+        <Text style={styles.sectionHead}>Stretch your palate</Text>
+        <StretchPick />
 
-        {/* 4. Saved restaurants. */}
-        <SavedNearbyCard />
+        {/* Saved restaurants moved to Profile per spec — Home stays decision-only. */}
 
         {visits.length === 0 && (
           <View style={{ marginTop: spacing.xxl }}>
@@ -450,13 +446,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     marginBottom: -4,  // RecommendationsCard already has its own marginTop
   },
-  checkNowRow: { marginTop: spacing.sm, alignItems: "center" },
-  checkNowBtn: {
-    paddingHorizontal: 14, paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: "transparent",
+  checkNowCard: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: 18,
+    backgroundColor: colors.faint,
+    borderWidth: 1, borderColor: colors.line,
   },
-  checkNowText: { color: colors.mute, fontSize: 12, fontWeight: "700" },
+  checkNowEyebrow: { ...type.micro, color: colors.red },
   emptyCard: {
     borderRadius: 18,
     borderWidth: 1,

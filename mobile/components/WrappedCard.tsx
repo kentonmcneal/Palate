@@ -7,6 +7,7 @@ export function WrappedCard({
   data,
   personaOverride,
   personaDescription,
+  topCuisines,
 }: {
   data: Wrapped;
   /** When provided, replaces the stored personality_label — used to render
@@ -15,6 +16,10 @@ export function WrappedCard({
   /** One-line description of what the persona means. Surfaces below the
    *  identity label as a calm, premium subtitle. */
   personaDescription?: string;
+  /** Optional top 3 cuisines (already mapped to display labels). Shown as a
+   *  chip row inside the black hero — same data as Profile, surfaced here
+   *  so Wrapped tells the full story without an extra tab hop. */
+  topCuisines?: { name: string; share: number }[];
 }) {
   const j = data.wrapped_json;
   const top3 = j.top_three ?? [];
@@ -66,6 +71,20 @@ export function WrappedCard({
           </View>
         ))}
       </View>
+
+      {topCuisines && topCuisines.length > 0 && (
+        <>
+          <Text style={[styles.topLabel, { marginTop: 18 }]}>Top cuisines</Text>
+          <View style={styles.cuisineRow}>
+            {topCuisines.slice(0, 3).map((c) => (
+              <View key={c.name} style={styles.cuisineChip}>
+                <Text style={styles.cuisineChipText}>{c.name}</Text>
+                <Text style={styles.cuisineChipPct}>{Math.round(c.share * 100)}%</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
 
       <Text style={styles.brand}>palate.app</Text>
     </View>
@@ -177,4 +196,15 @@ const styles = StyleSheet.create({
   topRank: { color: "rgba(255,255,255,0.5)" },
   topCount: { color: "rgba(255,255,255,0.6)" },
   brand: { color: "rgba(255,255,255,0.5)", marginTop: 24, fontSize: 12 },
+
+  cuisineRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  cuisineChip: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.16)",
+  },
+  cuisineChipText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  cuisineChipPct: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "700" },
 });

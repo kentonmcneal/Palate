@@ -7,7 +7,8 @@ import { colors, spacing, type } from "../theme";
 import { nearbyRestaurants } from "../lib/places";
 import { getEffectiveLocation, useBrowsingCity } from "../lib/browsing-location";
 import { computeTasteVector, type TasteVector } from "../lib/taste-vector";
-import { scoreMatch } from "../lib/match-score";
+import { loadPersonalSignal } from "../lib/personal-signal";
+import { assembleGraph, getCompatibility } from "../lib/recommendation";
 import { MatchMarker, TopMatchMarker } from "../components/MatchMarker";
 import { getCachedNearby, setCachedNearby } from "../lib/nearby-cache";
 import { LocationPill } from "../components/LocationPill";
@@ -55,34 +56,42 @@ export default function FullscreenMap() {
       }
       lastFetchCenter.current = { lat, lng };
 
+      // Build the canonical taste graph once per fetch and reuse for every
+      // marker. The compatibility cache (in lib/recommendation) ensures each
+      // (user, restaurant) is scored exactly once across all surfaces.
       const vector = vectorRef.current ?? await computeTasteVector().catch(() => null);
       vectorRef.current = vector;
+      const personal = await loadPersonalSignal().catch(() => null);
+      const graph = assembleGraph(vector, personal);
 
-      // Merge into the map keyed by place_id so previous results aren't lost
-      // when the user pans back and forth.
       setPlaces((prev) => {
         const next = new Map(prev);
         for (const p of nearby!) {
           if (p.latitude == null || p.longitude == null) continue;
           if (next.has(p.google_place_id)) continue;
-          const ctx = {
-            cuisineRegion: (p as any).cuisine_region ?? null,
-            cuisineSubregion: (p as any).cuisine_subregion ?? null,
-            formatClass: (p as any).format_class ?? null,
-            occasionTags: (p as any).occasion_tags ?? null,
-            flavorTags: (p as any).flavor_tags ?? null,
-          };
-          const m = vector ? scoreMatch(vector, {
-            cuisine: p.cuisine_type ?? null,
-            price_level: p.price_level ?? null,
+          const compat = getCompatibility(graph, {
+            google_place_id: p.google_place_id,
+            name: p.name,
+            cuisine_type: p.cuisine_type ?? null,
+            cuisine_region: (p as any).cuisine_region ?? null,
+            cuisine_subregion: (p as any).cuisine_subregion ?? null,
+            format_class: (p as any).format_class ?? null,
+            occasion_tags: (p as any).occasion_tags ?? null,
+            flavor_tags: (p as any).flavor_tags ?? null,
+            cultural_context: (p as any).cultural_context ?? null,
             neighborhood: p.neighborhood ?? null,
-          }, ctx) : null;
+            price_level: p.price_level ?? null,
+            rating: p.rating ?? null,
+            user_rating_count: (p as any).user_rating_count ?? null,
+            latitude: p.latitude,
+            longitude: p.longitude,
+          });
           next.set(p.google_place_id, {
             google_place_id: p.google_place_id,
             name: p.name,
             latitude: p.latitude!,
             longitude: p.longitude!,
-            matchScore: m?.score ?? null,
+            matchScore: compat.score,
           });
         }
         return next;

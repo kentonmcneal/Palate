@@ -50,11 +50,27 @@ let cached: PersonalSignal | null = null;
 let cacheUserId: string | null = null;
 let inflight: Promise<PersonalSignal> | null = null;
 
+// Listeners pattern (instead of a circular import) so the recommendation
+// module can subscribe to invalidations without us importing it here.
+const listeners: Array<() => void> = [];
+
+/** Subscribe to personal-signal invalidations. Returns an unsubscribe fn. */
+export function onPersonalSignalInvalidate(cb: () => void): () => void {
+  listeners.push(cb);
+  return () => {
+    const i = listeners.indexOf(cb);
+    if (i >= 0) listeners.splice(i, 1);
+  };
+}
+
 /** Bust the cache — call after a new visit, rating, or dismiss/skip. */
 export function invalidatePersonalSignal(): void {
   cached = null;
   cacheUserId = null;
   inflight = null;
+  for (const cb of listeners) {
+    try { cb(); } catch { /* ignore listener errors */ }
+  }
 }
 
 export async function loadPersonalSignal(): Promise<PersonalSignal> {

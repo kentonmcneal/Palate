@@ -10,7 +10,11 @@ import {
   getCachedFeaturedList, buildFeaturedLists, type FeaturedList,
 } from "../../lib/featured-lists";
 import { getEffectiveLocation, useBrowsingCity } from "../../lib/browsing-location";
-import type { RankedRestaurant } from "../../lib/restaurant-ranking";
+import { computeTasteVector } from "../../lib/taste-vector";
+import { loadPersonalSignal } from "../../lib/personal-signal";
+import {
+  assembleGraph, buildRankedRestaurant, type RankedRestaurant,
+} from "../../lib/recommendation";
 
 // ============================================================================
 // Featured list detail — pulls from the in-memory cache populated by the
@@ -26,6 +30,7 @@ export default function FeaturedListScreen() {
   const [list, setList] = useState<FeaturedList | null>(() => getCachedFeaturedList(slug));
   const [loading, setLoading] = useState(false);
   const [missing, setMissing] = useState(false);
+  const [items, setItems] = useState<RankedRestaurant[]>([]);
 
   useEffect(() => {
     if (list) return;
@@ -57,6 +62,26 @@ export default function FeaturedListScreen() {
     );
   }
 
+  // Whenever the list resolves, build canonical RankedRestaurant items so the
+  // shared card component reads a consistent compatibility shape.
+  useEffect(() => {
+    if (!list) return;
+    let alive = true;
+    (async () => {
+      const [vector, personal, here] = await Promise.all([
+        computeTasteVector().catch(() => null),
+        loadPersonalSignal().catch(() => null),
+        getEffectiveLocation().catch(() => null),
+      ]);
+      if (!alive) return;
+      const graph = assembleGraph(vector, personal);
+      setItems(list.restaurants.map((r) =>
+        buildRankedRestaurant(graph, r, { here: here ?? undefined, now: new Date() })
+      ));
+    })();
+    return () => { alive = false; };
+  }, [list]);
+
   if (missing || !list) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -72,8 +97,6 @@ export default function FeaturedListScreen() {
       </SafeAreaView>
     );
   }
-
-  const items: RankedRestaurant[] = list.restaurants.map((r) => ({ ...r, match: null, distanceKm: null }));
 
   return (
     <SafeAreaView style={styles.safe}>

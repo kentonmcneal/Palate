@@ -13,13 +13,15 @@ import { getEffectiveLocation, useBrowsingCity } from "../../lib/browsing-locati
 import { LocationPill } from "../../components/LocationPill";
 import { computeTasteVector, type TasteVector } from "../../lib/taste-vector";
 import { distanceKm, formatDistance } from "../../lib/match-score";
-import { rankRestaurantsForDiscovery, type RankedRestaurant } from "../../lib/restaurant-ranking";
 import { trackImpressions } from "../../lib/recommendation-events";
-import { calculatePalateMatchScore, type RestaurantInput } from "../../lib/palate-match-score";
 import { RestaurantCompatibilityCard } from "../../components/RestaurantCompatibilityCard";
 import { CardSkeleton, Shimmer } from "../../components/Shimmer";
 import { FeaturedLists } from "../../components/FeaturedLists";
 import { loadPersonalSignal, type PersonalSignal } from "../../lib/personal-signal";
+import {
+  assembleGraph, buildRankedRestaurant, generateCandidates,
+  type TasteGraph, type RankedRestaurant, type RestaurantInput,
+} from "../../lib/recommendation";
 
 // ============================================================================
 // Discover — three sub-tabs:
@@ -111,7 +113,7 @@ export default function DiscoverTab() {
     setSearching(true);
     try {
       const results = await searchRestaurants(query.trim(), here ?? undefined);
-      const ranked = results.map((p) => buildRanked(toInput(p), vector, here));
+      const ranked = results.map((p) => buildRankedRestaurant(graph, toInput(p), { here: here ?? undefined, now: new Date() }));
       setSearchResults(ranked);
     } catch {
       setSearchResults([]);
@@ -120,66 +122,49 @@ export default function DiscoverTab() {
     }
   }
 
-  // ---- Tabs derived from allNearby ----
+  // ---- Build canonical taste graph + rank ALL nearby through it ----
+  // Per spec: compatibility is calculated ONCE per (user, restaurant). The
+  // canonical compatibility cache (in lib/recommendation) makes that true.
+  const graph: TasteGraph = useMemo(() => assembleGraph(vector, personal), [vector, personal]);
+
+  const allRanked = useMemo(() => {
+    if (!here) return [];
+    return allNearby.map((r) => buildRankedRestaurant(graph, r, { here, now: new Date(), mode: "browsing" }));
+  }, [allNearby, graph, here]);
+
+  // Nearby tab — strict distance sort.
   const nearbyList = useMemo(() => {
-    return [...allNearby]
-      .map((r) => buildRanked(r, vector, here, personal))
+    return [...allRanked]
       .sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999))
       .slice(0, TOP_PER_TAB);
-  }, [allNearby, vector, here, personal]);
+  }, [allRanked]);
 
   // Trending: grouped into Beli-style category shelves ("Top 10 Burgers"…)
-  // Only categories with at least MIN_PER_CATEGORY hits show up.
   const trendingGroups = useMemo(
-    () => buildTrendingGroups(allNearby, vector, here, personal),
-    [allNearby, vector, here, personal],
+    () => buildTrendingGroups(allRanked),
+    [allRanked],
   );
 
-  // Most Compatible: bucketed ranker. Store a flagged pool (safe vs stretch)
-  // so the sort selector can re-order without re-fetching.
-  const [mcPool, setMcPool] = useState<{ r: RankedRestaurant; isStretch: boolean }[]>([]);
-  useFocusEffect(useCallback(() => {
-    if (allNearby.length === 0) return;
-    let alive = true;
-    rankRestaurantsForDiscovery({
-      vector, candidates: allNearby, here: here ?? undefined,
-      now: new Date(), perBucket: 12,
-    }).then((b) => {
-      if (!alive) return;
-      const seen = new Set<string>();
-      const pool: { r: RankedRestaurant; isStretch: boolean }[] = [];
-      for (const r of b.safe) {
-        if (seen.has(r.google_place_id)) continue;
-        seen.add(r.google_place_id);
-        pool.push({ r: buildRankedWithStaleness(r, vector, here, personal), isStretch: false });
-      }
-      for (const r of b.stretch) {
-        if (seen.has(r.google_place_id)) continue;
-        seen.add(r.google_place_id);
-        pool.push({ r: buildRankedWithStaleness(r, vector, here, personal), isStretch: true });
-      }
-      setMcPool(pool);
-    });
-    return () => { alive = false; };
-  }, [allNearby, vector, here, personal]));
-
+  // Most Compatible — sort by canonical compatibilityScore (per spec, NOT finalScore).
   const mostCompatibleList = useMemo(() => {
-    const arr = [...mcPool];
+    const arr = [...allRanked];
     if (sort === "compat_high") {
-      arr.sort((a, b) => (b.r.match?.score ?? 0) - (a.r.match?.score ?? 0));
+      arr.sort((a, b) => b.score.compatibilityScore - a.score.compatibilityScore);
     } else if (sort === "compat_low") {
-      arr.sort((a, b) => (a.r.match?.score ?? 0) - (b.r.match?.score ?? 0));
+      arr.sort((a, b) => a.score.compatibilityScore - b.score.compatibilityScore);
     } else if (sort === "distance") {
-      arr.sort((a, b) => (a.r.distanceKm ?? 999) - (b.r.distanceKm ?? 999));
+      arr.sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999));
     } else if (sort === "stretch") {
-      // Stretch first, then by score desc within group.
+      // Stretch slot — prefer high-novelty picks adjacent to user pattern.
       arr.sort((a, b) => {
-        if (a.isStretch !== b.isStretch) return a.isStretch ? -1 : 1;
-        return (b.r.match?.score ?? 0) - (a.r.match?.score ?? 0);
+        const aStretch = a.score.recommendationType === "stretch" ? 1 : 0;
+        const bStretch = b.score.recommendationType === "stretch" ? 1 : 0;
+        if (aStretch !== bStretch) return bStretch - aStretch;
+        return b.score.compatibilityScore - a.score.compatibilityScore;
       });
     }
-    return arr.map((x) => x.r).slice(0, TOP_PER_TAB);
-  }, [mcPool, sort]);
+    return arr.slice(0, TOP_PER_TAB);
+  }, [allRanked, sort]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -371,40 +356,6 @@ function toInput(p: Restaurant): RestaurantInput {
   };
 }
 
-function buildRanked(
-  r: RestaurantInput,
-  vector: TasteVector | null,
-  here: { lat: number; lng: number } | null,
-  personal?: PersonalSignal | null,
-): RankedRestaurant {
-  const match = calculatePalateMatchScore(vector, r, {
-    here: here ?? undefined,
-    now: new Date(),
-    personal: personal ?? undefined,
-    applyStaleness: false,
-  });
-  const km = (here && r.latitude != null && r.longitude != null)
-    ? distanceKm(here, { lat: r.latitude, lng: r.longitude })
-    : null;
-  return { ...r, match, distanceKm: km };
-}
-
-/** Same as buildRanked but with anti-staleness ON — for the recs feed. */
-function buildRankedWithStaleness(
-  r: RankedRestaurant,
-  vector: TasteVector | null,
-  here: { lat: number; lng: number } | null,
-  personal?: PersonalSignal | null,
-): RankedRestaurant {
-  const match = calculatePalateMatchScore(vector, r, {
-    here: here ?? undefined,
-    now: new Date(),
-    personal: personal ?? undefined,
-    applyStaleness: true,
-  });
-  return { ...r, match };
-}
-
 // ----------------------------------------------------------------------------
 // Trending categorization — Beli-style grouped lists.
 // ----------------------------------------------------------------------------
@@ -436,7 +387,12 @@ const CATEGORIES: CategoryDef[] = [
 ];
 
 function hasAny(r: RestaurantInput, needles: string[]): boolean {
-  const fields = [r.cuisine_type, r.cuisine_subregion, r.cuisine_region, r.format_class].filter(Boolean) as string[];
+  // Include the restaurant name as a fallback — Google Places cuisine tags
+  // are missing on many spots, so "Joe's Burgers" should still hit Burgers.
+  const fields = [
+    r.cuisine_type, r.cuisine_subregion, r.cuisine_region,
+    r.format_class, (r as any).name,
+  ].filter(Boolean) as string[];
   const hay = fields.join(" ").toLowerCase();
   return needles.some((n) => hay.includes(n.toLowerCase()));
 }
@@ -445,18 +401,14 @@ function hasOccasion(r: RestaurantInput, tag: string): boolean {
   return Array.isArray(r.occasion_tags) && r.occasion_tags.includes(tag);
 }
 
-function buildTrendingGroups(
-  candidates: RestaurantInput[],
-  vector: TasteVector | null,
-  here: { lat: number; lng: number } | null,
-  personal?: PersonalSignal | null,
-): TrendingGroup[] {
-  // Only "trending" if there's enough social proof — keep the bar reasonable
-  // so new openings still surface.
-  const popular = candidates.filter((r) => (r.user_rating_count ?? 0) >= 100);
+function buildTrendingGroups(allRanked: RankedRestaurant[]): TrendingGroup[] {
+  // Lowered the social-proof bar (was 100) — at the bar level, many cuisine
+  // categories were dropping below MIN. With 25 we still filter out totally
+  // unreviewed places but new spots and small joints can compete.
+  const popular = allRanked.filter((r) => (r.user_rating_count ?? 0) >= 25);
 
   // Bucket each place into the FIRST matching category so we don't double-show.
-  const buckets = new Map<string, RestaurantInput[]>();
+  const buckets = new Map<string, RankedRestaurant[]>();
   for (const r of popular) {
     const cat = CATEGORIES.find((c) => c.match(r));
     if (!cat) continue;
@@ -468,11 +420,22 @@ function buildTrendingGroups(
   const groups: TrendingGroup[] = [];
   for (const cat of CATEGORIES) {
     const items = buckets.get(cat.title) ?? [];
-    if (items.length < MIN_PER_CATEGORY) continue;
-    items.sort((a, b) => (b.user_rating_count ?? 0) - (a.user_rating_count ?? 0));
+    // Lowered MIN to 2 (was MIN_PER_CATEGORY=3) — many neighborhoods don't
+    // have 3 of every category, but 2 still feels like a "list" not noise.
+    if (items.length < 2) continue;
+    // Within each category: blend popularity with canonical compatibility
+    // (per spec — Trending lists should still respect taste fit, not just
+    // raw review count).
+    items.sort((a, b) => {
+      const aRev = a.user_rating_count ?? 0;
+      const bRev = b.user_rating_count ?? 0;
+      const popDiff = Math.log10(1 + bRev) - Math.log10(1 + aRev);
+      const compatDiff = (b.score.compatibilityScore - a.score.compatibilityScore) / 100;
+      return popDiff * 0.6 + compatDiff * 0.4;
+    });
     groups.push({
       title: cat.title,
-      items: items.slice(0, TOP_PER_CATEGORY).map((r) => buildRanked(r, vector, here, personal)),
+      items: items.slice(0, TOP_PER_CATEGORY),
     });
   }
   return groups;

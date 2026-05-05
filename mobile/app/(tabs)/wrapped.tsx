@@ -7,17 +7,23 @@ import { LAST_SEEN_WRAPPED_KEY } from "./_layout";
 import { Button, Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { generateForCurrentWeek, latestWrapped, isoWeekStart, type Wrapped } from "../../lib/wrapped";
-import { STORY_LAST_SHOWN_KEY } from "../wrapped-story";
+// Inline the constant to avoid eagerly evaluating wrapped-story.tsx on every
+// app launch. The file is loaded lazily when the user actually navigates to it.
+const STORY_LAST_SHOWN_KEY = "palate.wrappedStory.lastShownWeek";
 import { WrappedCard } from "../../components/WrappedCard";
 import { WrappedStoryCard } from "../../components/WrappedStoryCard";
 import { WrappedCharts } from "../../components/WrappedCharts";
-import { WeeklyPalateInsights } from "../../components/WeeklyPalateInsights";
 import { Confetti } from "../../components/Confetti";
 import { shareWrappedToFeed } from "../../lib/feed";
 import { track } from "../../lib/analytics";
 import { computeTasteVector, type TasteVector } from "../../lib/taste-vector";
-import { generateIdentitySet, generateLore, type PalateIdentitySet } from "../../lib/palate-labels";
+import { generateIdentitySet, generateLore, expandedLore, type PalateIdentitySet } from "../../lib/palate-labels";
 import { getSessionStage, type SessionStage } from "../../lib/session-stage";
+import { loadPersonalSignal } from "../../lib/personal-signal";
+import { assembleGraph, composeWrapped, type WrappedSummary } from "../../lib/recommendation";
+import { generatePercentileCards, generateCohortInsightAsync, type CohortInsight } from "../../lib/population-stats";
+import { computeAspirationalPalate, type AspirationalPalate } from "../../lib/aspirational-palate";
+import { getAreaPalates, type AreaPalateSummary } from "../../lib/area-palates";
 import ViewShot, { captureRef } from "react-native-view-shot";
 
 // ============================================================================
@@ -36,6 +42,12 @@ export default function WrappedTab() {
   const [identities, setIdentities] = useState<PalateIdentitySet | null>(null);
   const [vector, setVector] = useState<TasteVector | null>(null);
   const [stage, setStage] = useState<SessionStage>(1);
+  const [summary, setSummary] = useState<WrappedSummary | null>(null);
+  // Inlined-from-insights-deep state. All four blocks now live on Wrapped.
+  const [percentileCards, setPercentileCards] = useState<ReturnType<typeof generatePercentileCards>>([]);
+  const [cohort, setCohort] = useState<CohortInsight | null>(null);
+  const [aspirational, setAspirational] = useState<AspirationalPalate | null>(null);
+  const [areaPalates, setAreaPalates] = useState<AreaPalateSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [confettiKey, setConfettiKey] = useState(0);
   const cardRef = useRef<View>(null);
@@ -56,7 +68,28 @@ export default function WrappedTab() {
         await AsyncStorage.setItem(LAST_SEEN_WRAPPED_KEY, latest.week_start);
       }
       setVector(allTimeVec ?? null);
-      if (allTimeVec) setIdentities(generateIdentitySet(allTimeVec, weekVec ?? undefined));
+      const ids = allTimeVec ? generateIdentitySet(allTimeVec, weekVec ?? undefined) : null;
+      if (ids) setIdentities(ids);
+      // Compose canonical Wrapped summary from the weekly graph for the
+      // exploration/repeat/comfort/stretch scores below.
+      const personal = await loadPersonalSignal().catch(() => null);
+      const weekGraph = assembleGraph(weekVec ?? null, personal);
+      setSummary(composeWrapped(weekGraph));
+
+      // Load all the deep-insights surfaces in parallel — these used to live
+      // on /insights-deep, now they're inlined on Wrapped per spec.
+      if (allTimeVec && ids) {
+        const [pc, co, ap, ar] = await Promise.all([
+          Promise.resolve(generatePercentileCards(allTimeVec, ids.primary)),
+          generateCohortInsightAsync(ids.primary, allTimeVec).catch(() => null),
+          computeAspirationalPalate().catch(() => null),
+          getAreaPalates().catch(() => null),
+        ]);
+        setPercentileCards(pc);
+        setCohort(co);
+        setAspirational(ap);
+        setAreaPalates(ar);
+      }
     } catch (e: any) {
       console.warn("wrapped load", e?.message);
     }
@@ -64,20 +97,12 @@ export default function WrappedTab() {
 
   useFocusEffect(useCallback(() => {
     refresh();
-    // Show the 3-card story intro the first time per week. Gate via
-    // AsyncStorage so we only do it once per ISO week.
-    (async () => {
-      try {
-        const lastShown = await AsyncStorage.getItem(STORY_LAST_SHOWN_KEY);
-        const thisWeek = isoWeekStart();
-        if (lastShown !== thisWeek) {
-          // Delay slightly so the focus transition completes first.
-          setTimeout(() => router.push("/wrapped-story"), 80);
-        }
-      } catch {
-        // ignore — story is non-critical
-      }
-    })();
+    // Wrapped ALWAYS opens via the 3-card story intro. The story is the
+    // experience — Wrapped behind it is the resolution. Delay slightly so
+    // the focus transition completes first, otherwise the push fights the
+    // tab navigation.
+    const t = setTimeout(() => router.push("/wrapped-story"), 80);
+    return () => clearTimeout(t);
   }, [refresh, router]));
 
   async function generate() {
@@ -153,49 +178,122 @@ export default function WrappedTab() {
     <SafeAreaView style={styles.safe}>
       <Confetti fire={confettiKey > 0} count={180} />
       <ScrollView contentContainerStyle={styles.container}>
-        {/* Header — matches the screenshot: title + subtitle on the left,
-            "Insights →" pill on the right. */}
+        {/* Header — calm, premium. No "Insights →" button anymore; insights
+            are inlined directly below per spec. */}
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={type.title}>Your Wrapped</Text>
             <Text style={styles.subtitle}>What your week says about how you eat.</Text>
           </View>
+          {/* Replay the 3-card story intro on demand. The story shows
+              automatically once per ISO week; this button lets the user
+              re-trigger it any time. */}
           <Pressable
-            onPress={() => router.push("/insights-deep")}
-            style={styles.insightsBtn}
-            accessibilityLabel="Open detailed insights"
+            onPress={async () => {
+              try { await AsyncStorage.removeItem(STORY_LAST_SHOWN_KEY); } catch {}
+              router.push("/wrapped-story");
+            }}
+            style={styles.replayBtn}
           >
-            <Text style={styles.insightsBtnText}>Insights →</Text>
+            <Text style={styles.replayBtnText}>Replay story</Text>
           </Pressable>
         </View>
         <Spacer size={16} />
 
         {data ? (
           <>
-            {/* 1. The Wrapped card itself — black hero with identity, stats,
-                top spots. Same component used for sharing, just visible now. */}
+            {/* 1. Black hero — identity + stats + top spots + top cuisines. */}
             <ViewShot ref={cardRef as any} options={{ format: "png", quality: 1 }}>
               <WrappedCard
                 data={data}
                 personaOverride={identityLabel()}
                 personaDescription={stage >= 3 && identities ? identities.primary.description : undefined}
+                topCuisines={summary?.topCuisines.slice(0, 3).map((c) => ({
+                  name: humanizeCuisine(c.name),
+                  share: c.share,
+                }))}
               />
             </ViewShot>
 
-            {/* 2. One insight line */}
-            {insightLine().length > 0 && (
+            {/* 2. Interactive charts — tap-to-focus donut + day-of-week bars.
+                Charts come immediately after the hero per spec — no gray
+                "WHY THIS WEEK" / "TRY NEXT" boxes between. */}
+            <WrappedCharts />
+
+            {/* 3. Palate Lore (was on /insights-deep) — story + behavior. */}
+            {identities && stage >= 3 && (() => {
+              const lore = expandedLore(identities.primary);
+              return (
+                <View style={styles.insightCard}>
+                  <Text style={styles.insightEyebrow}>PALATE LORE</Text>
+                  <Text style={styles.insightTitle}>{identities.primary.label}</Text>
+                  <Text style={styles.insightBody}>{lore.story}</Text>
+                  <Spacer size={10} />
+                  <Text style={styles.insightBody}>{lore.behavior}</Text>
+                </View>
+              );
+            })()}
+
+            {/* 4. Where you rank (percentile cards) */}
+            {percentileCards.length > 0 && (
               <View style={styles.insightCard}>
-                <Text style={styles.insightText}>{insightLine()}</Text>
+                <Text style={styles.insightEyebrow}>WHERE YOU RANK</Text>
+                {percentileCards.map((c, i) => (
+                  <View key={i} style={styles.rankRow}>
+                    <Text style={styles.rankPct}>Top {c.percentile}%</Text>
+                    <Text style={styles.rankBody}>{c.body}</Text>
+                  </View>
+                ))}
               </View>
             )}
 
-            {/* 3. Interactive charts — tap-to-focus donut + day-of-week bars */}
-            <WrappedCharts />
+            {/* 5. People like you (cohort) */}
+            {cohort && (
+              <View style={styles.insightCard}>
+                <Text style={styles.insightEyebrow}>
+                  PEOPLE LIKE YOU{cohort.source === "preview" ? " · preview" : ""}
+                </Text>
+                <Text style={styles.insightTitle}>{cohort.countLine}</Text>
+                <Text style={styles.insightBody}>· {cohort.paceLine}</Text>
+                <Text style={styles.insightBody}>· {cohort.citiesLine}</Text>
+                <Text style={styles.insightBody}>· {cohort.topSavedLine}</Text>
+              </View>
+            )}
 
-            {/* 4. Per-week palate insights (composed from the week's vector) */}
-            <WeeklyPalateInsights weekStart={data.week_start} weekEnd={data.week_end} />
+            {/* 6. Your next era (aspirational) */}
+            {aspirational && (
+              <View style={[styles.insightCard, styles.darkCard]}>
+                <Text style={[styles.insightEyebrow, { color: "rgba(255,255,255,0.6)" }]}>YOUR NEXT ERA</Text>
+                <Text style={[styles.insightTitle, { color: "#fff" }]}>{aspirational.insight}</Text>
+                {aspirational.topAspirationTags.length > 0 && (
+                  <View style={styles.tagRow}>
+                    {aspirational.topAspirationTags.slice(0, 4).map((t) => (
+                      <View key={t.tag} style={styles.darkChip}>
+                        <Text style={styles.darkChipText}>{t.tag.replace(/_/g, " ")}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
 
-            {/* 5. Actions */}
+            {/* 7. Top palates in your area */}
+            {areaPalates && areaPalates.palates.length > 0 && (
+              <View style={styles.insightCard}>
+                <Text style={styles.insightEyebrow}>
+                  TOP PALATES IN {areaPalates.area.toUpperCase()}
+                  {areaPalates.source === "preview" ? " · preview" : ""}
+                </Text>
+                {areaPalates.palates.map((p, i) => (
+                  <View key={p.label} style={styles.rankRow}>
+                    <Text style={styles.rankPct}>{i + 1}. {p.label}</Text>
+                    <Text style={styles.rankBody}>{Math.round(p.share * 100)}%</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* 8. Actions */}
             <Spacer size={20} />
             <Button title="Share" onPress={shareImage} />
             <Spacer size={8} />
@@ -252,6 +350,12 @@ export default function WrappedTab() {
   );
 }
 
+function humanizeCuisine(s: string): string {
+  return s
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
 const SAMPLE_WRAPPED: Wrapped = {
   id: "sample",
   user_id: "sample",
@@ -291,6 +395,13 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.line,
   },
   insightsBtnText: { fontSize: 13, fontWeight: "700", color: colors.ink },
+  replayBtn: {
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.faint,
+    borderWidth: 1, borderColor: colors.line,
+  },
+  replayBtnText: { fontSize: 12, fontWeight: "700", color: colors.ink },
 
   identityCard: {
     padding: spacing.lg,
@@ -345,6 +456,25 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   insightText: { fontSize: 15, color: colors.ink, lineHeight: 21, fontStyle: "italic" },
+  insightEyebrow: { ...type.micro, color: colors.red },
+  insightTitle: { fontSize: 18, fontWeight: "800", color: colors.ink, marginTop: 8, letterSpacing: -0.3, lineHeight: 24 },
+  insightBody: { fontSize: 14, color: colors.ink, marginTop: 6, lineHeight: 20 },
+  darkCard: { backgroundColor: colors.ink, borderColor: colors.ink },
+  rankRow: {
+    flexDirection: "row", justifyContent: "space-between",
+    paddingVertical: 8,
+    borderTopColor: colors.line, borderTopWidth: 1,
+  },
+  rankPct: { flex: 1, fontSize: 14, fontWeight: "700", color: colors.ink },
+  rankBody: { fontSize: 13, color: colors.mute, marginLeft: 12 },
+  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
+  darkChip: {
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.18)",
+  },
+  darkChipText: { color: "#fff", fontSize: 11, fontWeight: "700" },
 
   deepLink: {
     paddingVertical: 12,

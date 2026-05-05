@@ -59,19 +59,63 @@ export function RecommendationsCard() {
       // is leaning heavily on the quiz fallback at this point).
       if (vector && vector.visitCount < 5) setEarlyEstimate(true);
       const result = await getPersonaRecommendations(persona, start, end);
-      const all = [...(result.similar ?? [])];
+      let all = [...(result.similar ?? [])];
       if (result.stretch) all.push(result.stretch);
 
-      // Enrich, then rank by match score (high → low) and cap at 5.
-      // Anti-staleness ON for the Home recs feed — frequently-visited spots
-      // get a soft penalty so the card doesn't keep recommending the same
-      // place. Personal signal also pulls in dismissals, item ratings,
-      // friend visits, and item↔cuisine cross-learning.
+      // FALLBACK: when persona engine returns nothing (sparse data, missing
+      // tags, etc.), pull straight from nearby restaurants ranked by
+      // canonical compatibility. Guarantees the card never silently disappears.
+      if (all.length === 0 && here) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { nearbyRestaurants } = require("../lib/places");
+          const { assembleGraph, getCompatibility } = require("../lib/recommendation");
+          const nearby = await nearbyRestaurants(here.lat, here.lng, 3000);
+          const graph = assembleGraph(vector, personal);
+          all = nearby
+            .map((p: any) => {
+              const compat = getCompatibility(graph, {
+                google_place_id: p.google_place_id,
+                name: p.name,
+                cuisine_type: p.cuisine_type ?? null,
+                cuisine_region: p.cuisine_region ?? null,
+                cuisine_subregion: p.cuisine_subregion ?? null,
+                format_class: p.format_class ?? null,
+                occasion_tags: p.occasion_tags ?? null,
+                flavor_tags: p.flavor_tags ?? null,
+                cultural_context: p.cultural_context ?? null,
+                neighborhood: p.neighborhood ?? null,
+                price_level: p.price_level ?? null,
+                rating: p.rating ?? null,
+                user_rating_count: p.user_rating_count ?? null,
+                latitude: p.latitude ?? null,
+                longitude: p.longitude ?? null,
+              });
+              return {
+                google_place_id: p.google_place_id,
+                name: p.name,
+                cuisine: p.cuisine_type ?? null,
+                neighborhood: p.neighborhood ?? null,
+                price_level: p.price_level ?? null,
+                latitude: p.latitude ?? null,
+                longitude: p.longitude ?? null,
+                rating: p.rating ?? null,
+                reason: compat.reasons[0] ?? "Nearby and worth a try.",
+                _fallbackCompat: compat.score,
+              } as any;
+            })
+            .sort((a: any, b: any) => (b._fallbackCompat ?? 0) - (a._fallbackCompat ?? 0));
+        } catch {
+          // fallback failed — leave all empty, card will hide gracefully
+        }
+      }
+
+      // Enrich with canonical match score + distance + best reason.
       const now = new Date();
-      const enriched: RestaurantRecommendation[] = all.map((r) => {
-        let matchScore: number | null = null;
+      const enriched: RestaurantRecommendation[] = all.map((r: any) => {
+        let matchScore: number | null = r._fallbackCompat ?? null;
         let reason = r.reason;
-        if (vector) {
+        if (vector && matchScore == null) {
           const m = scoreMatch(vector, r, undefined, {
             personal: personal ?? undefined,
             googlePlaceId: r.google_place_id,
@@ -88,7 +132,7 @@ export function RecommendationsCard() {
         return { ...r, matchScore, distanceKm: dKm, reason };
       });
       enriched.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
-      setRecs(enriched.slice(0, 5));
+      setRecs(enriched.slice(0, 3));
     } catch {
       setError(true);
     } finally {

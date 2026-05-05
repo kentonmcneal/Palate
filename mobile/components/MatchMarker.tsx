@@ -5,90 +5,162 @@ import { colors } from "../theme";
 import { matchScoreColor } from "../lib/match-score";
 
 // ============================================================================
-// MatchMarker — gradient pin + soft glow halo. Color tier follows the same
-// 4-step ramp used everywhere else (strong red → lighter red → light gray →
-// gray). High-match pins get an extra animated breath so the eye lands on
-// them first when scanning the map.
+// MatchMarker — circular pin that morphs into a fireball as compat → 100.
+// ----------------------------------------------------------------------------
+// Visual progression:
+//   < 40   → small gray circle, no animation
+//   40-59  → medium gray circle, faint pulse
+//   60-79  → red-gradient circle with glow halo, gentle breath
+//   80-99  → fireball-class: layered halo + breath + warm gradient core,
+//            faster pulse so the eye lands on it first
+//   100/top→ TopMatchMarker — full flame morph + double halo
+//
+// All variants are CIRCULAR (equal width and height) per spec — the old
+// oval pill design is gone.
 // ============================================================================
 
-const PULSE_THRESHOLD = 50;
+const PULSE_THRESHOLD = 40;
+const FIREBALL_THRESHOLD = 80;
 
 export function MatchMarker({ score }: { score: number | null }) {
   if (score == null) {
     return <View style={styles.dot} />;
   }
   const base = matchScoreColor(score);
-  const top = lighten(base, 0.18);
-  const bottom = darken(base, 0.22);
-  // Pulse strength scales with score: 50 → barely visible, 100 → strong.
-  // This gives instant visual hierarchy across the map.
+  const top = lighten(base, 0.22);
+  const bottom = darken(base, 0.28);
+  // Pulse strength scales with score: 40 → barely visible, 100 → strong.
   const pulseStrength = score >= PULSE_THRESHOLD
-    ? Math.min(1, (score - PULSE_THRESHOLD) / 50)
+    ? Math.min(1, (score - PULSE_THRESHOLD) / 60)
     : 0;
-  return <PinBody score={score} top={top} bottom={bottom} glow={base} pulseStrength={pulseStrength} />;
+  const isFireball = score >= FIREBALL_THRESHOLD;
+  return (
+    <PinBody
+      score={score}
+      top={top}
+      bottom={bottom}
+      glow={base}
+      pulseStrength={pulseStrength}
+      fireball={isFireball}
+    />
+  );
 }
 
-function PinBody({ score, top, bottom, glow, pulseStrength }: {
+function PinBody({ score, top, bottom, glow, pulseStrength, fireball }: {
   score: number; top: string; bottom: string; glow: string;
-  /** 0..1 — controls halo size, opacity, and breath duration. */
-  pulseStrength: number;
+  pulseStrength: number; fireball: boolean;
 }) {
   const breath = useRef(new Animated.Value(0)).current;
+  const morph = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (pulseStrength <= 0) return;
-    // Faster breath for higher scores so the most compatible spots feel alive.
-    const duration = 1500 - pulseStrength * 600; // 1500ms at 50, 900ms at 100
-    const loop = Animated.loop(
+    const duration = 1500 - pulseStrength * 700; // 1500ms low, 800ms high
+    const breathLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(breath, { toValue: 1, duration, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
         Animated.timing(breath, { toValue: 0, duration, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       ]),
     );
-    loop.start();
-    return () => loop.stop();
-  }, [pulseStrength, breath]);
+    breathLoop.start();
+    let morphLoop: Animated.CompositeAnimation | null = null;
+    if (fireball) {
+      morphLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(morph, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(morph, { toValue: 0, duration: 700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        ]),
+      );
+      morphLoop.start();
+    }
+    return () => {
+      breathLoop.stop();
+      morphLoop?.stop();
+    };
+  }, [pulseStrength, fireball, breath, morph]);
 
-  // Bigger halo + higher peak opacity for higher pulseStrength.
+  // Halo grows with pulseStrength
   const haloScale = breath.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 1.25 + 0.35 * pulseStrength], // 1.25 at 50, 1.6 at 100
+    outputRange: [1, 1.3 + 0.4 * pulseStrength],
   });
   const haloOpacity = breath.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.25 + 0.4 * pulseStrength, 0],
+    outputRange: [0.25 + 0.45 * pulseStrength, 0],
   });
+  const coreScaleY = morph.interpolate({ inputRange: [0, 1], outputRange: [1, 1.1] });
+  const coreScaleX = morph.interpolate({ inputRange: [0, 1], outputRange: [1, 0.94] });
+
+  // Circle size grows with score so high-compat pins are visually heavier
+  const size = 26 + Math.round(pulseStrength * 14); // 26 (low) → 40 (high)
+
+  // Fireball variant uses warm 3-stop gradient mimicking flame
+  const gradientStops: [string, string] | [string, string, string] = fireball
+    ? ["#FFE16B", "#FF6B2A", "#7A0B00"]
+    : [top, bottom];
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { width: size + 24, height: size + 24 }]}>
       {pulseStrength > 0 && (
         <Animated.View
           style={[
             styles.halo,
-            { backgroundColor: glow, transform: [{ scale: haloScale }], opacity: haloOpacity },
+            {
+              width: size + 12, height: size + 12, borderRadius: (size + 12) / 2,
+              backgroundColor: glow,
+              transform: [{ scale: haloScale }],
+              opacity: haloOpacity,
+            },
           ]}
         />
       )}
-      <View style={[styles.pinShadow, { shadowColor: glow, shadowOpacity: 0.4 + 0.4 * pulseStrength }]}>
-        <View style={styles.pin}>
+      {/* Inner glow ring for fireball tier */}
+      {fireball && (
+        <Animated.View
+          style={[
+            styles.innerHalo,
+            {
+              width: size + 4, height: size + 4, borderRadius: (size + 4) / 2,
+              opacity: breath.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0.85] }),
+            },
+          ]}
+        />
+      )}
+      <View
+        style={[
+          styles.pinShadow,
+          {
+            shadowColor: glow,
+            shadowOpacity: 0.4 + 0.5 * pulseStrength,
+            shadowRadius: 6 + 8 * pulseStrength,
+          },
+        ]}
+      >
+        <Animated.View
+          style={[
+            styles.pin,
+            {
+              width: size, height: size, borderRadius: size / 2,
+              transform: fireball ? [{ scaleX: coreScaleX }, { scaleY: coreScaleY }] : [],
+            },
+          ]}
+        >
           <LinearGradient
-            colors={[top, bottom]}
+            colors={gradientStops as any}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
             style={StyleSheet.absoluteFill}
           />
-          <View style={styles.gloss} />
           <Text style={styles.pinText}>{score}</Text>
-        </View>
+        </Animated.View>
       </View>
     </View>
   );
 }
 
 // ============================================================================
-// TopMatchMarker — the very best nearby spot. Layered halo + glow + morphing
-// core, kept distinct from the regular pin so it's instantly the center of
-// attention on the map.
+// TopMatchMarker — the highest-compat spot in view. Reserved for the single
+// brightest pin so it stands out even among other fireballs.
 // ============================================================================
 
 export function TopMatchMarker({ score }: { score: number }) {
@@ -99,32 +171,32 @@ export function TopMatchMarker({ score }: { score: number }) {
   useEffect(() => {
     const haloLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(halo, { toValue: 1, duration: 1600, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-        Animated.timing(halo, { toValue: 0, duration: 1600, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+        Animated.timing(halo, { toValue: 1, duration: 1400, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(halo, { toValue: 0, duration: 1400, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       ]),
     );
     const breathLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(breath, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(breath, { toValue: 0, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 1, duration: 950, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 0, duration: 950, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       ]),
     );
     const morphLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(morph, { toValue: 1, duration: 850, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(morph, { toValue: 0, duration: 850, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(morph, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(morph, { toValue: 0, duration: 700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]),
     );
     haloLoop.start(); breathLoop.start(); morphLoop.start();
     return () => { haloLoop.stop(); breathLoop.stop(); morphLoop.stop(); };
   }, [halo, breath, morph]);
 
-  const haloScale = halo.interpolate({ inputRange: [0, 1], outputRange: [1, 1.55] });
-  const haloOpacity = halo.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] });
-  const breathScale = breath.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] });
-  const breathOpacity = breath.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0.85] });
-  const coreScaleY = morph.interpolate({ inputRange: [0, 1], outputRange: [1, 1.1] });
-  const coreScaleX = morph.interpolate({ inputRange: [0, 1], outputRange: [1, 0.92] });
+  const haloScale = halo.interpolate({ inputRange: [0, 1], outputRange: [1, 1.65] });
+  const haloOpacity = halo.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] });
+  const breathScale = breath.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
+  const breathOpacity = breath.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0.95] });
+  const coreScaleY = morph.interpolate({ inputRange: [0, 1], outputRange: [1, 1.13] });
+  const coreScaleX = morph.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] });
 
   return (
     <View style={styles.topWrap}>
@@ -137,7 +209,7 @@ export function TopMatchMarker({ score }: { score: number }) {
         ]}
       >
         <LinearGradient
-          colors={["#FFB68C", "#FF3008", "#7A0B00"]}
+          colors={["#FFE16B", "#FF6B2A", "#7A0B00"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={StyleSheet.absoluteFill}
@@ -150,7 +222,6 @@ export function TopMatchMarker({ score }: { score: number }) {
 
 // ----------------------------------------------------------------------------
 // Color helpers — mix toward white/black without bringing in a color lib.
-// Accepts #RRGGBB only.
 // ----------------------------------------------------------------------------
 function lighten(hex: string, amount: number): string {
   return mix(hex, "#FFFFFF", amount);
@@ -169,60 +240,51 @@ function mix(a: string, b: string, t: number): string {
 
 const styles = StyleSheet.create({
   wrap: {
-    width: 60, height: 44,
     alignItems: "center", justifyContent: "center",
   },
   dot: {
-    width: 10, height: 10, borderRadius: 5,
+    width: 12, height: 12, borderRadius: 6,
     backgroundColor: colors.mute,
     borderWidth: 2, borderColor: "#fff",
   },
   halo: {
     position: "absolute",
-    width: 56, height: 36, borderRadius: 18,
+  },
+  innerHalo: {
+    position: "absolute",
+    backgroundColor: "#FFB347",
   },
   pinShadow: {
-    shadowOpacity: 0.55,
-    shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
   },
   pin: {
-    minWidth: 44, height: 28,
-    paddingHorizontal: 8,
-    borderRadius: 14,
+    overflow: "hidden",
     alignItems: "center", justifyContent: "center",
     borderWidth: 1.5, borderColor: "rgba(255,255,255,0.95)",
-    overflow: "hidden",
   },
-  gloss: {
-    position: "absolute",
-    top: 0, left: 0, right: 0, height: 12,
-    backgroundColor: "rgba(255,255,255,0.22)",
-    borderTopLeftRadius: 13, borderTopRightRadius: 13,
-  },
-  pinText: { color: "#fff", fontSize: 12, fontWeight: "800", letterSpacing: 0.2 },
+  pinText: { color: "#fff", fontSize: 11, fontWeight: "800", letterSpacing: 0.2 },
 
-  topWrap: { width: 72, height: 72, alignItems: "center", justifyContent: "center" },
+  topWrap: { width: 80, height: 80, alignItems: "center", justifyContent: "center" },
   topHalo: {
     position: "absolute",
-    width: 72, height: 72, borderRadius: 36,
+    width: 80, height: 80, borderRadius: 40,
     backgroundColor: colors.red,
   },
   topGlow: {
     position: "absolute",
-    width: 50, height: 50, borderRadius: 25,
-    backgroundColor: "#FF6B45",
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: "#FFB347",
   },
   topCore: {
-    width: 36, height: 36, borderRadius: 18,
+    width: 42, height: 42, borderRadius: 21,
     overflow: "hidden",
     alignItems: "center", justifyContent: "center",
     shadowColor: colors.red,
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
+    shadowOpacity: 0.85,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 0 },
     borderWidth: 1.5,
     borderColor: "rgba(255,255,255,0.95)",
   },
-  coreScore: { color: "#fff", fontSize: 12, fontWeight: "800", letterSpacing: 0.2 },
+  coreScore: { color: "#fff", fontSize: 13, fontWeight: "800", letterSpacing: 0.2 },
 });

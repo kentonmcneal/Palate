@@ -112,7 +112,7 @@ export default function RootLayout() {
           <Stack.Screen name="rate-items" options={{ presentation: "modal" }} />
           <Stack.Screen name="featured-list/[slug]" options={{ presentation: "modal" }} />
           <Stack.Screen name="location-picker" options={{ presentation: "modal" }} />
-          <Stack.Screen name="wrapped-story" options={{ presentation: "fullScreenModal" }} />
+          <Stack.Screen name="wrapped-story" options={{ presentation: "modal" }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

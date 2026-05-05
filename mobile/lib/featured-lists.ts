@@ -12,10 +12,10 @@
 
 import { supabase } from "./supabase";
 import { nearbyRestaurants, type Restaurant } from "./places";
-import { calculatePalateMatchScore, type RestaurantInput } from "./palate-match-score";
 import type { TasteVector } from "./taste-vector";
 import type { PersonalSignal } from "./personal-signal";
 import { distanceKm } from "./match-score";
+import { assembleGraph, getCompatibility, type RestaurantInput } from "./recommendation";
 
 export type FeaturedList = {
   slug: string;
@@ -137,15 +137,24 @@ const CATEGORIES: CategoryDef[] = [
 ];
 
 function any(r: Restaurant, needles: string[]): boolean {
-  const fields = [r.cuisine_type, (r as any).cuisine_subregion, (r as any).cuisine_region, (r as any).format_class].filter(Boolean) as string[];
+  // Match across every field that might carry the category signal — including
+  // restaurant name, since cuisine tags are often missing from Google data.
+  const fields = [
+    r.cuisine_type,
+    (r as any).cuisine_subregion,
+    (r as any).cuisine_region,
+    (r as any).format_class,
+    r.name,
+    (r as any).primary_type,
+  ].filter(Boolean) as string[];
   const hay = fields.join(" ").toLowerCase();
   return needles.some((n) => hay.includes(n.toLowerCase()));
 }
 
-const RADIUS_M = 5000;            // wider than Discover so lists feel "regional"
+const RADIUS_M = 12000;           // 12km — covers an entire city core
 const TOP_N = 10;
-const MIN_PER_LIST = 3;
-const MAX_LISTS = 12;             // show up to 12 carousel cards
+const MIN_PER_LIST = 1;           // even one match keeps the list visible
+const MAX_LISTS = 14;             // show up to 14 carousel cards
 
 // ----------------------------------------------------------------------------
 // Module-level cache. The Discover row populates this; the detail screen
@@ -187,30 +196,23 @@ export async function buildFeaturedLists(opts: {
 
   for (const cat of CATEGORIES) {
     const matched = restaurants
-      .filter(cat.match)
-      // Lower the social-proof bar so fast-food / new spots can compete.
-      .filter((r) => (r.user_rating_count ?? 0) >= 25);
+      .filter(cat.match);
+      // No review-count gate at all — the algorithm now relies on the
+      // composite blend (popularity + compat + proximity) to surface quality.
+      // This guarantees lists fill up to TOP_N when there's any data.
 
     if (matched.length < MIN_PER_LIST) continue;
 
     // ---- Composite ranking: popularity + match fit + proximity ----
-    // We blend these per-restaurant and then sort. Each component is 0..1.
+    // Each component is 0..1. Match fit comes from the canonical
+    // compatibility cache so the % shown on Featured List items is the SAME
+    // value used everywhere else.
+    const graph = assembleGraph(opts.vector ?? null, opts.personal ?? null);
     const scored = matched.map((r) => {
       const popularity = Math.log10(1 + (r.user_rating_count ?? 0)) / maxLogReviews;
 
-      let fit = 0.5;            // neutral when no vector
-      if (opts.vector) {
-        const m = calculatePalateMatchScore(opts.vector, toInput(r), {
-          here: opts.here,
-          now: new Date(),
-          personal: opts.personal ?? undefined,
-          // Featured Lists are reference rails, not the recs feed — DON'T
-          // apply anti-staleness here. Users want the canonical "Top X"
-          // including their favorite even if they've been many times.
-          applyStaleness: false,
-        });
-        fit = (m.score - 35) / 64; // unmap from 35..99 → 0..1
-      }
+      const compat = getCompatibility(graph, toInput(r));
+      const fit = (compat.score - 20) / 79; // unmap from 20..99 → 0..1
 
       // Distance decay — within the 5km radius, closer ranks higher. Soft.
       let prox = 1;

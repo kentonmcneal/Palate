@@ -7,9 +7,10 @@ import { computeTasteVector } from "../lib/taste-vector";
 import { nearbyRestaurants } from "../lib/places";
 import { getEffectiveLocation, useBrowsingCity } from "../lib/browsing-location";
 import { loadPersonalSignal } from "../lib/personal-signal";
-import { pickRightNowAndStretch, type RightNowPick } from "../lib/right-now";
 import { matchScoreColor } from "../lib/match-score";
 import { triggerHapticSelection } from "../lib/haptics";
+import { assembleGraph, computeRightNow, type RightNowPick } from "../lib/recommendation";
+import { toInput as toCandidateInput } from "../lib/recommendation/candidates";
 
 // ============================================================================
 // RightNowHero — the dominant decision card on Home.
@@ -52,27 +53,12 @@ export function RightNowHero({ onTakeMeThere }: Props) {
         ? nearby.filter((r) => !excludeIds.includes(r.google_place_id))
         : nearby;
 
-      const result = await pickRightNowAndStretch({
-        vector,
-        candidates: filtered.map((r) => ({
-          google_place_id: r.google_place_id,
-          name: r.name,
-          cuisine_type: r.cuisine_type ?? null,
-          cuisine_region: (r as any).cuisine_region ?? null,
-          cuisine_subregion: (r as any).cuisine_subregion ?? null,
-          format_class: (r as any).format_class ?? null,
-          occasion_tags: (r as any).occasion_tags ?? null,
-          flavor_tags: (r as any).flavor_tags ?? null,
-          cultural_context: (r as any).cultural_context ?? null,
-          neighborhood: r.neighborhood ?? null,
-          price_level: r.price_level ?? null,
-          rating: r.rating ?? null,
-          user_rating_count: (r as any).user_rating_count ?? null,
-          latitude: r.latitude ?? null,
-          longitude: r.longitude ?? null,
-        })),
+      // Canonical pipeline: build graph once, then computeRightNow.
+      const graph = assembleGraph(vector, personal);
+      const result = await computeRightNow({
+        graph,
         here,
-        personal,
+        preFetched: filtered.map(toCandidateInput),
       });
 
       setPick(result.rightNow);

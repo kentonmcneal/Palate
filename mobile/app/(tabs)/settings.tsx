@@ -23,6 +23,7 @@ import { getMyProfile, setProfileVisibility, setDisplayName, setUsername, upload
 import { listIncomingRequests } from "../../lib/friends";
 import { generateInviteLink, inviteShareMessage, getMyReferralCount } from "../../lib/referrals";
 import { GmailImportCard } from "../../components/GmailImportCard";
+import { SavedNearbyCard } from "../../components/SavedNearbyCard";
 
 const CUISINE_LABELS: Record<string, string> = {
   italian: "Italian", mexican: "Mexican", japanese: "Japanese", chinese: "Chinese",
@@ -337,6 +338,10 @@ export default function Settings() {
           </Pressable>
         </View>
 
+        {/* Saved restaurants moved here from Home — Profile is the right place
+            for "things I've kept." */}
+        <SavedNearbyCard />
+
         <Section title="Bring in your history">
           <GmailImportCard />
         </Section>
@@ -416,11 +421,12 @@ export default function Settings() {
           </Note>
         </Section>
 
-        <Section title="Privacy">
-          <Row label="Location tracking" right={<Switch value={tracking} onValueChange={toggleTracking} thumbColor={tracking ? colors.red : "#fff"} trackColor={{ true: "#FFCFC5", false: colors.line }} />} />
+        <Section title="Passive tracking">
+          <Row label="Auto-detect visits" right={<Switch value={tracking} onValueChange={toggleTracking} thumbColor={tracking ? colors.red : "#fff"} trackColor={{ true: "#FFCFC5", false: colors.line }} />} />
           <Note>
-            When off, Palate stops checking your location. Past visits stay. You can still
-            add visits manually.
+            When on, Palate checks your location whenever the app opens and prompts you
+            to confirm if you're at a restaurant. Removes the friction of remembering to
+            log every visit. Past visits stay if you turn this off.
           </Note>
         </Section>
 
