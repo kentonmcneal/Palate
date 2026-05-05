@@ -55,7 +55,11 @@ export default function WrappedStoryScreen() {
     if (index >= cards.length - 1) {
       // Persist the last-shown week so we don't loop on every focus.
       void AsyncStorage.setItem(STORY_LAST_SHOWN_KEY, isoWeekStart()).catch(() => {});
-      router.replace("/(tabs)/wrapped");
+      // dismiss() pops the modal stack and returns to the previously-mounted
+      // Wrapped tab — does NOT remount it. Critical: replace() would remount
+      // and re-trigger the focus effect, kicking off an infinite loop.
+      if (router.canGoBack()) router.back();
+      else router.replace("/(tabs)/wrapped");
       return;
     }
     Animated.sequence([
@@ -67,7 +71,9 @@ export default function WrappedStoryScreen() {
 
   function skip() {
     void AsyncStorage.setItem(STORY_LAST_SHOWN_KEY, isoWeekStart()).catch(() => {});
-    router.replace("/(tabs)/wrapped");
+    // Same as next() at the end — back() preserves the existing Wrapped tab.
+    if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)/wrapped");
   }
 
   if (cards.length === 0) {

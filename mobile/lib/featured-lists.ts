@@ -1,166 +1,66 @@
 // ============================================================================
-// featured-lists.ts — Beli-style "Top 10 X" curated lists.
+// featured-lists.ts — reads city-level Featured Lists from the cache table.
 // ----------------------------------------------------------------------------
-// Each list is a category cut against the user's nearby restaurants. Cover
-// is a gradient pair per cuisine (no photos in the catalog yet). Progress
-// counts how many of the top 10 the user has visited.
-//
-// We keep a module-level cache so the detail screen can render without
-// re-fetching (and without trying to round-trip a 10-restaurant payload
-// through expo-router params, which crashed on iOS due to URL-length limits).
+// Architecture (per cost discussion):
+//   • Cache table `featured_lists_cache` holds (city, category) → top 10
+//   • Edge function `featured-lists-refresh` populates the cache via Google
+//     Places Text Search (one query per category, up to 20 results each)
+//   • Nightly cron refreshes every active city
+//   • This file:
+//       - reads from the cache for the current city
+//       - marks the city as "active" so the cron knows to refresh it
+//       - if the cache is missing for this city, triggers a one-shot refresh
+//   • Cost: zero per user — a city's cache is computed once per day, served
+//     to every user in that city from a Supabase row read
 // ============================================================================
 
 import { supabase } from "./supabase";
-import { nearbyRestaurants, type Restaurant } from "./places";
-import type { TasteVector } from "./taste-vector";
-import type { PersonalSignal } from "./personal-signal";
-import { distanceKm } from "./match-score";
-import { assembleGraph, getCompatibility, type RestaurantInput } from "./recommendation";
+import type { RestaurantInput } from "./recommendation";
 
 export type FeaturedList = {
   slug: string;
   title: string;                 // "Top 10 Burgers"
-  subtitle: string;              // "in Philadelphia" / "Nearby"
-  visitedCount: number;
+  subtitle: string;              // "in Philadelphia"
+  visitedCount: number;          // user-specific overlay computed client-side
   totalCount: number;
-  gradient: [string, string];    // [from, to]
-  iconGlyph: string;             // single character glyph for the corner badge
+  gradient: [string, string];
+  iconGlyph: string;
   restaurants: RestaurantInput[];
 };
 
-type CategoryDef = {
+// ----------------------------------------------------------------------------
+// Per-category visual metadata. Lives client-side so we don't store gradient
+// hex codes in postgres. Slugs MUST match what the edge function writes.
+// ----------------------------------------------------------------------------
+type CategoryMeta = {
   slug: string;
-  title: string;
   gradient: [string, string];
   iconGlyph: string;
-  match: (r: Restaurant) => boolean;
 };
 
-// Order matters — list leads with everyday-decision categories the user
-// asked for: occasions first, then specific foods, then broader cuisines.
-const CATEGORIES: CategoryDef[] = [
-  // Occasions
-  {
-    slug: "date-night", title: "Top 10 Date Night",
-    gradient: ["#7E1538", "#280008"], iconGlyph: "D",
-    match: (r) => (r as any).occasion_tags?.includes?.("date_night") ?? false,
-  },
-  {
-    slug: "late-night", title: "Top 10 Late Night",
-    gradient: ["#0F1A2E", "#000408"], iconGlyph: "L",
-    match: (r) => (r as any).occasion_tags?.includes?.("late_night") ?? false,
-  },
-  {
-    slug: "early-morning", title: "Top 10 Early Morning",
-    gradient: ["#FFB347", "#7A4400"], iconGlyph: "M",
-    match: (r) => (r as any).occasion_tags?.includes?.("breakfast")
-      || any(r, ["breakfast", "diner", "bagel", "donut", "doughnut"]),
-  },
-  {
-    slug: "brunch", title: "Top 10 Brunch",
-    gradient: ["#F4A26A", "#7B2D00"], iconGlyph: "U",
-    match: (r) => (r as any).occasion_tags?.includes?.("brunch")
-      || any(r, ["brunch", "brunch_modern"]),
-  },
-
-  // Foods (specific dishes — fast food OK if it ranks)
-  {
-    slug: "burgers", title: "Top 10 Burgers",
-    gradient: ["#FF3008", "#7A0B00"], iconGlyph: "B",
-    match: (r) => any(r, ["burger", "burgers", "smashburger"]),
-  },
-  {
-    slug: "wings", title: "Top 10 Wings",
-    gradient: ["#FF8C00", "#5A1E00"], iconGlyph: "W",
-    match: (r) => any(r, ["wing", "wings", "buffalo"]),
-  },
-  {
-    slug: "fries", title: "Top 10 Fries",
-    gradient: ["#FFC04D", "#6B4500"], iconGlyph: "F",
-    match: (r) => any(r, ["fries", "frites", "fry"]),
-  },
-  {
-    slug: "hummus", title: "Top 10 Hummus",
-    gradient: ["#A89052", "#3D2F0E"], iconGlyph: "H",
-    match: (r) => any(r, ["hummus", "mediterranean", "lebanese", "israeli", "middle_eastern", "middle eastern"]),
-  },
-  {
-    slug: "steaks", title: "Top 10 Steaks",
-    gradient: ["#2B0A0A", "#000000"], iconGlyph: "K",
-    match: (r) => any(r, ["steak", "steakhouse", "chophouse"]),
-  },
-  {
-    slug: "pizza", title: "Top 10 Pizza",
-    gradient: ["#FF6B45", "#9C2200"], iconGlyph: "P",
-    match: (r) => any(r, ["pizza", "pizzeria", "italian_pizzeria", "italian_neapolitan"]),
-  },
-  {
-    slug: "tacos", title: "Top 10 Tacos",
-    gradient: ["#FF8C42", "#7B2D00"], iconGlyph: "T",
-    match: (r) => any(r, ["taco", "tacos", "taqueria", "mexican_taqueria"]),
-  },
-  {
-    slug: "sushi", title: "Top 10 Sushi",
-    gradient: ["#1F1F1F", "#000000"], iconGlyph: "S",
-    match: (r) => any(r, ["sushi", "japanese_sushi"]),
-  },
-  {
-    slug: "bbq", title: "Top 10 BBQ",
-    gradient: ["#5C1F00", "#1B0700"], iconGlyph: "Q",
-    match: (r) => any(r, ["bbq", "barbecue", "memphis_bbq", "texas_bbq", "kc_bbq"]),
-  },
-
-  // Cuisines (broader)
-  {
-    slug: "american", title: "Top 10 American",
-    gradient: ["#3D5A80", "#0E1F36"], iconGlyph: "A",
-    match: (r) => any(r, ["american", "diner", "tavern", "comfort"])
-      || (r as any).cuisine_region === "american",
-  },
-  {
-    slug: "italian", title: "Top 10 Italian",
-    gradient: ["#7C2D12", "#1F0904"], iconGlyph: "I",
-    match: (r) => any(r, ["italian", "trattoria", "osteria"])
-      || (r as any).cuisine_region === "italian",
-  },
-  {
-    slug: "caribbean", title: "Top 10 Caribbean",
-    gradient: ["#0D8A6B", "#022B22"], iconGlyph: "R",
-    match: (r) => any(r, ["caribbean", "jamaican", "haitian", "trinidadian", "cuban", "puerto rican", "dominican"])
-      || (r as any).cuisine_region === "caribbean",
-  },
-  {
-    slug: "cafes", title: "Top Cafés",
-    gradient: ["#8C5B36", "#3A1D0A"], iconGlyph: "C",
-    match: (r) => any(r, ["café", "cafe", "coffee"]) || (r as any).format_class === "café",
-  },
+const CATEGORY_META: CategoryMeta[] = [
+  { slug: "date-night",    gradient: ["#7E1538", "#280008"], iconGlyph: "D" },
+  { slug: "late-night",    gradient: ["#0F1A2E", "#000408"], iconGlyph: "L" },
+  { slug: "early-morning", gradient: ["#FFB347", "#7A4400"], iconGlyph: "M" },
+  { slug: "brunch",        gradient: ["#F4A26A", "#7B2D00"], iconGlyph: "U" },
+  { slug: "burgers",       gradient: ["#FF3008", "#7A0B00"], iconGlyph: "B" },
+  { slug: "wings",         gradient: ["#FF8C00", "#5A1E00"], iconGlyph: "W" },
+  { slug: "fries",         gradient: ["#FFC04D", "#6B4500"], iconGlyph: "F" },
+  { slug: "hummus",        gradient: ["#A89052", "#3D2F0E"], iconGlyph: "H" },
+  { slug: "steaks",        gradient: ["#2B0A0A", "#000000"], iconGlyph: "K" },
+  { slug: "pizza",         gradient: ["#FF6B45", "#9C2200"], iconGlyph: "P" },
+  { slug: "tacos",         gradient: ["#FF8C42", "#7B2D00"], iconGlyph: "T" },
+  { slug: "sushi",         gradient: ["#1F1F1F", "#000000"], iconGlyph: "S" },
+  { slug: "bbq",           gradient: ["#5C1F00", "#1B0700"], iconGlyph: "Q" },
+  { slug: "american",      gradient: ["#3D5A80", "#0E1F36"], iconGlyph: "A" },
+  { slug: "italian",       gradient: ["#7C2D12", "#1F0904"], iconGlyph: "I" },
+  { slug: "caribbean",     gradient: ["#0D8A6B", "#022B22"], iconGlyph: "R" },
+  { slug: "cafes",         gradient: ["#8C5B36", "#3A1D0A"], iconGlyph: "C" },
 ];
-
-function any(r: Restaurant, needles: string[]): boolean {
-  // Match across every field that might carry the category signal — including
-  // restaurant name, since cuisine tags are often missing from Google data.
-  const fields = [
-    r.cuisine_type,
-    (r as any).cuisine_subregion,
-    (r as any).cuisine_region,
-    (r as any).format_class,
-    r.name,
-    (r as any).primary_type,
-  ].filter(Boolean) as string[];
-  const hay = fields.join(" ").toLowerCase();
-  return needles.some((n) => hay.includes(n.toLowerCase()));
-}
-
-const RADIUS_M = 12000;           // 12km — covers an entire city core
-const TOP_N = 10;
-const MIN_PER_LIST = 1;           // even one match keeps the list visible
-const MAX_LISTS = 14;             // show up to 14 carousel cards
+const META_BY_SLUG = new Map(CATEGORY_META.map((m) => [m.slug, m]));
 
 // ----------------------------------------------------------------------------
-// Module-level cache. The Discover row populates this; the detail screen
-// reads from it. Keyed by slug so entries are stable across renders.
-// We cache by city too so switching browsing locations doesn't show a stale
-// list from the previous city.
+// Module cache so the detail screen can render without a fresh fetch.
 // ----------------------------------------------------------------------------
 let cacheCityKey: string | null = null;
 const cache = new Map<string, FeaturedList>();
@@ -169,96 +69,97 @@ export function getCachedFeaturedList(slug: string): FeaturedList | null {
   return cache.get(slug) ?? null;
 }
 
+// ----------------------------------------------------------------------------
+// Public entry — reads the city's cached lists, marks the city active,
+// triggers a refresh if the cache is empty.
+// ----------------------------------------------------------------------------
 export async function buildFeaturedLists(opts: {
   here: { lat: number; lng: number };
   city?: string | null;
-  /** Optional: personalize ranking. Without these, falls back to pure
-   *  popularity. Cold-start safe. */
-  vector?: TasteVector | null;
-  personal?: PersonalSignal | null;
+  // These two are accepted for API compat but no longer used — the cache is
+  // city-level, not user-level.
+  vector?: unknown;
+  personal?: unknown;
 }): Promise<FeaturedList[]> {
-  const restaurants = await nearbyRestaurants(opts.here.lat, opts.here.lng, RADIUS_M);
-  if (restaurants.length === 0) return [];
-
-  // Pull the user's visit set so we can show "X of 10".
-  const visitedIds = await loadUserVisitedIds();
-
-  // Pre-compute popularity normalization across the whole nearby pool so
-  // per-category ranks are comparable. log-scale dampens runaway top-rated
-  // chains (50k reviews shouldn't completely outweigh a 200-review gem).
-  const maxLogReviews = Math.max(
-    ...restaurants.map((r) => Math.log10(1 + (r.user_rating_count ?? 0))),
-    1,
-  );
-
+  const cityKey = opts.city ? slugify(opts.city) : `gps:${opts.here.lat.toFixed(2)},${opts.here.lng.toFixed(2)}`;
+  const cityLabel = opts.city ?? "Nearby";
   const subtitle = opts.city ? `in ${opts.city}` : "Nearby";
-  const lists: FeaturedList[] = [];
 
-  for (const cat of CATEGORIES) {
-    const matched = restaurants
-      .filter(cat.match);
-      // No review-count gate at all — the algorithm now relies on the
-      // composite blend (popularity + compat + proximity) to surface quality.
-      // This guarantees lists fill up to TOP_N when there's any data.
+  // 1. Mark this city as active so the nightly cron knows to refresh it.
+  //    Fire and forget — failure is non-critical.
+  void (async () => {
+    try {
+      await supabase.rpc("featured_lists_mark_city_active", {
+        p_city_key: cityKey,
+        p_city_label: cityLabel,
+        p_lat: opts.here.lat,
+        p_lng: opts.here.lng,
+      });
+    } catch { /* ignore */ }
+  })();
 
-    if (matched.length < MIN_PER_LIST) continue;
+  // 2. Read the cache for this city.
+  const { data: rows } = await supabase
+    .from("featured_lists_for_city")
+    .select("category_slug, category_title, restaurants, refreshed_at, is_fresh")
+    .eq("city_key", cityKey);
 
-    // ---- Composite ranking: GOOGLE QUALITY + popularity + proximity ----
-    // Featured Lists are intentionally NOT personalized — they're "what's
-    // hot in this area," like Beli's curated tabs or Yelp's Top 10s. They
-    // live in their own world, separate from the user's compat ranking.
-    //
-    // Real social-trending signal (TikTok / Reddit / IG mentions) requires
-    // backend integration with social APIs. Until that exists, we lean on
-    // Google Places: rating × log(reviews) is a decent proxy for "the place
-    // people are going to and liking." Proximity breaks ties so closer
-    // matches edge out far-flung ones inside the same category.
-    const scored = matched.map((r) => {
-      const popularity = Math.log10(1 + (r.user_rating_count ?? 0)) / maxLogReviews;
-
-      // Google rating, normalized 3.0..5.0 → 0..1. A 4.5+ rating with high
-      // popularity beats a 4.0 with similar popularity.
-      const rating = r.rating ?? 0;
-      const quality = rating >= 3.0 ? Math.min(1, (rating - 3.0) / 2.0) : 0;
-
-      // Distance decay — within the radius, closer ranks higher. Soft.
-      let prox = 1;
-      if (r.latitude != null && r.longitude != null) {
-        const km = distanceKm(opts.here, { lat: r.latitude, lng: r.longitude });
-        prox = Math.max(0, 1 - km / 6);
-      }
-
-      // Quality * popularity is the headline signal (highly-rated AND
-      // many-reviewed). Distance is a tie-breaker. No personal fit term.
-      const composite = 0.55 * (quality * 0.5 + popularity * 0.5) + 0.45 * (popularity) + 0.0;
-      // Simpler: weighted blend where quality and popularity each carry
-      // 35%, proximity carries 30%. Quality alone can't carry — many places
-      // have 4.7 with 12 reviews; that's noise.
-      const finalComposite = 0.35 * quality + 0.35 * popularity + 0.30 * prox;
-      return { r, composite: finalComposite };
-    });
-
-    scored.sort((a, b) => b.composite - a.composite);
-    const top = scored.slice(0, TOP_N).map((x) => x.r);
-
-    const visited = top.filter((r) => visitedIds.has(r.google_place_id)).length;
-
-    lists.push({
-      slug: cat.slug,
-      title: cat.title,
-      subtitle,
-      visitedCount: visited,
-      totalCount: top.length,
-      gradient: cat.gradient,
-      iconGlyph: cat.iconGlyph,
-      restaurants: top.map(toInput),
-    });
-
-    if (lists.length >= MAX_LISTS) break;
+  // 3. If cache is empty, kick off a one-shot refresh and return empty for now
+  //    (the user will see content on the next Discover open). This keeps the
+  //    UI from blocking on a multi-second Google round-trip.
+  if (!rows || rows.length === 0) {
+    void supabase.functions.invoke("featured-lists-refresh", {
+      body: {
+        action: "refresh_city",
+        city_key: cityKey,
+        city_label: cityLabel,
+        lat: opts.here.lat,
+        lng: opts.here.lng,
+      },
+    }).catch(() => {});
+    cacheCityKey = cityKey;
+    cache.clear();
+    return [];
   }
 
-  // Refresh cache for the detail screen.
-  const cityKey = opts.city ?? `gps:${opts.here.lat.toFixed(2)},${opts.here.lng.toFixed(2)}`;
+  // 4. If any rows are stale, kick off a background refresh while still
+  //    serving the stale data. (Stale-while-revalidate.)
+  const anyStale = rows.some((r: any) => !r.is_fresh);
+  if (anyStale) {
+    void supabase.functions.invoke("featured-lists-refresh", {
+      body: {
+        action: "refresh_city",
+        city_key: cityKey,
+        city_label: cityLabel,
+        lat: opts.here.lat,
+        lng: opts.here.lng,
+      },
+    }).catch(() => {});
+  }
+
+  // 5. Hydrate the user's visited place IDs to compute the "X of 10" overlay.
+  const visitedIds = await loadUserVisitedIds();
+
+  // 6. Map cache rows → FeaturedList[]
+  const lists: FeaturedList[] = [];
+  for (const row of rows as any[]) {
+    const meta = META_BY_SLUG.get(row.category_slug);
+    if (!meta) continue;
+    const restaurants = (row.restaurants ?? []) as RestaurantInput[];
+    const visited = restaurants.filter((r) => visitedIds.has(r.google_place_id)).length;
+    lists.push({
+      slug: row.category_slug,
+      title: row.category_title,
+      subtitle,
+      visitedCount: visited,
+      totalCount: restaurants.length,
+      gradient: meta.gradient,
+      iconGlyph: meta.iconGlyph,
+      restaurants,
+    });
+  }
+
+  // Refresh module cache for the detail screen.
   if (cacheCityKey !== cityKey) {
     cache.clear();
     cacheCityKey = cityKey;
@@ -267,6 +168,10 @@ export async function buildFeaturedLists(opts: {
 
   return lists;
 }
+
+// ----------------------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------------------
 
 async function loadUserVisitedIds(): Promise<Set<string>> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -283,22 +188,9 @@ async function loadUserVisitedIds(): Promise<Set<string>> {
   return out;
 }
 
-function toInput(p: Restaurant): RestaurantInput {
-  return {
-    google_place_id: p.google_place_id,
-    name: p.name,
-    cuisine_type: p.cuisine_type ?? null,
-    cuisine_region: (p as any).cuisine_region ?? null,
-    cuisine_subregion: (p as any).cuisine_subregion ?? null,
-    format_class: (p as any).format_class ?? null,
-    occasion_tags: (p as any).occasion_tags ?? null,
-    flavor_tags: (p as any).flavor_tags ?? null,
-    cultural_context: (p as any).cultural_context ?? null,
-    neighborhood: p.neighborhood ?? null,
-    price_level: p.price_level ?? null,
-    rating: p.rating ?? null,
-    user_rating_count: (p as any).user_rating_count ?? null,
-    latitude: p.latitude ?? null,
-    longitude: p.longitude ?? null,
-  };
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }

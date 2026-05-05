@@ -37,6 +37,11 @@ import ViewShot, { captureRef } from "react-native-view-shot";
 // Insights now. Wrapped stays scannable.
 // ============================================================================
 
+// Module-scope flag — survives component remounts. Without this, the Wrapped
+// tab re-mounts every time the story screen pops back via router.replace,
+// which would reset a useRef and re-trigger the story → infinite loop.
+let storyShownThisSession = false;
+
 export default function WrappedTab() {
   const [data, setData] = useState<Wrapped | null>(null);
   const [identities, setIdentities] = useState<PalateIdentitySet | null>(null);
@@ -52,10 +57,7 @@ export default function WrappedTab() {
   const [confettiKey, setConfettiKey] = useState(0);
   const cardRef = useRef<View>(null);
   const storyRef = useRef<View>(null);
-  // Tracks whether we've already pushed the story this app-session — stops
-  // the focus effect from re-pushing every time the user returns to Wrapped
-  // (e.g. after dismissing the story screen or coming back from a sub-route).
-  const storyShownThisSession = useRef(false);
+  // (storyShownThisSession lives at module scope above — see comment there.)
   const router = useRouter();
 
   const refresh = useCallback(async () => {
@@ -101,13 +103,11 @@ export default function WrappedTab() {
 
   useFocusEffect(useCallback(() => {
     refresh();
-    // Wrapped opens via the 3-card story intro on first tap per app session.
-    // The session ref prevents an infinite loop: when the story dismisses,
-    // it routes back to Wrapped, focus fires again — without the ref we'd
-    // immediately re-push the story. Tap the "Replay story" button on
-    // Wrapped to re-trigger manually.
-    if (storyShownThisSession.current) return;
-    storyShownThisSession.current = true;
+    // Story plays once per app session on first Wrapped focus. The
+    // module-scope flag survives component remounts (the story exit
+    // remounts this tab via router.replace).
+    if (storyShownThisSession) return;
+    storyShownThisSession = true;
     const t = setTimeout(() => router.push("/wrapped-story"), 80);
     return () => clearTimeout(t);
   }, [refresh, router]));
@@ -196,11 +196,10 @@ export default function WrappedTab() {
               automatically once per ISO week; this button lets the user
               re-trigger it any time. */}
           <Pressable
-            onPress={async () => {
-              try { await AsyncStorage.removeItem(STORY_LAST_SHOWN_KEY); } catch {}
-              // Reset the session flag so the next focus-fire after dismiss
-              // doesn't re-push (manual button is the only re-trigger).
-              storyShownThisSession.current = true;
+            onPress={() => {
+              // Manual re-trigger. Flag stays true so we don't re-loop on
+              // the next focus.
+              storyShownThisSession = true;
               router.push("/wrapped-story");
             }}
             style={styles.replayBtn}
