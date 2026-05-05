@@ -203,29 +203,39 @@ export async function buildFeaturedLists(opts: {
 
     if (matched.length < MIN_PER_LIST) continue;
 
-    // ---- Composite ranking: popularity + match fit + proximity ----
-    // Each component is 0..1. Match fit comes from the canonical
-    // compatibility cache so the % shown on Featured List items is the SAME
-    // value used everywhere else.
-    const graph = assembleGraph(opts.vector ?? null, opts.personal ?? null);
+    // ---- Composite ranking: GOOGLE QUALITY + popularity + proximity ----
+    // Featured Lists are intentionally NOT personalized — they're "what's
+    // hot in this area," like Beli's curated tabs or Yelp's Top 10s. They
+    // live in their own world, separate from the user's compat ranking.
+    //
+    // Real social-trending signal (TikTok / Reddit / IG mentions) requires
+    // backend integration with social APIs. Until that exists, we lean on
+    // Google Places: rating × log(reviews) is a decent proxy for "the place
+    // people are going to and liking." Proximity breaks ties so closer
+    // matches edge out far-flung ones inside the same category.
     const scored = matched.map((r) => {
       const popularity = Math.log10(1 + (r.user_rating_count ?? 0)) / maxLogReviews;
 
-      const compat = getCompatibility(graph, toInput(r));
-      const fit = (compat.score - 20) / 79; // unmap from 20..99 → 0..1
+      // Google rating, normalized 3.0..5.0 → 0..1. A 4.5+ rating with high
+      // popularity beats a 4.0 with similar popularity.
+      const rating = r.rating ?? 0;
+      const quality = rating >= 3.0 ? Math.min(1, (rating - 3.0) / 2.0) : 0;
 
-      // Distance decay — within the 5km radius, closer ranks higher. Soft.
+      // Distance decay — within the radius, closer ranks higher. Soft.
       let prox = 1;
       if (r.latitude != null && r.longitude != null) {
         const km = distanceKm(opts.here, { lat: r.latitude, lng: r.longitude });
         prox = Math.max(0, 1 - km / 6);
       }
 
-      // Tunable blend. Popularity stays the largest single factor — Featured
-      // Lists are still "what's hot" — but personal fit and proximity break
-      // ties and steer the order toward "what's hot AND for you AND nearby".
-      const composite = 0.45 * popularity + 0.35 * fit + 0.20 * prox;
-      return { r, composite };
+      // Quality * popularity is the headline signal (highly-rated AND
+      // many-reviewed). Distance is a tie-breaker. No personal fit term.
+      const composite = 0.55 * (quality * 0.5 + popularity * 0.5) + 0.45 * (popularity) + 0.0;
+      // Simpler: weighted blend where quality and popularity each carry
+      // 35%, proximity carries 30%. Quality alone can't carry — many places
+      // have 4.7 with 12 reviews; that's noise.
+      const finalComposite = 0.35 * quality + 0.35 * popularity + 0.30 * prox;
+      return { r, composite: finalComposite };
     });
 
     scored.sort((a, b) => b.composite - a.composite);

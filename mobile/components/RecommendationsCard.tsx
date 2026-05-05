@@ -280,7 +280,7 @@ function capitalize(s: string): string {
 
 const styles = StyleSheet.create({
   card: {
-    marginTop: spacing.xl,
+    // No top margin — the parent section header controls spacing now.
     padding: spacing.md,
     borderRadius: 22,
     backgroundColor: colors.paper,

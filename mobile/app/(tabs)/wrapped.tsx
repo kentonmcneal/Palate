@@ -52,6 +52,10 @@ export default function WrappedTab() {
   const [confettiKey, setConfettiKey] = useState(0);
   const cardRef = useRef<View>(null);
   const storyRef = useRef<View>(null);
+  // Tracks whether we've already pushed the story this app-session — stops
+  // the focus effect from re-pushing every time the user returns to Wrapped
+  // (e.g. after dismissing the story screen or coming back from a sub-route).
+  const storyShownThisSession = useRef(false);
   const router = useRouter();
 
   const refresh = useCallback(async () => {
@@ -97,10 +101,13 @@ export default function WrappedTab() {
 
   useFocusEffect(useCallback(() => {
     refresh();
-    // Wrapped ALWAYS opens via the 3-card story intro. The story is the
-    // experience — Wrapped behind it is the resolution. Delay slightly so
-    // the focus transition completes first, otherwise the push fights the
-    // tab navigation.
+    // Wrapped opens via the 3-card story intro on first tap per app session.
+    // The session ref prevents an infinite loop: when the story dismisses,
+    // it routes back to Wrapped, focus fires again — without the ref we'd
+    // immediately re-push the story. Tap the "Replay story" button on
+    // Wrapped to re-trigger manually.
+    if (storyShownThisSession.current) return;
+    storyShownThisSession.current = true;
     const t = setTimeout(() => router.push("/wrapped-story"), 80);
     return () => clearTimeout(t);
   }, [refresh, router]));
@@ -191,6 +198,9 @@ export default function WrappedTab() {
           <Pressable
             onPress={async () => {
               try { await AsyncStorage.removeItem(STORY_LAST_SHOWN_KEY); } catch {}
+              // Reset the session flag so the next focus-fire after dismiss
+              // doesn't re-push (manual button is the only re-trigger).
+              storyShownThisSession.current = true;
               router.push("/wrapped-story");
             }}
             style={styles.replayBtn}

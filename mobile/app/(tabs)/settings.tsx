@@ -448,16 +448,9 @@ export default function Settings() {
           />
         </Section>
 
-        <Section title="Insights">
-          <Button title="Your Insights" onPress={() => router.push("/insights-deep")} />
-          <Note>Palate Lore, percentile rankings, people-like-you, your aspirational palate, top palates in your area.</Note>
-          <Spacer />
-          <Button
-            title="Charts & analytics"
-            onPress={() => router.push("/insights")}
-            variant="ghost"
-          />
-        </Section>
+        {/* Insights section removed — all of that content (Palate Lore,
+            percentiles, people-like-you, aspirational, top palates in area)
+            now lives inline on the Wrapped tab per latest spec. */}
 
         <Section title="Your data">
           <Button title="Delete all visit history" onPress={deleteHistory} variant="ghost" />

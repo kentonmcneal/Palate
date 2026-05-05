@@ -444,7 +444,8 @@ const styles = StyleSheet.create({
     fontSize: 18, fontWeight: "800", color: colors.ink,
     letterSpacing: -0.3,
     marginTop: spacing.xl,
-    marginBottom: -4,  // RecommendationsCard already has its own marginTop
+    marginBottom: 12,  // positive margin so descenders don't get clipped by next card
+    paddingBottom: 4,
   },
   checkNowCard: {
     marginTop: spacing.md,
