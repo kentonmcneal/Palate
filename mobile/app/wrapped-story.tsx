@@ -6,7 +6,7 @@ import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors, spacing, type } from "../theme";
 import { computeTasteVector } from "../lib/taste-vector";
-import { generateIdentitySet } from "../lib/palate-labels";
+import { getProfileFromVector, IDENTITY_BLURB, type PalateProfile } from "../lib/palate";
 import { isoWeekStart } from "../lib/wrapped";
 import { triggerHapticSelection } from "../lib/haptics";
 
@@ -45,8 +45,8 @@ export default function WrappedStoryScreen() {
   useEffect(() => {
     (async () => {
       const v = await computeTasteVector({ sinceDays: 7 }).catch(() => null);
-      const all = await computeTasteVector().catch(() => null);
-      setCards(buildCards(v, all));
+      const profile = v ? await getProfileFromVector(v).catch(() => null) : null;
+      setCards(buildCards(profile));
     })();
   }, []);
 
@@ -126,63 +126,52 @@ export default function WrappedStoryScreen() {
 }
 
 // ----------------------------------------------------------------------------
-// Card builder — reads the week's vector and composes 3 cards. Reuses
-// existing copy when behavior matches; falls back to neutral framing otherwise.
+// Card builder — three cards per spec:
+//   Card 1: "Your palate leaned ___ this week"
+//   Card 2: Behavior explanation
+//   Card 3: Tags / movement
 // ----------------------------------------------------------------------------
-function buildCards(week: any, all: any): StoryCard[] {
-  const visits = week?.visitCount ?? 0;
-  const unique = week?.uniqueRestaurants ?? 0;
-  const repeatRate = week?.repeatRate ?? 0;
-  const exploration = week?.explorationRate ?? 1;
-
-  const ids = all && all.visitCount > 0 ? generateIdentitySet(all, week) : null;
-  const identityLabel = ids?.primary.label ?? "Pattern Forming";
-  const identityDescription = ids?.primary.description ?? "Your taste is taking shape.";
-
-  // Card 1 — observation about volume / cadence
-  const card1: StoryCard = visits >= 3
+function buildCards(profile: PalateProfile | null): StoryCard[] {
+  // Card 1 — identity reveal ("Your palate this week leaned X")
+  const identityName = profile?.primaryIdentity ?? "Learning";
+  const card1: StoryCard = identityName === "Learning"
     ? {
         eyebrow: "THIS WEEK",
-        headline: `${visits} visits across ${unique} place${unique === 1 ? "" : "s"}.`,
-        body: visits >= 3 && unique >= 3
-          ? "Three new spots a week, minimum. That's the rhythm."
-          : "A focused week. Quality over quantity.",
+        headline: "We're still learning your Palate.",
+        body: "Log a few more visits and we'll show you who you eat like.",
         gradient: ["#1A1A1A", "#000000"],
       }
     : {
-        eyebrow: "THIS WEEK",
-        headline: visits === 0 ? "A quiet week." : `${visits} visit${visits === 1 ? "" : "s"}.`,
+        eyebrow: "YOUR PALATE THIS WEEK LEANED",
+        headline: identityName,
+        body: IDENTITY_BLURB[identityName].tagline,
+        gradient: ["#1A1A1A", "#000000"],
+      };
+
+  // Card 2 — behavior explanation (what your data showed)
+  const card2: StoryCard = profile && profile.behaviorSignals.length > 0
+    ? {
+        eyebrow: "WHY",
+        headline: profile.explanation,
+        body: profile.behaviorSignals.slice(0, 2).join(" "),
+        gradient: ["#3D1F1A", "#0F0604"],
+      }
+    : {
+        eyebrow: "WHY",
+        headline: "A quiet week.",
         body: "Some weeks the kitchen wins. We'll still surface what your pattern says.",
-        gradient: ["#1A1A1A", "#000000"],
-      };
-
-  // Card 2 — contrast: variety vs repeat
-  const card2: StoryCard = exploration >= 0.7
-    ? {
-        eyebrow: "PATTERN",
-        headline: "You barely repeated anywhere.",
-        body: "New beats familiar this week. You're collecting first impressions.",
-        gradient: ["#3D1F1A", "#0F0604"],
-      }
-    : repeatRate >= 0.55
-    ? {
-        eyebrow: "PATTERN",
-        headline: "You returned to the spots that work.",
-        body: "Comfort over discovery this week — verified-good is hard to beat.",
-        gradient: ["#3D1F1A", "#0F0604"],
-      }
-    : {
-        eyebrow: "PATTERN",
-        headline: "A balanced week.",
-        body: "Mix of repeats and new spots. Steady curiosity, not a sprint.",
         gradient: ["#3D1F1A", "#0F0604"],
       };
 
-  // Card 3 — why this week / identity reveal teaser
+  // Card 3 — tags + movement (where you went / where you're going)
+  const tagsLine = profile && profile.tags.length > 0
+    ? profile.tags.slice(0, 3).join(" · ")
+    : "Tags appear after a few more visits.";
+  const movement = profile?.movement?.summary ?? "Your Palate updates each week.";
   const card3: StoryCard = {
-    eyebrow: "WHY THIS WEEK",
-    headline: identityLabel,
-    body: identityDescription,
+    eyebrow: "TAGS + MOVEMENT",
+    headline: tagsLine,
+    body: movement,
     gradient: ["#7A0B00", "#2B0400"],
   };
 

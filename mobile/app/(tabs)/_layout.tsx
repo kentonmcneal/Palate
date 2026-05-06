@@ -5,6 +5,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "../../theme";
 import { latestWrapped } from "../../lib/wrapped";
 import { triggerHapticSelection } from "../../lib/haptics";
+import { PalateIntroModal } from "../../components/PalateIntroModal";
 
 export const LAST_SEEN_WRAPPED_KEY = "palate.wrapped.lastSeen";
 
@@ -33,6 +34,8 @@ export default function TabsLayout() {
   }, []);
 
   return (
+    <>
+    <PalateIntroModal />
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -84,6 +87,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="add" options={{ href: null }} />
       <Tabs.Screen name="wishlist" options={{ href: null }} />
     </Tabs>
+    </>
   );
 }
 

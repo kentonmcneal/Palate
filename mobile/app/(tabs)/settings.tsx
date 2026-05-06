@@ -18,7 +18,7 @@ import {
 } from "../../lib/notifications";
 import { loadAnalytics, type AnalyticsSummary } from "../../lib/analytics-stats";
 import { computeTasteVector } from "../../lib/taste-vector";
-import { generateIdentitySet, type PalateIdentitySet } from "../../lib/palate-labels";
+import { getProfileFromVector, IDENTITY_BLURB, type PalateProfile } from "../../lib/palate";
 import { getMyProfile, setProfileVisibility, setDisplayName, setUsername, uploadAvatar, type ProfileVisibility } from "../../lib/profile";
 import { listIncomingRequests } from "../../lib/friends";
 import { generateInviteLink, inviteShareMessage, getMyReferralCount } from "../../lib/referrals";
@@ -42,7 +42,7 @@ export default function Settings() {
   const [email, setEmail] = useState<string | null>(null);
   const [sundayReminder, setSundayReminder] = useState(false);
   const [stats, setStats] = useState<AnalyticsSummary | null>(null);
-  const [identitySet, setIdentitySet] = useState<PalateIdentitySet | null>(null);
+  const [palateProfile, setPalateProfile] = useState<PalateProfile | null>(null);
   const [visibility, setVisibility] = useState<ProfileVisibility>("friends");
   const [displayName, setDisplayNameState] = useState<string | null>(null);
   const [username, setUsernameState] = useState<string | null>(null);
@@ -61,9 +61,13 @@ export default function Settings() {
     supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
     isReminderEnabled().then(setSundayReminder);
     loadAnalytics("all").then(setStats).catch(() => {});
-    // Compute the user's overall (all-time) palate identity for the Profile.
-    computeTasteVector().then((v) => {
-      if (v && v.visitCount > 0) setIdentitySet(generateIdentitySet(v));
+    // Compute the user's overall (all-time) Palate profile for the Profile
+    // header. Uses the new identity system (Curator/Forager/Steward/Anchor).
+    computeTasteVector().then(async (v) => {
+      if (v && v.visitCount > 0) {
+        const p = await getProfileFromVector(v).catch(() => null);
+        if (p) setPalateProfile(p);
+      }
     }).catch(() => {});
     getMyProfile().then((p) => {
       if (!p) return;
@@ -274,17 +278,17 @@ export default function Settings() {
             </Pressable>
           </View>
 
-          {/* Overall palate identity — promoted to the top of the Profile card.
-              Tap to dive into deep insights. */}
-          {identitySet && (
+          {/* Overall Palate identity — Curator/Forager/Steward/Anchor.
+              Tap to open Wrapped where the full breakdown lives. */}
+          {palateProfile && palateProfile.primaryIdentity !== "Learning" && (
             <Pressable
-              onPress={() => router.push("/insights-deep")}
+              onPress={() => router.push("/(tabs)/wrapped")}
               style={styles.identityBlock}
               accessibilityRole="button"
             >
-              <Text style={styles.identityEyebrow}>YOUR PALATE</Text>
-              <Text style={styles.identityName}>{identitySet.primary.label}</Text>
-              <Text style={styles.identityDesc}>{identitySet.primary.description}</Text>
+              <Text style={styles.identityEyebrow}>YOUR PALATE THIS WEEK LEANED</Text>
+              <Text style={styles.identityName}>{palateProfile.primaryIdentity}</Text>
+              <Text style={styles.identityDesc}>{IDENTITY_BLURB[palateProfile.primaryIdentity].tagline}</Text>
             </Pressable>
           )}
 

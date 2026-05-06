@@ -17,13 +17,18 @@ import { Confetti } from "../../components/Confetti";
 import { shareWrappedToFeed } from "../../lib/feed";
 import { track } from "../../lib/analytics";
 import { computeTasteVector, type TasteVector } from "../../lib/taste-vector";
-import { generateIdentitySet, generateLore, expandedLore, type PalateIdentitySet } from "../../lib/palate-labels";
+import { generateIdentitySet } from "../../lib/palate-labels";
 import { getSessionStage, type SessionStage } from "../../lib/session-stage";
 import { loadPersonalSignal } from "../../lib/personal-signal";
 import { assembleGraph, composeWrapped, type WrappedSummary } from "../../lib/recommendation";
 import { generatePercentileCards, generateCohortInsightAsync, type CohortInsight } from "../../lib/population-stats";
 import { computeAspirationalPalate, type AspirationalPalate } from "../../lib/aspirational-palate";
 import { getAreaPalates, type AreaPalateSummary } from "../../lib/area-palates";
+import {
+  getProfileFromVector, IDENTITY_BLURB,
+  type PalateProfile,
+} from "../../lib/palate";
+import { WhatArePalates } from "../../components/WhatArePalates";
 import ViewShot, { captureRef } from "react-native-view-shot";
 
 // ============================================================================
@@ -44,7 +49,7 @@ let storyShownThisSession = false;
 
 export default function WrappedTab() {
   const [data, setData] = useState<Wrapped | null>(null);
-  const [identities, setIdentities] = useState<PalateIdentitySet | null>(null);
+  const [profile, setProfile] = useState<PalateProfile | null>(null);
   const [vector, setVector] = useState<TasteVector | null>(null);
   const [stage, setStage] = useState<SessionStage>(1);
   const [summary, setSummary] = useState<WrappedSummary | null>(null);
@@ -74,20 +79,30 @@ export default function WrappedTab() {
         await AsyncStorage.setItem(LAST_SEEN_WRAPPED_KEY, latest.week_start);
       }
       setVector(allTimeVec ?? null);
-      const ids = allTimeVec ? generateIdentitySet(allTimeVec, weekVec ?? undefined) : null;
-      if (ids) setIdentities(ids);
       // Compose canonical Wrapped summary from the weekly graph for the
       // exploration/repeat/comfort/stretch scores below.
       const personal = await loadPersonalSignal().catch(() => null);
       const weekGraph = assembleGraph(weekVec ?? null, personal);
       setSummary(composeWrapped(weekGraph));
 
-      // Load all the deep-insights surfaces in parallel — these used to live
-      // on /insights-deep, now they're inlined on Wrapped per spec.
-      if (allTimeVec && ids) {
+      // NEW Palate identity (Curator/Forager/Steward/Anchor) — single
+      // source of truth from lib/palate. Operates on the WEEKLY vector so
+      // identity reflects "this week leaned X" not all-time pattern.
+      if (weekVec) {
+        const newProfile = await getProfileFromVector(weekVec, {
+          thisWeekIso: isoWeekStart(),
+        });
+        setProfile(newProfile);
+      }
+
+      // Deep-insights surfaces (percentile/cohort/aspirational/area) still
+      // call the legacy palate-labels API — feed them the legacy identity
+      // for now. Migration is a follow-up; this keeps them working.
+      if (allTimeVec) {
+        const legacyIds = generateIdentitySet(allTimeVec, weekVec ?? undefined);
         const [pc, co, ap, ar] = await Promise.all([
-          Promise.resolve(generatePercentileCards(allTimeVec, ids.primary)),
-          generateCohortInsightAsync(ids.primary, allTimeVec).catch(() => null),
+          Promise.resolve(generatePercentileCards(allTimeVec, legacyIds.primary)),
+          generateCohortInsightAsync(legacyIds.primary, allTimeVec).catch(() => null),
           computeAspirationalPalate().catch(() => null),
           getAreaPalates().catch(() => null),
         ]);
@@ -156,7 +171,9 @@ export default function WrappedTab() {
     try {
       await shareWrappedToFeed({
         personaLabel: identityLabel(),
-        tagline: identities?.primary.secondary ?? "",
+        tagline: profile && profile.primaryIdentity !== "Learning"
+          ? IDENTITY_BLURB[profile.primaryIdentity].tagline
+          : "",
         weekStart: data.week_start,
         weekEnd: data.week_end,
         totalVisits: data.total_visits,
@@ -170,15 +187,18 @@ export default function WrappedTab() {
   }
 
   function identityLabel(): string {
-    if (stage >= 3 && identities) return identities.primary.label;
+    // New Palate identity (Curator/Forager/Steward/Anchor/Learning) wins
+    // when available — single source of truth.
+    if (profile) return profile.primaryIdentity;
     if (data?.personality_label) return data.personality_label;
-    return "Pattern Forming";
+    return "Learning";
   }
 
   function insightLine(): string {
-    if (stage < 3) return "Your pattern is forming. The identity reveals at 3 visits.";
-    if (vector && identities) return generateLore(vector, identities.primary);
-    return "";
+    // Use the profile's composed explanation — already handles soft language
+    // for middle users + Learning state for low-data.
+    if (profile) return profile.explanation;
+    return "We're still learning your Palate. Log a few more visits and we'll show you who you eat like.";
   }
 
   return (
@@ -211,12 +231,17 @@ export default function WrappedTab() {
 
         {data ? (
           <>
-            {/* 1. Black hero — identity + stats + top spots + top cuisines. */}
+            {/* 1. Black hero — identity + stats + top spots + top cuisines.
+                Identity name is now Curator/Forager/Steward/Anchor (or
+                Learning when <4 visits). Description comes from the new
+                IDENTITY_BLURB. */}
             <ViewShot ref={cardRef as any} options={{ format: "png", quality: 1 }}>
               <WrappedCard
                 data={data}
                 personaOverride={identityLabel()}
-                personaDescription={stage >= 3 && identities ? identities.primary.description : undefined}
+                personaDescription={profile && profile.primaryIdentity !== "Learning"
+                  ? IDENTITY_BLURB[profile.primaryIdentity].tagline
+                  : undefined}
                 topCuisines={summary?.topCuisines.slice(0, 3).map((c) => ({
                   name: humanizeCuisine(c.name),
                   share: c.share,
@@ -224,24 +249,44 @@ export default function WrappedTab() {
               />
             </ViewShot>
 
-            {/* 2. Interactive charts — tap-to-focus donut + day-of-week bars.
-                Charts come immediately after the hero per spec — no gray
-                "WHY THIS WEEK" / "TRY NEXT" boxes between. */}
-            <WrappedCharts />
+            {/* 2. The week's headline — soft language for middle users */}
+            {profile && (
+              <View style={styles.insightCard}>
+                <Text style={styles.insightBody}>{profile.explanation}</Text>
+                {profile.movement && (
+                  <Text style={[styles.insightBody, { color: colors.red, fontWeight: "700", marginTop: 6 }]}>
+                    {profile.movement.summary}
+                  </Text>
+                )}
+              </View>
+            )}
 
-            {/* 3. Palate Lore (was on /insights-deep) — story + behavior. */}
-            {identities && stage >= 3 && (() => {
-              const lore = expandedLore(identities.primary);
-              return (
-                <View style={styles.insightCard}>
-                  <Text style={styles.insightEyebrow}>PALATE LORE</Text>
-                  <Text style={styles.insightTitle}>{identities.primary.label}</Text>
-                  <Text style={styles.insightBody}>{lore.story}</Text>
-                  <Spacer size={10} />
-                  <Text style={styles.insightBody}>{lore.behavior}</Text>
+            {/* 3. Tags (max 4) — non-exclusive secondary signals */}
+            {profile && profile.tags.length > 0 && (
+              <View style={styles.insightCard}>
+                <Text style={styles.insightEyebrow}>THIS WEEK'S TAGS</Text>
+                <View style={styles.tagRowLight}>
+                  {profile.tags.map((t) => (
+                    <View key={t} style={styles.tagChip}>
+                      <Text style={styles.tagChipText}>{t}</Text>
+                    </View>
+                  ))}
                 </View>
-              );
-            })()}
+              </View>
+            )}
+
+            {/* 4. Behavior signals — concrete, human-readable bullets */}
+            {profile && profile.behaviorSignals.length > 0 && (
+              <View style={styles.insightCard}>
+                <Text style={styles.insightEyebrow}>BEHAVIOR SIGNALS</Text>
+                {profile.behaviorSignals.map((s, i) => (
+                  <Text key={i} style={[styles.insightBody, { marginTop: i === 0 ? 8 : 4 }]}>· {s}</Text>
+                ))}
+              </View>
+            )}
+
+            {/* 5. Interactive charts — tap-to-focus donut + day-of-week bars */}
+            <WrappedCharts />
 
             {/* 4. Where you rank (percentile cards) */}
             {percentileCards.length > 0 && (
@@ -302,6 +347,9 @@ export default function WrappedTab() {
               </View>
             )}
 
+            {/* What are Palates? — explainer block with axis graph */}
+            {profile && <WhatArePalates profile={profile} />}
+
             {/* 8. Actions */}
             <Spacer size={20} />
             <Button title="Share" onPress={shareImage} />
@@ -320,12 +368,12 @@ export default function WrappedTab() {
               </View>
             </View>
           </>
-        ) : identities && vector && vector.visitCount > 0 ? (
+        ) : profile && vector && vector.visitCount > 0 ? (
           // Pre-Sunday: visits exist but no Wrapped row yet. Show a stripped
           // version so the tab feels alive while the user waits for Sunday.
           <>
             <View style={styles.identityCard}>
-              <Text style={styles.identityEyebrow}>YOU'RE A</Text>
+              <Text style={styles.identityEyebrow}>YOUR PALATE THIS WEEK LEANED</Text>
               <Text style={styles.identityName}>{identityLabel()}</Text>
             </View>
             <View style={styles.insightCard}>
@@ -484,6 +532,15 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: "rgba(255,255,255,0.18)",
   },
   darkChipText: { color: "#fff", fontSize: 11, fontWeight: "700" },
+
+  tagRowLight: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  tagChip: {
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.faint,
+    borderWidth: 1, borderColor: colors.line,
+  },
+  tagChipText: { color: colors.ink, fontSize: 12, fontWeight: "700" },
 
   deepLink: {
     paddingVertical: 12,
