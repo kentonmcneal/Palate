@@ -23,7 +23,7 @@ export { generateCandidates, type Candidate } from "./candidates";
 export { rerank, type RerankOptions } from "./reranking";
 export { explainCompatibility, explainRightNow, type RightNowExplanation } from "./explanations";
 export { composeWrapped, type WrappedSummary } from "./wrapped";
-export { computeRightNow, type RightNowPick, type RightNowResult } from "./right-now";
+export { computeRightNow, type RightNowPick, type RightNowResult, type RightNowStrategy } from "./right-now";
 export { classifyIdentity, classifyFromGraph } from "./identity";
 
 // ----------------------------------------------------------------------------

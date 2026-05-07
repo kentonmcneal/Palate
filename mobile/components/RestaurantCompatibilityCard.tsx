@@ -24,9 +24,14 @@ type Props = {
   surface: RecEventContext["surface"];
   bucket?: RecEventContext["bucket"];
   onDismissed?: () => void;
+  /** When set, replaces the personal-compat reason with this verbatim string
+   *  (no shortDescriptor truncation). Used by Featured Lists to show place
+   *  facts ("4.6 ★ · 1.2k reviews · $$") instead of misleading "matches your
+   *  X pattern" copy on a list that's intentionally not personalized. */
+  reasonOverride?: string;
 };
 
-export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDismissed }: Props) {
+export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDismissed, reasonOverride }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -93,9 +98,25 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
     restaurant.distanceKm != null ? formatDistance(restaurant.distanceKm) : null,
   ].filter(Boolean).join(" · ");
 
+  function showLessLikeThis() {
+    void triggerHapticSelection();
+    Alert.alert(
+      "Show less like this?",
+      `We'll surface fewer spots like ${restaurant.name} in your recs.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Show less",
+          style: "destructive",
+          onPress: () => dismiss(),
+        },
+      ],
+    );
+  }
+
   return (
     <Animated.View style={enterStyle}>
-    <TapCard onPress={openDetail} style={styles.card}>
+    <TapCard onPress={openDetail} onLongPress={showLessLikeThis} style={styles.card}>
       <View style={styles.head}>
         <View style={{ flex: 1 }}>
           <Text style={styles.name} numberOfLines={2}>{restaurant.name}</Text>
@@ -114,10 +135,13 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
         </View>
       </View>
 
-      {/* Strict format: ONE descriptor, max 5 words. */}
-      {m.reasons[0] && (
+      {/* Override mode: render verbatim (used by Featured Lists for facts).
+          Otherwise use the strict 5-word descriptor format. */}
+      {reasonOverride ? (
+        <Text style={styles.reason}>{reasonOverride}</Text>
+      ) : m.reasons[0] ? (
         <Text style={styles.reason}>{shortDescriptor(m.reasons[0])}</Text>
-      )}
+      ) : null}
 
       <View style={styles.actions}>
         <View>
@@ -139,13 +163,9 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
         >
           <Text style={styles.btnGhostText}>Maps</Text>
         </Pressable>
-        <Pressable
-          onPress={(e) => { e.stopPropagation(); dismiss(); }}
-          style={styles.btnSubtle}
-          hitSlop={8}
-        >
-          <Text style={styles.btnSubtleText}>Pass</Text>
-        </Pressable>
+        {/* "Pass" button removed per UX feedback — felt punitive on a card
+            that's already showing a high match score. Negative signal still
+            captured implicitly via skips when the user scrolls past. */}
       </View>
     </TapCard>
     </Animated.View>
@@ -156,20 +176,38 @@ function cap(s: string): string {
   return s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, " ") : s;
 }
 
+// Generic categories that, when used as the entire reason line, are useless
+// to the user ("bar", "café"). If our shortened reason collapses to one of
+// these, we fall back to the full sentence or to a generic-but-honest line.
+const STUB_REASONS = new Set([
+  "bar", "cafe", "café", "restaurant", "food", "place",
+  "within the kind of place", "in your usual lane",
+]);
+
 /**
- * Squeeze the recommendation reason into the strict 5-word descriptor format.
- * Strips punctuation, common filler ("Hits your", "Matches your"), trims
- * to the first 5 meaningful words. Lowercases for tone.
+ * Render the recommendation reason as a short, human line — max ~12 words.
+ * The compatibility scorer already produces sentences like "Matches your Bar
+ * habit." We keep them mostly intact (just trim the trailing period) so they
+ * read as English, not chip text. Only when the reason explicitly looks like
+ * a generic placeholder do we substitute a fallback.
  */
 function shortDescriptor(raw: string): string {
-  const cleaned = raw
-    .replace(/^(hits|matches|in|right|same|fits)\s+(your|the)\s+/i, "")
-    .replace(/\s*pattern\.?$/i, "")
-    .replace(/\s*habit\.?$/i, "")
-    .replace(/\.$/, "")
-    .replace(/\bright now\b/i, "now");
-  const words = cleaned.split(/\s+/).slice(0, 5);
-  return words.join(" ").toLowerCase();
+  const trimmed = raw.replace(/\s+/g, " ").trim().replace(/\.$/, "");
+  if (!trimmed) return "Similar to places you usually like";
+
+  // Reason was a single bare category like "Bar" or "Café" — that's the
+  // pre-fix bug. Substitute a clearer line.
+  const lower = trimmed.toLowerCase();
+  if (STUB_REASONS.has(lower)) return "Similar to places you usually like";
+
+  // Cap at ~12 words. Going longer risks wrapping awkwardly on a card.
+  const words = trimmed.split(/\s+/);
+  if (words.length <= 12) return ensurePunctuation(trimmed);
+  return ensurePunctuation(words.slice(0, 12).join(" "));
+}
+
+function ensurePunctuation(s: string): string {
+  return /[.!?]$/.test(s) ? s : `${s}.`;
 }
 
 function humanize(s: string): string {
@@ -191,10 +229,19 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   head: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  name: { fontSize: 17, fontWeight: "800", color: colors.ink, letterSpacing: -0.2 },
+  // Name is the primary visual element on the card.
+  name: { fontSize: 19, fontWeight: "800", color: colors.ink, letterSpacing: -0.3, lineHeight: 24 },
   sub: { ...type.small, marginTop: 4 },
-  scoreCol: { alignItems: "center", minWidth: 56 },
-  scoreNum: { fontSize: 24, fontWeight: "800", color: colors.red, letterSpacing: -0.5 },
+  // Score is highlighted but smaller than the name so it never out-competes
+  // the restaurant identity itself.
+  scoreCol: { alignItems: "center", minWidth: 50 },
+  scoreNum: {
+    fontSize: 20, fontWeight: "800", color: colors.red, letterSpacing: -0.4,
+    // Subtle brand glow on the score number — was 0.45 / 8.
+    textShadowColor: "rgba(255,48,8,0.22)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
+  },
   scoreLabel: { fontSize: 10, fontWeight: "700", color: colors.mute, letterSpacing: 1 },
   confLow: { fontSize: 9, fontWeight: "700", color: colors.mute, marginTop: 4 },
 

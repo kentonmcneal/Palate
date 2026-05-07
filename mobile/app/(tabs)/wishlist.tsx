@@ -25,6 +25,7 @@ import {
   type AspirationTag,
 } from "../../lib/palate-insights";
 import { saveVisit, rewardCopy } from "../../lib/visits";
+import { VisitCelebration } from "../../components/VisitCelebration";
 
 type GroupBy = "recent" | "cuisine" | "neighborhood";
 
@@ -35,6 +36,7 @@ export default function WishlistTab() {
   const [refreshing, setRefreshing] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>("recent");
   const [tagging, setTagging] = useState<WishlistEntry | null>(null);
+  const [burst, setBurst] = useState(0);
 
   const grouped = useMemo(() => groupEntries(entries, groupBy), [entries, groupBy]);
 
@@ -96,8 +98,13 @@ export default function WishlistTab() {
       // Remove from wishlist after successful visit log — they've been now
       await removeFromWishlist(entry.id);
       setEntries((curr) => curr.filter((e) => e.id !== entry.id));
+      // Light celebration: confetti + "Added to your Palate." toast.
+      setBurst((k) => k + 1);
+      // Surface milestone copy under the toast for big moments only.
       const r = rewardCopy(result.totalVisits);
-      Alert.alert(r.title, r.message);
+      if (r.title.includes("unlocked")) {
+        setTimeout(() => Alert.alert(r.title, r.message), 1300);
+      }
     } catch (e: any) {
       Alert.alert("Couldn't log visit", e.message ?? "Try again");
     }
@@ -183,6 +190,7 @@ export default function WishlistTab() {
         onSave={(tags) => tagging && handleSaveTags(tagging, tags)}
         onCancel={() => setTagging(null)}
       />
+      <VisitCelebration fire={burst} />
     </SafeAreaView>
   );
 }

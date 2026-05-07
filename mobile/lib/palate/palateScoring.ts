@@ -226,6 +226,7 @@ export async function getUserPalateProfile(
     behaviorSignals,
     movement,
     position: { x: smoothed.novelty, y: smoothed.premium },
+    priorPosition: prior ? { x: prior.novelty, y: prior.premium } : undefined,
   };
 }
 

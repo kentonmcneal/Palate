@@ -107,6 +107,9 @@ export type PalateProfile = {
   };
   /** Internal: the raw axis position (used by the axis graph) */
   position: { x: number; y: number };    // x = novelty (0..1), y = premium (0..1)
+  /** Prior week's axis position, only set when the previous week's profile
+   *  is available. The axis graph uses this to draw a movement arrow. */
+  priorPosition?: { x: number; y: number };
 };
 
 // ----------------------------------------------------------------------------

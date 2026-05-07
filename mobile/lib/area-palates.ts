@@ -27,72 +27,78 @@ export type AreaPalateSummary = {
   source: "real" | "preview";
 };
 
-// Mix per region. Broad cultural cues, not city stereotypes.
+// City mixes use the Curator/Forager/Steward/Anchor identity system, paired
+// with a one-word cultural cue. Format: "{Identity} · {Modifier}".
+//   Curator → Premium + Novelty
+//   Forager → Casual + Novelty
+//   Steward → Premium + Consistency
+//   Anchor  → Casual + Consistency
+// Modifiers reflect what locals are known for, not stereotypes.
 const CITY_MIXES: Record<string, AreaPalate[]> = {
   "New York": [
-    { label: "Late-Night Halal Seeker",       share: 0.18 },
-    { label: "Northeast Slice Loyalist",      share: 0.14 },
-    { label: "Brunch Socialite",              share: 0.12 },
-    { label: "Corner Store Breakfast Loyalist", share: 0.10 },
-    { label: "Korean BBQ Group-Dinner Regular", share: 0.07 },
+    { label: "Forager · Late-night",      share: 0.18 },
+    { label: "Anchor · Slice-loyal",      share: 0.14 },
+    { label: "Curator · Brunch",          share: 0.12 },
+    { label: "Anchor · Corner-store",     share: 0.10 },
+    { label: "Steward · Group-dinner",    share: 0.07 },
   ],
   "Brooklyn": [
-    { label: "Italian Sunday Sauce Loyalist", share: 0.16 },
-    { label: "Late-Night Pizza Crew",         share: 0.14 },
-    { label: "Wine Bar Tastemaker",           share: 0.11 },
-    { label: "Cuisine Cartographer",          share: 0.10 },
-    { label: "Brunch Socialite",              share: 0.09 },
+    { label: "Steward · Italian-focused", share: 0.16 },
+    { label: "Forager · Late-night",      share: 0.14 },
+    { label: "Curator · Wine-bar",        share: 0.11 },
+    { label: "Forager · Cross-cuisine",   share: 0.10 },
+    { label: "Curator · Brunch",          share: 0.09 },
   ],
   "Philadelphia": [
-    { label: "Bar Late-Night Regular",        share: 0.17 },
-    { label: "Italian Devotee",               share: 0.13 },
-    { label: "Northeast Comfort Loyalist",    share: 0.11 },
-    { label: "Brunch Socialite",              share: 0.10 },
-    { label: "Wine Bar Tastemaker",           share: 0.08 },
+    { label: "Anchor · Bar-late",         share: 0.17 },
+    { label: "Steward · Italian-focused", share: 0.13 },
+    { label: "Anchor · Comfort",          share: 0.11 },
+    { label: "Curator · Brunch",          share: 0.10 },
+    { label: "Curator · Wine-bar",        share: 0.08 },
   ],
   "Los Angeles": [
-    { label: "West Coast Healthy Loyalist",   share: 0.18 },
-    { label: "West Coast Taco Cartographer",  share: 0.15 },
-    { label: "Brunch Socialite",              share: 0.12 },
-    { label: "Korean BBQ Group-Dinner Regular", share: 0.09 },
-    { label: "Wine Bar Tastemaker",           share: 0.08 },
+    { label: "Anchor · Health-forward",   share: 0.18 },
+    { label: "Forager · Taco-mapping",    share: 0.15 },
+    { label: "Curator · Brunch",          share: 0.12 },
+    { label: "Steward · Group-dinner",    share: 0.09 },
+    { label: "Curator · Wine-bar",        share: 0.08 },
   ],
   "Atlanta": [
-    { label: "Southern Brunch Socialite",     share: 0.19 },
-    { label: "Southern Comfort Weekday Regular", share: 0.14 },
-    { label: "Soul Food Regular",             share: 0.11 },
-    { label: "Late-Night Bar-Snack Crew",     share: 0.09 },
-    { label: "Group-Dinner Socialite",        share: 0.08 },
+    { label: "Curator · Southern-brunch", share: 0.19 },
+    { label: "Anchor · Comfort",          share: 0.14 },
+    { label: "Steward · Soul-food",       share: 0.11 },
+    { label: "Forager · Late-night",      share: 0.09 },
+    { label: "Steward · Group-dinner",    share: 0.08 },
   ],
   "Austin": [
-    { label: "Southern BBQ Devotee",          share: 0.18 },
-    { label: "South Taco Cartographer",       share: 0.16 },
-    { label: "Brunch Socialite",              share: 0.11 },
-    { label: "Wine Bar Tastemaker",           share: 0.08 },
-    { label: "Late-Night Bar-Snack Crew",     share: 0.07 },
+    { label: "Steward · BBQ-focused",     share: 0.18 },
+    { label: "Forager · Taco-mapping",    share: 0.16 },
+    { label: "Curator · Brunch",          share: 0.11 },
+    { label: "Curator · Wine-bar",        share: 0.08 },
+    { label: "Forager · Late-night",      share: 0.07 },
   ],
   "Chicago": [
-    { label: "Midwest Deep Dish Devotee",     share: 0.15 },
-    { label: "Midwest Comfort Loyalist",      share: 0.12 },
-    { label: "Steakhouse Connoisseur",        share: 0.11 },
-    { label: "Late-Night Bar-Snack Crew",     share: 0.10 },
-    { label: "Brunch Socialite",              share: 0.09 },
+    { label: "Steward · Deep-dish",       share: 0.15 },
+    { label: "Anchor · Comfort",          share: 0.12 },
+    { label: "Steward · Steakhouse",      share: 0.11 },
+    { label: "Forager · Late-night",      share: 0.10 },
+    { label: "Curator · Brunch",          share: 0.09 },
   ],
   "San Francisco": [
-    { label: "West Coast Healthy Loyalist",   share: 0.16 },
-    { label: "Cuisine Cartographer",          share: 0.13 },
-    { label: "Wine Bar Tastemaker",           share: 0.11 },
-    { label: "Café Morning Ritualist",        share: 0.10 },
-    { label: "Modernist Curator",             share: 0.08 },
+    { label: "Anchor · Health-forward",   share: 0.16 },
+    { label: "Forager · Cross-cuisine",   share: 0.13 },
+    { label: "Curator · Wine-bar",        share: 0.11 },
+    { label: "Anchor · Café-morning",     share: 0.10 },
+    { label: "Curator · Modernist",       share: 0.08 },
   ],
 };
 
 const DEFAULT_MIX: AreaPalate[] = [
-  { label: "Brunch Socialite",                share: 0.14 },
-  { label: "Comfort-Food Weeknight Loyalist", share: 0.12 },
-  { label: "Café Morning Ritualist",          share: 0.10 },
-  { label: "Cuisine Cartographer",            share: 0.09 },
-  { label: "Wine Bar Tastemaker",             share: 0.07 },
+  { label: "Curator · Brunch",          share: 0.14 },
+  { label: "Anchor · Comfort",          share: 0.12 },
+  { label: "Anchor · Café-morning",     share: 0.10 },
+  { label: "Forager · Cross-cuisine",   share: 0.09 },
+  { label: "Curator · Wine-bar",        share: 0.07 },
 ];
 
 // Map common neighborhood substrings to a city key. Heuristic only — when we

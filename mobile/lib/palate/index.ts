@@ -41,6 +41,8 @@ export {
   composeExplanation,
   composeBehaviorSignals,
   composeMovement,
+  composeNextEra,
+  composeEgoHook,
 } from "./palateCopy";
 
 export {

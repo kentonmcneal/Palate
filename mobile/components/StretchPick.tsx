@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import { computeTasteVector } from "../lib/taste-vector";
 import { nearbyRestaurants } from "../lib/places";
+import { getCachedNearby, setCachedNearby } from "../lib/nearby-cache";
 import { getEffectiveLocation, useBrowsingCity } from "../lib/browsing-location";
 import { loadPersonalSignal } from "../lib/personal-signal";
 import { matchScoreColor, matchScoreTint } from "../lib/match-score";
@@ -28,8 +29,14 @@ export function StretchPick() {
     try {
       const here = await getEffectiveLocation().catch(() => null);
       if (!here) return;
-      const [nearby, vector, personal] = await Promise.all([
-        nearbyRestaurants(here.lat, here.lng, RADIUS_M),
+      // Share the nearby cache with RightNowHero — they both fetch the same
+      // bucket, so one Google call covers both components.
+      let nearby = await getCachedNearby(here.lat, here.lng, RADIUS_M);
+      if (!nearby) {
+        nearby = await nearbyRestaurants(here.lat, here.lng, RADIUS_M);
+        void setCachedNearby(here.lat, here.lng, RADIUS_M, nearby);
+      }
+      const [vector, personal] = await Promise.all([
         computeTasteVector().catch(() => null),
         loadPersonalSignal().catch(() => null),
       ]);

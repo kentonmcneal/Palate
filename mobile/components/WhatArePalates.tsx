@@ -1,20 +1,21 @@
-import { View, Text, StyleSheet } from "react-native";
+import { Pressable, View, Text, StyleSheet } from "react-native";
 import { colors, spacing, type } from "../theme";
 import { PalateAxisGraph } from "./PalateAxisGraph";
 import { IDENTITY_BLURB, WHAT_ARE_PALATES, type PalateProfile, type PrimaryIdentity } from "../lib/palate";
 
 // ============================================================================
 // WhatArePalates — explainer block. Renders below Wrapped.
-// Sections (per spec):
+// Sections (per redesign brief):
 //   1. Short explanation
 //   2. 2x2 axis graph with user position highlighted
 //   3. Short paragraph per quadrant
 //   4. Tag explanation
+//   5. Share CTA
 // ============================================================================
 
 const QUADRANT_ORDER: PrimaryIdentity[] = ["Curator", "Forager", "Steward", "Anchor"];
 
-export function WhatArePalates({ profile }: { profile: PalateProfile }) {
+export function WhatArePalates({ profile, onShare }: { profile: PalateProfile; onShare?: () => void }) {
   return (
     <View style={styles.wrap}>
       <Text style={styles.eyebrow}>WHAT ARE PALATES?</Text>
@@ -37,10 +38,13 @@ export function WhatArePalates({ profile }: { profile: PalateProfile }) {
       </View>
 
       <Text style={styles.eyebrow}>TAGS</Text>
-      <Text style={styles.tagIntro}>
-        Tags are non-exclusive — they describe the texture of how you ate this week. Things like "Roamer," "Date-night," or "Stretching lately."
-        Up to four show at a time, ranked by signal strength.
-      </Text>
+      <Text style={styles.tagIntro}>{WHAT_ARE_PALATES.tagsIntro}</Text>
+
+      {onShare && profile.primaryIdentity !== "Learning" && (
+        <Pressable onPress={onShare} style={styles.shareBtn} accessibilityRole="button">
+          <Text style={styles.shareBtnText}>Share your Palate →</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -75,4 +79,14 @@ const styles = StyleSheet.create({
   qNameActive: { color: colors.red },
   qTagline: { fontSize: 13, color: colors.ink, fontWeight: "600", marginTop: 4 },
   qDesc: { fontSize: 12, color: colors.mute, marginTop: 4, lineHeight: 17 },
+
+  shareBtn: {
+    marginTop: spacing.lg,
+    alignSelf: "flex-start",
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 999,
+    backgroundColor: colors.ink,
+  },
+  shareBtnText: { color: "#fff", fontSize: 14, fontWeight: "800", letterSpacing: 0.2 },
 });

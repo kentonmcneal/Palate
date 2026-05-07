@@ -102,10 +102,11 @@ export default function DiscoverTab() {
       setError(e?.message ?? "Couldn't load Discover");
       setHereLoading(false); setFeedLoading(false);
     }
-  }, []);
+  }, [browsingCity]);
 
-  // Re-run load whenever the user picks a different city.
-  useFocusEffect(useCallback(() => { load(); }, [load, browsingCity?.id]));
+  // Re-run load whenever the user picks a different city. (load itself depends
+  // on browsingCity now, so the focus effect picks up city changes via its dep.)
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   // ---- Search (debounced via submit, not keystroke — keeps it fast) ----
   async function runSearch() {
@@ -139,8 +140,9 @@ export default function DiscoverTab() {
       .slice(0, TOP_PER_TAB);
   }, [allRanked]);
 
-  // Trending: grouped into Beli-style category shelves ("Top 10 Burgers"…)
-  const trendingGroups = useMemo(
+  // Trending: grouped into Beli-style category shelves ("Top 10 Burgers"…),
+  // plus a fallback shelf when category coverage is sparse.
+  const trending = useMemo(
     () => buildTrendingGroups(allRanked),
     [allRanked],
   );
@@ -259,10 +261,10 @@ export default function DiscoverTab() {
                   <>
                     <SortRow value={sort} onChange={setSort} />
                     <Spacer size={10} />
-                    <List items={mostCompatibleList} surface="discover_for_you" emptyMsg="Log a few visits and we'll learn." />
+                    <List items={mostCompatibleList} surface="discover_for_you" emptyMsg="Log a few visits — once Palate sees a pattern, we'll personalize this list. In the meantime, the Trending tab shows what's hot in your area." />
                   </>
                 )}
-                {tab === "trending" && <TrendingGroups groups={trendingGroups} />}
+                {tab === "trending" && <TrendingGroups groups={trending.groups} fallbackNote={trending.fallbackNote} />}
                 {tab === "nearby"   && <List items={nearbyList} surface="discover_shelf" emptyMsg="Nothing nearby." />}
               </>
             )}
@@ -304,7 +306,13 @@ function SortRow({ value, onChange }: { value: SortKey; onChange: (k: SortKey) =
 function List({ items, surface, emptyMsg }: {
   items: RankedRestaurant[]; surface: any; emptyMsg: string;
 }) {
-  if (items.length === 0) return <Text style={[type.small, { lineHeight: 20 }]}>{emptyMsg}</Text>;
+  if (items.length === 0) {
+    return (
+      <View style={styles.emptyList}>
+        <Text style={styles.emptyListText}>{emptyMsg}</Text>
+      </View>
+    );
+  }
   return (
     <View>
       {items.map((r) => (
@@ -314,12 +322,21 @@ function List({ items, surface, emptyMsg }: {
   );
 }
 
-function TrendingGroups({ groups }: { groups: TrendingGroup[] }) {
+function TrendingGroups({ groups, fallbackNote }: { groups: TrendingGroup[]; fallbackNote?: string | null }) {
   if (groups.length === 0) {
-    return <Text style={[type.small, { lineHeight: 20 }]}>No trending categories near you yet.</Text>;
+    return (
+      <View style={styles.emptyList}>
+        <Text style={styles.emptyListText}>Trending near you is still warming up.</Text>
+      </View>
+    );
   }
   return (
     <View>
+      {fallbackNote && (
+        <Text style={[type.small, { color: colors.mute, marginBottom: 10, lineHeight: 18 }]}>
+          {fallbackNote}
+        </Text>
+      )}
       {groups.map((g) => (
         <View key={g.title} style={{ marginBottom: spacing.xl }}>
           <Text style={styles.groupHead}>{g.title}</Text>
@@ -401,13 +418,14 @@ function hasOccasion(r: RestaurantInput, tag: string): boolean {
   return Array.isArray(r.occasion_tags) && r.occasion_tags.includes(tag);
 }
 
-function buildTrendingGroups(allRanked: RankedRestaurant[]): TrendingGroup[] {
-  // Lowered the social-proof bar (was 100) — at the bar level, many cuisine
-  // categories were dropping below MIN. With 25 we still filter out totally
-  // unreviewed places but new spots and small joints can compete.
+type TrendingResult = { groups: TrendingGroup[]; fallbackNote: string | null };
+
+function buildTrendingGroups(allRanked: RankedRestaurant[]): TrendingResult {
+  // Try real category trending first (Beli-style shelves). Only filter on
+  // user_rating_count when we actually have ratings — Google sometimes returns
+  // places with null counts.
   const popular = allRanked.filter((r) => (r.user_rating_count ?? 0) >= 25);
 
-  // Bucket each place into the FIRST matching category so we don't double-show.
   const buckets = new Map<string, RankedRestaurant[]>();
   for (const r of popular) {
     const cat = CATEGORIES.find((c) => c.match(r));
@@ -420,12 +438,7 @@ function buildTrendingGroups(allRanked: RankedRestaurant[]): TrendingGroup[] {
   const groups: TrendingGroup[] = [];
   for (const cat of CATEGORIES) {
     const items = buckets.get(cat.title) ?? [];
-    // Lowered MIN to 2 (was MIN_PER_CATEGORY=3) — many neighborhoods don't
-    // have 3 of every category, but 2 still feels like a "list" not noise.
     if (items.length < 2) continue;
-    // Within each category: blend popularity with canonical compatibility
-    // (per spec — Trending lists should still respect taste fit, not just
-    // raw review count).
     items.sort((a, b) => {
       const aRev = a.user_rating_count ?? 0;
       const bRev = b.user_rating_count ?? 0;
@@ -433,12 +446,42 @@ function buildTrendingGroups(allRanked: RankedRestaurant[]): TrendingGroup[] {
       const compatDiff = (b.score.compatibilityScore - a.score.compatibilityScore) / 100;
       return popDiff * 0.6 + compatDiff * 0.4;
     });
-    groups.push({
-      title: cat.title,
-      items: items.slice(0, TOP_PER_CATEGORY),
-    });
+    groups.push({ title: cat.title, items: items.slice(0, TOP_PER_CATEGORY) });
   }
-  return groups;
+
+  if (groups.length > 0) return { groups, fallbackNote: null };
+
+  // Fallback: not enough category coverage. Show a single "Trending Near You"
+  // shelf ranked by review-weighted quality + open-now + proximity, so the
+  // tab is never empty when there are nearby places.
+  const ranked = rankFallbackTrending(allRanked);
+  if (ranked.length === 0) return { groups: [], fallbackNote: null };
+
+  return {
+    groups: [{ title: "Popular near you", items: ranked.slice(0, TOP_PER_TAB) }],
+    fallbackNote: "Strong picks nearby — category shelves unlock as more people log in your area.",
+  };
+}
+
+function rankFallbackTrending(items: RankedRestaurant[]): RankedRestaurant[] {
+  // Quality-first ranking when category trending is empty:
+  //   • rating
+  //   • review count (log-scaled — popular places trump tiny ones)
+  //   • open-now (small bonus — only when known)
+  //   • distance (small penalty for being far)
+  return [...items]
+    .filter((r) => (r.rating ?? 0) > 0 || (r.user_rating_count ?? 0) > 0 || r.distanceKm != null)
+    .sort((a, b) => fallbackScore(b) - fallbackScore(a));
+}
+
+function fallbackScore(r: RankedRestaurant): number {
+  const rating = r.rating ?? 0;
+  const reviews = Math.log10(1 + (r.user_rating_count ?? 0));
+  const dist = r.distanceKm ?? 5;
+  const open = (r as any).isOpenNow === true ? 0.3 : 0;
+  // Rating is the dominant axis. Reviews ground it. Distance only barely
+  // de-prioritizes — the user is ALREADY scoped to nearby radius.
+  return rating * 1.0 + reviews * 0.5 + open - Math.min(dist, 3) * 0.05;
 }
 
 const styles = StyleSheet.create({
@@ -497,4 +540,12 @@ const styles = StyleSheet.create({
   sortChipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
   sortChipText: { fontSize: 12, fontWeight: "700", color: colors.ink },
   sortChipTextActive: { color: "#fff" },
+
+  emptyList: {
+    padding: spacing.lg,
+    borderRadius: 16,
+    backgroundColor: colors.faint,
+    borderWidth: 1, borderColor: colors.line,
+  },
+  emptyListText: { ...type.small, lineHeight: 20 },
 });

@@ -62,8 +62,10 @@ export default function FeaturedListScreen() {
     );
   }
 
-  // Whenever the list resolves, build canonical RankedRestaurant items so the
-  // shared card component reads a consistent compatibility shape.
+  // Whenever the list resolves, build RankedRestaurant items via the canonical
+  // pipeline. Featured Lists are NOT personalized (per spec) — the card's
+  // personal-compat reason gets overridden in render with place-facts via the
+  // `reasonOverride` prop below.
   useEffect(() => {
     if (!list) return;
     let alive = true;
@@ -75,9 +77,10 @@ export default function FeaturedListScreen() {
       ]);
       if (!alive) return;
       const graph = assembleGraph(vector, personal);
-      setItems(list.restaurants.map((r) =>
+      const ranked = list.restaurants.map((r) =>
         buildRankedRestaurant(graph, r, { here: here ?? undefined, now: new Date() })
-      ));
+      );
+      setItems(ranked);
     })();
     return () => { alive = false; };
   }, [list]);
@@ -133,7 +136,11 @@ export default function FeaturedListScreen() {
           <View key={r.google_place_id} style={styles.itemRow}>
             <Text style={styles.rank}>{i + 1}</Text>
             <View style={{ flex: 1 }}>
-              <RestaurantCompatibilityCard restaurant={r} surface="discover_shelf" />
+              <RestaurantCompatibilityCard
+                restaurant={r}
+                surface="discover_shelf"
+                reasonOverride={formatPlaceFacts(r) ?? undefined}
+              />
             </View>
           </View>
         ))}
@@ -178,3 +185,17 @@ const styles = StyleSheet.create({
   itemRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 4 },
   rank: { width: 22, fontSize: 16, fontWeight: "800", color: colors.mute, paddingTop: 18 },
 });
+
+// Place-facts formatter for Featured Lists — rating + review count + price tier.
+// e.g. "4.6 ★ · 1.2k reviews · $$"
+function formatPlaceFacts(r: { rating?: number | null; user_rating_count?: number | null; price_level?: number | null }): string | null {
+  const parts: string[] = [];
+  if (r.rating != null) parts.push(`${r.rating.toFixed(1)} ★`);
+  if (r.user_rating_count != null) {
+    const n = r.user_rating_count;
+    const pretty = n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+    parts.push(`${pretty} reviews`);
+  }
+  if (r.price_level != null) parts.push("$".repeat(Math.min(4, Math.max(1, r.price_level))));
+  return parts.length > 0 ? parts.join(" · ") : null;
+}

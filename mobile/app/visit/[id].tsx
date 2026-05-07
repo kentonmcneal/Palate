@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
-  ActivityIndicator, Alert, Image, TextInput, Linking, Platform,
+  ActivityIndicator, Alert, Image, TextInput, Linking, Platform, Share,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import ViewShot, { captureRef } from "react-native-view-shot";
 import { Button, Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { supabase } from "../../lib/supabase";
@@ -19,6 +20,9 @@ import {
 } from "../../lib/visits";
 import { searchRestaurants, type Restaurant } from "../../lib/places";
 import { openInAppleMaps, openInGoogleMaps } from "../../lib/maps";
+import { VisitShareCard } from "../../components/VisitShareCard";
+import { computeTasteVector } from "../../lib/taste-vector";
+import { getProfileFromVector } from "../../lib/palate";
 
 export default function VisitDetailScreen() {
   const router = useRouter();
@@ -33,6 +37,29 @@ export default function VisitDetailScreen() {
   const [editingPlace, setEditingPlace] = useState(false);
   const [editingTime, setEditingTime] = useState(false);
   const [pickerMode, setPickerMode] = useState<"date" | "time">("date");
+  const [identityLabel, setIdentityLabel] = useState<string | null>(null);
+  const shareRef = useRef<View>(null);
+
+  // Pull the user's current Palate identity for the share card chip
+  // ("As told by a Curator"). Cached per session via getProfileFromVector.
+  useEffect(() => {
+    (async () => {
+      const v = await computeTasteVector().catch(() => null);
+      if (!v) return;
+      const p = await getProfileFromVector(v).catch(() => null);
+      if (p && p.primaryIdentity !== "Learning") setIdentityLabel(p.primaryIdentity);
+    })();
+  }, []);
+
+  async function shareVisit() {
+    if (!shareRef.current) return;
+    try {
+      const uri = await captureRef(shareRef, { format: "png", quality: 1 });
+      await Share.share({ url: uri, message: `Logged at ${visit?.restaurant?.name ?? "Palate"}` });
+    } catch (e: any) {
+      Alert.alert("Couldn't share", e.message ?? "Try again");
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -302,6 +329,23 @@ export default function VisitDetailScreen() {
               {visit.notes ?? "No notes yet."}
             </Text>
           )}
+        </View>
+
+        {/* Share — captures the off-screen 9:16 card and opens the share sheet */}
+        <Spacer />
+        <Button title="Share this visit" onPress={shareVisit} variant="ghost" />
+
+        {/* Off-screen share renderer — captured via ViewShot on Share tap. */}
+        <View style={{ position: "absolute", left: -9999, top: 0 }} pointerEvents="none">
+          <ViewShot ref={shareRef as any} options={{ format: "png", quality: 1 }}>
+            <VisitShareCard
+              visit={visit}
+              restaurantName={visit.restaurant?.name ?? "A spot you logged"}
+              neighborhood={visit.restaurant?.neighborhood ?? null}
+              cuisine={visit.restaurant?.cuisine_type ?? null}
+              identityLabel={identityLabel}
+            />
+          </ViewShot>
         </View>
       </ScrollView>
     </SafeAreaView>

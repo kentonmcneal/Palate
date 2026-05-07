@@ -7,6 +7,7 @@ import { colors, spacing, type } from "../theme";
 import { saveVisit, recordPromptDecision, rewardCopy } from "../lib/visits";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
 import { FirstVisitCelebration } from "../components/FirstVisitCelebration";
+import { VisitCelebration } from "../components/VisitCelebration";
 import type { Restaurant } from "../lib/places";
 
 export default function ConfirmVisit() {
@@ -21,6 +22,7 @@ export default function ConfirmVisit() {
 
   const [showAlts, setShowAlts] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [burst, setBurst] = useState(0);
   const [celebration, setCelebration] = useState<{
     name: string;
     restaurantId: string;
@@ -43,16 +45,18 @@ export default function ConfirmVisit() {
           visitId: result.id,
         });
       } else {
-        // Skip the alert toast and go straight to "What did you get?". The
-        // rate-items screen is non-blocking — Skip is one tap.
-        router.replace({
-          pathname: "/rate-items",
-          params: {
-            restaurant_id: result.restaurant_id,
-            visit_id: result.id,
-            name: params.name as string,
-          },
-        });
+        // Light celebration before we hand off to rate-items.
+        setBurst((k) => k + 1);
+        setTimeout(() => {
+          router.replace({
+            pathname: "/rate-items",
+            params: {
+              restaurant_id: result.restaurant_id,
+              visit_id: result.id,
+              name: params.name as string,
+            },
+          });
+        }, 1100);
       }
     } catch (e: any) {
       Alert.alert("Couldn't save", e.message ?? "Try again");
@@ -63,6 +67,11 @@ export default function ConfirmVisit() {
 
   async function handleNotNow() {
     await recordPromptDecision(params.place_id as string, "dismissed");
+    router.back();
+  }
+
+  async function handleSkipToday() {
+    await recordPromptDecision(params.place_id as string, "skip_today");
     router.back();
   }
 
@@ -83,14 +92,17 @@ export default function ConfirmVisit() {
           visitId: result.id,
         });
       } else {
-        router.replace({
-          pathname: "/rate-items",
-          params: {
-            restaurant_id: result.restaurant_id,
-            visit_id: result.id,
-            name: p.name,
-          },
-        });
+        setBurst((k) => k + 1);
+        setTimeout(() => {
+          router.replace({
+            pathname: "/rate-items",
+            params: {
+              restaurant_id: result.restaurant_id,
+              visit_id: result.id,
+              name: p.name,
+            },
+          });
+        }, 1100);
       }
     } catch (e: any) {
       Alert.alert("Couldn't save", e.message ?? "Try again");
@@ -141,11 +153,11 @@ export default function ConfirmVisit() {
         <Spacer size={32} />
         <Text style={[type.body, { color: colors.ink }]}>
           {params.confidence === "medium"
-            ? "Are you inside, or just nearby?"
-            : "Are you eating here?"}
+            ? `Are you inside ${params.name}, or just nearby?`
+            : `Are you eating at ${params.name}?`}
         </Text>
         <Spacer />
-        <Button title={params.confidence === "medium" ? "Yes, I'm here" : "Yes, save it"} onPress={handleYes} loading={busy} />
+        <Button title={params.confidence === "medium" ? "Yes, log visit" : "Yes, log visit"} onPress={handleYes} loading={busy} />
         <Spacer />
         <View style={{ flexDirection: "row", gap: 8 }}>
           <Pressable onPress={() => openInAppleMaps(params.name as string, params.address as string | undefined)} style={styles.mapsBtn}>
@@ -156,9 +168,11 @@ export default function ConfirmVisit() {
           </Pressable>
         </View>
         <Spacer />
+        <Button title="Not here" variant="ghost" onPress={handleNotNow} />
+        <Spacer />
         <Button title="Wrong restaurant" variant="ghost" onPress={handleWrong} />
         <Spacer />
-        <Button title="Just nearby — not now" variant="ghost" onPress={handleNotNow} />
+        <Button title="Don't ask again today for this place" variant="ghost" onPress={handleSkipToday} />
       </View>
       <FirstVisitCelebration
         visible={!!celebration}
@@ -176,6 +190,7 @@ export default function ConfirmVisit() {
           }
         }}
       />
+      <VisitCelebration fire={burst} />
     </SafeAreaView>
   );
 }

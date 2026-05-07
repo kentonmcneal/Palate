@@ -114,16 +114,23 @@ const styles = StyleSheet.create({
     padding: 24,
     overflow: "hidden",
     backgroundColor: colors.ink,
+    // Restrained brand glow — was 0.35 / 24. Matte premium per redesign brief.
+    shadowColor: colors.red,
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
   glowRed: {
     position: "absolute",
-    top: -80,
-    right: -60,
-    width: 220,
-    height: 220,
+    top: -100,
+    right: -80,
+    width: 280,
+    height: 280,
     borderRadius: 999,
     backgroundColor: colors.red,
-    opacity: 0.3,
+    // Was 0.45 — softer red blob, hints at the brand without dominating.
+    opacity: 0.20,
   },
   row: {
     flexDirection: "row",
@@ -149,10 +156,15 @@ const styles = StyleSheet.create({
   },
   persona: {
     color: colors.red,
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: "800",
-    letterSpacing: -0.6,
+    letterSpacing: -0.7,
+    lineHeight: 40,
     marginTop: 4,
+    // Restrained brand-text glow — was 0.65 / 18. Lit, not blooming.
+    textShadowColor: "rgba(255,48,8,0.32)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
   },
   personaDescription: {
     color: "rgba(255,255,255,0.78)",

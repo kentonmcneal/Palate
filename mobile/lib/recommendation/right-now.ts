@@ -53,6 +53,42 @@ const EXPLORATION_RATE = {
   stretch: 0.50,
 };
 
+// ----------------------------------------------------------------------------
+// National-chain denylist for the Right Now hero.
+// "What should I eat right now?" should reach for the unique/independent/
+// regional gem, not McDonald's. We detect by name pattern (Google Places
+// doesn't reliably tag chains in its API).
+//
+// Regional chains intentionally NOT included (Whataburger, In-N-Out,
+// Bojangles, Sheetz, Wawa, Cookout, Culver's, etc.) — they're often the
+// "unique to a region" answer and SHOULD show up.
+// ----------------------------------------------------------------------------
+const NATIONAL_CHAIN_PATTERNS = [
+  // Fast food
+  "mcdonald", "burger king", "wendy", "taco bell", "kfc", "popeyes",
+  "subway", "jersey mike", "jimmy john", "quiznos", "arby",
+  "chick-fil-a", "chickfila", "raising cane", "zaxby",
+  "domino", "pizza hut", "papa john", "little caesar", "marco's pizza",
+  "panera", "chipotle", "qdoba", "moe's southwest", "el pollo loco",
+  "panda express", "five guys", "shake shack", "smashburger",
+  "sonic", "checkers", "white castle", "carl's jr", "hardee",
+  "dairy queen", "baskin-robbins", "cold stone",
+  // Coffee
+  "starbucks", "dunkin", "caribou coffee", "tim horton", "peet's coffee",
+  // Casual dining chains
+  "applebee", "chili's", "tgi friday", "olive garden", "outback",
+  "red lobster", "longhorn", "cheesecake factory", "ihop", "denny",
+  "cracker barrel", "buffalo wild wings", "bdubs", "texas roadhouse",
+  "ruby tuesday", "bonefish grill", "carrabba", "yard house",
+  "p.f. chang", "pf chang", "the capital grille",
+];
+
+function isNationalChain(name: string | null | undefined): boolean {
+  if (!name) return false;
+  const n = name.toLowerCase().trim();
+  return NATIONAL_CHAIN_PATTERNS.some((p) => n.includes(p));
+}
+
 // We always surface the top scorer (no hard floor) — "Try another" cycles
 // down by score so the user can keep exploring. Empty-state only fires when
 // there are literally no candidates. Per latest UX feedback: showing the
@@ -70,12 +106,25 @@ export type RightNowResult = {
   stretch: RightNowPick | null;
 };
 
+/**
+ * "Try Another" strategy. Each tap on the hero card cycles to the next
+ * strategy so the user feels the app is *thinking*, not just shuffling.
+ *   • best    — default, finalScore ranking
+ *   • closest — same pool, sorted by distance ascending
+ *   • comfort — prefers low-novelty + high-confidence
+ *   • stretch — prefers recommendationType="stretch" (adjacent novel)
+ *   • quality — review count + rating dominates
+ */
+export type RightNowStrategy = "best" | "closest" | "comfort" | "stretch" | "quality";
+
 export type RightNowOptions = {
   graph: TasteGraph;
   here: { lat: number; lng: number };
   now?: Date;
   /** Pre-fetched nearby — saves a network call when caller has it. */
   preFetched?: RestaurantInput[];
+  /** Optional strategy bias for the rightNow slot. Default "best". */
+  strategy?: RightNowStrategy;
 };
 
 export async function computeRightNow(opts: RightNowOptions): Promise<RightNowResult> {
@@ -105,23 +154,25 @@ export async function computeRightNow(opts: RightNowOptions): Promise<RightNowRe
   });
 
   // ---- Right Now: exploit (93%) -----------------------------------------
-  // Sort by finalScore (compat * 0.6 + context * 0.3 + conf * 0.1).
   // Apply anti-staleness so a place visited 5x doesn't lock the slot.
-  // No compatibility floor — we always show the best available pick. The
-  // user can tap "Try another" to cycle down the list.
-  const exploit = scored
+  // Drop national chains entirely — "What should I eat right now?" should
+  // reach for the unique pick, not McDonald's. Regional chains and
+  // independents stay (the denylist is intentionally national-only).
+  const baseFiltered = scored
     .filter((s) => {
       // Don't recommend places the user has visited 3+ times
       const visits = opts.graph.restaurantVisits[s.restaurant.google_place_id] ?? 0;
       return visits < 3;
     })
-    .filter((s) => s.pool !== "stretch_adjacent")
-    .sort((a, b) => b.restaurant.score.finalScore - a.restaurant.score.finalScore);
+    .filter((s) => !isNationalChain(s.restaurant.name));
 
-  // Optionally swap top pick with a stretch candidate (5-10% exploration)
-  const useExploration = Math.random() < EXPLORATION_RATE.right_now;
+  const strategy: RightNowStrategy = opts.strategy ?? "best";
+  const exploit = sortForStrategy(baseFiltered, strategy);
+
+  // Exploration swap (only on the default "best" strategy — the explicit
+  // strategies are user-chosen and shouldn't get randomized away).
   let rightNowPick: RankedRestaurant | null = null;
-  if (useExploration) {
+  if (strategy === "best" && Math.random() < EXPLORATION_RATE.right_now) {
     const stretchPool = scored
       .filter((s) => s.pool === "stretch_adjacent" || s.restaurant.score.recommendationType === "stretch")
       .sort((a, b) => b.restaurant.score.compatibilityScore - a.restaurant.score.compatibilityScore);
@@ -168,4 +219,69 @@ function buildPick(r: RankedRestaurant, graph: TasteGraph, isStretch: boolean): 
 function distanceOf(r: RestaurantInput, here: { lat: number; lng: number } | null): number | null {
   if (!here || r.latitude == null || r.longitude == null) return null;
   return distanceKm(here, { lat: r.latitude, lng: r.longitude });
+}
+
+type ScoredCandidate = { restaurant: RankedRestaurant; pool: string };
+
+/**
+ * Strategy-specific sort. Each strategy filters / re-ranks `baseFiltered`
+ * differently. Returned array is "best first" for THAT strategy. We always
+ * fall back to finalScore when the strategy can't differentiate.
+ */
+function sortForStrategy(items: ScoredCandidate[], strategy: RightNowStrategy): ScoredCandidate[] {
+  if (strategy === "closest") {
+    return [...items]
+      .filter((s) => s.restaurant.distanceKm != null)
+      .sort((a, b) => {
+        const da = a.restaurant.distanceKm ?? 999;
+        const db = b.restaurant.distanceKm ?? 999;
+        if (Math.abs(da - db) > 0.05) return da - db;
+        return b.restaurant.score.finalScore - a.restaurant.score.finalScore;
+      });
+  }
+  if (strategy === "comfort") {
+    // Comfort = high compat, low novelty, high confidence. Penalize stretch.
+    return [...items]
+      .filter((s) => s.pool !== "stretch_adjacent")
+      .sort((a, b) => {
+        const aComfort = comfortScore(a.restaurant);
+        const bComfort = comfortScore(b.restaurant);
+        return bComfort - aComfort;
+      });
+  }
+  if (strategy === "stretch") {
+    // Stretch = adjacent novel. If we have actual stretch candidates, use
+    // them; otherwise fall back to the next-best "best" pick so the user
+    // doesn't see an empty card.
+    const stretches = items
+      .filter((s) =>
+        s.pool === "stretch_adjacent" ||
+        s.restaurant.score.recommendationType === "stretch")
+      .sort((a, b) => b.restaurant.score.compatibilityScore - a.restaurant.score.compatibilityScore);
+    if (stretches.length > 0) return stretches;
+    return [...items].sort((a, b) => b.restaurant.score.finalScore - a.restaurant.score.finalScore);
+  }
+  if (strategy === "quality") {
+    return [...items]
+      .filter((s) => (s.restaurant.rating ?? 0) > 0)
+      .sort((a, b) => qualityScore(b.restaurant) - qualityScore(a.restaurant));
+  }
+  // "best" — default
+  return [...items]
+    .filter((s) => s.pool !== "stretch_adjacent")
+    .sort((a, b) => b.restaurant.score.finalScore - a.restaurant.score.finalScore);
+}
+
+function comfortScore(r: RankedRestaurant): number {
+  const compat = r.score.compatibilityScore / 100;
+  // noveltyFit is 0..100 on the flat RestaurantScore — normalize for the penalty.
+  const novelty = (r.score.noveltyFit ?? 50) / 100;
+  const conf = r.match.confidence === "high" ? 1 : r.match.confidence === "medium" ? 0.6 : 0.3;
+  return compat * 1.0 + (1 - novelty) * 0.3 + conf * 0.2;
+}
+
+function qualityScore(r: RankedRestaurant): number {
+  const rating = r.rating ?? 0;
+  const reviews = Math.log10(1 + (r.user_rating_count ?? 0));
+  return rating * 1.0 + reviews * 0.45;
 }

@@ -12,9 +12,11 @@ import {
   type AspirationTag,
 } from "../lib/palate-insights";
 import { computeTasteVector } from "../lib/taste-vector";
-import { scoreMatch, distanceKm, formatDistance } from "../lib/match-score";
+import { distanceKm, formatDistance } from "../lib/match-score";
 import { getEffectiveLocation, useBrowsingCity } from "../lib/browsing-location";
 import { loadPersonalSignal } from "../lib/personal-signal";
+import { nearbyRestaurants } from "../lib/places";
+import { assembleGraph, getCompatibility } from "../lib/recommendation";
 import { triggerHapticSuccess } from "../lib/haptics";
 import { pickSaveCopy } from "../lib/save-copy";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
@@ -43,94 +45,72 @@ export function RecommendationsCard() {
 
   const load = useCallback(async () => {
     try {
-      const start = isoWeekStart();
-      const end = new Date().toISOString().slice(0, 10);
-      const [persona, vector, here, personal] = await Promise.all([
-        generateWeeklyPalatePersona(start, end),
+      const [vector, here, personal] = await Promise.all([
         computeTasteVector().catch(() => null),
         getEffectiveLocation().catch(() => null),
         loadPersonalSignal().catch(() => null),
       ]);
-      if (!persona) {
+      if (!here) {
         setRecs([]);
         return;
       }
-      // "Early estimate" = we have <5 visits to read from (the persona engine
-      // is leaning heavily on the quiz fallback at this point).
-      if (vector && vector.visitCount < 5) setEarlyEstimate(true);
-      const result = await getPersonaRecommendations(persona, start, end);
-      let all = [...(result.similar ?? [])];
-      if (result.stretch) all.push(result.stretch);
+      // Reset on every load — once you log your 5th visit the badge
+      // should disappear next render, not stay sticky from a prior load.
+      setEarlyEstimate(vector ? vector.visitCount < 5 : false);
 
-      // FALLBACK: when persona engine returns nothing (sparse data, missing
-      // tags, etc.), pull straight from nearby restaurants ranked by
-      // canonical compatibility. Guarantees the card never silently disappears.
-      if (all.length === 0 && here) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-var-requires
-          const { nearbyRestaurants } = require("../lib/places");
-          const { assembleGraph, getCompatibility } = require("../lib/recommendation");
-          const nearby = await nearbyRestaurants(here.lat, here.lng, 3000);
-          const graph = assembleGraph(vector, personal);
-          all = nearby
-            .map((p: any) => {
-              const compat = getCompatibility(graph, {
-                google_place_id: p.google_place_id,
-                name: p.name,
-                cuisine_type: p.cuisine_type ?? null,
-                cuisine_region: p.cuisine_region ?? null,
-                cuisine_subregion: p.cuisine_subregion ?? null,
-                format_class: p.format_class ?? null,
-                occasion_tags: p.occasion_tags ?? null,
-                flavor_tags: p.flavor_tags ?? null,
-                cultural_context: p.cultural_context ?? null,
-                neighborhood: p.neighborhood ?? null,
-                price_level: p.price_level ?? null,
-                rating: p.rating ?? null,
-                user_rating_count: p.user_rating_count ?? null,
-                latitude: p.latitude ?? null,
-                longitude: p.longitude ?? null,
-              });
-              return {
-                google_place_id: p.google_place_id,
-                name: p.name,
-                cuisine: p.cuisine_type ?? null,
-                neighborhood: p.neighborhood ?? null,
-                price_level: p.price_level ?? null,
-                latitude: p.latitude ?? null,
-                longitude: p.longitude ?? null,
-                rating: p.rating ?? null,
-                reason: compat.reasons[0] ?? "Nearby and worth a try.",
-                _fallbackCompat: compat.score,
-              } as any;
-            })
-            .sort((a: any, b: any) => (b._fallbackCompat ?? 0) - (a._fallbackCompat ?? 0));
-        } catch {
-          // fallback failed — leave all empty, card will hide gracefully
-        }
+      // CANONICAL PATH — single source of truth. Same scorer Discover and
+      // Map use, so the % match shown on Home for a given restaurant is
+      // identical to its % match anywhere else.
+      const nearby = await nearbyRestaurants(here.lat, here.lng, 3000);
+      const graph = assembleGraph(vector, personal);
+
+      // Visited place IDs — used for anti-staleness on the recs feed. We
+      // don't want Home to keep recommending places you've already been to
+      // many times. (Personal signal already tracks visit counts.)
+      const visitedHeavy = new Set<string>();
+      for (const [placeId, n] of personal?.visitsByPlaceId.entries() ?? []) {
+        if (n >= 3) visitedHeavy.add(placeId);
       }
 
-      // Enrich with canonical match score + distance + best reason.
-      const now = new Date();
-      const enriched: RestaurantRecommendation[] = all.map((r: any) => {
-        let matchScore: number | null = r._fallbackCompat ?? null;
-        let reason = r.reason;
-        if (vector && matchScore == null) {
-          const m = scoreMatch(vector, r, undefined, {
-            personal: personal ?? undefined,
-            googlePlaceId: r.google_place_id,
-            applyStaleness: true,
-            now,
+      const enriched: RestaurantRecommendation[] = nearby
+        .filter((p) => !visitedHeavy.has(p.google_place_id))
+        .map((p) => {
+          const compat = getCompatibility(graph, {
+            google_place_id: p.google_place_id,
+            name: p.name,
+            cuisine_type: p.cuisine_type ?? null,
+            cuisine_region: (p as any).cuisine_region ?? null,
+            cuisine_subregion: (p as any).cuisine_subregion ?? null,
+            format_class: (p as any).format_class ?? null,
+            occasion_tags: (p as any).occasion_tags ?? null,
+            flavor_tags: (p as any).flavor_tags ?? null,
+            cultural_context: (p as any).cultural_context ?? null,
+            neighborhood: p.neighborhood ?? null,
+            price_level: p.price_level ?? null,
+            rating: p.rating ?? null,
+            user_rating_count: (p as any).user_rating_count ?? null,
+            latitude: p.latitude ?? null,
+            longitude: p.longitude ?? null,
           });
-          matchScore = m.score;
-          if (m.reasons[0]) reason = m.reasons[0];
-        }
-        let dKm: number | null = null;
-        if (here && r.latitude != null && r.longitude != null) {
-          dKm = distanceKm({ lat: here.lat, lng: here.lng }, { lat: r.latitude, lng: r.longitude });
-        }
-        return { ...r, matchScore, distanceKm: dKm, reason };
-      });
+          const dKm = (p.latitude != null && p.longitude != null)
+            ? distanceKm({ lat: here.lat, lng: here.lng }, { lat: p.latitude, lng: p.longitude })
+            : null;
+          return {
+            google_place_id: p.google_place_id,
+            name: p.name,
+            cuisine: p.cuisine_type ?? null,
+            neighborhood: p.neighborhood ?? null,
+            price_level: p.price_level ?? null,
+            latitude: p.latitude ?? null,
+            longitude: p.longitude ?? null,
+            rating: p.rating ?? null,
+            matchScore: compat.score,
+            distanceKm: dKm,
+            reason: compat.reasons[0] ?? "Nearby and worth a try.",
+          } as RestaurantRecommendation;
+        });
+
+      // Sort by canonical compatibility (high → low) and take top 3.
       enriched.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
       setRecs(enriched.slice(0, 3));
     } catch {
@@ -145,7 +125,19 @@ export function RecommendationsCard() {
   // Hide the card entirely until we know if we have anything to show — keeps
   // the Home tab from flashing a useless block on first load.
   if (loading) return null;
-  if (error || !recs || recs.length === 0) return null;
+  if (error) return null;
+  // Empty state — no nearby restaurants found at all (rare). Render an
+  // inviting nudge instead of silently disappearing.
+  if (!recs || recs.length === 0) {
+    return (
+      <View style={[styles.card, styles.emptyCard]}>
+        <Text style={styles.eyebrow}>MOST COMPATIBLE</Text>
+        <Text style={styles.emptyText}>
+          No nearby spots loaded yet. Step outside or pick a city above to browse.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.card}>
@@ -299,6 +291,8 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.line,
   },
   earlyBadgeText: { fontSize: 10, fontWeight: "700", color: colors.mute, letterSpacing: 0.5 },
+  emptyCard: { backgroundColor: colors.faint, borderColor: colors.line },
+  emptyText: { ...type.small, marginTop: 10, lineHeight: 20 },
 
   row: {
     flexDirection: "row",

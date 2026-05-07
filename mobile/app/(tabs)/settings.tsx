@@ -24,6 +24,7 @@ import { listIncomingRequests } from "../../lib/friends";
 import { generateInviteLink, inviteShareMessage, getMyReferralCount } from "../../lib/referrals";
 import { GmailImportCard } from "../../components/GmailImportCard";
 import { SavedNearbyCard } from "../../components/SavedNearbyCard";
+import { ensureAutoDetectPermission, setAutoDetectEnabled, TRACKING_PAUSED_KEY } from "../../lib/auto-detect";
 
 const CUISINE_LABELS: Record<string, string> = {
   italian: "Italian", mexican: "Mexican", japanese: "Japanese", chinese: "Chinese",
@@ -34,7 +35,7 @@ const CUISINE_LABELS: Record<string, string> = {
   bar: "Bar", other: "Other",
 };
 
-const PAUSE_KEY = "palate.tracking.paused";
+const PAUSE_KEY = TRACKING_PAUSED_KEY;
 
 export default function Settings() {
   const router = useRouter();
@@ -188,14 +189,18 @@ export default function Settings() {
 
   async function toggleTracking(next: boolean) {
     setTracking(next);
-    await AsyncStorage.setItem(PAUSE_KEY, next ? "0" : "1");
+    await setAutoDetectEnabled(next);
     if (next) {
-      const { status } = await Location.getForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("System permission off", "Open iOS Settings to allow location.", [
-          { text: "Open Settings", onPress: () => Linking.openSettings() },
-          { text: "Not now" },
-        ]);
+      const { granted } = await ensureAutoDetectPermission();
+      if (!granted) {
+        Alert.alert(
+          "Auto-detect needs location access to suggest visits.",
+          "Allow location in iOS Settings → Palate, or turn this off.",
+          [
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+            { text: "Not now" },
+          ],
+        );
       }
     }
   }
@@ -286,6 +291,9 @@ export default function Settings() {
               style={styles.identityBlock}
               accessibilityRole="button"
             >
+              {/* Soft red glow blob in the corner — matches the Wrapped hero
+                  card so the brand color shows through, not just sits flat. */}
+              <View style={styles.identityGlow} pointerEvents="none" />
               <Text style={styles.identityEyebrow}>YOUR PALATE THIS WEEK LEANED</Text>
               <Text style={styles.identityName}>{palateProfile.primaryIdentity}</Text>
               <Text style={styles.identityDesc}>{IDENTITY_BLURB[palateProfile.primaryIdentity].tagline}</Text>
@@ -625,13 +633,39 @@ const styles = StyleSheet.create({
   avatarBadgeText: { color: "#fff", fontSize: 11, fontWeight: "800" },
   identityBlock: {
     marginTop: 16,
-    padding: 14,
-    borderRadius: 16,
+    padding: 18,
+    borderRadius: 18,
     backgroundColor: colors.ink,
+    overflow: "hidden",
+    // Restrained brand glow — was 0.4 / 20. Toned down per redesign brief.
+    shadowColor: colors.red,
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
-  identityEyebrow: { color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
-  identityName: { color: colors.red, fontSize: 24, fontWeight: "800", letterSpacing: -0.5, marginTop: 4 },
-  identityDesc: { color: "rgba(255,255,255,0.78)", fontSize: 13, lineHeight: 18, marginTop: 6, fontWeight: "500" },
+  identityEyebrow: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
+  identityName: {
+    color: colors.red,
+    fontSize: 32,
+    fontWeight: "800",
+    letterSpacing: -0.8,
+    lineHeight: 36,
+    marginTop: 6,
+    // Subtle brand-text glow — was 0.65 / 16. Restrained per redesign brief.
+    textShadowColor: "rgba(255,48,8,0.32)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
+  },
+  identityDesc: { color: "rgba(255,255,255,0.85)", fontSize: 14, lineHeight: 20, marginTop: 8, fontWeight: "500" },
+  identityGlow: {
+    position: "absolute",
+    top: -60, right: -60,
+    width: 200, height: 200, borderRadius: 999,
+    backgroundColor: colors.red,
+    // Smaller blob — was 0.32. Should hint, not dominate.
+    opacity: 0.14,
+  },
   profileBlock: {
     marginTop: 18,
     paddingTop: 14,

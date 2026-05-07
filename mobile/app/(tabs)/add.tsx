@@ -8,6 +8,7 @@ import { searchRestaurants, type Restaurant } from "../../lib/places";
 import { saveVisit, rewardCopy } from "../../lib/visits";
 import { getCurrentLocation } from "../../lib/location";
 import { FirstVisitCelebration } from "../../components/FirstVisitCelebration";
+import { VisitCelebration } from "../../components/VisitCelebration";
 
 export default function AddTab() {
   const router = useRouter();
@@ -15,6 +16,7 @@ export default function AddTab() {
   const [results, setResults] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState(false);
   const [celebration, setCelebration] = useState<{ name: string } | null>(null);
+  const [burst, setBurst] = useState(0);
 
   async function handleSearch() {
     if (!query.trim()) return;
@@ -42,10 +44,10 @@ export default function AddTab() {
       if (result.isFirstVisit) {
         setCelebration({ name: p.name });
       } else {
-        const r = rewardCopy(result.totalVisits);
-        Alert.alert(r.title, r.message, [
-          { text: "OK", onPress: () => router.replace("/(tabs)") },
-        ]);
+        // Lightweight celebration on every visit. Auto-dismisses, then we
+        // route home so the user sees the new entry in Recent.
+        setBurst((k) => k + 1);
+        setTimeout(() => router.replace("/(tabs)"), 1100);
       }
     } catch (e: any) {
       Alert.alert("Couldn't save", e.message ?? "Try again");
@@ -95,6 +97,7 @@ export default function AddTab() {
         restaurantName={celebration?.name ?? ""}
         onDismiss={() => { setCelebration(null); router.replace("/(tabs)"); }}
       />
+      <VisitCelebration fire={burst} />
     </SafeAreaView>
   );
 }

@@ -102,8 +102,10 @@ export default function FeedTab() {
           <View style={styles.empty}>
             <Text style={type.subtitle}>Your feed is quiet right now.</Text>
             <Text style={[type.small, { marginTop: 8, lineHeight: 20 }]}>
-              When your friends share their weekly Wrapped or hit a milestone,
-              it'll show up here. Add some friends to get started.
+              When friends share Wrapped or hit a milestone, it'll show up here.
+            </Text>
+            <Text style={[type.small, { marginTop: 6, lineHeight: 20, fontStyle: "italic" }]}>
+              Soon, you'll also see Palates similar to yours.
             </Text>
             <Spacer />
             <Pressable

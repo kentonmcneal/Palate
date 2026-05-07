@@ -144,6 +144,64 @@ export async function rateItem(opts: {
   invalidatePersonalSignal();
 }
 
+/** Top loved items across ALL of the user's restaurants. Surfaces on Wrapped
+ *  as "Your top dishes this week". Items are de-duped to most-recent rating
+ *  per item; loved-only by default. */
+export type LovedItem = {
+  itemId: string;
+  itemName: string;
+  restaurantId: string;
+  restaurantName: string;
+  ratedAt: string;
+};
+
+export async function myTopLovedItems(limit = 5, sinceDays?: number): Promise<LovedItem[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  let query = supabase
+    .from("menu_item_ratings")
+    .select(`
+      created_at,
+      item:menu_items!inner(
+        id,
+        name,
+        restaurant_id,
+        restaurant:restaurants!inner(name)
+      )
+    `)
+    .eq("user_id", user.id)
+    .eq("rating", "loved")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (sinceDays != null) {
+    const cutoff = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
+    query = query.gte("created_at", cutoff);
+  }
+
+  const { data } = await query;
+  if (!data) return [];
+
+  // De-dupe by item_id keeping most-recent rating
+  const seen = new Set<string>();
+  const out: LovedItem[] = [];
+  for (const row of data as any[]) {
+    const item = Array.isArray(row.item) ? row.item[0] : row.item;
+    if (!item || seen.has(item.id)) continue;
+    seen.add(item.id);
+    const rest = Array.isArray(item.restaurant) ? item.restaurant[0] : item.restaurant;
+    out.push({
+      itemId: item.id,
+      itemName: item.name,
+      restaurantId: item.restaurant_id,
+      restaurantName: rest?.name ?? "",
+      ratedAt: row.created_at,
+    });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 /** Convenience for the post-visit flow: create item + rating in one call. */
 export async function addAndRate(opts: {
   restaurantId: string;

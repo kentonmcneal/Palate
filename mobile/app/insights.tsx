@@ -245,6 +245,13 @@ function Dashboard({
     0,
   );
 
+  // -------- Narrative one-liners (max ~12 words each, skip when weak) --------
+  const cuisineNarr = cuisineNarrative(cuisineSlices);
+  const formatNarr = formatNarrative(data.formatBreakdown);
+  const whenNarr = whenNarrative(data.hourlyCounts);
+  const dayNarr = dayNarrative(dowBars, dowAccentIndex);
+  const topSpotsNarr = topSpotsNarrative(data.topSpots);
+
   return (
     <>
       {/* Hero summary */}
@@ -266,7 +273,7 @@ function Dashboard({
       </View>
 
       {/* Cuisine donut */}
-      <Section title="Cuisine breakdown">
+      <Section title="Cuisine breakdown" narrative={cuisineNarr}>
         <View style={styles.donutWrap}>
           <DonutChart
             data={cuisineSlices}
@@ -289,23 +296,17 @@ function Dashboard({
       </Section>
 
       {/* Format bars */}
-      <Section title="Where you eat" subtitle="Quick service vs sit-down vs café">
+      <Section title="Where you eat" subtitle="Quick service vs sit-down vs café" narrative={formatNarr}>
         <HorizontalBars data={formatRows} />
       </Section>
 
-      {/* WHEN you eat — hourly distribution is now the primary view. */}
-      <Section title="When you eat" subtitle="Hour-by-hour across the day">
+      {/* WHEN you eat — hourly distribution speaks for itself. Per redesign:
+          one narrative sentence per insight card, at bottom. The bulleted
+          hourlyInsights list was duplicating the late-night line and got
+          removed. Section's narrative prop carries the single takeaway. */}
+      <Section title="When you eat" subtitle="Hour-by-hour across the day" narrative={whenNarr}>
         <HourlyHistogram data={data.hourlyCounts} />
-        {data.hourlyInsights.length > 0 && (
-          <View style={styles.hourlyInsights}>
-            {data.hourlyInsights.map((ins) => (
-              <Text key={ins.pattern} style={styles.hourlyInsightText}>
-                · {ins.text}
-              </Text>
-            ))}
-          </View>
-        )}
-        {/* Meal buckets demoted to a compact summary row below the histogram. */}
+        {/* Meal buckets — compact summary row below the histogram. */}
         <View style={styles.mealRow}>
           {mealBars.map((m) => (
             <View key={m.label} style={styles.mealChip}>
@@ -317,12 +318,12 @@ function Dashboard({
       </Section>
 
       {/* Day of week */}
-      <Section title="Which days" subtitle="Sunday → Saturday">
+      <Section title="Which days" subtitle="Sunday → Saturday" narrative={dayNarr}>
         <VerticalBars data={dowBars} accentIndex={dowAccentIndex} height={150} />
       </Section>
 
       {/* Top spots */}
-      <Section title="Where you keep going">
+      <Section title="Where you keep going" narrative={topSpotsNarr}>
         {data.topSpots.map((s, i) => (
           <View key={s.name} style={styles.topRow}>
             <Text style={styles.topRank}>{i + 1}</Text>
@@ -402,7 +403,7 @@ function AspirationalCard({
     <View style={[styles.section, { backgroundColor: colors.ink }]}>
       <Text style={[type.micro, { color: "rgba(255,255,255,0.65)" }]}>YOUR NEXT ERA</Text>
       <Spacer size={10} />
-      <Text style={styles.aspInsight}>{aspirational.insight}</Text>
+      <Text style={styles.aspInsight}>{nextEraLine(aspirational)}</Text>
 
       {aspirational.topAspirationTags.length > 0 && (
         <>
@@ -512,10 +513,15 @@ function NeighborhoodSection({ location }: { location: LocationPatternSummary })
 function Section({
   title,
   subtitle,
+  narrative,
   children,
 }: {
   title: string;
   subtitle?: string;
+  /** Optional one-sentence human takeaway rendered under the chart. Capped at
+   *  ~12 words by the caller. Skip when the data isn't strong enough to say
+   *  anything honest. */
+  narrative?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -526,12 +532,89 @@ function Section({
       )}
       {!subtitle && <Spacer size={12} />}
       {children}
+      {narrative && (
+        <Text style={styles.sectionNarrative}>{narrative}</Text>
+      )}
     </View>
   );
 }
 
 function capCase(s: string): string {
   return s ? s[0].toUpperCase() + s.slice(1) : s;
+}
+
+// ----------------------------------------------------------------------------
+// Narrative one-liners. Each ≤12 words, returns undefined when the data isn't
+// strong enough to say anything honest.
+// ----------------------------------------------------------------------------
+function cuisineNarrative(slices: DonutSlice[]): string | undefined {
+  if (slices.length === 0) return undefined;
+  const total = slices.reduce((s, x) => s + x.value, 0);
+  if (total === 0) return undefined;
+  const top = slices[0];
+  const share = top.value / total;
+  if (share >= 0.55) return `More than half your meals look like ${top.label}.`;
+  if (share >= 0.35) return `${top.label} keeps showing up across your week.`;
+  if (slices.length >= 5) return "You spread your meals across a wide cuisine mix.";
+  return undefined;
+}
+
+function formatNarrative(rows: { format: string; count: number; pct: number }[]): string | undefined {
+  if (rows.length === 0) return undefined;
+  const top = rows[0];
+  if (top.pct >= 0.5) return `Most of your eating happens at ${(FORMAT_LABELS[top.format] ?? top.format).toLowerCase()}.`;
+  if (top.format === "cafe" || top.format === "café") return "You keep coming back to cafés.";
+  return undefined;
+}
+
+function whenNarrative(hourly: number[]): string | undefined {
+  const total = hourly.reduce((s, n) => s + n, 0);
+  if (total === 0) return undefined;
+  const late = (hourly[21] + hourly[22] + hourly[23] + hourly[0]) / total;
+  const morning = (hourly[6] + hourly[7] + hourly[8] + hourly[9]) / total;
+  const midday = (hourly[12] + hourly[13]) / total;
+  const evening = (hourly[18] + hourly[19]) / total;
+  if (late >= 0.2) return "A meaningful slice of your eating happens late at night.";
+  if (morning >= 0.25) return "Mornings are where a real chunk of your week lives.";
+  if (evening >= 0.35) return "Dinner anchors most of your week.";
+  if (midday >= 0.35) return "Midday is your steady eating window.";
+  return undefined;
+}
+
+function dayNarrative(bars: VBar[], accentIndex: number): string | undefined {
+  if (bars.length === 0) return undefined;
+  const total = bars.reduce((s, b) => s + b.value, 0);
+  if (total === 0) return undefined;
+  const top = bars[accentIndex];
+  if (top.value / total >= 0.22) return `${top.label} is the day you eat out most.`;
+  return undefined;
+}
+
+function topSpotsNarrative(spots: { name: string; count: number }[]): string | undefined {
+  if (spots.length === 0) return undefined;
+  const top = spots[0];
+  if (top.count >= 4) return `${top.name} earned the most repeats.`;
+  return undefined;
+}
+
+/** Replaces the awkward "Your current Palate is X. Your Aspirational Palate
+ *  leans Y." phrasing with a movement-flavored line. Honest about uncertainty
+ *  when the gap signal is weak. */
+function nextEraLine(asp: AspirationalPalate): string {
+  if (!asp.hasGap) return "Your next era will appear once Palate has more history.";
+  // Pick the strongest aspirational signal — cuisine if the wishlist diverges,
+  // otherwise neighborhood, else fall back to neutral copy.
+  const cuisineGap = asp.aspirationalCuisines[0];
+  const actualTop = asp.actualCuisines[0];
+  if (cuisineGap && (!actualTop || cuisineGap.cuisine !== actualTop.cuisine)) {
+    const label = (CUISINE_LABELS[cuisineGap.cuisine] ?? cuisineGap.cuisine);
+    return `You're saving more ${label} than you're eating — that's where you're headed.`;
+  }
+  if (asp.aspirationalNeighborhoods.length > 0) {
+    const hood = asp.aspirationalNeighborhoods[0];
+    return `You're eyeing ${hood} — your next chapter likely starts there.`;
+  }
+  return "Your next era is forming — keep saving the spots that pull you.";
 }
 
 function HeroStat({ label, value }: { label: string; value: string }) {
@@ -633,6 +716,18 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   donutWrap: { alignItems: "center", paddingVertical: 8 },
+  // One-sentence narrative under each chart — quiet, italic, never competes
+  // with the chart itself.
+  sectionNarrative: {
+    fontSize: 13,
+    color: colors.mute,
+    fontStyle: "italic",
+    lineHeight: 19,
+    marginTop: 14,
+    paddingTop: 10,
+    borderTopColor: colors.line,
+    borderTopWidth: 1,
+  },
   legendRow: {
     flexDirection: "row",
     alignItems: "center",

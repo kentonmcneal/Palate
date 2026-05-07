@@ -93,9 +93,8 @@ export function GmailImportCard() {
         <Text style={styles.eyebrow}>BRING IN YOUR HISTORY</Text>
         <Text style={styles.title}>Connect Gmail</Text>
         <Text style={styles.body}>
-          Pulls in your reservations and delivery orders from the last 90 days
-          (OpenTable, Resy, DoorDash, Uber Eats, and 6 more) and turns them
-          into Palate visits. Read-only access. Disconnect anytime.
+          Palate can turn recent reservations and delivery orders into visits.
+          Read-only access. Disconnect anytime.
         </Text>
         <Pressable
           onPress={handleConnect}

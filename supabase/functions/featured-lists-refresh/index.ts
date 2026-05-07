@@ -141,7 +141,12 @@ async function refreshCity(
   for (const cat of CATEGORIES) {
     const query = cat.query.replace("{city}", city_label);
     try {
-      const places = await googleTextSearch(query, lat, lng);
+      const rawPlaces = await googleTextSearch(query, lat, lng);
+      if (rawPlaces.length === 0) continue;
+
+      // Per-category time-of-day filter — late-night actually has to be open
+      // late, early-morning has to be open early, etc.
+      const places = filterByCategorySlug(rawPlaces, cat.slug);
       if (places.length === 0) continue;
 
       const ranked = rankAndTrim(places, lat, lng).slice(0, TOP_N);
@@ -197,7 +202,9 @@ async function googleTextSearch(
       "Content-Type": "application/json",
       "X-Goog-Api-Key": GOOGLE_KEY,
       "X-Goog-FieldMask":
-        "places.id,places.displayName,places.formattedAddress,places.shortFormattedAddress,places.location,places.primaryType,places.types,places.priceLevel,places.rating,places.userRatingCount",
+        // regularOpeningHours added so we can filter by time-of-day per
+        // category (late-night needs to actually be open late, etc.)
+        "places.id,places.displayName,places.formattedAddress,places.shortFormattedAddress,places.location,places.primaryType,places.types,places.priceLevel,places.rating,places.userRatingCount,places.regularOpeningHours",
     },
     body: JSON.stringify({
       textQuery: query,
@@ -219,6 +226,73 @@ async function googleTextSearch(
 
   const data = await resp.json();
   return (data.places ?? []) as GooglePlace[];
+}
+
+// ----------------------------------------------------------------------------
+// Hours-based filtering — Google's text-search ranking doesn't consider
+// actual operating hours, so a "late night food" search returns places that
+// close at 10:30 PM. We post-filter per category.
+// ----------------------------------------------------------------------------
+type Period = {
+  open?: { day?: number; hour?: number; minute?: number };
+  close?: { day?: number; hour?: number; minute?: number };
+};
+
+function getPeriods(p: GooglePlace): Period[] {
+  return (p as any).regularOpeningHours?.periods ?? [];
+}
+
+/** True iff the place is open past 23:00 on at least one Fri/Sat night,
+ *  or has an overnight close (close.day != open.day) on those nights. */
+function isOpenLate(p: GooglePlace): boolean {
+  const periods = getPeriods(p);
+  if (periods.length === 0) return true; // Missing data — don't filter aggressively
+  for (const period of periods) {
+    const openDay = period.open?.day;
+    if (openDay !== 4 && openDay !== 5 && openDay !== 6) continue; // Thu/Fri/Sat
+    const closeHour = period.close?.hour ?? 0;
+    const closeDay = period.close?.day;
+    // Overnight close (closes the next morning) → always counts as late.
+    if (closeDay != null && openDay != null && closeDay !== openDay) return true;
+    // Same-day close at 23:00 or later
+    if (closeHour >= 23 || (closeHour === 0 && (period.close?.minute ?? 0) > 0)) return true;
+  }
+  return false;
+}
+
+/** True iff the place is open at or before 8:00 on at least one weekday. */
+function isOpenEarly(p: GooglePlace): boolean {
+  const periods = getPeriods(p);
+  if (periods.length === 0) return true;
+  for (const period of periods) {
+    const openDay = period.open?.day;
+    if (openDay == null || openDay === 0 || openDay === 6) continue; // weekdays only
+    const openHour = period.open?.hour ?? 23;
+    if (openHour <= 8) return true;
+  }
+  return false;
+}
+
+/** True iff the place opens between 9:00-13:00 on Sat or Sun. */
+function isOpenForBrunch(p: GooglePlace): boolean {
+  const periods = getPeriods(p);
+  if (periods.length === 0) return true;
+  for (const period of periods) {
+    const openDay = period.open?.day;
+    if (openDay !== 0 && openDay !== 6) continue; // Sun or Sat
+    const openHour = period.open?.hour ?? 23;
+    if (openHour >= 9 && openHour <= 13) return true;
+  }
+  return false;
+}
+
+function filterByCategorySlug(places: GooglePlace[], slug: string): GooglePlace[] {
+  switch (slug) {
+    case "late-night":    return places.filter(isOpenLate);
+    case "early-morning": return places.filter(isOpenEarly);
+    case "brunch":        return places.filter(isOpenForBrunch);
+    default:              return places;
+  }
 }
 
 // ----------------------------------------------------------------------------

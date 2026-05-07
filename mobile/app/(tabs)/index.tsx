@@ -80,7 +80,7 @@ export default function Home() {
       const confidence = classifyAccuracy(loc.accuracy);
       if (confidence === "low") {
         Alert.alert(
-          "Can't quite see you",
+          "We couldn't confidently detect a restaurant nearby.",
           "Your location signal is fuzzy right now — usually means you're indoors or moving. Step outside or try again in a minute.",
         );
         return;
@@ -89,7 +89,10 @@ export default function Home() {
       await logLocationEvent(loc, places[0]?.google_place_id ?? null);
 
       if (!places.length) {
-        Alert.alert("Nothing nearby", "We don't see a restaurant near you right now.");
+        Alert.alert(
+          "We couldn't confidently detect a restaurant nearby.",
+          "If you're sure you're at one, you can log it manually from the + button.",
+        );
         return;
       }
 

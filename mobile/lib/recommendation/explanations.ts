@@ -80,14 +80,14 @@ export function explainCompatibility(
     out.push("A stretch from your usual pattern, but still within your flavor profile.");
   }
 
-  // 7. Last-resort — never empty, never vague
+  // 7. Last-resort — never empty, never vague, never a bare category.
   if (out.length === 0) {
     if (g.totalVisits === 0) {
       out.push("A solid baseline pick — log a few visits and we'll get more specific.");
     } else if (parts.quality.matched) {
-      out.push("Consistently strong reviews — quality safeguard.");
+      out.push("A familiar pick with strong reviews.");
     } else {
-      out.push("Within the kind of place you usually pick.");
+      out.push("Similar to places you usually like.");
     }
   }
 

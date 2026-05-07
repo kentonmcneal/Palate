@@ -173,20 +173,44 @@ export async function buildFeaturedLists(opts: {
 // Helpers
 // ----------------------------------------------------------------------------
 
+// Session cache so Discover doesn't re-fetch every visit row on every open
+// or city change. Invalidated when the user logs a new visit (via the
+// personal-signal listener wiring below).
+let visitedIdsCache: { userId: string; ids: Set<string> } | null = null;
+let visitedIdsInflight: Promise<Set<string>> | null = null;
+
 async function loadUserVisitedIds(): Promise<Set<string>> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return new Set();
-  const { data } = await supabase
-    .from("visits")
-    .select("restaurant:restaurants!inner(google_place_id)")
-    .eq("user_id", user.id);
-  const out = new Set<string>();
-  for (const row of (data ?? []) as any[]) {
-    const r = Array.isArray(row.restaurant) ? row.restaurant[0] : row.restaurant;
-    if (r?.google_place_id) out.add(r.google_place_id);
-  }
-  return out;
+  if (visitedIdsInflight) return visitedIdsInflight;
+  visitedIdsInflight = (async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return new Set<string>();
+      if (visitedIdsCache && visitedIdsCache.userId === user.id) {
+        return visitedIdsCache.ids;
+      }
+      const { data } = await supabase
+        .from("visits")
+        .select("restaurant:restaurants!inner(google_place_id)")
+        .eq("user_id", user.id);
+      const out = new Set<string>();
+      for (const row of (data ?? []) as any[]) {
+        const r = Array.isArray(row.restaurant) ? row.restaurant[0] : row.restaurant;
+        if (r?.google_place_id) out.add(r.google_place_id);
+      }
+      visitedIdsCache = { userId: user.id, ids: out };
+      return out;
+    } finally {
+      visitedIdsInflight = null;
+    }
+  })();
+  return visitedIdsInflight;
 }
+
+// Bust the cache when the user logs a new visit / item rating.
+import { onPersonalSignalInvalidate } from "./personal-signal";
+onPersonalSignalInvalidate(() => {
+  visitedIdsCache = null;
+});
 
 function slugify(s: string): string {
   return s

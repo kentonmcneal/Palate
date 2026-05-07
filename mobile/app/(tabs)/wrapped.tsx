@@ -17,18 +17,16 @@ import { Confetti } from "../../components/Confetti";
 import { shareWrappedToFeed } from "../../lib/feed";
 import { track } from "../../lib/analytics";
 import { computeTasteVector, type TasteVector } from "../../lib/taste-vector";
-import { generateIdentitySet } from "../../lib/palate-labels";
 import { getSessionStage, type SessionStage } from "../../lib/session-stage";
 import { loadPersonalSignal } from "../../lib/personal-signal";
 import { assembleGraph, composeWrapped, type WrappedSummary } from "../../lib/recommendation";
-import { generatePercentileCards, generateCohortInsightAsync, type CohortInsight } from "../../lib/population-stats";
-import { computeAspirationalPalate, type AspirationalPalate } from "../../lib/aspirational-palate";
 import { getAreaPalates, type AreaPalateSummary } from "../../lib/area-palates";
 import {
-  getProfileFromVector, IDENTITY_BLURB,
+  getProfileFromVector, IDENTITY_BLURB, composeEgoHook,
   type PalateProfile,
 } from "../../lib/palate";
 import { WhatArePalates } from "../../components/WhatArePalates";
+import { SharePalateCard, type ShareStat } from "../../components/SharePalateCard";
 import ViewShot, { captureRef } from "react-native-view-shot";
 
 // ============================================================================
@@ -51,17 +49,17 @@ export default function WrappedTab() {
   const [data, setData] = useState<Wrapped | null>(null);
   const [profile, setProfile] = useState<PalateProfile | null>(null);
   const [vector, setVector] = useState<TasteVector | null>(null);
-  const [stage, setStage] = useState<SessionStage>(1);
+  const [, setStage] = useState<SessionStage>(1);
   const [summary, setSummary] = useState<WrappedSummary | null>(null);
-  // Inlined-from-insights-deep state. All four blocks now live on Wrapped.
-  const [percentileCards, setPercentileCards] = useState<ReturnType<typeof generatePercentileCards>>([]);
-  const [cohort, setCohort] = useState<CohortInsight | null>(null);
-  const [aspirational, setAspirational] = useState<AspirationalPalate | null>(null);
+  // Area palates is the only "deep" surface that still renders on the tab —
+  // identity / signals / behavior / dishes / percentile / cohort / next era
+  // all moved into the Wrapped Story (app/wrapped-story.tsx).
   const [areaPalates, setAreaPalates] = useState<AreaPalateSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [confettiKey, setConfettiKey] = useState(0);
   const cardRef = useRef<View>(null);
   const storyRef = useRef<View>(null);
+  const palateShareRef = useRef<View>(null);
   // (storyShownThisSession lives at module scope above — see comment there.)
   const router = useRouter();
 
@@ -79,15 +77,12 @@ export default function WrappedTab() {
         await AsyncStorage.setItem(LAST_SEEN_WRAPPED_KEY, latest.week_start);
       }
       setVector(allTimeVec ?? null);
-      // Compose canonical Wrapped summary from the weekly graph for the
-      // exploration/repeat/comfort/stretch scores below.
       const personal = await loadPersonalSignal().catch(() => null);
       const weekGraph = assembleGraph(weekVec ?? null, personal);
       setSummary(composeWrapped(weekGraph));
 
-      // NEW Palate identity (Curator/Forager/Steward/Anchor) — single
-      // source of truth from lib/palate. Operates on the WEEKLY vector so
-      // identity reflects "this week leaned X" not all-time pattern.
+      // Palate identity — single source of truth, used for the share card
+      // hero copy + the WhatArePalates explainer placement on this tab.
       if (weekVec) {
         const newProfile = await getProfileFromVector(weekVec, {
           thisWeekIso: isoWeekStart(),
@@ -95,22 +90,10 @@ export default function WrappedTab() {
         setProfile(newProfile);
       }
 
-      // Deep-insights surfaces (percentile/cohort/aspirational/area) still
-      // call the legacy palate-labels API — feed them the legacy identity
-      // for now. Migration is a follow-up; this keeps them working.
-      if (allTimeVec) {
-        const legacyIds = generateIdentitySet(allTimeVec, weekVec ?? undefined);
-        const [pc, co, ap, ar] = await Promise.all([
-          Promise.resolve(generatePercentileCards(allTimeVec, legacyIds.primary)),
-          generateCohortInsightAsync(legacyIds.primary, allTimeVec).catch(() => null),
-          computeAspirationalPalate().catch(() => null),
-          getAreaPalates().catch(() => null),
-        ]);
-        setPercentileCards(pc);
-        setCohort(co);
-        setAspirational(ap);
-        setAreaPalates(ar);
-      }
+      // Area palates still renders on the tab. Everything else (percentile,
+      // cohort, aspirational, top dishes) moved to the Wrapped Story.
+      const ar = await getAreaPalates().catch(() => null);
+      setAreaPalates(ar);
     } catch (e: any) {
       console.warn("wrapped load", e?.message);
     }
@@ -118,13 +101,37 @@ export default function WrappedTab() {
 
   useFocusEffect(useCallback(() => {
     refresh();
-    // Story plays once per app session on first Wrapped focus. The
-    // module-scope flag survives component remounts (the story exit
-    // remounts this tab via router.replace).
+    // Story plays once per ISO week, AND only once per app session (whichever
+    // is more restrictive). Two gates:
+    //   • Module-scope flag — prevents re-push when the story screen exits
+    //     and re-mounts this tab.
+    //   • AsyncStorage(STORY_LAST_SHOWN_KEY) — prevents re-firing every cold
+    //     launch within the same week. Written by wrapped-story on dismiss.
     if (storyShownThisSession) return;
-    storyShownThisSession = true;
-    const t = setTimeout(() => router.push("/wrapped-story"), 80);
-    return () => clearTimeout(t);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    (async () => {
+      try {
+        const lastShown = await AsyncStorage.getItem(STORY_LAST_SHOWN_KEY);
+        if (cancelled) return;
+        if (lastShown === isoWeekStart()) {
+          // Already showed this week — set the session flag so the manual
+          // Replay button is the only way back in.
+          storyShownThisSession = true;
+          return;
+        }
+        storyShownThisSession = true;
+        timer = setTimeout(() => router.push("/wrapped-story"), 80);
+      } catch {
+        // If AsyncStorage fails, fall back to "show on first focus this session"
+        storyShownThisSession = true;
+        timer = setTimeout(() => router.push("/wrapped-story"), 80);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [refresh, router]));
 
   async function generate() {
@@ -161,6 +168,20 @@ export default function WrappedTab() {
     try {
       const uri = await captureRef(storyRef, { format: "png", quality: 1 });
       await Share.share({ url: uri });
+    } catch (e: any) {
+      Alert.alert("Couldn't share", e.message ?? "Try again");
+    }
+  }
+
+  async function sharePalate() {
+    if (!palateShareRef.current) {
+      Alert.alert("Not ready yet", "Give it a moment and try again.");
+      return;
+    }
+    try {
+      const uri = await captureRef(palateShareRef, { format: "png", quality: 1 });
+      await Share.share({ url: uri, message: "My Palate this week" });
+      void track("palate_share_card_exported");
     } catch (e: any) {
       Alert.alert("Couldn't share", e.message ?? "Try again");
     }
@@ -249,89 +270,16 @@ export default function WrappedTab() {
               />
             </ViewShot>
 
-            {/* 2. The week's headline — soft language for middle users */}
-            {profile && (
-              <View style={styles.insightCard}>
-                <Text style={styles.insightBody}>{profile.explanation}</Text>
-                {profile.movement && (
-                  <Text style={[styles.insightBody, { color: colors.red, fontWeight: "700", marginTop: 6 }]}>
-                    {profile.movement.summary}
-                  </Text>
-                )}
-              </View>
-            )}
+            {/* The deep narrative pieces (ego hook, interpretation, signals,
+                behavior, top dish, percentile, cohort, next era) now live
+                EXCLUSIVELY in the Wrapped Story (app/wrapped-story.tsx),
+                rendered up to 5 Spotify-Wrapped-style cards. The Wrapped tab
+                stays scannable: share card, charts, area palates, explainer. */}
 
-            {/* 3. Tags (max 4) — non-exclusive secondary signals */}
-            {profile && profile.tags.length > 0 && (
-              <View style={styles.insightCard}>
-                <Text style={styles.insightEyebrow}>THIS WEEK'S TAGS</Text>
-                <View style={styles.tagRowLight}>
-                  {profile.tags.map((t) => (
-                    <View key={t} style={styles.tagChip}>
-                      <Text style={styles.tagChipText}>{t}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* 4. Behavior signals — concrete, human-readable bullets */}
-            {profile && profile.behaviorSignals.length > 0 && (
-              <View style={styles.insightCard}>
-                <Text style={styles.insightEyebrow}>BEHAVIOR SIGNALS</Text>
-                {profile.behaviorSignals.map((s, i) => (
-                  <Text key={i} style={[styles.insightBody, { marginTop: i === 0 ? 8 : 4 }]}>· {s}</Text>
-                ))}
-              </View>
-            )}
-
-            {/* 5. Interactive charts — tap-to-focus donut + day-of-week bars */}
+            {/* Interactive charts — tap-to-focus donut + day-of-week bars */}
             <WrappedCharts />
 
-            {/* 4. Where you rank (percentile cards) */}
-            {percentileCards.length > 0 && (
-              <View style={styles.insightCard}>
-                <Text style={styles.insightEyebrow}>WHERE YOU RANK</Text>
-                {percentileCards.map((c, i) => (
-                  <View key={i} style={styles.rankRow}>
-                    <Text style={styles.rankPct}>Top {c.percentile}%</Text>
-                    <Text style={styles.rankBody}>{c.body}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* 5. People like you (cohort) */}
-            {cohort && (
-              <View style={styles.insightCard}>
-                <Text style={styles.insightEyebrow}>
-                  PEOPLE LIKE YOU{cohort.source === "preview" ? " · preview" : ""}
-                </Text>
-                <Text style={styles.insightTitle}>{cohort.countLine}</Text>
-                <Text style={styles.insightBody}>· {cohort.paceLine}</Text>
-                <Text style={styles.insightBody}>· {cohort.citiesLine}</Text>
-                <Text style={styles.insightBody}>· {cohort.topSavedLine}</Text>
-              </View>
-            )}
-
-            {/* 6. Your next era (aspirational) */}
-            {aspirational && (
-              <View style={[styles.insightCard, styles.darkCard]}>
-                <Text style={[styles.insightEyebrow, { color: "rgba(255,255,255,0.6)" }]}>YOUR NEXT ERA</Text>
-                <Text style={[styles.insightTitle, { color: "#fff" }]}>{aspirational.insight}</Text>
-                {aspirational.topAspirationTags.length > 0 && (
-                  <View style={styles.tagRow}>
-                    {aspirational.topAspirationTags.slice(0, 4).map((t) => (
-                      <View key={t.tag} style={styles.darkChip}>
-                        <Text style={styles.darkChipText}>{t.tag.replace(/_/g, " ")}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* 7. Top palates in your area */}
+            {/* Top palates in your area */}
             {areaPalates && areaPalates.palates.length > 0 && (
               <View style={styles.insightCard}>
                 <Text style={styles.insightEyebrow}>
@@ -347,12 +295,21 @@ export default function WrappedTab() {
               </View>
             )}
 
-            {/* What are Palates? — explainer block with axis graph */}
-            {profile && <WhatArePalates profile={profile} />}
+            {/* What are Palates? — explainer block with axis graph + share CTA */}
+            {profile && <WhatArePalates profile={profile} onShare={sharePalate} />}
 
             {/* 8. Actions */}
             <Spacer size={20} />
-            <Button title="Share" onPress={shareImage} />
+            {/* Primary share — the new 9:16 SharePalateCard. Only shown for
+                classified users; "Learning" users have nothing meaningful to
+                share yet. */}
+            {profile && profile.primaryIdentity !== "Learning" && (
+              <>
+                <Button title="Share your Palate" onPress={sharePalate} />
+                <Spacer size={8} />
+              </>
+            )}
+            <Button title="Share Wrapped card" variant="ghost" onPress={shareImage} />
             <Spacer size={8} />
             <Button title="Post to Feed" variant="ghost" onPress={shareToFeed} />
             <Spacer size={8} />
@@ -360,12 +317,24 @@ export default function WrappedTab() {
             <Spacer size={8} />
             <Button title="Refresh" variant="ghost" onPress={generate} loading={loading} />
 
-            {/* Off-screen story renderer — kept hidden so view-shot can grab a
-                9:16 IG variant without affecting on-screen layout. */}
+            {/* Off-screen renderers — kept hidden so view-shot can grab them
+                without affecting on-screen layout. Story = legacy 9:16 card.
+                PalateShare = new design-bible 9:16 card. */}
             <View style={{ position: "absolute", left: -9999, top: 0 }} pointerEvents="none">
               <View ref={storyRef as any} collapsable={false}>
                 <WrappedStoryCard data={data} personaOverride={identityLabel()} />
               </View>
+              {profile && profile.primaryIdentity !== "Learning" && (
+                <View ref={palateShareRef as any} collapsable={false} style={{ marginTop: 24 }}>
+                  <SharePalateCard
+                    identity={profile.primaryIdentity}
+                    weekRange={formatWeekRange(data.week_start, data.week_end)}
+                    stats={buildShareStats(data)}
+                    tags={profile.tags.slice(0, 3)}
+                    egoHook={composeEgoHook(profile)}
+                  />
+                </View>
+              )}
             </View>
           </>
         ) : profile && vector && vector.visitCount > 0 ? (
@@ -411,6 +380,27 @@ function humanizeCuisine(s: string): string {
   return s
     .replace(/_/g, " ")
     .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+const SHORT_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function formatWeekRange(startISO: string, endISO: string): string {
+  const fmt = (iso: string) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    if (!y || !m || !d) return iso;
+    return `${SHORT_MONTHS[m - 1]} ${d}`;
+  };
+  return `${fmt(startISO)} — ${fmt(endISO)}`;
+}
+
+function buildShareStats(w: Wrapped): ShareStat[] {
+  const out: ShareStat[] = [
+    { label: "Visits", value: String(w.total_visits ?? 0) },
+    { label: "Places", value: String(w.unique_restaurants ?? 0) },
+  ];
+  if (typeof w.repeat_rate === "number") {
+    out.push({ label: "Repeat", value: `${Math.round(w.repeat_rate * 100)}%` });
+  }
+  return out;
 }
 
 const SAMPLE_WRAPPED: Wrapped = {
@@ -474,6 +464,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.7,
     lineHeight: 38,
     marginTop: 6,
+    // Subtle brand-text glow per redesign brief — restrained, not blooming.
+    textShadowColor: "rgba(255,48,8,0.28)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
   },
 
   statRow: {
@@ -541,6 +535,38 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.line,
   },
   tagChipText: { color: colors.ink, fontSize: 12, fontWeight: "700" },
+  // Dominant (first) tag gets the headline treatment per design bible.
+  dominantTag: {
+    color: colors.ink,
+    fontSize: 28,
+    fontWeight: "800",
+    letterSpacing: -0.6,
+    marginTop: 8,
+  },
+  // Ego hook — small, premium, sits right under the black hero card.
+  egoHook: {
+    color: colors.red,
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: 1.3,
+    textTransform: "uppercase",
+    marginTop: spacing.md,
+    marginLeft: 4,
+    // Restrained glow — was 0.55. Reads as brand accent, not blooming text.
+    textShadowColor: "rgba(255,48,8,0.28)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+
+  insightCardSubtle: { backgroundColor: colors.faint },
+  dishRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingVertical: 10,
+    borderTopColor: colors.line, borderTopWidth: 1,
+  },
+  dishHeart: { color: colors.red, fontSize: 18, fontWeight: "800" },
+  dishName: { fontSize: 14, fontWeight: "700", color: colors.ink },
+  dishWhere: { fontSize: 12, color: colors.mute, marginTop: 2 },
 
   deepLink: {
     paddingVertical: 12,

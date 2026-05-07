@@ -1,6 +1,6 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, View, Text } from "react-native";
+import { ActivityIndicator, AppState, View, Text } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -15,6 +15,7 @@ import { colors } from "../theme";
 import * as WebBrowser from "expo-web-browser";
 import { initObservability } from "../lib/observability";
 import { registerPushToken } from "../lib/notifications";
+import { checkForAutoVisitOnForeground } from "../lib/auto-detect";
 
 // Resolve any pending OAuth session (Gmail Connect) when the app is reopened
 // after the system browser hand-off.
@@ -67,6 +68,18 @@ export default function RootLayout() {
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // Auto-detect: every time the app comes to foreground (or first launches
+  // while already authed), check if the user appears to be at a restaurant.
+  // The helper itself respects the toggle, throttle, and permission state.
+  useEffect(() => {
+    if (!session?.user) return;
+    void checkForAutoVisitOnForeground();
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") void checkForAutoVisitOnForeground();
+    });
+    return () => sub.remove();
+  }, [session?.user]);
 
   // Route guard: kick to /sign-in if not authed; bounce away from /sign-in
   // once authed. Signed-in users are allowed to be in /onboarding so brand-new

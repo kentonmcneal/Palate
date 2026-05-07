@@ -24,6 +24,47 @@ function mealTypeFor(date: Date): Visit["meal_type"] {
   return "snack";
 }
 
+// Time-of-day buckets per spec. Distinct from `meal_type` (the legacy enum
+// column) so Insights can answer "afternoon coffee runs?" / "late-night
+// kebab habit?" without ambiguity. Boundaries are inclusive on the start.
+export type TimeOfDayBucket =
+  | "breakfast"   // 05:00 – 10:59
+  | "lunch"       // 11:00 – 14:59
+  | "afternoon"   // 15:00 – 16:59
+  | "dinner"      // 17:00 – 21:59
+  | "lateNight";  // 22:00 – 04:59
+
+const DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+
+export function timeOfDayBucket(date: Date): TimeOfDayBucket {
+  const h = date.getHours();
+  if (h >= 5 && h < 11) return "breakfast";
+  if (h >= 11 && h < 15) return "lunch";
+  if (h >= 15 && h < 17) return "afternoon";
+  if (h >= 17 && h < 22) return "dinner";
+  return "lateNight";
+}
+
+/**
+ * Build the canonical time metadata stored on every new visit. All fields are
+ * computed in the user's LOCAL timezone — visited_at stays UTC for queries
+ * across timezones, the local_* fields preserve "what time it felt like" for
+ * the user when Wrapped runs.
+ */
+export function buildVisitTimeMeta(date: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const localDate = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const localTime = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return {
+    visited_at: date.toISOString(),
+    local_date: localDate,
+    local_time: localTime,
+    hour_of_day: date.getHours(),
+    day_of_week: DOW[date.getDay()],
+    time_of_day_bucket: timeOfDayBucket(date),
+  };
+}
+
 export type SaveVisitResult = Visit & {
   isFirstVisit: boolean;
   totalVisits: number;
@@ -108,19 +149,44 @@ export async function saveVisit(opts: {
     .select("id", { count: "exact", head: true })
     .eq("user_id", user.id);
 
-  const { data, error } = await supabase
+  const meta = buildVisitTimeMeta(visitedAt);
+  const insertPayload: Record<string, unknown> = {
+    user_id: user.id,
+    restaurant_id: restaurantId,
+    visited_at: meta.visited_at,
+    meal_type: mealTypeFor(visitedAt),
+    detection_source: opts.source,
+    confirmed_by_user: true,
+    notes: opts.notes ?? null,
+    local_date: meta.local_date,
+    local_time: meta.local_time,
+    hour_of_day: meta.hour_of_day,
+    day_of_week: meta.day_of_week,
+    time_of_day_bucket: meta.time_of_day_bucket,
+  };
+
+  let { data, error } = await supabase
     .from("visits")
-    .insert({
-      user_id: user.id,
-      restaurant_id: restaurantId,
-      visited_at: visitedAt.toISOString(),
-      meal_type: mealTypeFor(visitedAt),
-      detection_source: opts.source,
-      confirmed_by_user: true,
-      notes: opts.notes ?? null,
-    })
+    .insert(insertPayload)
     .select("*")
     .single();
+
+  // Graceful degradation: if the migration hasn't been applied yet, retry
+  // without the new columns so the app keeps working in the meantime.
+  if (error && /column .* does not exist/i.test(error.message)) {
+    const fallback = {
+      user_id: insertPayload.user_id,
+      restaurant_id: insertPayload.restaurant_id,
+      visited_at: insertPayload.visited_at,
+      meal_type: insertPayload.meal_type,
+      detection_source: insertPayload.detection_source,
+      confirmed_by_user: insertPayload.confirmed_by_user,
+      notes: insertPayload.notes,
+    };
+    const retry = await supabase.from("visits").insert(fallback).select("*").single();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) throw error;
   const total = (priorCount ?? 0) + 1;
@@ -185,8 +251,14 @@ export async function updateVisit(
 ): Promise<void> {
   const update: Record<string, unknown> = {};
   if (patch.visitedAt) {
-    update.visited_at = patch.visitedAt.toISOString();
+    const meta = buildVisitTimeMeta(patch.visitedAt);
+    update.visited_at = meta.visited_at;
     update.meal_type = mealTypeFor(patch.visitedAt);
+    update.local_date = meta.local_date;
+    update.local_time = meta.local_time;
+    update.hour_of_day = meta.hour_of_day;
+    update.day_of_week = meta.day_of_week;
+    update.time_of_day_bucket = meta.time_of_day_bucket;
   }
   if (patch.notes !== undefined) update.notes = patch.notes;
   if (patch.googlePlaceId) {
@@ -194,6 +266,17 @@ export async function updateVisit(
   }
   if (Object.keys(update).length === 0) return;
   const { error } = await supabase.from("visits").update(update).eq("id", id);
+  if (error && /column .* does not exist/i.test(error.message)) {
+    // Pre-migration fallback — strip the new fields and retry.
+    const legacy: Record<string, unknown> = {};
+    for (const k of ["visited_at", "meal_type", "notes", "restaurant_id"]) {
+      if (k in update) legacy[k] = update[k];
+    }
+    if (Object.keys(legacy).length === 0) return;
+    const retry = await supabase.from("visits").update(legacy).eq("id", id);
+    if (retry.error) throw retry.error;
+    return;
+  }
   if (error) throw error;
 }
 
@@ -257,22 +340,28 @@ export async function deleteVisitWithUndo(id: string): Promise<{ undo: () => Pro
   };
 }
 
-/** Was the user already prompted for this place recently? Used to suppress repeats. */
+/** Was the user already prompted for this place recently? Used to suppress
+ *  repeats. The "skip_today" outcome — fired by the "Don't ask again today"
+ *  button — is honored for a full 24h regardless of `withinMinutes`. */
 export async function recentlyPrompted(googlePlaceId: string, withinMinutes = 360) {
-  const cutoff = new Date(Date.now() - withinMinutes * 60_000).toISOString();
+  const skipCutoff = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+  const recentCutoff = new Date(Date.now() - withinMinutes * 60_000).toISOString();
   const { data, error } = await supabase
     .from("prompt_decisions")
-    .select("id")
+    .select("decided_at, outcome")
     .eq("google_place_id", googlePlaceId)
-    .gte("decided_at", cutoff)
-    .limit(1);
+    .gte("decided_at", skipCutoff)
+    .order("decided_at", { ascending: false })
+    .limit(5);
   if (error) return false;
-  return (data ?? []).length > 0;
+  const rows = data ?? [];
+  if (rows.some((r) => r.outcome === "skip_today")) return true;
+  return rows.some((r) => r.decided_at >= recentCutoff);
 }
 
 export async function recordPromptDecision(
   googlePlaceId: string,
-  outcome: "confirmed" | "dismissed" | "wrong_place" | "ignored",
+  outcome: "confirmed" | "dismissed" | "wrong_place" | "ignored" | "skip_today",
 ) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
