@@ -1,0 +1,549 @@
+{
+  "version": 1,
+  "notes": "Each case is a synthetic Google Place + expected classifier output. Only the fields listed under `expected` are asserted — missing fields are not checked. IDs prefixed `synthetic_` are not real place_ids; real-place fixtures should be added via supabase/eval/seed-from-places.ts later.",
+  "cases": [
+    {
+      "id": "starbucks-basic",
+      "input": {
+        "id": "synthetic_starbucks_1",
+        "displayName": { "text": "Starbucks" },
+        "types": ["coffee_shop", "cafe", "restaurant", "food", "point_of_interest", "establishment"],
+        "primaryType": "coffee_shop",
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "userRatingCount": 1200
+      },
+      "expected": {
+        "cuisine_type": "café",
+        "format_class": "café",
+        "chain_name": "Starbucks",
+        "chain_type": "national_chain",
+        "cultural_context": "comfort"
+      }
+    },
+    {
+      "id": "joes-pizza-nyc",
+      "input": {
+        "id": "synthetic_joes_1",
+        "displayName": { "text": "Joe's Pizza" },
+        "types": ["pizza_restaurant", "italian_restaurant", "restaurant"],
+        "primaryType": "pizza_restaurant",
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "userRatingCount": 8000
+      },
+      "expected": {
+        "cuisine_type": "italian",
+        "cuisine_region": "american",
+        "cuisine_subregion": "pizza_nyc",
+        "format_class": "quick_service",
+        "chain_type": "independent"
+      }
+    },
+    {
+      "id": "han-dynasty-szechuan",
+      "notes": "Famous Sichuan spot, but name has no szechuan keyword — current rules will only return cuisine='chinese'. Known fail for LLM fallback to win.",
+      "input": {
+        "id": "synthetic_handynasty_1",
+        "displayName": { "text": "Han Dynasty" },
+        "types": ["chinese_restaurant", "restaurant"],
+        "primaryType": "chinese_restaurant",
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "userRatingCount": 2200
+      },
+      "expected": {
+        "cuisine_type": "chinese",
+        "cuisine_region": "east_asian",
+        "cuisine_subregion": "chinese_szechuan",
+        "flavor_tags_include": ["spicy"]
+      }
+    },
+    {
+      "id": "pho-hoa-vietnamese",
+      "input": {
+        "id": "synthetic_phohoa_1",
+        "displayName": { "text": "Pho Hoa" },
+        "types": ["vietnamese_restaurant", "restaurant"],
+        "primaryType": "vietnamese_restaurant",
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "userRatingCount": 900
+      },
+      "expected": {
+        "cuisine_type": "vietnamese",
+        "cuisine_region": "east_asian",
+        "cuisine_subregion": "vietnamese_pho",
+        "format_class": "quick_service"
+      }
+    },
+    {
+      "id": "nashville-hot-chicken",
+      "input": {
+        "id": "synthetic_hattie_1",
+        "displayName": { "text": "Hattie B's Nashville Hot Chicken" },
+        "types": ["american_restaurant", "restaurant"],
+        "primaryType": "american_restaurant",
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "userRatingCount": 3500
+      },
+      "expected": {
+        "cuisine_type": "american",
+        "cuisine_region": "southern_us",
+        "cuisine_subregion": "nashville_hot",
+        "flavor_tags_include": ["spicy"]
+      }
+    },
+    {
+      "id": "memphis-bbq",
+      "input": {
+        "id": "synthetic_memphisbbq_1",
+        "displayName": { "text": "Central BBQ — Memphis Ribs & Smokehouse" },
+        "types": ["barbecue_restaurant", "american_restaurant", "restaurant"],
+        "primaryType": "barbecue_restaurant",
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "userRatingCount": 4200
+      },
+      "expected": {
+        "cuisine_type": "bbq",
+        "cuisine_region": "southern_us",
+        "cuisine_subregion": "memphis_bbq",
+        "flavor_tags_include": ["smoky", "char"]
+      }
+    },
+    {
+      "id": "ramen-shop",
+      "input": {
+        "id": "synthetic_ramen_1",
+        "displayName": { "text": "Ippudo" },
+        "types": ["ramen_restaurant", "japanese_restaurant", "restaurant"],
+        "primaryType": "ramen_restaurant",
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "userRatingCount": 5500
+      },
+      "expected": {
+        "cuisine_type": "japanese",
+        "cuisine_region": "east_asian",
+        "cuisine_subregion": "japanese_ramen",
+        "flavor_tags_include": ["umami", "savory"]
+      }
+    },
+    {
+      "id": "sushi-omakase-fine",
+      "input": {
+        "id": "synthetic_sushi_1",
+        "displayName": { "text": "Sushi Nakazawa" },
+        "types": ["sushi_restaurant", "japanese_restaurant", "restaurant"],
+        "primaryType": "sushi_restaurant",
+        "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+        "userRatingCount": 600
+      },
+      "expected": {
+        "cuisine_type": "japanese",
+        "cuisine_subregion": "japanese_sushi",
+        "format_class": "fine_dining",
+        "cultural_context": "modernist",
+        "occasion_tags_include": ["date_night"]
+      }
+    },
+    {
+      "id": "korean-bbq",
+      "input": {
+        "id": "synthetic_kbbq_1",
+        "displayName": { "text": "Cote Korean BBQ" },
+        "types": ["korean_restaurant", "barbecue_restaurant", "restaurant"],
+        "primaryType": "korean_restaurant",
+        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "userRatingCount": 2800
+      },
+      "expected": {
+        "cuisine_type": "korean",
+        "cuisine_subregion": "korean_bbq",
+        "occasion_tags_include": ["date_night", "group_dinner"]
+      }
+    },
+    {
+      "id": "halal-cart-nyc",
+      "input": {
+        "id": "synthetic_halal_1",
+        "displayName": { "text": "The Halal Guys" },
+        "types": ["middle_eastern_restaurant", "meal_takeaway", "restaurant"],
+        "primaryType": "meal_takeaway",
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "userRatingCount": 9000
+      },
+      "expected": {
+        "cuisine_type": "middle-eastern",
+        "cuisine_subregion": "halal_cart",
+        "format_class": "quick_service"
+      }
+    },
+    {
+      "id": "wine-bar-no-priceLevel",
+      "input": {
+        "id": "synthetic_winebar_1",
+        "displayName": { "text": "Compagnie des Vins Surnaturels" },
+        "types": ["wine_bar", "bar", "restaurant"],
+        "primaryType": "wine_bar",
+        "userRatingCount": 400
+      },
+      "expected": {
+        "cuisine_type": "bar",
+        "format_class": "bar",
+        "occasion_tags_include": ["late_night"]
+      }
+    },
+    {
+      "id": "indie-italian-no-types",
+      "notes": "Common bad-data case: Google only returns `restaurant` as a type. Current rules will not infer cuisine at all — known limitation.",
+      "input": {
+        "id": "synthetic_indie_italian_1",
+        "displayName": { "text": "Via Carota" },
+        "types": ["restaurant"],
+        "primaryType": "restaurant",
+        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "userRatingCount": 1800
+      },
+      "expected": {
+        "cuisine_type": "italian",
+        "cuisine_region": "italian",
+        "format_class": "casual_dining"
+      }
+    },
+    {
+      "id": "south-indian-not-named",
+      "notes": "Real south-Indian spot. Name has no 'dosa' or 'south indian' keyword, so current rules misclassify as indian_north. Known fail.",
+      "input": {
+        "id": "synthetic_southindian_1",
+        "displayName": { "text": "Saravanaa Bhavan" },
+        "types": ["indian_restaurant", "vegetarian_restaurant", "restaurant"],
+        "primaryType": "indian_restaurant",
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "userRatingCount": 2500
+      },
+      "expected": {
+        "cuisine_type": "indian",
+        "cuisine_subregion": "indian_south",
+        "flavor_tags_include": ["spicy"]
+      }
+    },
+    {
+      "id": "taqueria",
+      "input": {
+        "id": "synthetic_taqueria_1",
+        "displayName": { "text": "Taqueria El Buen Sabor" },
+        "types": ["mexican_restaurant", "restaurant"],
+        "primaryType": "mexican_restaurant",
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "userRatingCount": 700
+      },
+      "expected": {
+        "cuisine_type": "mexican",
+        "cuisine_subregion": "mexican_taqueria",
+        "cuisine_region": "latin_american",
+        "format_class": "quick_service"
+      }
+    },
+    {
+      "id": "ethiopian",
+      "input": {
+        "id": "synthetic_ethiopian_1",
+        "displayName": { "text": "Meskerem Ethiopian Restaurant" },
+        "types": ["restaurant"],
+        "primaryType": "restaurant",
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "userRatingCount": 450
+      },
+      "expected": {
+        "cuisine_subregion": "ethiopian",
+        "cuisine_region": "african"
+      }
+    },
+    {
+      "id": "chipotle-quick-service",
+      "input": {
+        "id": "synthetic_chipotle_1",
+        "displayName": { "text": "Chipotle Mexican Grill" },
+        "types": ["mexican_restaurant", "fast_food_restaurant", "restaurant"],
+        "primaryType": "fast_food_restaurant",
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "userRatingCount": 1500
+      },
+      "expected": {
+        "cuisine_type": "mexican",
+        "format_class": "quick_service",
+        "chain_name": "Chipotle",
+        "chain_type": "national_chain",
+        "cultural_context": "comfort"
+      }
+    },
+    {
+      "id": "fine-dining-no-cuisine-hint",
+      "notes": "Tasting-menu place with `restaurant` as only type. Current rules infer fine_dining from price but nothing else. Known fail for review-mining / LLM to win.",
+      "input": {
+        "id": "synthetic_finedining_1",
+        "displayName": { "text": "Atomix" },
+        "types": ["restaurant"],
+        "primaryType": "restaurant",
+        "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+        "userRatingCount": 800
+      },
+      "expected": {
+        "cuisine_type": "korean",
+        "format_class": "fine_dining",
+        "cultural_context": "modernist"
+      }
+    },
+    {
+      "id": "brunch-spot",
+      "input": {
+        "id": "synthetic_brunch_1",
+        "displayName": { "text": "Clinton Street Baking Company" },
+        "types": ["brunch_restaurant", "breakfast_restaurant", "american_restaurant", "restaurant"],
+        "primaryType": "brunch_restaurant",
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "userRatingCount": 6500
+      },
+      "expected": {
+        "cuisine_type": "brunch",
+        "occasion_tags_include": ["brunch", "weekend_anchor"]
+      }
+    },
+    {
+      "id": "small-hidden-spot",
+      "input": {
+        "id": "synthetic_hidden_1",
+        "displayName": { "text": "Lucia's Pierogi House" },
+        "types": ["restaurant"],
+        "primaryType": "restaurant",
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "userRatingCount": 30
+      },
+      "expected": {
+        "cultural_context": "hidden"
+      }
+    },
+    {
+      "id": "trending-mega-popular",
+      "input": {
+        "id": "synthetic_trending_1",
+        "displayName": { "text": "Lucali" },
+        "types": ["pizza_restaurant", "italian_restaurant", "restaurant"],
+        "primaryType": "pizza_restaurant",
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "userRatingCount": 8500
+      },
+      "expected": {
+        "cuisine_type": "italian",
+        "cuisine_subregion": "italian_pizzeria",
+        "cultural_context": "trending"
+      }
+    },
+    {
+      "id": "review-mining-spicy-flavor",
+      "notes": "Reviews mention spice level even though cuisine doesn't auto-trigger spicy. Review mining should add the tag.",
+      "input": {
+        "id": "synthetic_mining_1",
+        "displayName": { "text": "Spicy Village" },
+        "types": ["chinese_restaurant", "restaurant"],
+        "primaryType": "chinese_restaurant",
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "userRatingCount": 1000,
+        "reviews": [
+          { "text": { "text": "The hand-pulled noodles are amazing and the spice level here is no joke — my tongue went numbing from the szechuan peppercorn." } },
+          { "text": { "text": "Cozy spot, came on a date night, very romantic." } }
+        ]
+      },
+      "expected": {
+        "cuisine_type": "chinese",
+        "flavor_tags_include": ["spicy"],
+        "occasion_tags_include": ["date_night"]
+      }
+    },
+    {
+      "id": "review-mining-date-night",
+      "notes": "Reviews suggest a date-night vibe at a moderate-price place that wouldn't otherwise get date_night.",
+      "input": {
+        "id": "synthetic_mining_2",
+        "displayName": { "text": "Rosemary's" },
+        "types": ["italian_restaurant", "restaurant"],
+        "primaryType": "italian_restaurant",
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "userRatingCount": 2200,
+        "reviews": [
+          { "text": { "text": "Brought my partner here for our anniversary — candle-lit, intimate, the burrata was decadent and creamy." } },
+          { "text": { "text": "Great spot for a romantic dinner. Pasta was buttery and rich." } }
+        ]
+      },
+      "expected": {
+        "cuisine_type": "italian",
+        "occasion_tags_include": ["date_night"],
+        "flavor_tags_include": ["rich"]
+      }
+    },
+    {
+      "id": "eligibility-mcdonalds",
+      "notes": "Classic fast-food national chain — should never appear in discovery.",
+      "input": {
+        "id": "synthetic_mcdonalds_1",
+        "displayName": { "text": "McDonald's" },
+        "types": ["fast_food_restaurant", "hamburger_restaurant", "restaurant"],
+        "primaryType": "fast_food_restaurant",
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "userRatingCount": 800
+      },
+      "expected": {
+        "chain_type": "national_chain",
+        "recommendation_eligibility": 0,
+        "ineligibility_reason": "national_chain"
+      }
+    },
+    {
+      "id": "eligibility-starbucks-not-discovery",
+      "notes": "Even though it's a café (not quick-service), Starbucks isn't food discovery.",
+      "input": {
+        "id": "synthetic_starbucks_2",
+        "displayName": { "text": "Starbucks" },
+        "types": ["coffee_shop", "cafe", "restaurant"],
+        "primaryType": "coffee_shop",
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "userRatingCount": 1500
+      },
+      "expected": {
+        "recommendation_eligibility": 0,
+        "ineligibility_reason": "national_chain"
+      }
+    },
+    {
+      "id": "eligibility-airport-restaurant",
+      "notes": "Restaurant inside JFK terminal — gated, can't recommend.",
+      "input": {
+        "id": "synthetic_airport_1",
+        "displayName": { "text": "Shake Shack JFK Terminal 4" },
+        "types": ["hamburger_restaurant", "restaurant"],
+        "primaryType": "hamburger_restaurant",
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "userRatingCount": 600,
+        "formattedAddress": "Terminal 4, John F Kennedy International Airport, Queens, NY 11430"
+      },
+      "expected": {
+        "recommendation_eligibility": 0,
+        "ineligibility_reason": "airport"
+      }
+    },
+    {
+      "id": "eligibility-airport-lounge",
+      "input": {
+        "id": "synthetic_lounge_1",
+        "displayName": { "text": "Centurion Lounge" },
+        "types": ["bar", "restaurant"],
+        "primaryType": "bar",
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "userRatingCount": 200,
+        "formattedAddress": "Terminal B, LaGuardia Airport, Queens, NY"
+      },
+      "expected": {
+        "recommendation_eligibility": 0,
+        "ineligibility_reason": "airport"
+      }
+    },
+    {
+      "id": "eligibility-hotel-generic",
+      "notes": "Generic hotel restaurant with no specific cuisine identified — likely 'Marriott Restaurant' style.",
+      "input": {
+        "id": "synthetic_hotel_1",
+        "displayName": { "text": "The Restaurant at Marriott Marquis" },
+        "types": ["lodging", "restaurant"],
+        "primaryType": "lodging",
+        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "userRatingCount": 300
+      },
+      "expected": {
+        "recommendation_eligibility": 0,
+        "ineligibility_reason": "hotel"
+      }
+    },
+    {
+      "id": "eligibility-regional-chain-downrank",
+      "notes": "A regional chain (3+ locations in DB) should be downranked but not excluded.",
+      "input": {
+        "id": "synthetic_regional_1",
+        "displayName": { "text": "Honest Tom's Tacos" },
+        "types": ["mexican_restaurant", "restaurant"],
+        "primaryType": "mexican_restaurant",
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "userRatingCount": 700
+      },
+      "expected": {
+        "recommendation_eligibility": 1
+      }
+    },
+    {
+      "id": "eligibility-destination-hotel-restaurant",
+      "notes": "Le Coucou-style — hotel-attached but its own brand + confident cuisine. Should be eligible (primaryType is restaurant, cuisine is set, even though lodging is in types).",
+      "input": {
+        "id": "synthetic_destination_hotel_1",
+        "displayName": { "text": "Le Coucou" },
+        "types": ["french_restaurant", "restaurant", "lodging"],
+        "primaryType": "french_restaurant",
+        "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+        "userRatingCount": 1800,
+        "formattedAddress": "138 Lafayette St, New York, NY 10013"
+      },
+      "expected": {
+        "cuisine_type": "french",
+        "recommendation_eligibility": 1,
+        "ineligibility_reason": null
+      }
+    },
+    {
+      "id": "eligibility-bar-named-lounge-not-airport",
+      "notes": "Soho cocktail bar named '... Lounge'. Should be eligible — the lounge-exclusion only fires when also in an airport/members context.",
+      "input": {
+        "id": "synthetic_soho_lounge_1",
+        "displayName": { "text": "Soho Lounge" },
+        "types": ["bar", "restaurant"],
+        "primaryType": "bar",
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "userRatingCount": 450,
+        "formattedAddress": "120 Spring St, New York, NY 10012"
+      },
+      "expected": {
+        "recommendation_eligibility": 1,
+        "ineligibility_reason": null
+      }
+    },
+    {
+      "id": "eligibility-independent-passes",
+      "notes": "Independent restaurant — full eligibility.",
+      "input": {
+        "id": "synthetic_eligible_indie",
+        "displayName": { "text": "Vetri Cucina" },
+        "types": ["italian_restaurant", "restaurant"],
+        "primaryType": "italian_restaurant",
+        "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+        "userRatingCount": 1200
+      },
+      "expected": {
+        "recommendation_eligibility": 1,
+        "ineligibility_reason": null
+      }
+    },
+    {
+      "id": "review-mining-brunch-anchor",
+      "notes": "Reviews establish a weekend brunch anchor even though Google types only say restaurant.",
+      "input": {
+        "id": "synthetic_mining_3",
+        "displayName": { "text": "Buvette" },
+        "types": ["restaurant"],
+        "primaryType": "restaurant",
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "userRatingCount": 3000,
+        "reviews": [
+          { "text": { "text": "Saturday morning institution — always packed weekends. Bottomless mimosa flight is a must." } },
+          { "text": { "text": "Best brunch spot in the West Village. Fresh and light." } }
+        ]
+      },
+      "expected": {
+        "occasion_tags_include": ["brunch", "weekend_anchor"],
+        "flavor_tags_include": ["fresh", "light"]
+      }
+    }
+  ]
+}

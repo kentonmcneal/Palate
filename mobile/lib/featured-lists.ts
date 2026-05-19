@@ -145,7 +145,12 @@ export async function buildFeaturedLists(opts: {
   for (const row of rows as any[]) {
     const meta = META_BY_SLUG.get(row.category_slug);
     if (!meta) continue;
-    const restaurants = (row.restaurants ?? []) as RestaurantInput[];
+    // Safety-net filter: hide ineligible places (chains, airports, hotels)
+    // even if the nightly cron hasn't rebuilt this cache row yet. Rows
+    // without the field default to eligible — older cache entries pass
+    // through until the cron refreshes them.
+    const restaurants = ((row.restaurants ?? []) as RestaurantInput[])
+      .filter((r) => ((r as { recommendation_eligibility?: number | null }).recommendation_eligibility ?? 1) > 0);
     const visited = restaurants.filter((r) => visitedIds.has(r.google_place_id)).length;
     lists.push({
       slug: row.category_slug,

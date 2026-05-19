@@ -206,8 +206,8 @@ export async function saveVisit(opts: {
 async function emitVisitFeedEvent(userId: string, restaurantId: string, googlePlaceId: string) {
   try {
     const { data: rest } = await supabase
-      .from("restaurants")
-      .select("name, cuisine_type, neighborhood")
+      .from("restaurants_resolved")
+      .select("name, cuisine_type:resolved_cuisine_type, neighborhood")
       .eq("id", restaurantId)
       .maybeSingle();
     if (!rest) return;

@@ -19,6 +19,7 @@ import {
   myRatingsForRestaurant, topItemsForRestaurant,
   type MyItemRating, type MenuItemSummary,
 } from "../../lib/menu-items";
+import { loadEditorialBlurb } from "../../lib/restaurant-blurb";
 
 // ============================================================================
 // Restaurant detail — your full history at one place + match score + actions.
@@ -39,6 +40,26 @@ type RestaurantRow = {
   price_level: number | null;
   rating: number | null;
   user_rating_count: number | null;
+  recommendation_eligibility: number | null;
+  ineligibility_reason: string | null;
+  // Per-field 0..1 confidence from the rule engine. JSONB on the DB side.
+  classification_confidence?: {
+    cuisine_type?: number;
+    cuisine_subregion?: number;
+    cuisine_region?: number;
+    format_class?: number;
+    chain_type?: number;
+    cultural_context?: number;
+  } | null;
+  // Raw algorithmic values — present when reading the `restaurants_resolved`
+  // view. We overlay them with resolved_* below so `cuisine_type` reflects
+  // any user override; the `_raw` versions stay so we can show a "user-
+  // corrected" badge by comparing.
+  resolved_cuisine_type?: string | null;
+  resolved_cuisine_subregion?: string | null;
+  resolved_cuisine_region?: string | null;
+  resolved_format_class?: string | null;
+  resolved_chain_type?: string | null;
 };
 
 type VisitRow = {
@@ -63,13 +84,16 @@ export default function RestaurantDetailScreen() {
   const [myItems, setMyItems] = useState<MyItemRating[]>([]);
   const [topItems, setTopItems] = useState<MenuItemSummary[]>([]);
   const [confettiKey, setConfettiKey] = useState(0);
+  const [cuisineOverridden, setCuisineOverridden] = useState(false);
+  const [blurb, setBlurb] = useState<string | null>(null);
+  const [blurbLoading, setBlurbLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       const { data: rest, error: rErr } = await supabase
-        .from("restaurants")
+        .from("restaurants_resolved")
         .select("*")
         .eq("google_place_id", place_id)
         .maybeSingle();
@@ -77,8 +101,32 @@ export default function RestaurantDetailScreen() {
         setLoading(false);
         return;
       }
-      const r = rest as RestaurantRow;
+      // Overlay so consumers reading `.cuisine_type` etc. see the resolved
+      // (override-applied) value. The raw `resolved_*` keys stay on the row
+      // so the badge logic can detect "this was user-corrected" by diff.
+      const raw = rest as RestaurantRow;
+      const r: RestaurantRow = {
+        ...raw,
+        cuisine_type:      raw.resolved_cuisine_type      ?? raw.cuisine_type,
+        cuisine_subregion: raw.resolved_cuisine_subregion ?? raw.cuisine_subregion,
+        cuisine_region:    raw.resolved_cuisine_region    ?? raw.cuisine_region,
+        format_class:      raw.resolved_format_class      ?? raw.format_class,
+      };
       setRestaurant(r);
+      // Override exists when the resolved value diverges from the raw
+      // algorithmic value. Drives the "✓ Corrected" badge + revert action.
+      setCuisineOverridden(
+        raw.resolved_cuisine_type != null
+        && raw.resolved_cuisine_type !== raw.cuisine_type,
+      );
+      // Editorial blurb fires in the background — null is fine, the slot
+      // hides itself when there's no LLM key or no review snippets yet. The
+      // loading flag drives a skeleton so cold-cache fetches don't look broken.
+      setBlurbLoading(true);
+      void loadEditorialBlurb(place_id)
+        .then((b) => { setBlurb(b); })
+        .catch(() => setBlurb(null))
+        .finally(() => setBlurbLoading(false));
 
       const [visitsRes, vector, wishRes, mine, top] = await Promise.all([
         user ? supabase
@@ -126,6 +174,84 @@ export default function RestaurantDetailScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  // Common cuisines for the override picker. Intentionally short — covers
+  // ~80% of corrections; users with a less-common cuisine can submit again
+  // later once we add a free-text picker.
+  const CUISINE_CHOICES = [
+    "italian", "chinese", "japanese", "korean",
+    "thai", "mexican", "indian", "mediterranean",
+  ];
+
+  function reportWrongCuisine() {
+    if (!restaurant) return;
+    Alert.alert(
+      "What cuisine is it?",
+      "We'll update this place for everyone.",
+      [
+        ...CUISINE_CHOICES.map((c) => ({
+          text: cap(c),
+          onPress: () => submitCuisineOverride(c),
+        })),
+        { text: "Cancel", style: "cancel" as const },
+      ],
+    );
+  }
+
+  async function submitCuisineOverride(cuisine: string) {
+    if (!restaurant) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      Alert.alert("Sign in required", "Log in to submit a correction.");
+      return;
+    }
+    const { error } = await supabase
+      .from("restaurant_overrides")
+      .upsert(
+        {
+          restaurant_id: restaurant.id,
+          user_id: user.id,
+          field: "cuisine_type",
+          value: cuisine,
+        },
+        { onConflict: "restaurant_id,field" },
+      );
+    if (error) {
+      Alert.alert("Couldn't update cuisine", humanizeSupabaseError(error));
+      return;
+    }
+    // Optimistic local update so the screen reflects the change immediately.
+    setRestaurant({ ...restaurant, cuisine_type: cuisine });
+    setCuisineOverridden(true);
+    void triggerHapticSuccess();
+  }
+
+  function revertCuisineOverride() {
+    if (!restaurant) return;
+    Alert.alert(
+      "Revert cuisine?",
+      "This will restore the original algorithmic guess for this place.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Revert",
+          style: "destructive",
+          onPress: async () => {
+            const { error } = await supabase
+              .from("restaurant_overrides")
+              .delete()
+              .eq("restaurant_id", restaurant.id)
+              .eq("field", "cuisine_type");
+            if (error) {
+              Alert.alert("Couldn't revert", humanizeSupabaseError(error));
+              return;
+            }
+            await load();
+          },
+        },
+      ],
+    );
+  }
+
   async function handleSave() {
     if (!restaurant || alreadySaved || saved || saving) return;
     setSaving(true);
@@ -163,6 +289,15 @@ export default function RestaurantDetailScreen() {
 
   const r = restaurant;
   const showSaved = saved || alreadySaved;
+  // Mute the cuisine label when the classifier was uncertain AND no user
+  // override has confirmed it. Threshold chosen empirically: the eval shows
+  // values above 0.5 are usually right, below 0.5 are coin-flips.
+  const cuisineConf = r.classification_confidence?.cuisine_type;
+  const lowConfCuisine =
+    r.cuisine_type != null
+    && !cuisineOverridden
+    && cuisineConf != null
+    && cuisineConf < 0.5;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -186,12 +321,42 @@ export default function RestaurantDetailScreen() {
             )}
           </View>
           <Text style={styles.heroSub}>
-            {[r.cuisine_type ? cap(r.cuisine_type) : null, r.neighborhood, r.address].filter(Boolean).join(" · ")}
+            {r.cuisine_type ? (
+              <Text style={lowConfCuisine ? styles.heroCuisineMuted : undefined}>
+                {cap(r.cuisine_type)}{lowConfCuisine ? " (best guess)" : ""}
+              </Text>
+            ) : null}
+            {r.cuisine_type && (r.neighborhood || r.address) ? " · " : ""}
+            {[r.neighborhood, r.address].filter(Boolean).join(" · ")}
           </Text>
+          {cuisineOverridden ? (
+            <View style={styles.correctedRow}>
+              <View style={styles.correctedBadge}>
+                <Text style={styles.correctedBadgeText}>✓ Corrected by users</Text>
+              </View>
+              <Pressable onPress={revertCuisineOverride} hitSlop={6}>
+                <Text style={styles.cuisineCorrect}>Revert</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable onPress={reportWrongCuisine} hitSlop={6}>
+              <Text style={styles.cuisineCorrect}>
+                {r.cuisine_type ? "Wrong cuisine? Tap to fix" : "Add cuisine"}
+              </Text>
+            </Pressable>
+          )}
           {r.rating != null && (
             <Text style={styles.heroRating}>
               ★ {r.rating.toFixed(1)}{r.user_rating_count ? ` · ${r.user_rating_count.toLocaleString()} reviews on Google` : ""}
             </Text>
+          )}
+          {blurb ? (
+            <Text style={styles.heroBlurb}>{blurb}</Text>
+          ) : blurbLoading ? (
+            <Text style={styles.heroBlurbLoading}>Reading reviews…</Text>
+          ) : null}
+          {ineligibilityHint(r) && (
+            <Text style={styles.ineligibleHint}>{ineligibilityHint(r)}</Text>
           )}
           {matchReasons.length > 0 && (
             <View style={styles.reasonRow}>
@@ -216,6 +381,13 @@ export default function RestaurantDetailScreen() {
             <Text style={styles.actionGhostText}>Google Maps</Text>
           </Pressable>
         </View>
+
+        <Pressable
+          onPress={() => router.push(`/similar/${r.google_place_id}` as any)}
+          style={({ pressed }) => [styles.similarBtn, pressed && { opacity: 0.85 }]}
+        >
+          <Text style={styles.similarBtnText}>Find more like {r.name}</Text>
+        </Pressable>
 
         <Spacer size={24} />
 
@@ -297,6 +469,39 @@ export default function RestaurantDetailScreen() {
   );
 }
 
+// Translate raw Supabase/PostgREST errors into something a non-technical
+// user can act on. The default just returns the error message — we
+// override only for codes/messages we've actually seen surface in the app.
+function humanizeSupabaseError(err: { message?: string; code?: string } | null | undefined): string {
+  if (!err) return "Something went wrong. Try again.";
+  const msg = (err.message ?? "").toLowerCase();
+  if (err.code === "42501" || msg.includes("permission") || msg.includes("rls")) {
+    return "You don't have permission to do that.";
+  }
+  if (msg.includes("network") || msg.includes("failed to fetch") || msg.includes("timeout")) {
+    return "Couldn't reach Palate. Check your connection and try again.";
+  }
+  if (msg.includes("duplicate") || msg.includes("conflict")) {
+    return "This correction already exists. Refresh and try again.";
+  }
+  return err.message ?? "Something went wrong. Try again.";
+}
+
+// Maps the classifier's machine reason codes to a single-line user-facing
+// note. Returns null when the place IS eligible for discovery — caller
+// hides the slot in that case.
+function ineligibilityHint(r: { recommendation_eligibility?: number | null; ineligibility_reason?: string | null }): string | null {
+  if (r.recommendation_eligibility == null || r.recommendation_eligibility > 0) return null;
+  switch (r.ineligibility_reason) {
+    case "airport":         return "Inside an airport — not surfaced in discovery.";
+    case "lounge_gated":    return "Members-only / airport lounge — not surfaced in discovery.";
+    case "hotel":
+    case "hotel_generic":   return "Hotel restaurant — not surfaced in discovery.";
+    case "national_chain":  return "National chain — not surfaced in discovery.";
+    default:                return "Not surfaced in discovery.";
+  }
+}
+
 function cap(s: string): string {
   return s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, " ") : s;
 }
@@ -344,7 +549,34 @@ const styles = StyleSheet.create({
     flex: 1, color: "#fff", fontSize: 28, fontWeight: "800", letterSpacing: -0.6, lineHeight: 32,
   },
   heroSub: { color: "rgba(255,255,255,0.78)", fontSize: 14, marginTop: 8, lineHeight: 20 },
+  heroCuisineMuted: {
+    color: "rgba(255,255,255,0.5)", fontStyle: "italic",
+  },
+  cuisineCorrect: {
+    color: "rgba(255,255,255,0.55)", fontSize: 12, marginTop: 6,
+    textDecorationLine: "underline",
+  },
+  correctedRow: {
+    flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8,
+  },
+  correctedBadge: {
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.18)",
+  },
+  correctedBadgeText: { color: "#fff", fontSize: 11, fontWeight: "700" },
   heroRating: { color: "rgba(255,255,255,0.6)", fontSize: 12, marginTop: 6, fontWeight: "600" },
+  heroBlurb: {
+    color: "rgba(255,255,255,0.92)", fontSize: 14, marginTop: 12,
+    lineHeight: 20, fontStyle: "italic",
+  },
+  heroBlurbLoading: {
+    color: "rgba(255,255,255,0.4)", fontSize: 13, marginTop: 12,
+    fontStyle: "italic",
+  },
+  ineligibleHint: {
+    color: "rgba(255,255,255,0.5)", fontSize: 11, marginTop: 10,
+    fontWeight: "500",
+  },
   matchBadge: {
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
     backgroundColor: colors.red,
@@ -367,6 +599,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
   },
   actionGhostText: { fontSize: 13, fontWeight: "700", color: colors.ink },
+  similarBtn: {
+    marginTop: 12,
+    backgroundColor: colors.ink,
+    borderRadius: 999,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  similarBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
 
   visitCount: { ...type.subtitle, marginBottom: 10 },
   visitRow: {

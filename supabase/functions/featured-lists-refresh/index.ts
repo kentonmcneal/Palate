@@ -18,6 +18,10 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import {
+  type GooglePlace as ClassifierPlace,
+  googleToRestaurantRow,
+} from "../_shared/classifier.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -146,10 +150,32 @@ async function refreshCity(
 
       // Per-category time-of-day filter — late-night actually has to be open
       // late, early-morning has to be open early, etc.
-      const places = filterByCategorySlug(rawPlaces, cat.slug);
-      if (places.length === 0) continue;
+      const hoursFiltered = filterByCategorySlug(rawPlaces, cat.slug);
+      if (hoursFiltered.length === 0) continue;
 
-      const ranked = rankAndTrim(places, lat, lng).slice(0, TOP_N);
+      // Classify each candidate through the shared classifier, then drop
+      // ineligible ones (national chains, airports, hotels, lounges) at
+      // cache-write time. This means every featured list contains
+      // genuinely discoverable places — no need to filter again on read.
+      // We also upsert each classified row into `restaurants` so future
+      // lookups (similar_restaurants, detail screens) reuse the same
+      // classification rather than re-deriving from Google.
+      const classified = hoursFiltered.map((p) =>
+        googleToRestaurantRow(p as unknown as ClassifierPlace),
+      );
+      const eligibleRows = classified.filter(
+        (row) => (row.recommendation_eligibility ?? 1) > 0,
+      );
+      if (eligibleRows.length === 0) continue;
+
+      // Side-effect: keep `restaurants` warm with the full classified row.
+      // Stripping google_raw to keep upsert payload reasonable.
+      const restaurantRows = eligibleRows.map(({ google_raw: _r, ...rest }) => rest);
+      void admin.from("restaurants").upsert(restaurantRows, {
+        onConflict: "google_place_id",
+      });
+
+      const ranked = rankAndTrimClassified(eligibleRows, lat, lng).slice(0, TOP_N);
 
       await admin
         .from("featured_lists_cache")
@@ -296,57 +322,45 @@ function filterByCategorySlug(places: GooglePlace[], slug: string): GooglePlace[
 }
 
 // ----------------------------------------------------------------------------
-// Ranking + serialization
+// Ranking — takes already-classified rows (from googleToRestaurantRow) and
+// projects them into the trimmed shape the mobile cache reader expects.
+// Composite: 0.4 quality + 0.4 popularity + 0.2 proximity to city center.
 // ----------------------------------------------------------------------------
-function rankAndTrim(places: GooglePlace[], cityLat: number, cityLng: number) {
-  // Composite: 0.4 quality + 0.4 popularity + 0.2 proximity to city center.
+type ClassifiedRow = ReturnType<typeof googleToRestaurantRow>;
+
+function rankAndTrimClassified(rows: ClassifiedRow[], cityLat: number, cityLng: number) {
   const maxLogReviews = Math.max(
-    ...places.map((p) => Math.log10(1 + (p.userRatingCount ?? 0))),
+    ...rows.map((r) => Math.log10(1 + (r.user_rating_count ?? 0))),
     1,
   );
-  return places
-    .map((p) => {
-      const popularity = Math.log10(1 + (p.userRatingCount ?? 0)) / maxLogReviews;
-      const rating = p.rating ?? 0;
+  return rows
+    .map((r) => {
+      const popularity = Math.log10(1 + (r.user_rating_count ?? 0)) / maxLogReviews;
+      const rating = r.rating ?? 0;
       const quality = rating >= 3.0 ? Math.min(1, (rating - 3.0) / 2.0) : 0;
       let prox = 1;
-      if (p.location) {
-        const km = haversineKm(cityLat, cityLng, p.location.latitude, p.location.longitude);
+      if (r.latitude != null && r.longitude != null) {
+        const km = haversineKm(cityLat, cityLng, r.latitude, r.longitude);
         prox = Math.max(0, 1 - km / 15);
       }
       const composite = 0.4 * quality + 0.4 * popularity + 0.2 * prox;
-      return { p, composite };
+      return { r, composite };
     })
     .sort((a, b) => b.composite - a.composite)
-    .map(({ p }) => ({
-      google_place_id: p.id,
-      name: p.displayName?.text ?? "",
-      cuisine_type: p.primaryType ?? null,
-      neighborhood: shortHood(p.shortFormattedAddress, p.formattedAddress),
-      price_level: googlePriceLevelToInt(p.priceLevel),
-      rating: p.rating ?? null,
-      user_rating_count: p.userRatingCount ?? null,
-      latitude: p.location?.latitude ?? null,
-      longitude: p.location?.longitude ?? null,
+    .map(({ r }) => ({
+      google_place_id: r.google_place_id,
+      name: r.name,
+      cuisine_type: r.cuisine_type,
+      neighborhood: r.neighborhood,
+      price_level: r.price_level,
+      rating: r.rating,
+      user_rating_count: r.user_rating_count,
+      latitude: r.latitude,
+      longitude: r.longitude,
+      // Carried into the cache so the mobile safety-net filter no-ops
+      // (cache rows are pre-filtered, but the field stays accurate).
+      recommendation_eligibility: r.recommendation_eligibility,
     }));
-}
-
-function shortHood(short?: string, full?: string): string | null {
-  // Best-effort: extract neighborhood / first locality from the address
-  const src = short || full;
-  if (!src) return null;
-  const parts = src.split(",").map((s) => s.trim());
-  return parts[0] || null;
-}
-
-function googlePriceLevelToInt(g?: string): number | null {
-  // Google v1 returns enum strings; map to the 1..4 ints the app expects.
-  if (!g) return null;
-  if (g === "PRICE_LEVEL_FREE" || g === "PRICE_LEVEL_INEXPENSIVE") return 1;
-  if (g === "PRICE_LEVEL_MODERATE") return 2;
-  if (g === "PRICE_LEVEL_EXPENSIVE") return 3;
-  if (g === "PRICE_LEVEL_VERY_EXPENSIVE") return 4;
-  return null;
 }
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {

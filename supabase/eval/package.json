@@ -1,0 +1,15 @@
+{
+  "name": "palate-classifier-eval",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "eval": "tsx run.ts",
+    "eval:llm": "tsx run.ts --with-llm"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}

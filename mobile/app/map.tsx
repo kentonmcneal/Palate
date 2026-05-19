@@ -69,6 +69,9 @@ export default function FullscreenMap() {
         for (const p of nearby!) {
           if (p.latitude == null || p.longitude == null) continue;
           if (next.has(p.google_place_id)) continue;
+          // Skip ineligible places on the discovery map (McDonald's, airports,
+          // hotels, lounges). Visit-logging surfaces don't apply this filter.
+          if ((p.recommendation_eligibility ?? 1) === 0) continue;
           const compat = getCompatibility(graph, {
             google_place_id: p.google_place_id,
             name: p.name,

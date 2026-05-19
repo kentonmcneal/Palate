@@ -17,6 +17,9 @@ export type Restaurant = {
   rating?: number | null;
   user_rating_count?: number | null;
   price_level?: number | null;
+  /** 0 = never recommend (chains/airports/hotels), 1 = full discovery. */
+  recommendation_eligibility?: number | null;
+  ineligibility_reason?: string | null;
 };
 
 /** Calls the places-proxy edge function with a typed body. */
