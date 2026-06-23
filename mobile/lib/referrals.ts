@@ -19,7 +19,8 @@ export async function generateInviteLink(): Promise<string> {
 
 export function inviteShareMessage(link: string): string {
   return [
-    "I've been using Palate — it tells you what your eating habits actually say about you. Patterns, not ratings.",
+    "I've been tracking everywhere I eat on Palate — it figures out your taste identity from your actual habits, not star ratings.",
+    "Add me and we can see how our palates compare 👀",
     "",
     `Try it: ${link}`,
   ].join("\n");

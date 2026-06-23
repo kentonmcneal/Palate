@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Modal, View, Text, StyleSheet, Pressable, Animated, Easing } from "react-native";
+import { Modal, View, Text, StyleSheet, Pressable, Animated, Easing, Share } from "react-native";
 import { colors, spacing, type } from "../theme";
 import { Confetti } from "./Confetti";
+import { generateInviteLink } from "../lib/referrals";
 
 type Props = {
   visible: boolean;
@@ -38,6 +39,17 @@ export function FirstVisitCelebration({ visible, restaurantName, onDismiss }: Pr
     }
   }, [visible, scale, opacity]);
 
+  async function handleShare() {
+    try {
+      const link = await generateInviteLink();
+      await Share.share({
+        message: `Just logged my first visit on Palate 🍴 It builds your taste identity from where you actually eat. Add me and compare palates:\n\n${link}`,
+      });
+    } catch {
+      // user cancelled or share unavailable — no-op
+    }
+  }
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
       <Confetti fire={confettiKey > 0} count={150} />
@@ -55,6 +67,9 @@ export function FirstVisitCelebration({ visible, restaurantName, onDismiss }: Pr
           </Text>
           <Pressable onPress={onDismiss} style={styles.cta} accessibilityRole="button">
             <Text style={styles.ctaText}>Let's go</Text>
+          </Pressable>
+          <Pressable onPress={handleShare} style={styles.shareLink} accessibilityRole="button">
+            <Text style={styles.shareLinkText}>Share your first visit →</Text>
           </Pressable>
         </Animated.View>
       </View>
@@ -109,4 +124,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   ctaText: { color: "#fff", fontWeight: "800", fontSize: 16 },
+  shareLink: { marginTop: 14, paddingVertical: 6 },
+  shareLinkText: { color: colors.red, fontWeight: "700", fontSize: 14 },
 });
