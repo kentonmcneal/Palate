@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
-  eyebrow: { ...type.micro, color: colors.red },
+  eyebrow: { ...type.micro, color: colors.mute },
   body: { fontSize: 14, color: colors.ink, marginTop: 8, lineHeight: 20 },
   bold: { fontWeight: "800" },
   row: { flexDirection: "row", gap: 8, marginTop: 12 },

@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.line,
     marginBottom: 12,
   },
-  eyebrow: { ...type.micro, color: colors.red },
+  eyebrow: { ...type.micro, color: colors.mute },
   cardTitle: { fontSize: 18, fontWeight: "800", color: colors.ink, marginTop: 8, letterSpacing: -0.3, lineHeight: 24 },
   body1: { fontSize: 14, color: colors.ink, marginTop: 8, lineHeight: 20 },
 

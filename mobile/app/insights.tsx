@@ -27,7 +27,7 @@ function rangeLabel(range: TimeRange): string {
 }
 
 const CUISINE_PALETTE = [
-  "#FF3008", "#FF6B45", "#FF9466", "#FFB68C", "#1F1F1F", "#555555", "#9A9A9A",
+  "#E5391C", "#FF6B45", "#FF9466", "#FFB68C", "#1F1F1F", "#555555", "#9A9A9A",
 ];
 
 const FORMAT_LABELS: Record<string, string> = {

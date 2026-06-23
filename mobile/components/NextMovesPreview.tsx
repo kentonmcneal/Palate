@@ -63,7 +63,7 @@ function cap(s: string): string {
 const styles = StyleSheet.create({
   wrap: { marginTop: spacing.xl },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  viewAll: { color: colors.red, fontSize: 13, fontWeight: "700" },
+  viewAll: { color: colors.redText, fontSize: 13, fontWeight: "700" },
   card: {
     width: 180,
     padding: spacing.md,

@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
-  eyebrow: { ...type.micro, color: colors.red },
+  eyebrow: { ...type.micro, color: colors.mute },
   title: { fontSize: 18, fontWeight: "800", color: colors.ink, letterSpacing: -0.3, marginTop: 6 },
   body: { fontSize: 13, color: colors.ink, lineHeight: 19, marginTop: 8 },
   actions: { flexDirection: "row", gap: 8, marginTop: 14 },

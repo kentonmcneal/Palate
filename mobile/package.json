@@ -19,6 +19,7 @@
     "testMatch": ["<rootDir>/lib/palate/__tests__/**/*.test.(ts|tsx|js|jsx)"]
   },
   "dependencies": {
+    "@expo-google-fonts/fraunces": "^0.4.2",
     "@expo-google-fonts/inter": "^0.4.2",
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-native-community/datetimepicker": "8.0.1",

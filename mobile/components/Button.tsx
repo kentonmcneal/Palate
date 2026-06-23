@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 22,
   },
-  primary: { backgroundColor: colors.red },
+  primary: { backgroundColor: colors.primary },
   secondary: { backgroundColor: colors.ink },
   ghost: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.line },
   danger: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.red },

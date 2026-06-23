@@ -17,7 +17,7 @@ type Props = {
 };
 
 const PALETTE = [
-  "#FF3008", // red
+  "#E5391C", // red
   "#FF6B45",
   "#FF9466",
   "#FFB68C",

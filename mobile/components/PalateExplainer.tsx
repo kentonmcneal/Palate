@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
-  essayEyebrow: { ...type.micro, color: colors.red },
+  essayEyebrow: { ...type.micro, color: colors.mute },
   essayBody: { fontSize: 15, color: colors.ink, lineHeight: 22, marginTop: 10 },
   expandHint: { fontSize: 11, fontWeight: "700", color: colors.mute, marginTop: 12, letterSpacing: 0.5 },
 

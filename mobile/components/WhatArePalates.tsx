@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paper,
     borderWidth: 1, borderColor: colors.line,
   },
-  eyebrow: { ...type.micro, color: colors.red, marginTop: spacing.md },
+  eyebrow: { ...type.micro, color: colors.mute, marginTop: spacing.md },
   intro: { fontSize: 14, color: colors.ink, lineHeight: 21, marginTop: 8 },
   tagIntro: { fontSize: 13, color: colors.mute, lineHeight: 19, marginTop: 8 },
 
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.line,
   },
   quadrantBlockActive: {
-    backgroundColor: "#FFF1EE",
+    backgroundColor: colors.redTint,
     borderColor: colors.red,
   },
   qName: { fontSize: 15, fontWeight: "800", color: colors.ink, letterSpacing: -0.2 },

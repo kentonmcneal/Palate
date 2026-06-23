@@ -28,6 +28,7 @@ import {
 import { WhatArePalates } from "../../components/WhatArePalates";
 import { SharePalateCard, type ShareStat } from "../../components/SharePalateCard";
 import ViewShot, { captureRef } from "react-native-view-shot";
+import { generateInviteLink, inviteShareMessage } from "../../lib/referrals";
 
 // ============================================================================
 // Wrapped — REFLECTION ONLY. One job: tell me what kind of eater I am.
@@ -207,6 +208,16 @@ export default function WrappedTab() {
     }
   }
 
+  async function inviteFriend() {
+    try {
+      const link = await generateInviteLink();
+      await Share.share({ message: inviteShareMessage(link) });
+      void track("wrapped_invite_shared");
+    } catch (e: any) {
+      Alert.alert("Couldn't share", e.message ?? "Try again");
+    }
+  }
+
   function identityLabel(): string {
     // New Palate identity (Curator/Forager/Steward/Anchor/Learning) wins
     // when available — single source of truth.
@@ -312,6 +323,8 @@ export default function WrappedTab() {
             <Button title="Share Wrapped card" variant="ghost" onPress={shareImage} />
             <Spacer size={8} />
             <Button title="Post to Feed" variant="ghost" onPress={shareToFeed} />
+            <Spacer size={8} />
+            <Button title="Invite a friend — compare palates" onPress={inviteFriend} />
             <Spacer size={8} />
             <Button title="Share to Instagram Story" variant="ghost" onPress={shareToStory} />
             <Spacer size={8} />
@@ -507,7 +520,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   insightText: { fontSize: 15, color: colors.ink, lineHeight: 21, fontStyle: "italic" },
-  insightEyebrow: { ...type.micro, color: colors.red },
+  insightEyebrow: { ...type.micro, color: colors.mute },
   insightTitle: { fontSize: 18, fontWeight: "800", color: colors.ink, marginTop: 8, letterSpacing: -0.3, lineHeight: 24 },
   insightBody: { fontSize: 14, color: colors.ink, marginTop: 6, lineHeight: 20 },
   darkCard: { backgroundColor: colors.ink, borderColor: colors.ink },

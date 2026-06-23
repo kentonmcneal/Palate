@@ -495,6 +495,8 @@ function ineligibilityHint(r: { recommendation_eligibility?: number | null; inel
   switch (r.ineligibility_reason) {
     case "airport":         return "Inside an airport — not surfaced in discovery.";
     case "lounge_gated":    return "Members-only / airport lounge — not surfaced in discovery.";
+    case "lounge":          return "Lounge — not surfaced in discovery.";
+    case "fast_food":       return "Fast food — not surfaced in discovery.";
     case "hotel":
     case "hotel_generic":   return "Hotel restaurant — not surfaced in discovery.";
     case "national_chain":  return "National chain — not surfaced in discovery.";
@@ -513,13 +515,13 @@ function ratingLabel(r: "loved" | "ok" | "not_for_me"): string {
 }
 
 function ratingPillStyle(r: "loved" | "ok" | "not_for_me") {
-  if (r === "loved") return { backgroundColor: "#FFF1EE", borderColor: "#FFD7CE" };
+  if (r === "loved") return { backgroundColor: colors.redTint, borderColor: colors.redTintBorder };
   if (r === "ok") return { backgroundColor: "#F4F4F4", borderColor: "#E2E2E2" };
   return { backgroundColor: "#FAFAFA", borderColor: "#E8E8E8" };
 }
 
 function ratingPillTextStyle(r: "loved" | "ok" | "not_for_me") {
-  if (r === "loved") return { color: "#FF3008" };
+  if (r === "loved") return { color: colors.red };
   if (r === "ok") return { color: "#7A7A7A" };
   return { color: "#A0A0A0" };
 }
@@ -579,7 +581,7 @@ const styles = StyleSheet.create({
   },
   matchBadge: {
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
-    backgroundColor: colors.red,
+    backgroundColor: colors.primary,
   },
   matchBadgeText: { color: "#fff", fontSize: 12, fontWeight: "800" },
   reasonRow: { marginTop: 12, gap: 4 },
@@ -588,7 +590,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: "row", gap: 8, marginTop: 14 },
   actionBtn: {
     flex: 1, paddingVertical: 12, borderRadius: 14,
-    backgroundColor: colors.red,
+    backgroundColor: colors.primary,
     alignItems: "center",
   },
   actionBtnDone: { backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line },
@@ -615,7 +617,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.line, borderBottomWidth: 1,
   },
   visitThumb: { width: 44, height: 44, borderRadius: 10, backgroundColor: colors.faint },
-  visitDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.red },
+  visitDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.mute },
   visitDate: { fontSize: 15, fontWeight: "700", color: colors.ink },
   visitNote: { fontSize: 13, color: colors.mute, marginTop: 4, fontStyle: "italic", lineHeight: 18 },
 

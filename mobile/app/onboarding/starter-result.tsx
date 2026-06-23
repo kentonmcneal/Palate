@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   recBadgeText: { color: "#fff", fontSize: 12, fontWeight: "800" },
   recName: { fontSize: 15, fontWeight: "600", color: colors.ink },
 
-  stretchCard: { borderColor: colors.red, backgroundColor: "#FFF7F4" },
+  stretchCard: { borderColor: colors.red, backgroundColor: colors.redTint },
   stretchName: { fontSize: 20, fontWeight: "800", color: colors.ink, letterSpacing: -0.4 },
   stretchReason: { fontSize: 13, color: colors.mute, lineHeight: 19 },
 

@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   eyebrow: { ...type.micro },
-  viewAll: { fontSize: 12, fontWeight: "700", color: colors.red },
+  viewAll: { fontSize: 12, fontWeight: "700", color: colors.redText },
   row: {
     flexDirection: "row", alignItems: "center",
     paddingVertical: 12,

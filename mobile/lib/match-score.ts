@@ -167,7 +167,7 @@ export function distanceKm(
 // 40-59  → light gray    (neutral)
 // 0-39   → gray          (probably not for you)
 // ----------------------------------------------------------------------------
-const STRONG_RED  = "#FF3008";
+const STRONG_RED  = "#E5391C";
 const LIGHTER_RED = "#FF8266";
 const LIGHT_GRAY  = "#B5B5B5";
 const GRAY        = "#8E8E8E";

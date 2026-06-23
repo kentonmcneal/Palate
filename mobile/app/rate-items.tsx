@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.line,
     borderBottomWidth: 1,
   },
-  eyebrow: { ...type.micro, color: colors.red },
+  eyebrow: { ...type.micro, color: colors.mute },
   title: { fontSize: 22, fontWeight: "800", color: colors.ink, marginTop: 6, letterSpacing: -0.5 },
 
   body: { padding: spacing.lg, paddingBottom: 40 },

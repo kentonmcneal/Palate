@@ -19,7 +19,9 @@ import type { TextStyle } from "react-native";
 export const palateColors = {
   // Brand reds — ember accent over wine/oxblood backgrounds. Use red sparingly:
   // primary CTAs, identity highlights, active tab state, match score accent.
-  red:        "#FF2D16",
+  // Unified with /theme.ts `colors.red` so the diary and identity surfaces
+  // share one brand red (was #FF2D16 here vs #FF3008 there).
+  red:        "#E5391C",
   // Wine / burgundy / oxblood — for matte premium card backgrounds and the
   // story-mode gradient. These let us avoid bright flat red surfaces.
   wine:       "#5A0B14",
@@ -53,7 +55,7 @@ export const palateGradients = {
   shareWine:  ["#711428", "#3A080A", "#0D0D0D"] as [string, string, string],
   /** Glow accent — radial halo behind identity headlines. Toned down per
    *  redesign brief (was 0.4 → 0.18). */
-  identityGlow: "rgba(255,45,22,0.18)",
+  identityGlow: "rgba(229,57,28,0.18)",
 } as const;
 
 // ----------------------------------------------------------------------------

@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  eyebrow: { ...type.micro, color: colors.red },
+  eyebrow: { ...type.micro, color: colors.mute },
   scoreChip: {
     minWidth: 38, height: 26, borderRadius: 13,
     paddingHorizontal: 8,

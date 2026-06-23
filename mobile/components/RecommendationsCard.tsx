@@ -307,8 +307,8 @@ const styles = StyleSheet.create({
   matchBadge: {
     paddingHorizontal: 8, paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: "#FFF1EE",
-    borderWidth: 1, borderColor: "#FFD7CE",
+    backgroundColor: colors.redTint,
+    borderWidth: 1, borderColor: colors.redTintBorder,
   },
   matchBadgeText: { fontSize: 11, fontWeight: "800", color: colors.red },
   sub: { ...type.small, marginTop: 2 },

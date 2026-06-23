@@ -7,7 +7,7 @@ import { DonutChart, type DonutSlice } from "./charts/DonutChart";
 import { VerticalBars, type VBar } from "./charts/VerticalBars";
 
 const CUISINE_PALETTE = [
-  "#FF3008", "#FF6B45", "#FF9466", "#FFB68C", "#1F1F1F", "#555555", "#9A9A9A",
+  "#E5391C", "#FF6B45", "#FF9466", "#FFB68C", "#1F1F1F", "#555555", "#9A9A9A",
 ];
 
 const CUISINE_LABELS: Record<string, string> = {
@@ -71,7 +71,7 @@ export function WrappedCharts() {
       {cuisineSlices.length > 0 && (
         <GlowCard glowColor={cuisineSlices[focusedSlice ?? 0]?.color ?? colors.red}>
           <View style={styles.headRow}>
-            <Text style={[type.micro, { color: colors.red }]}>CUISINE THIS WEEK</Text>
+            <Text style={[type.micro, { color: colors.mute }]}>CUISINE THIS WEEK</Text>
             {focusedSlice != null && (
               <Pressable onPress={() => setFocusedSlice(null)}>
                 <Text style={styles.clearLink}>Clear</Text>
@@ -126,7 +126,7 @@ export function WrappedCharts() {
 
       {dowBars.some((b) => b.value > 0) && (
         <GlowCard glowColor={colors.red}>
-          <Text style={[type.micro, { color: colors.red }]}>WHICH DAYS</Text>
+          <Text style={[type.micro, { color: colors.mute }]}>WHICH DAYS</Text>
           <View style={{ marginTop: 12 }}>
             <VerticalBars data={dowBars} accentIndex={dowAccentIndex} height={110} />
           </View>

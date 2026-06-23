@@ -9,6 +9,9 @@ import {
   Inter_400Regular, Inter_500Medium, Inter_600SemiBold,
   Inter_700Bold, Inter_800ExtraBold,
 } from "@expo-google-fonts/inter";
+import {
+  Fraunces_600SemiBold, Fraunces_700Bold,
+} from "@expo-google-fonts/fraunces";
 import { supabase } from "../lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { colors } from "../theme";
@@ -41,6 +44,7 @@ export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     Inter_400Regular, Inter_500Medium, Inter_600SemiBold,
     Inter_700Bold, Inter_800ExtraBold,
+    Fraunces_600SemiBold, Fraunces_700Bold,
   });
 
   // Once fonts load, default every Text to Inter regular. Heavier weights are

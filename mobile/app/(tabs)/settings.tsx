@@ -434,7 +434,7 @@ export default function Settings() {
         </Section>
 
         <Section title="Passive tracking">
-          <Row label="Auto-detect visits" right={<Switch value={tracking} onValueChange={toggleTracking} thumbColor={tracking ? colors.red : "#fff"} trackColor={{ true: "#FFCFC5", false: colors.line }} />} />
+          <Row label="Auto-detect visits" right={<Switch value={tracking} onValueChange={toggleTracking} thumbColor={tracking ? colors.red : "#fff"} trackColor={{ true: colors.redTintBorder, false: colors.line }} />} />
           <Note>
             When on, Palate checks your location whenever the app opens and prompts you
             to confirm if you're at a restaurant. Removes the friction of remembering to
@@ -443,7 +443,7 @@ export default function Settings() {
         </Section>
 
         <Section title="Notifications">
-          <Row label="Sunday Wrapped reminder" right={<Switch value={sundayReminder} onValueChange={toggleSundayReminder} thumbColor={sundayReminder ? colors.red : "#fff"} trackColor={{ true: "#FFCFC5", false: colors.line }} />} />
+          <Row label="Sunday Wrapped reminder" right={<Switch value={sundayReminder} onValueChange={toggleSundayReminder} thumbColor={sundayReminder ? colors.red : "#fff"} trackColor={{ true: colors.redTintBorder, false: colors.line }} />} />
           <Note>One reminder a week, Sunday at 9 AM. That's it.</Note>
         </Section>
 

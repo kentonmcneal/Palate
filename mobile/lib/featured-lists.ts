@@ -43,7 +43,7 @@ const CATEGORY_META: CategoryMeta[] = [
   { slug: "late-night",    gradient: ["#0F1A2E", "#000408"], iconGlyph: "L" },
   { slug: "early-morning", gradient: ["#FFB347", "#7A4400"], iconGlyph: "M" },
   { slug: "brunch",        gradient: ["#F4A26A", "#7B2D00"], iconGlyph: "U" },
-  { slug: "burgers",       gradient: ["#FF3008", "#7A0B00"], iconGlyph: "B" },
+  { slug: "burgers",       gradient: ["#E5391C", "#7A0B00"], iconGlyph: "B" },
   { slug: "wings",         gradient: ["#FF8C00", "#5A1E00"], iconGlyph: "W" },
   { slug: "fries",         gradient: ["#FFC04D", "#6B4500"], iconGlyph: "F" },
   { slug: "hummus",        gradient: ["#A89052", "#3D2F0E"], iconGlyph: "H" },

@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
   },
   chipActive: {
     borderColor: colors.red,
-    backgroundColor: "#FFF1EE",
+    backgroundColor: colors.redTint,
   },
   chipEmoji: { fontSize: 18 },
   chipLabel: { fontSize: 14, fontWeight: "600", color: colors.ink },
