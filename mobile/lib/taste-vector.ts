@@ -11,6 +11,8 @@
 // ============================================================================
 
 import { supabase } from "./supabase";
+import { applyPersonaPrior } from "./persona-prior";
+import type { StarterPersonaKey } from "./starter-quiz";
 
 export type WeightMap = Record<string, number>;
 
@@ -68,7 +70,35 @@ const MIN_TOP_NEIGHBORHOOD = 1;
 // ----------------------------------------------------------------------------
 // Public entry point
 // ----------------------------------------------------------------------------
-export async function computeTasteVector(opts?: { sinceDays?: number }): Promise<TasteVector> {
+export async function computeTasteVector(
+  opts?: { sinceDays?: number; savesOnly?: boolean },
+): Promise<TasteVector> {
+  // Saves-only mode: rebuild the vector from wishlist restaurants as if they
+  // were the primary signal, so recommendations reflect what the user has
+  // saved rather than where they've eaten.
+  if (opts?.savesOnly) {
+    const { data, error } = await supabase
+      .from("wishlist")
+      .select(`
+        added_at,
+        restaurant:restaurants (
+          id, name, cuisine_type, cuisine_region, cuisine_subregion,
+          format_class, chain_type, occasion_tags, flavor_tags,
+          cultural_context, neighborhood, latitude, longitude, price_level
+        )
+      `);
+    if (error) throw error;
+    const synthVisits: VisitRow[] = ((data ?? []) as unknown as Array<{
+      added_at: string;
+      restaurant: RestaurantTags | RestaurantTags[] | null;
+    }>).map((w) => ({
+      visited_at: w.added_at,
+      meal_type: null,
+      restaurant: unwrapRel(w.restaurant),
+    }));
+    return aggregate(synthVisits, []);
+  }
+
   const since = opts?.sinceDays
     ? new Date(Date.now() - opts.sinceDays * 86_400_000).toISOString()
     : null;
@@ -101,10 +131,29 @@ export async function computeTasteVector(opts?: { sinceDays?: number }): Promise
   if (vErr) throw vErr;
   if (wErr) throw wErr;
 
-  return aggregate(
+  const v = aggregate(
     (visitsData ?? []) as unknown as VisitRow[],
     (wishData ?? []) as unknown as WishlistRow[],
   );
+
+  // Cold-start: until the user has a few real visits, seed the vector from
+  // their onboarding quiz persona so session-one recommendations are already
+  // personalized instead of a bare distance/rating ranker.
+  if (v.visitCount < 3) {
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("quiz_persona")
+        .maybeSingle();
+      const persona = (profile?.quiz_persona as StarterPersonaKey | null) ?? null;
+      if (persona) applyPersonaPrior(v, persona);
+    } catch {
+      // Persona seeding is best-effort — a missing/locked profile just means
+      // the user gets the un-seeded cold-start behavior.
+    }
+  }
+
+  return v;
 }
 
 // ----------------------------------------------------------------------------

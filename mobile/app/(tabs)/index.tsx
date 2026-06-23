@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, Alert, ScrollView, RefreshControl, Pressable, Image, Animated, Easing } from "react-native";
+import { View, Text, StyleSheet, Alert, ScrollView, RefreshControl, Pressable, Image, Animated, Easing, Share } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Button, Spacer } from "../../components/Button";
@@ -11,6 +12,9 @@ import { recentlyPrompted, recentVisits, deleteVisitWithUndo, type Visit } from 
 import { openInAppleMaps } from "../../lib/maps";
 import { AnimatedNumber } from "../../components/AnimatedNumber";
 import { computeStreak, type StreakInfo } from "../../lib/streak";
+import { refreshDailyReminder } from "../../lib/notifications";
+import { postMilestoneAndNotify } from "../../lib/feed";
+import { generateInviteLink } from "../../lib/referrals";
 import {
   analyzeWeeklyPalate,
   daysUntilSundayWrap,
@@ -24,11 +28,35 @@ import { Confetti } from "../../components/Confetti";
 import { LocationPill } from "../../components/LocationPill";
 import { RightNowHero } from "../../components/RightNowHero";
 import { StretchPick } from "../../components/StretchPick";
+import { WishlistRail } from "../../components/WishlistRail";
+import { BasedOnSaves, BasedOnSavesEmpty } from "../../components/BasedOnSaves";
+import { listWishlist, type WishlistEntry } from "../../lib/palate-insights";
+import { loadRecsFromSaves, type SaveAnchoredRec } from "../../lib/recs-from-saves";
+import { getEffectiveLocation } from "../../lib/browsing-location";
+import { distanceKm } from "../../lib/match-score";
 
 const STREAK_MILESTONES = [7, 14, 30, 50, 100, 200, 365];
 
 function milestoneFor(count: number): number | null {
   return STREAK_MILESTONES.includes(count) ? count : null;
+}
+
+// Pick up to 8 wishlist entries within ~15km of the current location. Older
+// saves without coordinates pass through unconditionally. If no location is
+// available, show the most recent saves (capped at 8) so the rail isn't empty.
+function filterWishlistForHere(
+  wish: WishlistEntry[],
+  here: { lat: number; lng: number } | null,
+): WishlistEntry[] {
+  if (!here) return wish.slice(0, 8);
+  return wish
+    .filter((w) => {
+      const r = w.restaurant;
+      if (!r) return false;
+      if (r.latitude == null || r.longitude == null) return true;
+      return distanceKm(here, { lat: r.latitude, lng: r.longitude }) < 15;
+    })
+    .slice(0, 8);
 }
 
 export default function Home() {
@@ -40,25 +68,54 @@ export default function Home() {
   const [weekInsight, setWeekInsight] = useState<PalateInsight | null>(null);
   const [milestoneConfetti, setMilestoneConfetti] = useState(0);
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
+  // Saves-anchored shelves migrated from Discover. Both surface on Home so the
+  // decision engine has personal-intent context one tap away.
+  const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
+  const [wishlistRail, setWishlistRail] = useState<WishlistEntry[]>([]);
+  const [hasAnySaves, setHasAnySaves] = useState<boolean | null>(null);
+  const [savesAnchors, setSavesAnchors] = useState<Array<{ id: string; name: string }>>([]);
+  const [savesRecs, setSavesRecs] = useState<SaveAnchoredRec[]>([]);
 
   const load = useCallback(async () => {
-    // All three are independent — fetch in parallel so the screen renders fast.
-    const [v, s, w] = await Promise.allSettled([
+    // All independent — fetch in parallel so the screen renders fast.
+    const [v, s, w, loc, wish, saves] = await Promise.allSettled([
       recentVisits(10),
       computeStreak(),
       loadCurrentWeekInsight(),
+      getEffectiveLocation(),
+      listWishlist(),
+      loadRecsFromSaves(),
     ]);
     if (v.status === "fulfilled") setVisits(v.value);
     if (s.status === "fulfilled") {
       setStreak(s.value);
+      // Re-engagement: schedule (or clear) tonight's streak-at-risk nudge.
+      void refreshDailyReminder({ loggedToday: s.value.loggedToday, streak: s.value.current });
       // Fire confetti once per session when the user crosses a milestone day.
       const m = milestoneFor(s.value.current);
       if (m && celebratedStreak !== m) {
         setMilestoneConfetti((k) => k + 1);
         setCelebratedStreak(m);
+        void celebrateMilestone(m);
       }
     }
     if (w.status === "fulfilled") setWeekInsight(w.value);
+    const hereLoc = loc.status === "fulfilled" && loc.value ? loc.value : null;
+    setHere(hereLoc ? { lat: hereLoc.lat, lng: hereLoc.lng } : null);
+    if (wish.status === "fulfilled") {
+      setHasAnySaves(wish.value.length > 0);
+      setWishlistRail(filterWishlistForHere(wish.value, hereLoc));
+    } else {
+      setHasAnySaves(false);
+      setWishlistRail([]);
+    }
+    if (saves.status === "fulfilled") {
+      setSavesAnchors(saves.value.anchors);
+      setSavesRecs(saves.value.recs);
+    } else {
+      setSavesAnchors([]);
+      setSavesRecs([]);
+    }
   }, [celebratedStreak]);
 
   useFocusEffect(
@@ -66,6 +123,41 @@ export default function Home() {
       load();
     }, [load]),
   );
+
+  // A streak milestone just got crossed: push it to the friend feed (once,
+  // deduped across app restarts) and offer to share it — which doubles as an
+  // invite, since the share carries the user's referral link.
+  async function celebrateMilestone(days: number) {
+    try {
+      const key = "palate.lastMilestonePosted";
+      const last = await AsyncStorage.getItem(key);
+      if (last !== String(days)) {
+        await postMilestoneAndNotify(days);
+        await AsyncStorage.setItem(key, String(days));
+      }
+    } catch {
+      // Feed post is best-effort — never block the celebration on it.
+    }
+    Alert.alert(
+      `🔥 ${days}-day streak!`,
+      "You're officially in the habit. Share it — and see who can keep up.",
+      [
+        { text: "Not now", style: "cancel" },
+        { text: "Share", onPress: () => void shareStreak(days) },
+      ],
+    );
+  }
+
+  async function shareStreak(days: number) {
+    try {
+      const link = await generateInviteLink();
+      await Share.share({
+        message: `${days} days straight logging every meal on Palate 🔥 Think you can out-streak me?\n\n${link}`,
+      });
+    } catch {
+      // user cancelled or share unavailable — no-op
+    }
+  }
 
   async function handleCheckNow() {
     setChecking(true);
@@ -174,6 +266,28 @@ export default function Home() {
             loading={checking}
           />
         </View>
+
+        {/* Saved places near here (rail). Moved up from Discover so saves
+            stay one tap away from the decision engine. */}
+        <WishlistRail
+          items={wishlistRail}
+          here={here}
+          onTap={(gpid) => router.push(`/restaurant/${gpid}` as any)}
+        />
+
+        {/* "Because you saved X, Y, Z" — directly addresses the burger-feedback
+            loop problem: surfaces things similar to user's HIGH-INTENT signal
+            (saves), not their latest visits. Shows empty-state nudge when
+            the user has zero saves yet. */}
+        {savesRecs.length > 0 ? (
+          <BasedOnSaves
+            anchors={savesAnchors}
+            recs={savesRecs}
+            onTap={(gpid) => router.push(`/restaurant/${gpid}` as any)}
+          />
+        ) : hasAnySaves === false ? (
+          <BasedOnSavesEmpty />
+        ) : null}
 
         {/* 3. Places you'll probably like — 3 picks. */}
         <Text style={styles.sectionHead}>Places you'll probably like</Text>
@@ -386,7 +500,7 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
   addBtn: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: colors.red,
+    backgroundColor: colors.ink,
     alignItems: "center", justifyContent: "center",
   },
   addBtnText: { color: "#fff", fontSize: 22, fontWeight: "800", marginTop: -2 },
@@ -397,16 +511,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "#FFF1EE",
+    backgroundColor: colors.faint,
     borderWidth: 1,
-    borderColor: "#FFD7CE",
+    borderColor: colors.line,
   },
   streakChipAtRisk: {
-    backgroundColor: colors.faint,
+    backgroundColor: colors.paper,
     borderColor: colors.line,
   },
   streakEmoji: { fontSize: 14 },
-  streakText: { color: colors.red, fontWeight: "800", fontSize: 14 },
+  streakText: { color: colors.ink, fontWeight: "800", fontSize: 14 },
   streakTextAtRisk: { color: colors.mute },
   weekCard: {
     marginBottom: spacing.xl,
@@ -457,7 +571,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.faint,
     borderWidth: 1, borderColor: colors.line,
   },
-  checkNowEyebrow: { ...type.micro, color: colors.red },
+  checkNowEyebrow: { ...type.micro, color: colors.mute },
   emptyCard: {
     borderRadius: 18,
     borderWidth: 1,
@@ -478,10 +592,10 @@ const styles = StyleSheet.create({
   visitCardThumb: { width: 56, height: 56, borderRadius: 12, backgroundColor: colors.faint },
   visitCardThumbEmpty: {
     width: 56, height: 56, borderRadius: 12,
-    backgroundColor: "#FFF1EE",
+    backgroundColor: colors.faint,
     alignItems: "center", justifyContent: "center",
   },
-  visitCardThumbInitial: { fontSize: 20, fontWeight: "800", color: colors.red },
+  visitCardThumbInitial: { fontSize: 20, fontWeight: "800", color: colors.mute },
   visitCardName: { fontSize: 16, fontWeight: "700", color: colors.ink },
   visitMapsBtn: {
     paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
@@ -489,5 +603,5 @@ const styles = StyleSheet.create({
   },
   visitMapsBtnText: { fontSize: 12, fontWeight: "700", color: colors.ink },
   recentHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  viewAll: { color: colors.red, fontSize: 13, fontWeight: "700" },
+  viewAll: { color: colors.redText, fontSize: 13, fontWeight: "700" },
 });
