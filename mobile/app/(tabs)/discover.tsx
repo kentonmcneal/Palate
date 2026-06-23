@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, RefreshControl,
   TextInput, ActivityIndicator,
@@ -10,7 +10,6 @@ import { colors, spacing, type } from "../../theme";
 import { nearbyRestaurants, searchRestaurants, type Restaurant } from "../../lib/places";
 import { supabase } from "../../lib/supabase";
 import { listWishlist, type WishlistEntry } from "../../lib/palate-insights";
-import { loadRecsFromSaves, type SaveAnchoredRec } from "../../lib/recs-from-saves";
 import { getCurrentLocation, classifyAccuracy } from "../../lib/location";
 import { getEffectiveLocation, useBrowsingCity } from "../../lib/browsing-location";
 import { LocationPill } from "../../components/LocationPill";
@@ -41,6 +40,26 @@ const MIN_PER_CATEGORY = 3;
 
 type SubTab = "most_compatible" | "trending" | "nearby";
 type SortKey = "compat_high" | "compat_low" | "distance" | "stretch";
+type FormatFilter = "all" | "casual" | "boutique";
+
+const FILTER_LABEL: Record<FormatFilter, string> = {
+  all: "All",
+  casual: "Casual",
+  boutique: "Boutique",
+};
+
+// Casual = fast/quick-service or cheap; Boutique = upscale/fine-dining or
+// pricey. Applied as a visibility filter over the ranked list — it does not
+// change the underlying compatibility scores.
+function matchesFormatFilter(r: RankedRestaurant, filter: FormatFilter): boolean {
+  if (filter === "all") return true;
+  const fmt = (r as any).format_class as string | null | undefined;
+  const price = (r as any).price_level as number | null | undefined;
+  if (filter === "casual") {
+    return fmt === "quick_service" || fmt === "fast_casual" || (price != null && price <= 2);
+  }
+  return fmt === "fine_dining" || fmt === "casual_dining" || (price != null && price >= 3);
+}
 
 const SORT_LABEL: Record<SortKey, string> = {
   compat_high: "Highest match",
@@ -53,10 +72,21 @@ export default function DiscoverTab() {
   const router = useRouter();
   const [tab, setTab] = useState<SubTab>("most_compatible");
   const [sort, setSort] = useState<SortKey>("compat_high");
+  const [formatFilter, setFormatFilter] = useState<FormatFilter>("all");
+  // When true, the taste vector is rebuilt from saved (wishlist) restaurants
+  // only — recommendations reflect what you've saved, not where you've been.
+  const [savesOnly, setSavesOnly] = useState(false);
   const [browsingCity] = useBrowsingCity();
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<RankedRestaurant[] | null>(null);
   const [searching, setSearching] = useState(false);
+  // searchActive flips to true on TextInput focus and stays true until the
+  // user taps "Cancel". Drives the suggestion panel ("Find similar to X" +
+  // city-wide list) that appears while the query is still empty.
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchWishlist, setSearchWishlist] = useState<WishlistEntry[]>([]);
+  const [searchCityList, setSearchCityList] = useState<CityRestaurant[]>([]);
+  const [searchPanelLoading, setSearchPanelLoading] = useState(false);
 
   const [hereLoading, setHereLoading] = useState(true);
   const [feedLoading, setFeedLoading] = useState(true);
@@ -66,10 +96,6 @@ export default function DiscoverTab() {
   const [vector, setVector] = useState<TasteVector | null>(null);
   const [allNearby, setAllNearby] = useState<RestaurantInput[]>([]);
   const [personal, setPersonal] = useState<PersonalSignal | null>(null);
-  const [wishlistRail, setWishlistRail] = useState<WishlistEntry[]>([]);
-  const [hasAnySaves, setHasAnySaves] = useState<boolean | null>(null);
-  const [savesAnchors, setSavesAnchors] = useState<Array<{ id: string; name: string }>>([]);
-  const [savesRecs, setSavesRecs] = useState<SaveAnchoredRec[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -94,35 +120,26 @@ export default function DiscoverTab() {
 
       setFeedLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      const [nearby, vec, sig, visitedIds, wish] = await Promise.all([
+      // Taste vector is computed separately (see effect below) so toggling
+      // "saves only" recomputes it without refetching nearby places.
+      const [nearby, sig, visitedIds] = await Promise.all([
         nearbyRestaurants(loc.lat, loc.lng, NEARBY_RADIUS_M),
-        computeTasteVector().catch(() => null),
         loadPersonalSignal().catch(() => null),
         user ? loadVisitedPlaceIds(user.id) : Promise.resolve(new Set<string>()),
-        listWishlist().catch(() => []),
       ]);
 
       // Hybrid discovery policy:
       //   - Drop places with recommendation_eligibility === 0 (chains, airports,
       //     hotels, lounges — see classifier inferRecommendationEligibility)
-      //   - Drop places the user has already visited (wishlist rail surfaces
-      //     intentional saves separately so they don't get hidden)
+      //   - Drop places the user has already visited (saved-shelf and
+      //     wishlist-rail live on Home now)
       const candidates = nearby.filter(
         (p) => (p.recommendation_eligibility ?? 1) > 0 && !visitedIds.has(p.google_place_id),
       );
 
-      setVector(vec);
       setPersonal(sig);
       setAllNearby(candidates.map(toInput));
-      setWishlistRail(filterWishlistForHere(wish, { lat: loc.lat, lng: loc.lng }));
-      setHasAnySaves(wish.length > 0);
       setFeedLoading(false);
-
-      // Saves-anchored recs run after the main feed renders so the screen
-      // isn't blocked. Errors are swallowed — the rail is best-effort.
-      void loadRecsFromSaves()
-        .then((res) => { setSavesAnchors(res.anchors); setSavesRecs(res.recs); })
-        .catch(() => { setSavesAnchors([]); setSavesRecs([]); });
 
       // Fire impressions for the visible top
       void trackImpressions(candidates.slice(0, TOP_PER_TAB).map((p) => p.google_place_id), { surface: "discover_for_you" });
@@ -135,6 +152,17 @@ export default function DiscoverTab() {
   // Re-run load whenever the user picks a different city. (load itself depends
   // on browsingCity now, so the focus effect picks up city changes via its dep.)
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // Compute the taste vector independently of the nearby fetch so the
+  // "saves only" toggle re-ranks instantly without another places call.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const vec = await computeTasteVector({ savesOnly }).catch(() => null);
+      if (!cancelled) setVector(vec);
+    })();
+    return () => { cancelled = true; };
+  }, [savesOnly]);
 
   // ---- Search (debounced via submit, not keystroke — keeps it fast) ----
   async function runSearch() {
@@ -151,6 +179,30 @@ export default function DiscoverTab() {
     }
   }
 
+  // Lazy-load the suggestion panel data the first time the search bar gets
+  // focused. Both queries are independent; run them in parallel.
+  async function openSearch() {
+    setSearchActive(true);
+    if (searchWishlist.length > 0 || searchCityList.length > 0 || searchPanelLoading) return;
+    setSearchPanelLoading(true);
+    try {
+      const [wishRes, cityRes] = await Promise.allSettled([
+        listWishlist(),
+        here ? loadCityRestaurants(here) : Promise.resolve([] as CityRestaurant[]),
+      ]);
+      if (wishRes.status === "fulfilled") setSearchWishlist(wishRes.value.slice(0, 8));
+      if (cityRes.status === "fulfilled") setSearchCityList(cityRes.value);
+    } finally {
+      setSearchPanelLoading(false);
+    }
+  }
+
+  function closeSearch() {
+    setSearchActive(false);
+    setQuery("");
+    setSearchResults(null);
+  }
+
   // ---- Build canonical taste graph + rank ALL nearby through it ----
   // Per spec: compatibility is calculated ONCE per (user, restaurant). The
   // canonical compatibility cache (in lib/recommendation) makes that true.
@@ -161,18 +213,25 @@ export default function DiscoverTab() {
     return allNearby.map((r) => buildRankedRestaurant(graph, r, { here, now: new Date(), mode: "browsing" }));
   }, [allNearby, graph, here]);
 
+  // Apply the Casual/Boutique visibility filter once; all three tabs read
+  // from this filtered list so the toggle affects every view consistently.
+  const visibleRanked = useMemo(
+    () => allRanked.filter((r) => matchesFormatFilter(r, formatFilter)),
+    [allRanked, formatFilter],
+  );
+
   // Nearby tab — strict distance sort.
   const nearbyList = useMemo(() => {
-    return [...allRanked]
+    return [...visibleRanked]
       .sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999))
       .slice(0, TOP_PER_TAB);
-  }, [allRanked]);
+  }, [visibleRanked]);
 
   // Trending: grouped into Beli-style category shelves ("Top 10 Burgers"…),
   // plus a fallback shelf when category coverage is sparse.
   const trending = useMemo(
-    () => buildTrendingGroups(allRanked, vector),
-    [allRanked, vector],
+    () => buildTrendingGroups(visibleRanked, vector),
+    [visibleRanked, vector],
   );
 
   // Most Compatible — sort by canonical compatibilityScore (per spec, NOT
@@ -185,7 +244,7 @@ export default function DiscoverTab() {
     const keyFor = (r: RankedRestaurant) =>
       r.score.compatibilityScore + timeOfDayBoost(r.occasion_tags ?? null, occs);
 
-    const arr = allRanked.map((r) => ({ item: r, sortKey: keyFor(r) }));
+    const arr = visibleRanked.map((r) => ({ item: r, sortKey: keyFor(r) }));
     if (sort === "compat_high") {
       arr.sort((a, b) => b.sortKey - a.sortKey);
     } else if (sort === "compat_low") {
@@ -202,7 +261,7 @@ export default function DiscoverTab() {
       });
     }
     return arr.map((x) => x.item).slice(0, TOP_PER_TAB);
-  }, [allRanked, sort]);
+  }, [visibleRanked, sort]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -231,15 +290,22 @@ export default function DiscoverTab() {
             style={styles.searchInput}
             returnKeyType="search"
             onSubmitEditing={runSearch}
+            onFocus={openSearch}
             autoCapitalize="words"
             autoCorrect={false}
           />
-          <Pressable onPress={() => router.push("/map")} style={styles.mapPill}>
-            <Text style={styles.mapPillText}>Map</Text>
-          </Pressable>
+          {searchActive ? (
+            <Pressable onPress={closeSearch} style={styles.mapPill}>
+              <Text style={styles.mapPillText}>Cancel</Text>
+            </Pressable>
+          ) : (
+            <Pressable onPress={() => router.push("/map" as any)} style={styles.mapPill}>
+              <Text style={styles.mapPillText}>Map</Text>
+            </Pressable>
+          )}
         </View>
 
-        {/* Search results take over the page when active */}
+        {/* Search results take over the page when query has been submitted */}
         {searchResults !== null ? (
           <View style={{ marginTop: spacing.lg }}>
             <View style={styles.searchHead}>
@@ -263,36 +329,18 @@ export default function DiscoverTab() {
               ))
             )}
           </View>
+        ) : searchActive && !query ? (
+          <SearchSuggestionPanel
+            wishlist={searchWishlist}
+            cityList={searchCityList}
+            loading={searchPanelLoading}
+            onSimilarTap={(gpid) => router.push(`/similar/${gpid}` as any)}
+            onPlaceTap={(gpid) => router.push(`/restaurant/${gpid}` as any)}
+          />
         ) : (
           <>
-            {/* Wishlist rail — saved places near here. Kept above featured /
-                sub-tabs because saved-intent should be one tap away. */}
-            {wishlistRail.length > 0 && (
-              <WishlistRail
-                items={wishlistRail}
-                here={here}
-                onTap={(gpid) => router.push(`/restaurant/${gpid}` as any)}
-              />
-            )}
-
-            {/* Based on your saves — uses wishlist as the rec anchor so the
-                feed isn't dominated by whatever the user happens to eat. When
-                the user has no saves yet, surface a nudge explaining the
-                feature so it doesn't feel like dead UI. */}
-            {savesRecs.length > 0 ? (
-              <BasedOnSaves
-                anchors={savesAnchors}
-                recs={savesRecs}
-                onTap={(gpid) => router.push(`/restaurant/${gpid}` as any)}
-              />
-            ) : hasAnySaves === false ? (
-              <View style={styles.savesEmpty}>
-                <Text style={[type.micro, { marginBottom: 4 }]}>BASED ON YOUR SAVES</Text>
-                <Text style={[type.small, { lineHeight: 18 }]}>
-                  Save a few restaurants and we'll find more like them. Tap the heart on any place to start.
-                </Text>
-              </View>
-            ) : null}
+            {/* (Wishlist rail + "Based on your saves" moved to Home page.
+                Discover stays a pure browse/search surface.) */}
 
             {/* Featured Lists — Beli-style curated rows above the sub-tabs. */}
             <FeaturedLists here={here} city={browsingCity?.name ?? null} vector={vector} personal={personal} />
@@ -303,6 +351,14 @@ export default function DiscoverTab() {
               <SubTabBtn label="Trending"        active={tab === "trending"}        onPress={() => setTab("trending")} />
               <SubTabBtn label="Nearby"          active={tab === "nearby"}          onPress={() => setTab("nearby")} />
             </View>
+
+            <Spacer size={12} />
+            <FilterRow
+              filter={formatFilter}
+              onFilter={setFormatFilter}
+              savesOnly={savesOnly}
+              onSavesOnly={setSavesOnly}
+            />
 
             <Spacer size={16} />
 
@@ -368,117 +424,117 @@ function timeOfDayBoost(tags: string[] | null, currentTags: string[]): number {
   return Math.min(hits * 3, 8);
 }
 
-function BasedOnSaves({
-  anchors, recs, onTap,
+// City-restaurants helper for the search suggestion panel — bounding-box
+// query over `restaurants_resolved` so we get user-corrected cuisines too,
+// ranked by review count. ~12km box at the equator; tightens at higher
+// latitudes. 100-row cap keeps the response light.
+type CityRestaurant = {
+  google_place_id: string;
+  name: string;
+  cuisine_type: string | null;
+  neighborhood: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  price_level: number | null;
+  rating: number | null;
+  user_rating_count: number | null;
+};
+
+async function loadCityRestaurants(here: { lat: number; lng: number }): Promise<CityRestaurant[]> {
+  const dLat = 0.1;
+  const dLng = 0.13;
+  const { data } = await supabase
+    .from("restaurants_resolved")
+    .select("google_place_id, name, cuisine_type:resolved_cuisine_type, neighborhood, latitude, longitude, price_level, rating, user_rating_count, recommendation_eligibility")
+    .gte("latitude", here.lat - dLat).lte("latitude", here.lat + dLat)
+    .gte("longitude", here.lng - dLng).lte("longitude", here.lng + dLng)
+    .or("recommendation_eligibility.is.null,recommendation_eligibility.gt.0")
+    .order("user_rating_count", { ascending: false, nullsFirst: false })
+    .limit(100);
+  return ((data ?? []) as any[]).map((r) => ({
+    google_place_id: r.google_place_id,
+    name: r.name,
+    cuisine_type: r.cuisine_type,
+    neighborhood: r.neighborhood,
+    latitude: r.latitude,
+    longitude: r.longitude,
+    price_level: r.price_level,
+    rating: r.rating,
+    user_rating_count: r.user_rating_count,
+  }));
+}
+
+// Search-bar suggestion panel — appears when the user taps the search bar
+// before they've typed anything. Two sections: "Find places similar to ..."
+// (anchored on saves) and "All restaurants nearby" (bounding-box list).
+function SearchSuggestionPanel({
+  wishlist, cityList, loading, onSimilarTap, onPlaceTap,
 }: {
-  anchors: Array<{ id: string; name: string }>;
-  recs: SaveAnchoredRec[];
-  onTap: (googlePlaceId: string) => void;
+  wishlist: WishlistEntry[];
+  cityList: CityRestaurant[];
+  loading: boolean;
+  onSimilarTap: (googlePlaceId: string) => void;
+  onPlaceTap: (googlePlaceId: string) => void;
 }) {
-  const namesLine = anchors.slice(0, 3).map((a) => a.name).join(", ")
-    + (anchors.length > 3 ? ` +${anchors.length - 3}` : "");
   return (
-    <View style={{ marginBottom: spacing.lg }}>
-      <Text style={[type.micro, { marginBottom: 4 }]}>BASED ON YOUR SAVES</Text>
-      <Text style={[type.small, { marginBottom: 10, lineHeight: 18 }]} numberOfLines={2}>
-        Because you saved <Text style={{ color: colors.ink, fontWeight: "600" }}>{namesLine}</Text>
-      </Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 10, paddingRight: spacing.md }}
-      >
-        {recs.map((r) => (
+    <View style={{ marginTop: spacing.lg }}>
+      {wishlist.length > 0 && (
+        <View style={{ marginBottom: spacing.lg }}>
+          <Text style={[type.micro, { marginBottom: 10 }]}>FIND PLACES SIMILAR TO…</Text>
+          {wishlist.map((w) => {
+            const r = w.restaurant;
+            if (!r) return null;
+            return (
+              <Pressable
+                key={w.id}
+                onPress={() => onSimilarTap(r.google_place_id)}
+                style={({ pressed }) => [styles.suggestRow, pressed && { opacity: 0.85 }]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.suggestName} numberOfLines={1}>{r.name}</Text>
+                  <Text style={styles.suggestSub} numberOfLines={1}>
+                    {[r.cuisine_type ? r.cuisine_type[0].toUpperCase() + r.cuisine_type.slice(1) : null, r.neighborhood]
+                      .filter(Boolean).join(" · ")}
+                  </Text>
+                </View>
+                <Text style={styles.suggestArrow}>›</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
+      <Text style={[type.micro, { marginBottom: 10 }]}>ALL RESTAURANTS NEARBY</Text>
+      {loading && cityList.length === 0 ? (
+        <ActivityIndicator color={colors.red} />
+      ) : cityList.length === 0 ? (
+        <Text style={[type.small, { lineHeight: 20 }]}>
+          No places indexed yet in this area — start logging visits to fill the map.
+        </Text>
+      ) : (
+        cityList.map((r) => (
           <Pressable
-            key={r.id}
-            onPress={() => onTap(r.google_place_id)}
-            style={({ pressed }) => [styles.savesCard, pressed && { opacity: 0.85 }]}
+            key={r.google_place_id}
+            onPress={() => onPlaceTap(r.google_place_id)}
+            style={({ pressed }) => [styles.suggestRow, pressed && { opacity: 0.85 }]}
           >
-            <Text style={styles.savesCardName} numberOfLines={1}>{r.name}</Text>
-            <Text style={styles.savesCardSub} numberOfLines={1}>
-              {[
-                r.cuisine_type ? r.cuisine_type[0].toUpperCase() + r.cuisine_type.slice(1) : null,
-                r.neighborhood,
-                r.price_level != null && r.price_level > 0 ? "$".repeat(r.price_level) : null,
-              ].filter(Boolean).join(" · ")}
-            </Text>
-            <Text style={styles.savesCardWhy} numberOfLines={1}>
-              Like {r.matchedAgainst.slice(0, 2).join(" + ")}
-            </Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.suggestName} numberOfLines={1}>{r.name}</Text>
+              <Text style={styles.suggestSub} numberOfLines={1}>
+                {[
+                  r.cuisine_type ? r.cuisine_type[0].toUpperCase() + r.cuisine_type.slice(1) : null,
+                  r.neighborhood,
+                  r.price_level != null && r.price_level > 0 ? "$".repeat(r.price_level) : null,
+                  r.rating != null ? `★ ${r.rating.toFixed(1)}` : null,
+                ].filter(Boolean).join(" · ")}
+              </Text>
+            </View>
+            <Text style={styles.suggestArrow}>›</Text>
           </Pressable>
-        ))}
-      </ScrollView>
+        ))
+      )}
     </View>
   );
-}
-
-function WishlistRail({
-  items, here, onTap,
-}: {
-  items: WishlistEntry[];
-  here: { lat: number; lng: number } | null;
-  onTap: (googlePlaceId: string) => void;
-}) {
-  return (
-    <View style={{ marginBottom: spacing.lg }}>
-      <Text style={[type.micro, { marginBottom: 10 }]}>FROM YOUR WISHLIST · NEAR HERE</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 10, paddingRight: spacing.md }}
-      >
-        {items.map((w) => {
-          const r = w.restaurant;
-          if (!r) return null;
-          const km =
-            here && r.latitude != null && r.longitude != null
-              ? distanceKm(here, { lat: r.latitude, lng: r.longitude })
-              : null;
-          const meta = [
-            r.cuisine_type ? r.cuisine_type[0].toUpperCase() + r.cuisine_type.slice(1) : null,
-            r.neighborhood,
-          ].filter(Boolean).join(" · ");
-          return (
-            <Pressable
-              key={w.id}
-              onPress={() => onTap(r.google_place_id)}
-              style={({ pressed }) => [styles.wishChip, pressed && { opacity: 0.85 }]}
-            >
-              <Text style={styles.wishChipName} numberOfLines={1}>{r.name}</Text>
-              {meta.length > 0 && (
-                <Text style={styles.wishChipSub} numberOfLines={1}>{meta}</Text>
-              )}
-              <View style={styles.wishChipFootRow}>
-                {r.price_level != null && r.price_level > 0 && (
-                  <Text style={styles.wishChipMeta}>{"$".repeat(r.price_level)}</Text>
-                )}
-                {km != null && (
-                  <Text style={styles.wishChipMeta}>{km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`}</Text>
-                )}
-              </View>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-    </View>
-  );
-}
-
-// Pick up to 8 wishlist entries within ~15km of the current location. If the
-// user has no coordinates on a saved place (older row), include it anyway.
-function filterWishlistForHere(
-  wish: WishlistEntry[],
-  here: { lat: number; lng: number },
-): WishlistEntry[] {
-  return wish
-    .filter((w) => {
-      const r = w.restaurant;
-      if (!r) return false;
-      if (r.latitude == null || r.longitude == null) return true;
-      const km = distanceKm(here, { lat: r.latitude, lng: r.longitude });
-      return km < 15;
-    })
-    .slice(0, 8);
 }
 
 // All restaurant ids the user has ever visited, used to hide them from the
@@ -514,6 +570,39 @@ function SubTabBtn({ label, active, onPress }: { label: string; active: boolean;
     <Pressable onPress={onPress} style={[styles.tabBtn, active && styles.tabBtnActive]}>
       <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
     </Pressable>
+  );
+}
+
+// Casual/Boutique format filter + "Saves only" toggle. Filter chips switch
+// the visible list between fast/casual and upscale/boutique; the trailing
+// chip rebuilds recommendations from saved restaurants only.
+function FilterRow({
+  filter, onFilter, savesOnly, onSavesOnly,
+}: {
+  filter: FormatFilter;
+  onFilter: (f: FormatFilter) => void;
+  savesOnly: boolean;
+  onSavesOnly: (v: boolean) => void;
+}) {
+  const order: FormatFilter[] = ["all", "casual", "boutique"];
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow}>
+      {order.map((k) => {
+        const active = k === filter;
+        return (
+          <Pressable key={k} onPress={() => onFilter(k)} style={[styles.sortChip, active && styles.sortChipActive]}>
+            <Text style={[styles.sortChipText, active && styles.sortChipTextActive]}>{FILTER_LABEL[k]}</Text>
+          </Pressable>
+        );
+      })}
+      <View style={styles.filterDivider} />
+      <Pressable
+        onPress={() => onSavesOnly(!savesOnly)}
+        style={[styles.sortChip, savesOnly && styles.sortChipActive]}
+      >
+        <Text style={[styles.sortChipText, savesOnly && styles.sortChipTextActive]}>Saves only</Text>
+      </Pressable>
+    </ScrollView>
   );
 }
 
@@ -802,7 +891,7 @@ const styles = StyleSheet.create({
   tabTextActive: { color: colors.ink },
 
   searchHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  clear: { color: colors.red, fontSize: 13, fontWeight: "700" },
+  clear: { color: colors.redText, fontSize: 13, fontWeight: "700" },
 
   errCard: {
     padding: spacing.md, borderRadius: 14,
@@ -823,6 +912,7 @@ const styles = StyleSheet.create({
   sortChipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
   sortChipText: { fontSize: 12, fontWeight: "700", color: colors.ink },
   sortChipTextActive: { color: "#fff" },
+  filterDivider: { width: 1, alignSelf: "stretch", marginVertical: 4, backgroundColor: colors.line },
 
   emptyList: {
     padding: spacing.lg,
@@ -831,39 +921,13 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.line,
   },
   emptyListText: { ...type.small, lineHeight: 20 },
-  wishChip: {
-    paddingHorizontal: 14, paddingVertical: 10,
-    backgroundColor: colors.faint,
-    borderRadius: 14,
-    minWidth: 160, maxWidth: 220,
-    borderWidth: 1, borderColor: colors.line,
+  suggestRow: {
+    flexDirection: "row", alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.line,
   },
-  wishChipName: {
-    fontSize: 14, fontWeight: "700", color: colors.ink,
-    letterSpacing: -0.2,
-  },
-  wishChipSub: {
-    fontSize: 12, color: colors.mute, marginTop: 2,
-  },
-  wishChipFootRow: {
-    flexDirection: "row", gap: 8, marginTop: 6,
-  },
-  wishChipMeta: {
-    fontSize: 11, color: colors.ink, fontWeight: "700",
-  },
-  savesCard: {
-    paddingHorizontal: 14, paddingVertical: 12,
-    backgroundColor: colors.ink,
-    borderRadius: 14,
-    minWidth: 180, maxWidth: 240,
-  },
-  savesCardName: { fontSize: 15, fontWeight: "700", color: "#fff", letterSpacing: -0.2 },
-  savesCardSub: { fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 3 },
-  savesCardWhy: { fontSize: 11, color: colors.red, marginTop: 6, fontWeight: "700" },
-  savesEmpty: {
-    backgroundColor: colors.faint,
-    borderRadius: 14,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-  },
+  suggestName: { fontSize: 15, fontWeight: "600", color: colors.ink, letterSpacing: -0.2 },
+  suggestSub: { fontSize: 12, color: colors.mute, marginTop: 2 },
+  suggestArrow: { fontSize: 20, color: colors.mute, marginLeft: 12 },
 });
