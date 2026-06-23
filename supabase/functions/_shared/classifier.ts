@@ -7,7 +7,7 @@
 // Keep this module side-effect free. No fetch(), no Deno.env reads, no DB
 // access. That is what lets the eval runner exercise it in isolation.
 
-export const CLASSIFIER_VERSION = "1.3.1";
+export const CLASSIFIER_VERSION = "1.4.0";
 
 // ----- Google place shape (subset we use) -------------------------------
 
@@ -49,6 +49,21 @@ export interface DerivedClassification {
   occasion_tags: string[];
   flavor_tags: string[];
   cultural_context: string;
+  // ----- Qualitative "feel" tags -----------------------------------------
+  // The attributes Google Places can't express — vibe, who's in the room,
+  // how the menu eats, and whether it feels worth the money. These are
+  // LLM-derived: the deterministic rules can't read a room from types[], so
+  // they leave these null/empty and the LLM layer fills them in.
+  //   vibe         : single dominant atmosphere
+  //   crowd_energy : 0-3 tags describing who's there
+  //   menu_style   : how the food is structured/served
+  //   price_feel   : perceived value, independent of raw price_level
+  //   ambiance_notes: one short free-text sentence (max ~15 words)
+  vibe: string | null;
+  crowd_energy: string[];
+  menu_style: string | null;
+  price_feel: string | null;
+  ambiance_notes: string | null;
   tags: string[];
   // 0..1. 0 = never recommend (McDonald's, airports, hotels, lounges).
   // 1 = full discovery candidate. Soft downranks land in between.
@@ -628,6 +643,13 @@ export function deriveClassification(p: GooglePlace): DerivedClassification {
     occasion_tags: occasionTags,
     flavor_tags: flavorTags,
     cultural_context: culturalContext,
+    // Qualitative tags are LLM-only; the rule path can't infer them, so it
+    // emits neutral defaults that the LLM merge can override.
+    vibe: null,
+    crowd_energy: [],
+    menu_style: null,
+    price_feel: null,
+    ambiance_notes: null,
     tags: deriveTags(cuisine, primaryType, price),
     recommendation_eligibility: elig.eligibility,
     ineligibility_reason: elig.reason,
@@ -673,6 +695,12 @@ export function googleToRestaurantRow(
     occasion_tags: d.occasion_tags.length ? d.occasion_tags : null,
     flavor_tags: d.flavor_tags.length ? d.flavor_tags : null,
     cultural_context: d.cultural_context,
+    // Qualitative "feel" tags (LLM-derived; null when not enriched).
+    vibe: d.vibe,
+    crowd_energy: d.crowd_energy.length ? d.crowd_energy : null,
+    menu_style: d.menu_style,
+    price_feel: d.price_feel,
+    ambiance_notes: d.ambiance_notes,
     neighborhood: neighborhoodFromPlace(p),
     tags: d.tags.length ? d.tags : null,
     price_level: price,

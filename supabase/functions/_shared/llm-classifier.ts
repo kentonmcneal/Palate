@@ -35,6 +35,13 @@ export interface LLMSuggestion {
   cultural_context: string | null;
   flavor_tags: string[];
   occasion_tags: string[];
+  // Qualitative "feel" tags — the attributes Google can't express. These are
+  // LLM-only (the rule engine has no source for them).
+  vibe: string | null;
+  crowd_energy: string[];
+  menu_style: string | null;
+  price_feel: string | null;
+  ambiance_notes: string | null;
   confidence: ConfidenceMap;
   reasoning: string;
 }
@@ -102,6 +109,7 @@ export function mergeLLMIntoDerivation(
 
   const flavor = Array.from(new Set([...base.flavor_tags, ...llm.flavor_tags]));
   const occasion = Array.from(new Set([...base.occasion_tags, ...llm.occasion_tags]));
+  const crowd = Array.from(new Set([...base.crowd_energy, ...llm.crowd_energy]));
 
   return {
     cuisine_type: cuisine.value,
@@ -113,6 +121,14 @@ export function mergeLLMIntoDerivation(
     cultural_context: cultural.value as string,
     flavor_tags: flavor,
     occasion_tags: occasion,
+    // Qualitative tags are LLM-only — the deterministic base always carries
+    // nulls/empties here, so the LLM value wins (falling back to base if the
+    // LLM declined to tag the field).
+    vibe: llm.vibe ?? base.vibe,
+    crowd_energy: crowd,
+    menu_style: llm.menu_style ?? base.menu_style,
+    price_feel: llm.price_feel ?? base.price_feel,
+    ambiance_notes: llm.ambiance_notes ?? base.ambiance_notes,
     tags: base.tags,
     // Eligibility is computed from chain_type/format_class/etc., which the
     // LLM doesn't override. Carry base values through.
@@ -146,6 +162,11 @@ OUTPUT FORMAT (return ONLY a single JSON object, no prose):
   "cultural_context": one of [comfort, modernist, heritage, hidden, trending, fusion] or null,
   "flavor_tags": array (any of [smoky, spicy, savory, umami, sweet, fresh, rich, light, char]),
   "occasion_tags": array (any of [date_night, group_dinner, casual_solo, brunch, late_night, breakfast, working_lunch, weekend_anchor]),
+  "vibe": one of [chill, upscale_casual, upscale_formal, lively, intimate, dive, trendy] or null,
+  "crowd_energy": array of 0-3 (any of [young_professionals, college, neighborhood_regulars, tourist_heavy, diverse, family_friendly, industry_crowd]),
+  "menu_style": one of [small_plates, comfort_food, tasting_menu, street_food_inspired, classic_american, globally_inspired, bar_food] or null,
+  "price_feel": one of [great_value, fair, splurge_worthy] or null,
+  "ambiance_notes": a single sentence (max 15 words) capturing anything distinctive, or null,
   "confidence": object with float 0..1 keys cuisine_type, cuisine_subregion, cuisine_region, format_class, cultural_context. Use 0 when you have no signal, 0.95 when the data is unambiguous,
   "reasoning": one short sentence on what tipped the call
 }
@@ -156,7 +177,14 @@ RULES:
 - Subregion must be consistent with cuisine_type. E.g., chinese_szechuan only when cuisine_type is "chinese".
 - The restaurant name alone is sometimes diagnostic ("Sichuan Impression", "Joe's Pizza"). Use it.
 - If review snippets or editorial summary are provided, weigh them heavily — they reflect what the place actually serves.
-- Confidence above 0.85 should be reserved for cases where the name, types, or reviews are unmistakable.`;
+- Confidence above 0.85 should be reserved for cases where the name, types, or reviews are unmistakable.
+
+QUALITATIVE TAGS (vibe, crowd_energy, menu_style, price_feel, ambiance_notes):
+- These capture what Google can't: atmosphere, who's in the room, how the menu eats, and perceived value. They are the heart of Palate.
+- Derive them PRIMARILY from review snippets and the editorial summary — that is where vibe and crowd live. Do not infer them from the name or types alone.
+- Be conservative: return null (and [] for crowd_energy) for any qualitative field the reviews don't actually support. A wrong vibe is worse than a missing one.
+- price_feel is about value, not absolute price: a $$$ place reviewers call "worth every penny" is splurge_worthy; a $$ place that "punches above its price" is great_value.
+- ambiance_notes must be grounded in the provided text — one concrete, specific sentence, never generic filler. If nothing distinctive is stated, return null.`;
 
 function buildUserMessage(input: LLMInput): string {
   const lines: string[] = [];
@@ -194,6 +222,13 @@ function parseResponse(text: string): LLMSuggestion {
     cultural_context: obj.cultural_context ?? null,
     flavor_tags: Array.isArray(obj.flavor_tags) ? obj.flavor_tags : [],
     occasion_tags: Array.isArray(obj.occasion_tags) ? obj.occasion_tags : [],
+    vibe: obj.vibe ?? null,
+    crowd_energy: Array.isArray(obj.crowd_energy) ? obj.crowd_energy : [],
+    menu_style: obj.menu_style ?? null,
+    price_feel: obj.price_feel ?? null,
+    ambiance_notes: typeof obj.ambiance_notes === "string" && obj.ambiance_notes.trim()
+      ? obj.ambiance_notes.trim()
+      : null,
     confidence: typeof obj.confidence === "object" && obj.confidence ? obj.confidence : {},
     reasoning: typeof obj.reasoning === "string" ? obj.reasoning : "",
   };
