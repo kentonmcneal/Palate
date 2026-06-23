@@ -14,6 +14,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const PREF_KEY = "palate.notifications.enabled";
 const SCHEDULED_KEY = "palate.notifications.scheduledId";
+const DAILY_REMINDER_KEY = "palate.notifications.dailyReminderId";
 
 // Lazy import so the rest of the app keeps building if expo-notifications
 // isn't installed yet (it's a new dependency for this feature).
@@ -134,6 +135,60 @@ export async function registerPushToken(): Promise<void> {
 
 async function loadDeviceLib(): Promise<typeof import("expo-device") | null> {
   try { return await import("expo-device"); } catch { return null; }
+}
+
+/**
+ * Re-engagement nudge. Schedules a one-shot local notification for this
+ * evening if the user hasn't logged today, with streak-aware copy so an
+ * at-risk streak gets a sharper message. Safe to call on every Home load:
+ * it cancels any prior daily reminder first so we never stack.
+ *
+ * Only schedules for users who have ALREADY granted notification permission —
+ * it never prompts. (The Sunday-Wrapped opt-in in Settings is where users
+ * grant permission; this rides on that grant.)
+ */
+export async function refreshDailyReminder(opts: { loggedToday: boolean; streak: number }): Promise<void> {
+  const Notifications = await loadNotificationsLib();
+  if (!Notifications) return;
+
+  const perm = await Notifications.getPermissionsAsync();
+  if (!perm.granted) return;
+
+  // Clear any prior daily reminder so we never stack duplicates.
+  const existing = await AsyncStorage.getItem(DAILY_REMINDER_KEY);
+  if (existing) {
+    try { await Notifications.cancelScheduledNotificationAsync(existing); } catch {}
+    await AsyncStorage.removeItem(DAILY_REMINDER_KEY);
+  }
+
+  // Already logged today → nothing to nudge. Tomorrow's Home load reschedules.
+  if (opts.loggedToday) return;
+
+  // Fire tonight at 8:00pm local — only if that's still comfortably in the
+  // future (no midnight buzzing; if it's already past, the next day handles it).
+  const fire = new Date();
+  fire.setHours(20, 0, 0, 0);
+  if (fire.getTime() <= Date.now() + 60_000) return;
+
+  const { title, body } = streakReminderCopy(opts.streak);
+  const id = await Notifications.scheduleNotificationAsync({
+    content: { title, body, sound: "default", data: { type: "streak_reminder" } },
+    trigger: fire as any,
+  });
+  await AsyncStorage.setItem(DAILY_REMINDER_KEY, id);
+}
+
+function streakReminderCopy(streak: number): { title: string; body: string } {
+  if (streak >= 1) {
+    return {
+      title: `🔥 Your ${streak}-day streak is on the line`,
+      body: "Log today's meal before midnight to keep it alive.",
+    };
+  }
+  return {
+    title: "What did you eat today?",
+    body: "Ten seconds to log it — every visit sharpens your Wrapped.",
+  };
 }
 
 export async function disableSundayWrappedReminder(): Promise<void> {
