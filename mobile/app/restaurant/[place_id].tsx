@@ -516,14 +516,14 @@ function ratingLabel(r: "loved" | "ok" | "not_for_me"): string {
 
 function ratingPillStyle(r: "loved" | "ok" | "not_for_me") {
   if (r === "loved") return { backgroundColor: colors.redTint, borderColor: colors.redTintBorder };
-  if (r === "ok") return { backgroundColor: "#F4F4F4", borderColor: "#E2E2E2" };
-  return { backgroundColor: "#FAFAFA", borderColor: "#E8E8E8" };
+  if (r === "ok") return { backgroundColor: colors.faint, borderColor: colors.line };
+  return { backgroundColor: colors.paper, borderColor: colors.line };
 }
 
 function ratingPillTextStyle(r: "loved" | "ok" | "not_for_me") {
   if (r === "loved") return { color: colors.red };
-  if (r === "ok") return { color: "#7A7A7A" };
-  return { color: "#A0A0A0" };
+  if (r === "ok") return { color: colors.mute };
+  return { color: colors.mute };
 }
 
 const styles = StyleSheet.create({
