@@ -474,8 +474,12 @@ async function getVisitedPlaceIds(weekStart: string, weekEnd: string): Promise<S
     .gte("visited_at", startISO)
     .lte("visited_at", endISO);
   const ids = new Set<string>();
-  for (const row of (data ?? []) as Array<{ restaurant: { google_place_id: string } | null }>) {
-    if (row.restaurant?.google_place_id) ids.add(row.restaurant.google_place_id);
+  // Supabase types a to-one join as an array; normalize to handle both shapes.
+  for (const row of (data ?? []) as Array<{
+    restaurant: { google_place_id: string | null } | { google_place_id: string | null }[] | null;
+  }>) {
+    const restaurant = Array.isArray(row.restaurant) ? row.restaurant[0] : row.restaurant;
+    if (restaurant?.google_place_id) ids.add(restaurant.google_place_id);
   }
   return ids;
 }

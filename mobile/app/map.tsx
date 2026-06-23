@@ -40,6 +40,7 @@ export default function FullscreenMap() {
   const [places, setPlaces] = useState<Map<string, MapPlace>>(new Map());
   const [loading, setLoading] = useState(true);
   const [refetching, setRefetching] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const vectorRef = useRef<TasteVector | null>(null);
   const lastFetchCenter = useRef<{ lat: number; lng: number } | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -47,6 +48,7 @@ export default function FullscreenMap() {
 
   const fetchAt = useCallback(async (lat: number, lng: number, radius: number, isInitial = false) => {
     if (isInitial) setLoading(true); else setRefetching(true);
+    setFetchError(null);
     try {
       // Try cache first
       let nearby = await getCachedNearby(lat, lng, radius);
@@ -99,8 +101,15 @@ export default function FullscreenMap() {
         }
         return next;
       });
-    } catch {
-      // silent — keep previous markers
+    } catch (e: any) {
+      // Keep previous markers, but tell the user why nothing new loaded
+      // instead of failing silently (the old behavior looked like a freeze).
+      const msg = String(e?.message ?? e ?? "");
+      setFetchError(
+        msg.includes("rate_limited")
+          ? "Slow down a sec — too many map moves. New spots will load shortly."
+          : "Couldn't load this area. Check your connection and try again.",
+      );
     } finally {
       setLoading(false);
       setRefetching(false);
@@ -203,6 +212,11 @@ export default function FullscreenMap() {
               <Text style={styles.refetchText}>Loading area…</Text>
             </View>
           )}
+          {!refetching && fetchError && (
+            <Pressable style={styles.errorPill} onPress={() => { if (here) void fetchAt(here.lat, here.lng, PAN_RADIUS_M, false); }}>
+              <Text style={styles.errorText}>{fetchError}  ·  Tap to retry</Text>
+            </Pressable>
+          )}
         </View>
       )}
     </SafeAreaView>
@@ -241,4 +255,13 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(17,17,17,0.9)",
   },
   refetchText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  errorPill: {
+    position: "absolute",
+    top: 12, alignSelf: "center",
+    maxWidth: "92%",
+    paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: "rgba(200,30,20,0.95)",
+  },
+  errorText: { color: "#fff", fontSize: 12, fontWeight: "700", textAlign: "center" },
 });
