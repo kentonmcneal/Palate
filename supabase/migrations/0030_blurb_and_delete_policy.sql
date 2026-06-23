@@ -26,7 +26,10 @@ alter table public.restaurants
 
 -- The resolved view inherits any new columns via `r.*` — recreate so PostgREST
 -- exposes them. Definition matches 0028 + the new columns flowing through r.*.
-create or replace view public.restaurants_resolved as
+-- Drop first because CREATE OR REPLACE VIEW can't shift column positions when
+-- `r.*` expands to include the newly added columns.
+drop view if exists public.restaurants_resolved;
+create view public.restaurants_resolved as
 select
   r.*,
   coalesce(o_cuisine.value,    r.cuisine_type)      as resolved_cuisine_type,

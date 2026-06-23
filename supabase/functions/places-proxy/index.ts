@@ -54,7 +54,18 @@ const RESTAURANT_TYPES = [
   "meal_delivery",
 ];
 
+// Server-side guards. The map covers a wide area, so the radius cap is
+// generous; Google charges per call (not per result), so a larger radius +
+// higher result count means FEWER calls to fill the map, not more spend.
+const NEARBY_MAX_RADIUS_M = 3000;       // was 500 — caused the "pins stop on pan" bug
+const NEARBY_DEFAULT_RADIUS_M = 1500;
+const NEARBY_MAX_RESULTS = 20;          // was 10 — same per-call price, more pins
+
+// Coarse abuse ceiling only. Normal panning is bounded client-side (debounce +
+// distance threshold + cache), so this just stops a runaway/looping client. It
+// counts the user's own recent location activity as a rough proxy.
 const NEARBY_RATE_LIMIT_SECONDS = 60;
+const NEARBY_RATE_LIMIT_MAX = 40;       // was effectively 5 — far too low for a pan-to-refetch map
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -109,12 +120,13 @@ async function handleNearby(
   admin: ReturnType<typeof createClient>,
 ) {
   const { lat, lng } = body;
-  const radius = Math.min(body.radius_m ?? 150, 500);
+  const radius = Math.min(body.radius_m ?? NEARBY_DEFAULT_RADIUS_M, NEARBY_MAX_RADIUS_M);
   if (typeof lat !== "number" || typeof lng !== "number") {
     return json({ error: "lat/lng required" }, 400);
   }
 
-  // rate-limit: latest location_events for this user in the last 60s
+  // Coarse abuse ceiling: bail only if this user has been extremely active in
+  // the last minute. Normal map panning stays well under this.
   const cutoff = new Date(Date.now() - NEARBY_RATE_LIMIT_SECONDS * 1000).toISOString();
   const { count } = await admin
     .from("location_events")
@@ -122,7 +134,7 @@ async function handleNearby(
     .eq("user_id", userId)
     .gte("captured_at", cutoff);
 
-  if ((count ?? 0) > 5) {
+  if ((count ?? 0) > NEARBY_RATE_LIMIT_MAX) {
     return json({ error: "rate_limited" }, 429);
   }
 
@@ -139,7 +151,7 @@ async function handleNearby(
       },
       body: JSON.stringify({
         includedTypes: RESTAURANT_TYPES,
-        maxResultCount: 10,
+        maxResultCount: NEARBY_MAX_RESULTS,
         locationRestriction: {
           circle: {
             center: { latitude: lat, longitude: lng },

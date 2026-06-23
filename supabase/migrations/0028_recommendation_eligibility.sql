@@ -21,7 +21,10 @@ create index if not exists restaurants_eligible_idx
   where recommendation_eligibility > 0;
 
 -- Extend the resolved view with the new columns so reads stay one-stop.
-create or replace view public.restaurants_resolved as
+-- CREATE OR REPLACE VIEW can't shift column positions, and `r.*` now expands
+-- to include the new columns above — drop and recreate.
+drop view if exists public.restaurants_resolved;
+create view public.restaurants_resolved as
 select
   r.*,
   coalesce(o_cuisine.value,    r.cuisine_type)      as resolved_cuisine_type,

@@ -528,12 +528,13 @@ export function inferRecommendationEligibility(
     return { eligibility: 0, reason: "airport" };
   }
 
-  // Lounges that are gated (members-only, airport club, etc.)
+  // Lounges — excluded from discovery entirely. Gated lounges (airport clubs,
+  // members-only) get a more specific reason, but ALL lounges are dropped:
+  // they're bars / bottle-service spots, not the restaurants Palate surfaces.
   if (/\blounge\b/.test(name)) {
-    if (/\b(members|airport|terminal|club|priority pass|admirals|centurion)\b/.test(name)
-        || /\b(airport|terminal)\b/.test(address)) {
-      return { eligibility: 0, reason: "lounge_gated" };
-    }
+    const gated = /\b(members|airport|terminal|club|priority pass|admirals|centurion)\b/.test(name)
+      || /\b(airport|terminal)\b/.test(address);
+    return { eligibility: 0, reason: gated ? "lounge_gated" : "lounge" };
   }
 
   // Hotels — when the place IS a hotel rather than a destination restaurant.
@@ -544,6 +545,14 @@ export function inferRecommendationEligibility(
   }
   if (types.includes("lodging") && derived.cuisine_type === null) {
     return { eligibility: 0, reason: "hotel_generic" };
+  }
+
+  // Fast food — Google's explicit fast_food_restaurant type (the
+  // McDonald's / Burger King tier). Independent cheap eats are NOT caught
+  // here (they keep eligibility), so the discovery feed loses true fast
+  // food without nuking great low-price local spots.
+  if (types.includes("fast_food_restaurant")) {
+    return { eligibility: 0, reason: "fast_food" };
   }
 
   // National chains — across all formats. A discovery feed shouldn't push
