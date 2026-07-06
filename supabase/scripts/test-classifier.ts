@@ -16,6 +16,9 @@ type Case = {
   expectSubregion?: string | null;
   expectOccasionIncludes?: string[];
   expectOccasionExcludes?: string[];
+  expectTagsInclude?: string[];
+  expectCrowdInclude?: string[];
+  expectCultural?: string;
 };
 
 const P = (over: Partial<GooglePlace>): GooglePlace => ({
@@ -73,6 +76,22 @@ const cases: Case[] = [
     }),
     expectOccasionIncludes: ["party"],
   },
+  // ---- Google atmosphere attributes → deterministic occasion (no LLM) ----
+  {
+    desc: "Attributes: liveMusic + cocktails → party",
+    place: P({ displayName: { text: "Habibi Mezze" }, types: ["mediterranean_restaurant", "restaurant"], liveMusic: true, servesCocktails: true }),
+    expectOccasionIncludes: ["party"],
+  },
+  {
+    desc: "Attributes: kid-friendly → family_gathering",
+    place: P({ displayName: { text: "Mama's Table" }, types: ["italian_restaurant", "restaurant"], goodForChildren: true, menuForChildren: true }),
+    expectOccasionIncludes: ["family_gathering"],
+  },
+  {
+    desc: "Attributes: reservable + upscale → celebration/business",
+    place: P({ displayName: { text: "Le Jardin" }, types: ["french_restaurant", "restaurant"], reservable: true, priceLevel: "PRICE_LEVEL_VERY_EXPENSIVE" }),
+    expectOccasionIncludes: ["celebration", "business_dinner"],
+  },
   {
     desc: "Mediterranean CELEBRATION/BUSINESS spot (from reviews)",
     place: P({
@@ -81,6 +100,43 @@ const cases: Case[] = [
     }),
     expectOccasionIncludes: ["celebration", "business_dinner"],
     expectOccasionExcludes: ["party"],
+  },
+
+  // ---- Discovery signals: critic mentions, hidden-gem, tourist-trap ----
+  {
+    desc: "Michelin mention in reviews → critic tag",
+    place: P({
+      displayName: { text: "Kochi" }, types: ["korean_restaurant", "restaurant"],
+      reviews: reviews("This Michelin-starred tasting menu was one of the best meals of my life."),
+    }),
+    expectTagsInclude: ["michelin"],
+  },
+  {
+    desc: "Hidden-gem language → tag",
+    place: P({
+      displayName: { text: "Mamá" }, types: ["mexican_restaurant", "restaurant"],
+      reviews: reviews("A true hidden gem, this hole-in-the-wall is where the locals go and no one else knows about it."),
+    }),
+    expectTagsInclude: ["hidden-gem", "local-favorite"],
+  },
+  {
+    desc: "Tourist-trap language → crowd + tag",
+    place: P({
+      displayName: { text: "Times Sq Pasta" }, types: ["italian_restaurant", "restaurant"],
+      reviews: reviews("Total tourist trap, overpriced and overrated, full of tourists and not worth the money."),
+    }),
+    expectTagsInclude: ["tourist-heavy"],
+    expectCrowdInclude: ["tourist_heavy"],
+  },
+  {
+    desc: "Rating × count: hidden gem (4.6 / 300)",
+    place: P({ displayName: { text: "Corner Bistro X" }, types: ["restaurant"], rating: 4.6, userRatingCount: 300 }),
+    expectTagsInclude: ["hidden-gem"], expectCultural: "hidden",
+  },
+  {
+    desc: "Rating × count: high-traffic destination (4.2 / 25000)",
+    place: P({ displayName: { text: "Famous Deli" }, types: ["restaurant"], rating: 4.2, userRatingCount: 25000 }),
+    expectTagsInclude: ["high-traffic"], expectCrowdInclude: ["tourist_heavy"], expectCultural: "trending",
   },
 ];
 
@@ -103,6 +159,12 @@ for (const c of cases) {
     if (!d.occasion_tags.includes(occ)) problems.push(`occasion missing "${occ}" (got ${d.occasion_tags.join(",") || "none"})`);
   for (const occ of c.expectOccasionExcludes ?? [])
     if (d.occasion_tags.includes(occ)) problems.push(`occasion should NOT include "${occ}"`);
+  for (const t of c.expectTagsInclude ?? [])
+    if (!(d.tags ?? []).includes(t)) problems.push(`tags missing "${t}" (got ${(d.tags ?? []).join(",") || "none"})`);
+  for (const cr of c.expectCrowdInclude ?? [])
+    if (!(d.crowd_energy ?? []).includes(cr)) problems.push(`crowd missing "${cr}" (got ${(d.crowd_energy ?? []).join(",") || "none"})`);
+  if (c.expectCultural !== undefined && d.cultural_context !== c.expectCultural)
+    problems.push(`cultural "${d.cultural_context}" ≠ "${c.expectCultural}"`);
 
   if (problems.length === 0) { pass += 1; }
   else { fail += 1; fails.push(`✗ ${c.desc}\n    ${problems.join("\n    ")}`); }

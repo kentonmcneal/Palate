@@ -215,7 +215,7 @@ async function handleDetails(
     headers: {
       "X-Goog-Api-Key": GOOGLE_KEY,
       "X-Goog-FieldMask":
-        "id,displayName,formattedAddress,shortFormattedAddress,addressComponents,location,primaryType,types,priceLevel,rating,userRatingCount,editorialSummary,reviews",
+        "id,displayName,formattedAddress,shortFormattedAddress,addressComponents,location,primaryType,types,priceLevel,rating,userRatingCount,editorialSummary,reviews,goodForGroups,goodForChildren,menuForChildren,goodForWatchingSports,liveMusic,reservable,outdoorSeating,servesBreakfast,servesBrunch,servesLunch,servesDinner,servesBeer,servesWine,servesCocktails,servesVegetarianFood,servesDessert,allowsDogs,delivery,takeout,dineIn",
     },
   });
   if (!resp.ok) {

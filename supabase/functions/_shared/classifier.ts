@@ -35,6 +35,29 @@ export interface GooglePlace {
   userRatingCount?: number;
   editorialSummary?: { text?: string };
   reviews?: GoogleReview[];
+  // Google "atmosphere" attributes — booleans Google already computes. Present
+  // only on the Details call (same paid SKU as reviews, so no extra cost). They
+  // are strong DETERMINISTIC occasion/vibe signal, no LLM needed.
+  goodForGroups?: boolean;
+  goodForChildren?: boolean;
+  menuForChildren?: boolean;
+  goodForWatchingSports?: boolean;
+  liveMusic?: boolean;
+  reservable?: boolean;
+  outdoorSeating?: boolean;
+  servesBreakfast?: boolean;
+  servesBrunch?: boolean;
+  servesLunch?: boolean;
+  servesDinner?: boolean;
+  servesBeer?: boolean;
+  servesWine?: boolean;
+  servesCocktails?: boolean;
+  servesVegetarianFood?: boolean;
+  servesDessert?: boolean;
+  allowsDogs?: boolean;
+  delivery?: boolean;
+  takeout?: boolean;
+  dineIn?: boolean;
 }
 
 // ----- Derived classification shape -------------------------------------
@@ -490,6 +513,64 @@ export function inferOccasionTags(
   return [...tags];
 }
 
+// Map Google's structured "atmosphere" booleans into deterministic occasion /
+// crowd / vibe / tag signals. This is high-quality, zero-cost, zero-LLM signal
+// — Google already computed these — and it's exactly the occasion axis Palate
+// cares about. Only meaningful on Details responses (that's where Google
+// returns the attributes); nearby/search responses simply have them undefined.
+export interface AttributeSignals {
+  occasion_tags: string[];
+  crowd_energy: string[];
+  tags: string[];
+  vibe: string | null;
+}
+
+export function inferFromAttributes(p: GooglePlace, priceLevel: number | null): AttributeSignals {
+  const occasion = new Set<string>();
+  const crowd = new Set<string>();
+  const tags = new Set<string>();
+  let vibe: string | null = null;
+  const price = priceLevel ?? 2;
+
+  if (p.goodForGroups) occasion.add("group_dinner");
+  if (p.goodForChildren || p.menuForChildren) {
+    occasion.add("family_gathering");
+    crowd.add("family_friendly");
+    tags.add("family-friendly");
+  }
+  if (p.liveMusic) {
+    occasion.add("party");
+    tags.add("live-music");
+    vibe = "lively";
+  }
+  if (p.servesCocktails) tags.add("cocktails");
+  if (p.servesCocktails && p.liveMusic) vibe = "festive";
+  // Reservable + upscale reads as a destination for planned, special meals.
+  if (p.reservable && price >= 3) {
+    occasion.add("celebration");
+    occasion.add("business_dinner");
+    if (!vibe) vibe = price >= 4 ? "upscale_formal" : "upscale_casual";
+  }
+  if (p.outdoorSeating) tags.add("outdoor-seating");
+  if (p.goodForWatchingSports) { tags.add("sports"); occasion.add("group_dinner"); }
+  if (p.servesBrunch) occasion.add("brunch");
+  if (p.servesBreakfast) occasion.add("breakfast");
+  if (p.allowsDogs) tags.add("dog-friendly");
+  if (p.servesVegetarianFood) tags.add("vegetarian-friendly");
+  // Takeout/delivery only (no dine-in) → a grab-and-go spot.
+  if (p.dineIn === false && (p.takeout || p.delivery)) {
+    occasion.add("quick_bite");
+    tags.add("takeout");
+  }
+
+  return {
+    occasion_tags: [...occasion],
+    crowd_energy: [...crowd],
+    tags: [...tags],
+    vibe,
+  };
+}
+
 export function inferFlavorTags(cuisine: string | null, subregion: string | null): string[] {
   const tags = new Set<string>();
   if (subregion?.includes("bbq") || subregion === "memphis_bbq" || subregion === "kc_bbq" || subregion === "texas_bbq") {
@@ -510,21 +591,27 @@ export function inferCulturalContext(
   chainType: string,
   priceLevel: number | null,
   ratingCount: number | null,
+  rating: number | null = null,
 ): string {
-  return inferCulturalContextWithConfidence(chainType, priceLevel, ratingCount)[0];
+  return inferCulturalContextWithConfidence(chainType, priceLevel, ratingCount, rating)[0];
 }
 
 // Cultural context is the most editorial field — every assignment here is a
 // heuristic. Cap confidence at ~0.7 so the LLM fallback can override later.
+// Now uses rating AND count together so "hidden" means genuinely loved-but-
+// small, and "trending" means mobbed, rather than raw count alone.
 export function inferCulturalContextWithConfidence(
   chainType: string,
   priceLevel: number | null,
   ratingCount: number | null,
+  rating: number | null = null,
 ): [string, number] {
   if (chainType === "national_chain") return ["comfort", 0.7];
-  if (priceLevel != null && priceLevel >= 4) return ["modernist", 0.55];
+  if (ratingCount != null && ratingCount > 6000) return ["trending", 0.55];
+  if (rating != null && ratingCount != null
+      && rating >= 4.4 && ratingCount >= 40 && ratingCount <= 1500) return ["hidden", 0.6];
   if (ratingCount != null && ratingCount < 50) return ["hidden", 0.5];
-  if (ratingCount != null && ratingCount > 5000) return ["trending", 0.5];
+  if (priceLevel != null && priceLevel >= 4) return ["modernist", 0.55];
   return ["heritage", 0.3];
 }
 
@@ -612,14 +699,35 @@ const REVIEW_OCCASION_PATTERNS: Array<[string, RegExp]> = [
   ["quick_bite",      /\b(quick bite|grab (and|&|'?n'?) go|counter service|takeout|to[- ]go|fast service|order at the counter)\b/i],
 ];
 
+// Discovery signals mined from review / editorial text. These are the highest-
+// value curation signals a discovery app can get for free: critic recognition
+// (Michelin/Beard/etc.), "hidden gem" vs "tourist trap" language, and buzz.
+// They land in the free-form `tags` array (and, for tourist language, nudge the
+// crowd/cultural signals).
+const REVIEW_SIGNAL_PATTERNS: Array<[string, RegExp]> = [
+  // ---- Critic / award recognition (strong curation signal) ----
+  ["michelin",              /\bmichelin\b/i],
+  ["bib-gourmand",          /\bbib gourmand\b/i],
+  ["james-beard",           /\bjames beard\b/i],
+  ["celebrity-chef",        /\b(celebrity chef|star chef|renowned chef|acclaimed chef|iron chef|top chef|james beard (award|nominee|semifinalist))\b/i],
+  ["critically-acclaimed",  /\b(critically acclaimed|award[- ]winning|award winner|the infatuation|zagat|eater\b|michelin (star|guide|recommended)|best (new )?restaurants?|top \d+|world'?s (\d+ )?best|forbes|\bnyt\b|new york times)\b/i],
+  // ---- Hidden gem vs tourist trap ----
+  ["hidden-gem",            /\b(hidden gem|underrated|off the beaten path|hole[- ]in[- ]the[- ]wall|best[- ]kept secret|neighborhood secret|don'?t tell anyone)\b/i],
+  ["local-favorite",        /\b(local favorite|neighborhood (spot|favorite|joint|gem|staple)|locals love|where (the )?locals|beloved (local|neighborhood)|community staple)\b/i],
+  ["tourist-heavy",         /\b(tourist trap|touristy|overrated|overhyped|overpriced|not worth the (hype|wait|price|money)|full of tourists|all hype)\b/i],
+  // ---- Buzz / hard-to-get (trending signal) ----
+  ["buzzy",                 /\b(impossible to get (a )?(reservation|table)|always a (wait|line)|hardest reservation|blew up|everyone'?s talking about|hottest (new )?(spot|restaurant|table)|booked (out |up )?(for )?(weeks|months)|month[- ]long wait|line out the door)\b/i],
+];
+
 export interface ReviewMiningResult {
   flavor_tags: string[];
   occasion_tags: string[];
+  signal_tags: string[];
 }
 
 export function mineFromReviewSnippets(snippets: string[]): ReviewMiningResult {
   const corpus = snippets.join("\n").toLowerCase();
-  if (!corpus) return { flavor_tags: [], occasion_tags: [] };
+  if (!corpus) return { flavor_tags: [], occasion_tags: [], signal_tags: [] };
 
   const flavor: string[] = [];
   for (const [tag, pat] of REVIEW_FLAVOR_PATTERNS) {
@@ -629,7 +737,31 @@ export function mineFromReviewSnippets(snippets: string[]): ReviewMiningResult {
   for (const [tag, pat] of REVIEW_OCCASION_PATTERNS) {
     if (pat.test(corpus)) occasion.push(tag);
   }
-  return { flavor_tags: flavor, occasion_tags: occasion };
+  const signal: string[] = [];
+  for (const [tag, pat] of REVIEW_SIGNAL_PATTERNS) {
+    if (pat.test(corpus)) signal.push(tag);
+  }
+  return { flavor_tags: flavor, occasion_tags: occasion, signal_tags: signal };
+}
+
+// Hidden-gem vs tourist-trap scoring from the rating + review-count you already
+// store. A place beloved but not yet mobbed is discovery gold; a 4.1 with 40k
+// reviews is an overexposed destination. Pure, deterministic, no cost.
+export function inferDiscoverySignals(
+  rating: number | null,
+  ratingCount: number | null,
+): { tags: string[]; crowd: string[] } {
+  const tags: string[] = [];
+  const crowd: string[] = [];
+  if (ratingCount != null && ratingCount < 40) {
+    tags.push("new-or-undiscovered");
+  }
+  if (rating != null && ratingCount != null) {
+    if (rating >= 4.4 && ratingCount >= 40 && ratingCount <= 1500) tags.push("hidden-gem");
+    if (rating >= 4.3 && ratingCount > 1500 && ratingCount <= 8000) tags.push("local-favorite");
+    if (ratingCount > 8000) { crowd.push("tourist_heavy"); tags.push("high-traffic"); }
+  }
+  return { tags, crowd };
 }
 
 // ----- Recommendation eligibility ---------------------------------------
@@ -790,6 +922,7 @@ export function deriveClassification(p: GooglePlace): DerivedClassification {
     chainType,
     price,
     p.userRatingCount ?? null,
+    p.rating ?? null,
   );
 
   // Region confidence inherits from subregion — they're computed together.
@@ -808,8 +941,21 @@ export function deriveClassification(p: GooglePlace): DerivedClassification {
 
   const baseOccasion = inferOccasionTags(formatClass, price, types);
   const baseFlavor = inferFlavorTags(cuisine, subregion);
-  const occasionTags = Array.from(new Set([...baseOccasion, ...mined.occasion_tags]));
+  // Google's structured atmosphere attributes — deterministic occasion/crowd/
+  // vibe/tag signal (Details responses only; undefined elsewhere).
+  const attrs = inferFromAttributes(p, price);
+  const occasionTags = Array.from(new Set([...baseOccasion, ...mined.occasion_tags, ...attrs.occasion_tags]));
   const flavorTags = Array.from(new Set([...baseFlavor, ...mined.flavor_tags]));
+
+  // Discovery signals: critic/award + hidden-gem/tourist language mined from
+  // reviews, plus a hidden-gem vs high-traffic read from rating × review count.
+  const discovery = inferDiscoverySignals(p.rating ?? null, p.userRatingCount ?? null);
+  const crowdEnergy = Array.from(new Set([
+    ...attrs.crowd_energy,
+    ...discovery.crowd,
+    ...(mined.signal_tags.includes("tourist-heavy") ? ["tourist_heavy"] : []),
+  ]));
+  const signalTags = Array.from(new Set([...mined.signal_tags, ...discovery.tags]));
 
   const elig = inferRecommendationEligibility(p, {
     chain_type: chainType,
@@ -827,14 +973,15 @@ export function deriveClassification(p: GooglePlace): DerivedClassification {
     occasion_tags: occasionTags,
     flavor_tags: flavorTags,
     cultural_context: culturalContext,
-    // Qualitative tags are LLM-only; the rule path can't infer them, so it
-    // emits neutral defaults that the LLM merge can override.
-    vibe: null,
-    crowd_energy: [],
+    // Qualitative tags: seed vibe/crowd from Google's deterministic atmosphere
+    // attributes when present; the LLM merge can still override with a
+    // review-grounded read. menu_style / price_feel / ambiance stay LLM-only.
+    vibe: attrs.vibe,
+    crowd_energy: crowdEnergy,
     menu_style: null,
     price_feel: null,
     ambiance_notes: null,
-    tags: deriveTags(cuisine, primaryType, price),
+    tags: Array.from(new Set([...deriveTags(cuisine, primaryType, price), ...attrs.tags, ...signalTags])),
     recommendation_eligibility: elig.eligibility,
     ineligibility_reason: elig.reason,
     confidence: {
