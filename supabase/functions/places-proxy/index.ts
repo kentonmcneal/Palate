@@ -28,6 +28,7 @@ import {
   classifyWithLLM,
   type LLMInput,
   mergeLLMIntoDerivation,
+  shouldEnrichQualitative,
   shouldUseLLM,
 } from "../_shared/llm-classifier.ts";
 
@@ -397,17 +398,19 @@ async function classifyAndBuildRow(
     }
   }
 
-  if (opts.useLLM && anthropic && shouldUseLLM(derived)) {
+  const llmInput: LLMInput = {
+    name: place.displayName?.text ?? "Unknown",
+    types: place.types ?? [],
+    primaryType: place.primaryType ?? null,
+    priceLevel: place.priceLevel ? PRICE_LEVEL_MAP[place.priceLevel] ?? null : null,
+    userRatingCount: place.userRatingCount ?? null,
+    editorialSummary,
+    reviewSnippets,
+  };
+  // Fire the LLM when cuisine is ambiguous OR when there's enough review text
+  // to read vibe/occasion — the latter enriches well-classified places too.
+  if (opts.useLLM && anthropic && (shouldUseLLM(derived) || shouldEnrichQualitative(llmInput))) {
     try {
-      const llmInput: LLMInput = {
-        name: place.displayName?.text ?? "Unknown",
-        types: place.types ?? [],
-        primaryType: place.primaryType ?? null,
-        priceLevel: place.priceLevel ? PRICE_LEVEL_MAP[place.priceLevel] ?? null : null,
-        userRatingCount: place.userRatingCount ?? null,
-        editorialSummary,
-        reviewSnippets,
-      };
       const suggestion = await classifyWithLLM(
         llmInput,
         anthropic.messages.create.bind(anthropic.messages),

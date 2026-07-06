@@ -32,6 +32,7 @@ import {
   classifyWithLLM,
   type LLMInput,
   mergeLLMIntoDerivation,
+  shouldEnrichQualitative,
   shouldUseLLM,
 } from "../functions/_shared/llm-classifier";
 
@@ -92,24 +93,26 @@ async function main() {
       const place = row.google_raw as GooglePlace;
       let derived = deriveClassification(place);
 
-      if (create && WITH_LLM && shouldUseLLM(derived)) {
-        llmCalls += 1;
-        try {
-          const llmInput: LLMInput = {
-            name: place.displayName?.text ?? "Unknown",
-            types: place.types ?? [],
-            primaryType: place.primaryType ?? null,
-            priceLevel: place.priceLevel ? PRICE_LEVEL_MAP[place.priceLevel] ?? null : null,
-            userRatingCount: place.userRatingCount ?? null,
-            editorialSummary: place.editorialSummary?.text ?? null,
-            reviewSnippets: (place.reviews ?? [])
-              .map((r) => r.text?.text ?? "")
-              .filter(Boolean),
-          };
-          const suggestion = await classifyWithLLM(llmInput, create);
-          derived = mergeLLMIntoDerivation(derived, suggestion);
-        } catch (e) {
-          console.error(`  [llm-fail] ${row.google_place_id}:`, e);
+      if (create && WITH_LLM) {
+        const llmInput: LLMInput = {
+          name: place.displayName?.text ?? "Unknown",
+          types: place.types ?? [],
+          primaryType: place.primaryType ?? null,
+          priceLevel: place.priceLevel ? PRICE_LEVEL_MAP[place.priceLevel] ?? null : null,
+          userRatingCount: place.userRatingCount ?? null,
+          editorialSummary: place.editorialSummary?.text ?? null,
+          reviewSnippets: (place.reviews ?? [])
+            .map((r) => r.text?.text ?? "")
+            .filter(Boolean),
+        };
+        if (shouldUseLLM(derived) || shouldEnrichQualitative(llmInput)) {
+          llmCalls += 1;
+          try {
+            const suggestion = await classifyWithLLM(llmInput, create);
+            derived = mergeLLMIntoDerivation(derived, suggestion);
+          } catch (e) {
+            console.error(`  [llm-fail] ${row.google_place_id}:`, e);
+          }
         }
       }
 
@@ -132,6 +135,13 @@ async function main() {
           occasion_tags: newRow.occasion_tags,
           flavor_tags: newRow.flavor_tags,
           cultural_context: newRow.cultural_context,
+          // Qualitative "feel" tags — only meaningfully populated on --with-llm
+          // runs, but always written so a re-run can clear stale values.
+          vibe: newRow.vibe,
+          crowd_energy: newRow.crowd_energy,
+          menu_style: newRow.menu_style,
+          price_feel: newRow.price_feel,
+          ambiance_notes: newRow.ambiance_notes,
           tags: newRow.tags,
           classifier_version: newRow.classifier_version,
           classification_confidence: newRow.classification_confidence,

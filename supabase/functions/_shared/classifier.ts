@@ -106,6 +106,7 @@ export const CUISINE_TYPE_MAP: Record<string, string> = {
   hamburger_restaurant: "american",
   fast_food_restaurant: "american",
   sandwich_shop: "american",
+  bar_and_grill: "american",
   italian_restaurant: "italian",
   pizza_restaurant: "italian",
   chinese_restaurant: "chinese",
@@ -115,13 +116,20 @@ export const CUISINE_TYPE_MAP: Record<string, string> = {
   korean_restaurant: "korean",
   thai_restaurant: "thai",
   vietnamese_restaurant: "vietnamese",
+  indonesian_restaurant: "indonesian",
+  filipino_restaurant: "filipino",
   indian_restaurant: "indian",
+  afghani_restaurant: "middle-eastern",
   mexican_restaurant: "mexican",
   mediterranean_restaurant: "mediterranean",
   greek_restaurant: "mediterranean",
+  turkish_restaurant: "middle-eastern",
+  lebanese_restaurant: "middle-eastern",
   middle_eastern_restaurant: "middle-eastern",
   french_restaurant: "french",
   spanish_restaurant: "spanish",
+  brazilian_restaurant: "latin-american",
+  african_restaurant: "african",
   steak_house: "steakhouse",
   seafood_restaurant: "seafood",
   barbecue_restaurant: "bbq",
@@ -130,7 +138,10 @@ export const CUISINE_TYPE_MAP: Record<string, string> = {
   vegan_restaurant: "healthy",
   vegetarian_restaurant: "healthy",
   ice_cream_shop: "dessert",
+  dessert_restaurant: "dessert",
+  acai_shop: "healthy",
   donut_shop: "bakery",
+  bagel_shop: "bakery",
   bakery: "bakery",
   coffee_shop: "café",
   cafe: "café",
@@ -186,7 +197,7 @@ export const SUBREGION_RULES: Array<{
   { match: (n) => /taiwanese|boba|bubble tea/i.test(n),            subregion: "taiwanese",     region: "east_asian" },
   { match: (_, t) => t.includes("chinese_restaurant"),             subregion: "chinese",       region: "east_asian" },
   // Vietnamese
-  { match: (n) => /pho/i.test(n),                                  subregion: "vietnamese_pho", region: "east_asian" },
+  { match: (n) => /\bph[oở]\b/i.test(n),                           subregion: "vietnamese_pho", region: "east_asian" },
   { match: (n) => /banh mi|bánh mì/i.test(n),                      subregion: "vietnamese_banh_mi", region: "east_asian" },
   { match: (_, t) => t.includes("vietnamese_restaurant"),          subregion: "vietnamese",    region: "east_asian" },
   // Thai
@@ -200,7 +211,7 @@ export const SUBREGION_RULES: Array<{
   { match: (n) => /halal cart|halal guys|halal food/i.test(n),     subregion: "halal_cart",    region: "middle_eastern" },
   { match: (n) => /persian|iranian|kebab house/i.test(n),          subregion: "persian",       region: "middle_eastern" },
   { match: (n) => /lebanese|shawarma/i.test(n),                    subregion: "lebanese",      region: "middle_eastern" },
-  { match: (n) => /israeli|sabich|hummus/i.test(n),                subregion: "israeli",       region: "middle_eastern" },
+  { match: (n) => /israeli|sabich/i.test(n),                       subregion: "israeli",       region: "middle_eastern" },
   { match: (n) => /turkish|doner|adana/i.test(n),                  subregion: "turkish",       region: "middle_eastern" },
   { match: (_, t) => t.includes("middle_eastern_restaurant"),      subregion: "middle_eastern", region: "middle_eastern" },
   // Mediterranean
@@ -238,7 +249,7 @@ export const SUBREGION_RULES: Array<{
   { match: (n) => /diner/i.test(n),                                subregion: "american_diner", region: "american" },
   { match: (n) => /deli|jewish deli|pastrami/i.test(n),            subregion: "deli_jewish",   region: "american" },
   // (pizza_nyc + pizza_chicago moved up — see Italian block above)
-  { match: (n) => /diner|breakfast|pancake/i.test(n),              subregion: "breakfast_diner", region: "american" },
+  { match: (n) => /breakfast|pancake|flapjack|waffle house|egg\b/i.test(n), subregion: "breakfast_diner", region: "american" },
   { match: (_, t) => t.includes("hamburger_restaurant"),           subregion: "burger",        region: "american" },
   { match: (n) => /bodega|corner store/i.test(n),                  subregion: "bodega_food",   region: "american" },
   // Bar / wine / fine dining
@@ -280,6 +291,45 @@ export function inferSubregionWithConfidence(
   return { subregion: null, region: null, confidence: 0 };
 }
 
+// Every subregion maps back to a broad cuisine_type. This is the fallback that
+// keeps cuisine and subregion from ever disagreeing: when the Google types[]
+// don't yield a cuisine but a name-based subregion rule fires (e.g. "Sichuan
+// Impression" typed only as `restaurant`), we backfill cuisine_type from the
+// subregion instead of leaving it null.
+export const SUBREGION_TO_CUISINE: Record<string, string> = {
+  memphis_bbq: "bbq", kc_bbq: "bbq", texas_bbq: "bbq", bbq_general: "bbq",
+  nashville_hot: "bbq",
+  cajun: "american", soul_food: "american",
+  korean_bbq: "korean", korean: "korean",
+  japanese_ramen: "japanese", japanese_sushi: "japanese",
+  japanese_izakaya: "japanese", japanese: "japanese",
+  chinese_szechuan: "chinese", chinese_cantonese: "chinese",
+  chinese_xian: "chinese", taiwanese: "chinese", chinese: "chinese",
+  vietnamese_pho: "vietnamese", vietnamese_banh_mi: "vietnamese",
+  vietnamese: "vietnamese",
+  thai: "thai",
+  indian_south: "indian", indian_north: "indian",
+  pakistani: "indian", bangladeshi: "indian",
+  halal_cart: "middle-eastern", persian: "middle-eastern",
+  lebanese: "middle-eastern", israeli: "middle-eastern",
+  turkish: "middle-eastern", middle_eastern: "middle-eastern",
+  greek: "mediterranean", moroccan: "mediterranean",
+  mediterranean_general: "mediterranean",
+  italian_neapolitan: "italian", italian_trattoria: "italian",
+  italian_pizzeria: "italian", italian_general: "italian",
+  pizza_nyc: "italian", pizza_chicago: "italian",
+  mexican_taqueria: "mexican", mexican_regional: "mexican", mexican: "mexican",
+  peruvian: "latin-american", brazilian: "latin-american",
+  argentine: "latin-american", cuban: "latin-american",
+  dominican: "latin-american", puerto_rican: "latin-american",
+  jamaican: "caribbean", trinidadian: "caribbean", haitian: "caribbean",
+  ethiopian: "african", nigerian: "african", senegalese: "african",
+  american_diner: "american", deli_jewish: "american",
+  breakfast_diner: "american", burger: "american", bodega_food: "american",
+  wine_bar_food: "bar", steakhouse: "steakhouse", seafood_house: "seafood",
+  brunch_modern: "brunch", "café": "café",
+};
+
 export function inferFormatClass(types: string[], priceLevel: number | null): string {
   return inferFormatClassWithConfidence(types, priceLevel)[0];
 }
@@ -303,22 +353,84 @@ export function inferFormatClassWithConfidence(
   return ["fast_casual", 0.3];
 }
 
-export const NATIONAL_CHAINS = new Set([
-  "Starbucks", "McDonald's", "Subway", "Chipotle", "Chick-fil-A",
-  "Shake Shack", "Sweetgreen", "Dunkin", "Panera", "Five Guys",
-  "Taco Bell", "Wendy's", "Burger King", "Popeyes", "Cava", "Pret",
-]);
-
-export const KNOWN_CHAINS = [
-  "Starbucks", "McDonald's", "Chipotle", "Sweetgreen", "Chick-fil-A",
-  "Shake Shack", "Subway", "Dunkin", "Panera", "Five Guys", "In-N-Out",
-  "Taco Bell", "Wendy's", "Burger King", "Popeyes", "Cava", "Pret",
+// Chains a discovery app should never surface — the brands users already know
+// and would not be delighted to "discover." Spans fast food, fast casual,
+// national coffee/bakery, casual-dining sit-down chains, pizza chains, and
+// dessert/smoothie chains. Matched case- and punctuation-insensitively as a
+// whole phrase anywhere in the name (so "SF Chipotle" and "Chipotle Mexican
+// Grill" both hit). Curated toward unambiguous brand names to avoid clobbering
+// independents that happen to share a common word.
+export const CHAIN_BRANDS: string[] = [
+  // Burgers / fast food
+  "McDonald's", "Burger King", "Wendy's", "In-N-Out", "Five Guys",
+  "Shake Shack", "Whataburger", "Culver's", "Carl's Jr", "Hardee's",
+  "Jack in the Box", "White Castle", "Sonic Drive-In", "Checkers", "Rally's",
+  "Smashburger", "Steak 'n Shake", "Fatburger", "The Habit Burger",
+  // Chicken
+  "Chick-fil-A", "Popeyes", "KFC", "Raising Cane's", "Zaxby's", "Bojangles",
+  "Church's Chicken", "Wingstop", "Buffalo Wild Wings", "El Pollo Loco",
+  "Dave's Hot Chicken", "Chester's",
+  // Mexican / TexMex fast
+  "Taco Bell", "Chipotle", "Qdoba", "Moe's Southwest", "Del Taco",
+  "Taco Cabana", "Baja Fresh", "Rubio's", "On The Border",
+  // Sandwiches / subs / delis
+  "Subway", "Jimmy John's", "Jersey Mike's", "Firehouse Subs", "Quiznos",
+  "Potbelly", "Which Wich", "Blimpie", "Schlotzsky's", "Arby's", "Jason's Deli",
+  "McAlister's Deli",
+  // Fast-casual bowls / salads / healthy
+  "Sweetgreen", "Cava", "Chopt", "Just Salad", "Dig Inn", "Panera",
+  "Freshii", "Tender Greens", "Mendocino Farms", "Noodles & Company",
+  "Panda Express", "Pei Wei", "Pieology", "Blaze Pizza", "MOD Pizza",
+  "&pizza", "Sarku Japan",
+  // Coffee / bakery / snacks
+  "Starbucks", "Dunkin", "Tim Hortons", "Peet's Coffee", "Caribou Coffee",
+  "Pret A Manger", "Le Pain Quotidien", "Corner Bakery", "Panera Bread",
+  "Auntie Anne's", "Cinnabon", "Krispy Kreme", "Einstein Bros",
+  "The Coffee Bean", "Dutch Bros", "Philz Coffee",
+  // Pizza chains
+  "Domino's", "Pizza Hut", "Papa John's", "Little Caesars", "Papa Murphy's",
+  "Round Table Pizza", "Marco's Pizza", "California Pizza Kitchen",
+  // Casual-dining sit-down chains
+  "Olive Garden", "Applebee's", "Chili's", "TGI Fridays", "Red Lobster",
+  "Outback Steakhouse", "Texas Roadhouse", "LongHorn Steakhouse",
+  "The Cheesecake Factory", "IHOP", "Denny's", "Waffle House", "Cracker Barrel",
+  "Red Robin", "P.F. Chang's", "Cheddar's", "Ruby Tuesday", "Friendly's",
+  "Perkins", "Bob Evans", "Golden Corral", "Hooters", "Dave & Buster's",
+  "Maggiano's", "Carrabba's", "Bonefish Grill", "Yard House", "BJ's Restaurant",
+  "Benihana", "Buca di Beppo", "Bahama Breeze", "Miller's Ale House",
+  // Dessert / smoothie / ice cream
+  "Baskin-Robbins", "Dairy Queen", "Cold Stone", "Ben & Jerry's",
+  "Jamba", "Smoothie King", "Menchie's", "TCBY", "Häagen-Dazs", "Insomnia Cookies",
+  // Grocers/markets sometimes typed as restaurants
   "Whole Foods", "Trader Joe's",
 ];
 
+// Back-compat aliases (nothing else imports these, but keep the symbols).
+export const NATIONAL_CHAINS = new Set(CHAIN_BRANDS);
+export const KNOWN_CHAINS = CHAIN_BRANDS;
+
+// Normalize a name for chain comparison: lowercase, strip punctuation/diacritics,
+// collapse whitespace. "Chick-fil-A" and "chick fil a" both become "chick fil a".
+function normalizeForChain(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFKD").replace(/[̀-ͯ]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+const CHAIN_NORMALIZED: Array<[string, string]> = CHAIN_BRANDS.map(
+  (b) => [b, normalizeForChain(b)],
+);
+
+// Detect a known chain anywhere in the name (as a bounded phrase), not just as
+// a prefix — so location-prefixed and suffixed variants ("Downtown Chipotle",
+// "Chipotle Mexican Grill") are caught. Returns the canonical brand name.
 export function detectChain(name: string): string | null {
-  for (const c of KNOWN_CHAINS) {
-    if (name.toLowerCase().startsWith(c.toLowerCase())) return c;
+  const norm = ` ${normalizeForChain(name)} `;
+  for (const [brand, token] of CHAIN_NORMALIZED) {
+    if (norm.includes(` ${token} `)) return brand;
   }
   return null;
 }
@@ -327,18 +439,15 @@ export function inferChainType(name: string, chainName: string | null): string {
   return inferChainTypeWithConfidence(name, chainName)[0];
 }
 
-// Known-chain lookups are high signal. Independent classification is the
-// absence of a match, which is medium confidence (could be a chain we
-// haven't seen). The name-heuristic local_chain detection is shakier.
+// Any brand on the curated list is a national chain (hard-excluded downstream).
+// Everything else is treated as independent — the discovery-positive default.
+// We intentionally dropped the noisy name-heuristic ("Group", "Brothers", …)
+// that used to mislabel single independents as local chains.
 export function inferChainTypeWithConfidence(
-  name: string,
+  _name: string,
   chainName: string | null,
 ): [string, number] {
-  if (chainName) {
-    if (NATIONAL_CHAINS.has(chainName)) return ["national_chain", 0.95];
-    if (/(\bgroup\b|\bco\.|\& sons|\bbrothers\b)/i.test(name)) return ["local_chain", 0.55];
-    return ["regional_chain", 0.55];
-  }
+  if (chainName) return ["national_chain", 0.95];
   return ["independent", 0.6];
 }
 
@@ -349,12 +458,20 @@ export function inferOccasionTags(
 ): string[] {
   const tags = new Set<string>();
   const price = priceLevel ?? 2;
-  if (formatClass === "fine_dining" || price >= 3) {
+  // Top-tier price/format reads as an occasion destination: dates, celebrations
+  // (graduations, anniversaries), and serious business dinners.
+  if (formatClass === "fine_dining" || price >= 4) {
+    tags.add("date_night");
+    tags.add("celebration");
+    tags.add("business_dinner");
+  }
+  if (formatClass === "casual_dining" || price === 3) {
     tags.add("date_night");
     tags.add("group_dinner");
   }
   if (formatClass === "bar" || formatClass === "wine_bar") {
     tags.add("late_night");
+    tags.add("party");
     tags.add("group_dinner");
   }
   if (formatClass === "café") {
@@ -363,6 +480,7 @@ export function inferOccasionTags(
   }
   if (formatClass === "quick_service") {
     tags.add("casual_solo");
+    tags.add("quick_bite");
     tags.add("working_lunch");
   }
   if (types.includes("brunch_restaurant") || types.includes("breakfast_restaurant")) {
@@ -479,13 +597,19 @@ const REVIEW_FLAVOR_PATTERNS: Array<[string, RegExp]> = [
 ];
 
 const REVIEW_OCCASION_PATTERNS: Array<[string, RegExp]> = [
-  ["date_night",      /\b(date night|romantic|anniversary|intimate|cozy|candle[- ]?lit)\b/i],
-  ["group_dinner",    /\b(family[- ]style|shareable|big group|large group|good for groups|family friendly)\b/i],
+  ["date_night",      /\b(date night|romantic|anniversary|intimate|cozy|candle[- ]?lit|first date)\b/i],
+  ["group_dinner",    /\b(family[- ]style|shareable|big group|large group|good for groups)\b/i],
   ["brunch",          /\b(brunch|mimosa|bottomless|weekend brunch|brunch spot)\b/i],
   ["late_night",      /\b(late night|after work drinks|2 ?am|midnight|bar food)\b/i],
   ["breakfast",       /\b(breakfast|early morning|first thing|pancakes|eggs and)\b/i],
-  ["working_lunch",   /\b(working lunch|business lunch|meeting|quick lunch|in and out fast)\b/i],
+  ["working_lunch",   /\b(working lunch|business lunch|quick lunch|in and out fast)\b/i],
   ["weekend_anchor",  /\b(weekend institution|saturday morning|sunday tradition|always packed weekends)\b/i],
+  // New occasion axes — these are what let same-cuisine places diverge.
+  ["celebration",     /\b(special occasion|celebrat\w*|graduation|birthday (dinner|party|celebration)|anniversary dinner|milestone|engagement|proposal|toast\w*)\b/i],
+  ["business_dinner", /\b(business (dinner|lunch|meal)|client (dinner|lunch|meeting)|work (dinner|event)|power lunch|impress\w* clients?|expense account|corporate (dinner|event)|closing a deal|colleagues)\b/i],
+  ["party",           /\b(part(y|ies)|loud|bumping|packed and loud|dj\b|bottle service|nightlife|club vibe|turn ?up|the scene|see and be seen|hype|lively crowd|dance floor)\b/i],
+  ["family_gathering",/\b(family (gathering|dinner|reunion|meal)|kids? menu|high ?chairs?|whole family|great with kids|family friendly)\b/i],
+  ["quick_bite",      /\b(quick bite|grab (and|&|'?n'?) go|counter service|takeout|to[- ]go|fast service|order at the counter)\b/i],
 ];
 
 export interface ReviewMiningResult {
@@ -522,6 +646,27 @@ export interface EligibilityResult {
   reason: string | null;
 }
 
+// Google place types that mean "this isn't a discovery restaurant at all" —
+// stores, institutional cafeterias, gas stations. Presence of any of these
+// (without a real restaurant type also present) drops the place.
+const NON_RESTAURANT_TYPES = new Set([
+  "supermarket", "grocery_store", "convenience_store", "gas_station",
+  "department_store", "shopping_mall", "warehouse_store", "liquor_store",
+  "drugstore", "pharmacy", "cafeteria",
+]);
+
+// A "real restaurant" type present in types[] means the place serves as a
+// dining destination even if it's inside a hotel/store — used to avoid
+// over-excluding hotel restaurants and market stalls that are real spots.
+const RESTAURANT_TYPES = new Set([
+  "restaurant", "meal_takeaway", "meal_delivery", "cafe", "coffee_shop",
+  "bakery", "bar", "wine_bar", "pub", "ice_cream_shop", "dessert_restaurant",
+]);
+
+function hasRestaurantType(types: string[]): boolean {
+  return types.some((t) => RESTAURANT_TYPES.has(t) || t.endsWith("_restaurant"));
+}
+
 export function inferRecommendationEligibility(
   place: GooglePlace,
   derived: { chain_type: string; cuisine_type: string | null; format_class: string },
@@ -529,55 +674,83 @@ export function inferRecommendationEligibility(
   const types = place.types ?? [];
   const name = (place.displayName?.text ?? "").toLowerCase();
   const address = (place.formattedAddress ?? place.shortFormattedAddress ?? "").toLowerCase();
+  const haystack = `${name} ${address}`;
 
   // ---- HARD EXCLUDES (eligibility = 0) ----
 
-  // Airports: by Google type, address keyword, or "terminal X" pattern
+  // Non-restaurant venues: grocery/convenience/gas/etc. with no real dining
+  // type present. (A market stall Google also tags `restaurant` survives.)
+  if (types.some((t) => NON_RESTAURANT_TYPES.has(t)) && !hasRestaurantType(types)) {
+    return { eligibility: 0, reason: "not_a_restaurant" };
+  }
+
+  // Airports & captive transit venues. Require an actual airport signal — the
+  // Google `airport` type or an "airport"/"airfield"/"international terminal"
+  // keyword — rather than a bare "Terminal" token (which matches "Terminal
+  // Market", ferry terminals, "Terminal Ave", etc.).
   if (types.includes("airport")) {
     return { eligibility: 0, reason: "airport" };
   }
-  if (/\b(airport|airfield)\b/.test(address)) {
+  if (/\b(airport|airfield)\b/.test(haystack)) {
     return { eligibility: 0, reason: "airport" };
   }
-  if (/\bterminal\s+[a-z0-9]/i.test(address) || /\bgate\s+\d/i.test(address)) {
+  if (/\bconcourse [a-z]\b/.test(address)) {
     return { eligibility: 0, reason: "airport" };
   }
 
-  // Lounges — excluded from discovery entirely. Gated lounges (airport clubs,
-  // members-only) get a more specific reason, but ALL lounges are dropped:
-  // they're bars / bottle-service spots, not the restaurants Palate surfaces.
-  if (/\blounge\b/.test(name)) {
-    const gated = /\b(members|airport|terminal|club|priority pass|admirals|centurion)\b/.test(name)
-      || /\b(airport|terminal)\b/.test(address);
-    return { eligibility: 0, reason: gated ? "lounge_gated" : "lounge" };
+  // Food courts and captive-venue concessions — quick-service you can't easily
+  // seek out and wouldn't "discover." Explicit "food court" anywhere, or a
+  // stadium/arena/convention address. NOTE: trendy "food halls" (Chelsea
+  // Market, Time Out Market) are destinations and are deliberately NOT excluded.
+  if (/\bfood court\b/.test(haystack)) {
+    return { eligibility: 0, reason: "food_court" };
+  }
+  if (/\b(stadium|arena|ballpark|amphitheater|amphitheatre|convention center|convention centre|fairgrounds|casino floor)\b/.test(address)) {
+    return { eligibility: 0, reason: "captive_venue" };
   }
 
-  // Hotels — when the place IS a hotel rather than a destination restaurant.
-  // Heuristic: primaryType=lodging (Google thinks it's a hotel first), or
-  // `lodging` in types AND no specific cuisine inferred (generic hotel dining).
-  if (place.primaryType === "lodging") {
+  // Hotels — exclude only when the place IS the hotel (lodging is the dominant
+  // signal and no real restaurant type is present). A named hotel restaurant
+  // that Google also tags `restaurant` stays eligible — those are destinations.
+  if (place.primaryType === "lodging" && !hasRestaurantType(types)) {
     return { eligibility: 0, reason: "hotel" };
   }
-  if (types.includes("lodging") && derived.cuisine_type === null) {
+  if (types.includes("lodging") && !hasRestaurantType(types)) {
     return { eligibility: 0, reason: "hotel_generic" };
+  }
+
+  // Nightlife lounges — hookah/cigar/bottle-service/members lounges are not the
+  // food destinations Palate surfaces. But a bare "Lounge" in the name is NOT
+  // enough (many real restaurants use it): require a nightlife/gated signal or
+  // a night_club type with no restaurant type present.
+  if (/\blounge\b/.test(name)) {
+    const gated = /\b(members|member's|private|airport|terminal|club|priority pass|admirals|centurion|sky ?club)\b/.test(haystack);
+    const nightlife = /\b(hookah|shisha|cigar|bottle service|vip|nightclub|night club|gentlemen'?s)\b/.test(haystack);
+    if (gated) return { eligibility: 0, reason: "lounge_gated" };
+    if (nightlife) return { eligibility: 0, reason: "lounge_nightlife" };
+    // otherwise fall through — treat as a normal restaurant named "...Lounge"
+  }
+  if ((types.includes("night_club") || /\b(hookah|shisha) (lounge|bar|spot)\b/.test(haystack)) && !hasRestaurantType(types)) {
+    return { eligibility: 0, reason: "nightlife" };
   }
 
   // Fast food — Google's explicit fast_food_restaurant type (the
   // McDonald's / Burger King tier). Independent cheap eats are NOT caught
-  // here (they keep eligibility), so the discovery feed loses true fast
-  // food without nuking great low-price local spots.
+  // here (they keep eligibility), so the feed loses true fast food without
+  // nuking great low-price local spots.
   if (types.includes("fast_food_restaurant")) {
     return { eligibility: 0, reason: "fast_food" };
   }
 
-  // National chains — across all formats. A discovery feed shouldn't push
-  // Starbucks, McDonald's, Chipotle, Sweetgreen, Panera, etc. Users who
-  // want them can search by name.
+  // National / well-known chains — across all formats and price tiers. A
+  // discovery feed shouldn't push brands users already know (McDonald's,
+  // Chipotle, Olive Garden, Starbucks, Cheesecake Factory…). Search still finds
+  // them by name.
   if (derived.chain_type === "national_chain") {
     return { eligibility: 0, reason: "national_chain" };
   }
 
-  // ---- SOFT DOWNRANK ----
+  // ---- SOFT DOWNRANK (kept for any future regional/local chain tagging) ----
 
   if (derived.chain_type === "regional_chain") {
     return { eligibility: 0.7, reason: "regional_chain" };
@@ -597,8 +770,19 @@ export function deriveClassification(p: GooglePlace): DerivedClassification {
   const primaryType = p.primaryType ?? types[0] ?? null;
   const price = p.priceLevel ? PRICE_LEVEL_MAP[p.priceLevel] ?? null : null;
 
-  const [cuisine, cuisineConf] = inferCuisineFromTypesWithConfidence(types);
+  let [cuisine, cuisineConf] = inferCuisineFromTypesWithConfidence(types);
   const { subregion, region, confidence: subregionConf } = inferSubregionWithConfidence(name, types);
+  // Fallback: if Google types gave no cuisine but a name-based subregion rule
+  // fired (e.g. "Sichuan Impression" typed only `restaurant`), derive the broad
+  // cuisine from the subregion so the two never disagree. Confidence tracks the
+  // subregion signal but is capped since it's an inference, not a Google label.
+  if (cuisine === null && subregion) {
+    const fromSub = SUBREGION_TO_CUISINE[subregion];
+    if (fromSub) {
+      cuisine = fromSub;
+      cuisineConf = Math.min(subregionConf, 0.7);
+    }
+  }
   const [formatClass, formatConf] = inferFormatClassWithConfidence(types, price);
   const chainName = detectChain(name);
   const [chainType, chainConf] = inferChainTypeWithConfidence(name, chainName);
