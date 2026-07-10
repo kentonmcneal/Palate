@@ -43,6 +43,8 @@ const cases: Case[] = [
   { desc: "Generic mall food court stall", place: P({ displayName: { text: "Sarku Teriyaki" }, types: ["restaurant"], formattedAddress: "100 Mall Dr, Food Court, Anytown" }), expectEligibility: 0, expectReason: "food_court" },
   { desc: "Airport concession (airport rule wins over chain)", place: P({ displayName: { text: "Shake Shack" }, types: ["hamburger_restaurant"], formattedAddress: "JFK International Airport, Terminal 4, Queens NY" }), expectEligibility: 0, expectReason: "airport" },
   { desc: "Independent at an airport", place: P({ displayName: { text: "Deep Blue Sushi" }, types: ["sushi_restaurant"], formattedAddress: "LaGuardia Airport, Terminal B" }), expectEligibility: 0, expectReason: "airport" },
+  { desc: "Restaurant on 'Airport Blvd' street (KEEP — not at an airport)", place: P({ displayName: { text: "Justine's Brasserie" }, types: ["french_restaurant"], formattedAddress: "4710 East 5th St, Austin TX" }), expectEligibility: 1.0, expectReason: null },
+  { desc: "Real spot addressed on Airport Rd (KEEP)", place: P({ displayName: { text: "The Green Bean" }, types: ["cafe"], formattedAddress: "2801 Airport Rd, Memphis TN" }), expectEligibility: 1.0, expectReason: null },
   { desc: "Stadium concession", place: P({ displayName: { text: "Local Smoke BBQ" }, types: ["barbecue_restaurant"], formattedAddress: "1 MetLife Stadium Dr, East Rutherford" }), expectEligibility: 0, expectReason: "captive_venue" },
 
   // ---- Lounge disambiguation (the false-positive fix) ----

@@ -39,6 +39,7 @@ export const POPULAR_CITIES: BrowsingCity[] = [
   { id: "atlanta",      name: "Atlanta",      region: "GA", lat: 33.7490, lng: -84.3880 },
   { id: "denver",       name: "Denver",       region: "CO", lat: 39.7392, lng: -104.9903 },
   { id: "nashville",    name: "Nashville",    region: "TN", lat: 36.1627, lng: -86.7816 },
+  { id: "memphis",      name: "Memphis",      region: "TN", lat: 35.1495, lng: -90.0490 },
   { id: "new-orleans",  name: "New Orleans",  region: "LA", lat: 29.9511, lng: -90.0715 },
   { id: "portland",     name: "Portland",     region: "OR", lat: 45.5152, lng: -122.6784 },
   { id: "san-diego",    name: "San Diego",    region: "CA", lat: 32.7157, lng: -117.1611 },

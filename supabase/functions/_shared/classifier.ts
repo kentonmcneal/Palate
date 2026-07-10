@@ -823,7 +823,12 @@ export function inferRecommendationEligibility(
   if (types.includes("airport")) {
     return { eligibility: 0, reason: "airport" };
   }
-  if (/\b(airport|airfield)\b/.test(haystack)) {
+  // "airport"/"airfield" keyword — but NOT when it's just a street name.
+  // "Airport Blvd", "Airport Rd", "Airport Way" etc. are common city streets
+  // lined with normal restaurants (e.g. Austin's Airport Blvd), nowhere near a
+  // terminal. Skip the exclude when the token is immediately followed by a
+  // street-type suffix.
+  if (/\b(airport|airfield)\b(?!\s+(rd|road|blvd|boulevard|ave|avenue|st|street|way|hwy|highway|dr|drive|ln|lane|pkwy|parkway|cir|circle|ct|court|pl|place|ter|terrace|loop|row|pike|plaza|center|centre|ctr|sq|square))/.test(haystack)) {
     return { eligibility: 0, reason: "airport" };
   }
   if (/\bconcourse [a-z]\b/.test(address)) {

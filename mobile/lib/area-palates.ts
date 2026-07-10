@@ -77,6 +77,13 @@ const CITY_MIXES: Record<string, AreaPalate[]> = {
     { label: "Curator · Wine-bar",        share: 0.08 },
     { label: "Forager · Late-night",      share: 0.07 },
   ],
+  "Memphis": [
+    { label: "Steward · Dry-rub-BBQ",     share: 0.19 },
+    { label: "Anchor · Soul-food",        share: 0.15 },
+    { label: "Anchor · Meat-and-three",   share: 0.11 },
+    { label: "Forager · Beale-late",      share: 0.09 },
+    { label: "Curator · Brunch",          share: 0.08 },
+  ],
   "Chicago": [
     { label: "Steward · Deep-dish",       share: 0.15 },
     { label: "Anchor · Comfort",          share: 0.12 },
@@ -109,6 +116,7 @@ const HOOD_TO_CITY: Array<{ match: RegExp; city: string }> = [
   { match: /center city|fishtown|northern liberties|south philly|rittenhouse|university city/i, city: "Philadelphia" },
   { match: /los angeles|santa monica|venice|silver lake|west hollywood|culver city|pasadena/i, city: "Los Angeles" },
   { match: /atlanta|buckhead|midtown atl|inman park|virginia.?highland/i, city: "Atlanta" },
+  { match: /memphis|cooper.?young|overton square|beale|germantown|collierville/i, city: "Memphis" },
   { match: /austin|south congress|east austin|domain/i, city: "Austin" },
   { match: /chicago|wicker park|lincoln park|river north|lakeview/i, city: "Chicago" },
   { match: /san francisco|mission|hayes valley|noe valley|north beach/i, city: "San Francisco" },
