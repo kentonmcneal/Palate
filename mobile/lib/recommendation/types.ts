@@ -31,6 +31,9 @@ export type RestaurantInput = {
   occasion_tags?: string[] | null;
   flavor_tags?: string[] | null;
   cultural_context?: string | null;
+  // Free-form classifier tags (e.g. "michelin", "hidden-gem", "tourist-heavy")
+  // used for discovery-signal score adjustment.
+  tags?: string[] | null;
   neighborhood?: string | null;
   price_level?: number | null;
   rating?: number | null;

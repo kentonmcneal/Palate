@@ -445,7 +445,7 @@ async function loadCityRestaurants(here: { lat: number; lng: number }): Promise<
   const dLng = 0.13;
   const { data } = await supabase
     .from("restaurants_resolved")
-    .select("google_place_id, name, cuisine_type:resolved_cuisine_type, neighborhood, latitude, longitude, price_level, rating, user_rating_count, recommendation_eligibility")
+    .select("google_place_id, name, cuisine_type:resolved_cuisine_type, occasion_tags, tags, neighborhood, latitude, longitude, price_level, rating, user_rating_count, recommendation_eligibility")
     .gte("latitude", here.lat - dLat).lte("latitude", here.lat + dLat)
     .gte("longitude", here.lng - dLng).lte("longitude", here.lng + dLng)
     .or("recommendation_eligibility.is.null,recommendation_eligibility.gt.0")
@@ -455,6 +455,8 @@ async function loadCityRestaurants(here: { lat: number; lng: number }): Promise<
     google_place_id: r.google_place_id,
     name: r.name,
     cuisine_type: r.cuisine_type,
+    occasion_tags: r.occasion_tags,
+    tags: r.tags,
     neighborhood: r.neighborhood,
     latitude: r.latitude,
     longitude: r.longitude,

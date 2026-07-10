@@ -127,6 +127,7 @@ export function toInput(p: any): RestaurantInput {
     occasion_tags: p.occasion_tags ?? null,
     flavor_tags: p.flavor_tags ?? null,
     cultural_context: p.cultural_context ?? null,
+    tags: p.tags ?? null,
     neighborhood: p.neighborhood ?? null,
     price_level: p.price_level ?? null,
     rating: p.rating ?? null,

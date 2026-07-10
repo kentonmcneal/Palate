@@ -184,6 +184,11 @@ const CUISINE_DISPLAY: Record<string, string> = {
   "seafood": "seafood",
   "steakhouse": "steakhouse",
   "bar": "bar-and-bite",
+  "filipino": "Filipino",
+  "indonesian": "Indonesian",
+  "latin-american": "Latin American",
+  "caribbean": "Caribbean",
+  "african": "African",
 };
 
 const TRAIT_DISPLAY: Record<PalateTrait, string> = {
