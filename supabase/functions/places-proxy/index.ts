@@ -68,6 +68,17 @@ const NEARBY_MAX_RESULTS = 20;          // was 10 — same per-call price, more 
 const NEARBY_RATE_LIMIT_SECONDS = 60;
 const NEARBY_RATE_LIMIT_MAX = 40;       // was effectively 5 — far too low for a pan-to-refetch map
 
+// ----- Cost controls ----------------------------------------------------
+// Daily ceiling on *billable* Google Places calls (nearby, search, and
+// details cache-misses). When today's count hits the cap the proxy stops
+// calling Google and serves cached/DB results until the next UTC day. Default
+// ~1500/day (~$48/day worst case at Pro pricing); raise via env as you scale.
+const GOOGLE_DAILY_CALL_CAP = Number(Deno.env.get("GOOGLE_DAILY_CALL_CAP") ?? "1500");
+// Founder's own Expo push token (ExponentPushToken[...]). Receives the 80%
+// warning and the kill-switch-tripped alert. When unset, alerts are skipped
+// silently (the kill-switch itself still works).
+const ALERT_PUSH_TOKEN = Deno.env.get("ALERT_PUSH_TOKEN") ?? "";
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -139,6 +150,15 @@ async function handleNearby(
     return json({ error: "rate_limited" }, 429);
   }
 
+  // Kill-switch: if today's Google budget is spent, serve best-effort results
+  // from the cached restaurants instead of calling Google.
+  if (await isTripped(admin)) {
+    const places = await degradedNearby(admin, lat, lng, radius);
+    await recordUsage(admin, "nearby", "cache");
+    return json({ places, degraded: true });
+  }
+  await reserveGoogleCall(admin);
+
   // call Google Places API (New) — searchNearby
   const resp = await fetch(
     "https://places.googleapis.com/v1/places:searchNearby",
@@ -181,6 +201,7 @@ async function handleNearby(
     await admin.from("restaurants").upsert(rows, { onConflict: "google_place_id" });
   }
 
+  await recordUsage(admin, "nearby", "google");
   return json({ places: rows });
 }
 
@@ -205,8 +226,20 @@ async function handleDetails(
     && new Date(cached.refreshed_at).getTime() > Date.now() - 30 * 24 * 3600 * 1000;
 
   if (cacheFresh) {
+    await recordUsage(admin, "details", "cache");
     return json({ place: cached });
   }
+
+  // Kill-switch: budget spent — return the stale cached row if we have one,
+  // rather than paying Google for a refresh. Only 503 when we have nothing.
+  if (await isTripped(admin)) {
+    if (cached) {
+      await recordUsage(admin, "details", "cache");
+      return json({ place: cached, degraded: true });
+    }
+    return json({ error: "temporarily_unavailable", degraded: true }, 503);
+  }
+  await reserveGoogleCall(admin);
 
   // Details endpoint requests the richer fields (editorialSummary, reviews)
   // because this is the LLM-augmented path — those become inputs to the LLM
@@ -225,6 +258,7 @@ async function handleDetails(
   const place = await resp.json() as GooglePlace;
   const row = await classifyAndBuildRow(place, { useLLM: true, admin });
   await admin.from("restaurants").upsert(row, { onConflict: "google_place_id" });
+  await recordUsage(admin, "details", "google");
   return json({ place: row });
 }
 
@@ -233,6 +267,15 @@ async function handleSearch(
   admin: ReturnType<typeof createClient>,
 ) {
   if (!body.query) return json({ error: "query required" }, 400);
+
+  // Kill-switch: text search is a relevance-ranked query we can't faithfully
+  // serve from the DB, so when the budget is spent we return empty with a
+  // degraded flag rather than a low-quality guess.
+  if (await isTripped(admin)) {
+    await recordUsage(admin, "search", "cache");
+    return json({ places: [], degraded: true });
+  }
+  await reserveGoogleCall(admin);
 
   const resp = await fetch("https://places.googleapis.com/v1/places:searchText", {
     method: "POST",
@@ -273,6 +316,7 @@ async function handleSearch(
   if (rows.length) {
     await admin.from("restaurants").upsert(rows, { onConflict: "google_place_id" });
   }
+  await recordUsage(admin, "search", "google");
   return json({ places: rows });
 }
 
@@ -430,6 +474,93 @@ async function classifyAndBuildRow(
     reviews_refreshed_at: opts.useLLM ? new Date().toISOString() : null,
     google_raw: place,
   };
+}
+
+// ----- Cost-control helpers ---------------------------------------------
+
+function todayUTC(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Best-effort push to the founder's device when a budget threshold is crossed.
+// Reuses the same Expo endpoint as notify-feed-post. Never throws.
+async function sendAlertPush(title: string, body: string) {
+  if (!ALERT_PUSH_TOKEN) return;
+  try {
+    await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ to: ALERT_PUSH_TOKEN, title, body, priority: "high", sound: "default" }),
+    });
+  } catch (_) { /* alerts are best-effort — never break the request */ }
+}
+
+// True when today's billable-call budget is already spent.
+async function isTripped(admin: ReturnType<typeof createClient>): Promise<boolean> {
+  const { data } = await admin
+    .from("google_usage_counter")
+    .select("tripped")
+    .eq("day", todayUTC())
+    .maybeSingle();
+  return data?.tripped === true;
+}
+
+// Count one billable Google call and fire the 80% / tripped alerts exactly
+// once each (the RPC reports which caller crossed the threshold).
+async function reserveGoogleCall(admin: ReturnType<typeof createClient>) {
+  try {
+    const { data } = await admin.rpc("bump_google_usage", {
+      p_day: todayUTC(),
+      p_cap: GOOGLE_DAILY_CALL_CAP,
+    });
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return;
+    if (row.crossed_warn) {
+      await sendAlertPush(
+        "Palate — Google budget at 80%",
+        `${row.new_count}/${GOOGLE_DAILY_CALL_CAP} Google Places calls used today.`,
+      );
+    }
+    if (row.crossed_trip) {
+      await sendAlertPush(
+        "⚠️ Palate kill-switch tripped",
+        `Hit ${GOOGLE_DAILY_CALL_CAP} Google calls — serving cached results only until tomorrow (UTC).`,
+      );
+    }
+  } catch (_) { /* metering must never break the request */ }
+}
+
+// Telemetry (best-effort): per-day tally of proxy activity by action + source.
+async function recordUsage(
+  admin: ReturnType<typeof createClient>,
+  action: string,
+  source: "google" | "cache",
+) {
+  try {
+    await admin.rpc("record_api_usage", { p_day: todayUTC(), p_action: action, p_source: source });
+  } catch (_) { /* telemetry must never break the request */ }
+}
+
+// Degraded nearby: a bounding-box query on the cached restaurants, used only
+// when the Google budget is spent. Less fresh than a live call, but keeps the
+// map usable instead of returning nothing.
+async function degradedNearby(
+  admin: ReturnType<typeof createClient>,
+  lat: number,
+  lng: number,
+  radius: number,
+) {
+  const dLat = radius / 111000;
+  const dLng = radius / ((111000 * Math.cos((lat * Math.PI) / 180)) || 111000);
+  const { data } = await admin
+    .from("restaurants_resolved")
+    .select("*")
+    .gte("latitude", lat - dLat).lte("latitude", lat + dLat)
+    .gte("longitude", lng - dLng).lte("longitude", lng + dLng)
+    .or("recommendation_eligibility.is.null,recommendation_eligibility.gt.0")
+    .order("user_rating_count", { ascending: false })
+    .limit(NEARBY_MAX_RESULTS);
+  return data ?? [];
 }
 
 function json(body: unknown, status = 200) {
