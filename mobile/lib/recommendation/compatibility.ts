@@ -47,9 +47,11 @@ export function computeCompatibility(graph: TasteGraph, r: RestaurantInput): Com
     quality.s * W.quality +
     novelty.s * W.novelty;
 
-  // Map to 0..100. Floor at 20 (we never claim "we know it's bad" without data)
-  // and cap at 99 (we never claim perfect).
-  let raw = Math.round(composite01 * 100);
+  // Map to 0..100 with a gentle top-lift so a genuinely strong match lands in
+  // the 90s (a linear map made even the best pick feel like ~45). The exponent
+  // < 1 lifts the high end more than the low end; weak matches still read weak.
+  // Floor 20 (never claim "bad" without data), cap 99 (never claim perfect).
+  let raw = Math.round(Math.pow(composite01, 0.7) * 100);
 
   // Personal-signal adjustment: item ratings, friend visits, dismisses, skips.
   const personalDelta = computePersonalDelta(graph, r);
@@ -101,15 +103,15 @@ function scoreTaste(g: TasteGraph, r: RestaurantInput): Dim {
   let weight = 0;
 
   if (r.cuisine_subregion) {
-    const share = shareOf(g.cuisinesSubregion, r.cuisine_subregion);
-    score += share * 0.5; weight += 0.5;
+    const aff = affinityOf(g.cuisinesSubregion, r.cuisine_subregion);
+    score += aff * 0.5; weight += 0.5;
   }
   if (r.cuisine_region) {
-    const share = shareOf(g.cuisines, r.cuisine_region);
-    score += share * 0.3; weight += 0.3;
+    const aff = affinityOf(g.cuisines, r.cuisine_region);
+    score += aff * 0.3; weight += 0.3;
   }
   if (r.flavor_tags?.length) {
-    const overlap = sumShare(g.flavors, r.flavor_tags);
+    const overlap = sumAffinity(g.flavors, r.flavor_tags);
     score += overlap * 0.2; weight += 0.2;
   }
   const s = weight > 0 ? Math.min(1, score / weight) : 0.5;
@@ -122,11 +124,11 @@ function scoreBehavior(g: TasteGraph, r: RestaurantInput): Dim {
   let weight = 0;
 
   if (r.format_class) {
-    const share = shareOf(g.formats, r.format_class);
-    score += share * 0.45; weight += 0.45;
+    const aff = affinityOf(g.formats, r.format_class);
+    score += aff * 0.45; weight += 0.45;
   }
   if (r.occasion_tags?.length) {
-    const overlap = sumShare(g.occasions, r.occasion_tags);
+    const overlap = sumAffinity(g.occasions, r.occasion_tags);
     score += overlap * 0.30; weight += 0.30;
   }
   // Price proximity — closer to user's average tier = higher
@@ -233,9 +235,23 @@ function decideConfidence(g: TasteGraph, matched: number): "low" | "medium" | "h
 // ----------------------------------------------------------------------------
 // Helpers
 // ----------------------------------------------------------------------------
-function sumShare(map: Record<string, number>, keys: string[]): number {
+// Relative affinity: how strongly the user favors this bucket vs their OWN top
+// bucket. Raw shareOf caps low — a favorite is rarely >0.3 of visits, since
+// shares sum to 1 across all buckets — which compressed every match into the
+// 30s-40s. Normalizing by the user's max share lets a #1-cuisine match reach
+// ~1.0, so composite scores span a useful range again.
+function maxValue(map: Record<string, number>): number {
+  let m = 0;
+  for (const n of Object.values(map)) if (n > m) m = n;
+  return m;
+}
+function affinityOf(map: Record<string, number>, key: string): number {
+  const m = maxValue(map);
+  return m > 0 ? Math.min(1, (map[key] ?? 0) / m) : 0;
+}
+function sumAffinity(map: Record<string, number>, keys: string[]): number {
   let s = 0;
-  for (const k of keys) s += shareOf(map, k);
+  for (const k of keys) s += affinityOf(map, k);
   return Math.min(1, s);
 }
 

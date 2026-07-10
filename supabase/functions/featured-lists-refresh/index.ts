@@ -28,6 +28,12 @@ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY   = Deno.env.get("GOOGLE_PLACES_API_KEY")!;
 
 const TOP_N = 10;
+// Google text search returns 20 results/page. Only paginate (up to 3 pages /
+// 60 raw) when a list is short of TOP_N after filtering — well-covered
+// categories cost a single call, so the extra Google spend is bounded to lists
+// that actually under-fill. NB: this cron calls Google directly, outside
+// places-proxy's daily kill-switch, so keeping pagination conditional matters.
+const MAX_PAGES = 3;
 const STALE_AFTER_MS = 36 * 60 * 60 * 1000; // 36h
 
 // ----------------------------------------------------------------------------
@@ -145,27 +151,34 @@ async function refreshCity(
   for (const cat of CATEGORIES) {
     const query = cat.query.replace("{city}", city_label);
     try {
-      const rawPlaces = await googleTextSearch(query, lat, lng);
-      if (rawPlaces.length === 0) continue;
+      // Collect candidates across up to MAX_PAGES pages, stopping as soon as we
+      // have enough eligible + hours-passing places to fill the list. Chains,
+      // airports, hotels, lounges (recommendation_eligibility === 0) are dropped
+      // below, so a chain-heavy category like "burgers" often needs page 2/3 to
+      // reach TOP_N genuine independents. Well-covered categories break after
+      // one page, so the extra spend is bounded to lists that are actually short.
+      const rawById = new Map<string, GooglePlace>();
+      let pageToken: string | undefined = undefined;
+      let eligibleRows: ClassifiedRow[] = [];
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const { places, nextPageToken } = await googleTextSearch(query, lat, lng, pageToken);
+        for (const p of places) rawById.set(p.id, p);
 
-      // Per-category time-of-day filter — late-night actually has to be open
-      // late, early-morning has to be open early, etc.
-      const hoursFiltered = filterByCategorySlug(rawPlaces, cat.slug);
-      if (hoursFiltered.length === 0) continue;
+        // Per-category time-of-day filter (late-night must be open late, etc.),
+        // then classify and drop ineligible venues. Re-run over everything
+        // collected so far so the stop condition sees the full pool. Classifying
+        // is deterministic and LLM-free here, so re-running per page is cheap.
+        const hoursFiltered = filterByCategorySlug([...rawById.values()], cat.slug);
+        const classified = hoursFiltered.map((p) =>
+          googleToRestaurantRow(p as unknown as ClassifierPlace),
+        );
+        eligibleRows = classified.filter(
+          (row) => (row.recommendation_eligibility ?? 1) > 0,
+        );
 
-      // Classify each candidate through the shared classifier, then drop
-      // ineligible ones (national chains, airports, hotels, lounges) at
-      // cache-write time. This means every featured list contains
-      // genuinely discoverable places — no need to filter again on read.
-      // We also upsert each classified row into `restaurants` so future
-      // lookups (similar_restaurants, detail screens) reuse the same
-      // classification rather than re-deriving from Google.
-      const classified = hoursFiltered.map((p) =>
-        googleToRestaurantRow(p as unknown as ClassifierPlace),
-      );
-      const eligibleRows = classified.filter(
-        (row) => (row.recommendation_eligibility ?? 1) > 0,
-      );
+        if (eligibleRows.length >= TOP_N || !nextPageToken) break;
+        pageToken = nextPageToken;
+      }
       if (eligibleRows.length === 0) continue;
 
       // Side-effect: keep `restaurants` warm with the full classified row.
@@ -221,7 +234,8 @@ async function googleTextSearch(
   query: string,
   lat: number,
   lng: number,
-): Promise<GooglePlace[]> {
+  pageToken?: string,
+): Promise<{ places: GooglePlace[]; nextPageToken?: string }> {
   const resp = await fetch("https://places.googleapis.com/v1/places:searchText", {
     method: "POST",
     headers: {
@@ -229,8 +243,9 @@ async function googleTextSearch(
       "X-Goog-Api-Key": GOOGLE_KEY,
       "X-Goog-FieldMask":
         // regularOpeningHours added so we can filter by time-of-day per
-        // category (late-night needs to actually be open late, etc.)
-        "places.id,places.displayName,places.formattedAddress,places.shortFormattedAddress,places.location,places.primaryType,places.types,places.priceLevel,places.rating,places.userRatingCount,places.regularOpeningHours",
+        // category (late-night needs to actually be open late, etc.);
+        // nextPageToken so we can paginate short lists up to TOP_N.
+        "nextPageToken,places.id,places.displayName,places.formattedAddress,places.shortFormattedAddress,places.location,places.primaryType,places.types,places.priceLevel,places.rating,places.userRatingCount,places.regularOpeningHours",
     },
     body: JSON.stringify({
       textQuery: query,
@@ -242,6 +257,8 @@ async function googleTextSearch(
           radius: 30000,
         },
       },
+      // pageToken must accompany otherwise-identical params (Google requirement).
+      ...(pageToken ? { pageToken } : {}),
     }),
   });
 
@@ -251,7 +268,10 @@ async function googleTextSearch(
   }
 
   const data = await resp.json();
-  return (data.places ?? []) as GooglePlace[];
+  return {
+    places: (data.places ?? []) as GooglePlace[],
+    nextPageToken: data.nextPageToken as string | undefined,
+  };
 }
 
 // ----------------------------------------------------------------------------
