@@ -11,6 +11,7 @@ import { colors, spacing, type } from "../../theme";
 import { listFeed, toggleLike, type FeedEvent } from "../../lib/feed";
 import { listIncomingRequests } from "../../lib/friends";
 import { reportContent, blockUser, REPORT_REASONS } from "../../lib/moderation";
+import { supabase } from "../../lib/supabase";
 
 export default function FeedTab() {
   const router = useRouter();
@@ -18,15 +19,18 @@ export default function FeedTab() {
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [myId, setMyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [feed, requests] = await Promise.all([
+      const [feed, requests, { data: auth }] = await Promise.all([
         listFeed(60),
         listIncomingRequests(),
+        supabase.auth.getUser(),
       ]);
       setEvents(feed);
       setPendingCount(requests.length);
+      setMyId(auth.user?.id ?? null);
     } catch (e: any) {
       console.warn("feed load", e?.message);
     } finally {
@@ -129,6 +133,7 @@ export default function FeedTab() {
           <FeedRow
             key={ev.id}
             event={ev}
+            isSelf={ev.user_id === myId}
             onLike={() => handleLike(ev)}
             onBlockedUser={removeUser}
             onReportedEvent={removeEvent}
@@ -140,9 +145,10 @@ export default function FeedTab() {
 }
 
 function FeedRow({
-  event, onLike, onBlockedUser, onReportedEvent,
+  event, isSelf, onLike, onBlockedUser, onReportedEvent,
 }: {
   event: FeedEvent;
+  isSelf: boolean;
   onLike: () => void;
   onBlockedUser: (userId: string) => void;
   onReportedEvent: (eventId: string) => void;
@@ -203,9 +209,11 @@ function FeedRow({
             <Text style={styles.when}>{when}</Text>
           </View>
         </Pressable>
-        <Pressable onPress={openMenu} hitSlop={12} style={styles.menuBtn} accessibilityLabel="Post options">
-          <Text style={styles.menuDots}>•••</Text>
-        </Pressable>
+        {!isSelf && (
+          <Pressable onPress={openMenu} hitSlop={12} style={styles.menuBtn} accessibilityLabel="Post options">
+            <Text style={styles.menuDots}>•••</Text>
+          </Pressable>
+        )}
       </View>
 
       <FeedBody event={event} />

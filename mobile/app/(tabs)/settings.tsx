@@ -471,6 +471,8 @@ export default function Settings() {
         </Section>
 
         <Section title="Account">
+          <Button title="Blocked accounts" onPress={() => router.push("/blocked")} variant="ghost" />
+          <Spacer />
           <Button title="Sign out" onPress={async () => { await signOut(); router.replace("/sign-in"); }} variant="ghost" />
         </Section>
 

@@ -8,6 +8,7 @@
 // Writes ./feedback-export/ :
 //   feedback.md              human-readable, newest first, grouped by category
 //   feedback.csv            spreadsheet-friendly
+//   reports.csv             open moderation reports (Apple wants these actioned <24h)
 //   screenshots/<id>.<ext>  any attached screenshots (downloaded from the bucket)
 //
 // Then just drag the feedback-export folder into a Claude Code chat.
@@ -120,9 +121,29 @@ async function main() {
   }
   writeFileSync(join(OUT, "feedback.csv"), lines.join("\n"));
 
-  console.log(`Exported ${rows.length} item(s) and ${shots} screenshot(s) to ${OUT}/`);
+  // Moderation reports (separate table). Pull open ones for triage.
+  let reportCount = 0;
+  {
+    let rq = supabase.from("content_reports").select("*").order("created_at", { ascending: false });
+    if (SINCE) rq = rq.gte("created_at", SINCE);
+    const { data: reps, error: repErr } = await rq;
+    if (repErr) {
+      console.warn(`  ! couldn't read content_reports: ${repErr.message}`);
+    } else {
+      const rcols = ["created_at", "status", "reason", "target_type", "target_id", "target_user_id", "note", "reporter_id"];
+      const rlines = [rcols.join(",")];
+      for (const r of (reps ?? []) as any[]) {
+        rlines.push(rcols.map((c) => csvCell(r[c])).join(","));
+      }
+      writeFileSync(join(OUT, "reports.csv"), rlines.join("\n"));
+      reportCount = (reps ?? []).length;
+    }
+  }
+
+  console.log(`Exported ${rows.length} feedback item(s), ${reportCount} report(s), ${shots} screenshot(s) to ${OUT}/`);
   console.log(`  ${join(OUT, "feedback.md")}`);
   console.log(`  ${join(OUT, "feedback.csv")}`);
+  if (reportCount >= 0) console.log(`  ${join(OUT, "reports.csv")}`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

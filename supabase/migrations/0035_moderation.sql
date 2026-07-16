@@ -12,9 +12,12 @@
 -- ============================================================================
 
 -- 1. Blocks -------------------------------------------------------------------
+-- FKs point at public.profiles (not auth.users) so PostgREST can embed the
+-- blocked user's profile in the "blocked accounts" list — same pattern as
+-- feed_events.user_id. profiles.id is itself the auth user id.
 create table if not exists public.blocked_users (
-  blocker_id uuid        not null references auth.users(id) on delete cascade,
-  blocked_id uuid        not null references auth.users(id) on delete cascade,
+  blocker_id uuid        not null references public.profiles(id) on delete cascade,
+  blocked_id uuid        not null references public.profiles(id) on delete cascade,
   created_at timestamptz not null default now(),
   primary key (blocker_id, blocked_id)
 );

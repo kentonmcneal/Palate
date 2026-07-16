@@ -60,6 +60,36 @@ export async function isBlocked(targetUserId: string): Promise<boolean> {
   return !!data;
 }
 
+export type BlockedProfile = {
+  id: string;
+  display_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  blocked_at: string;
+};
+
+/** Everyone the current user has blocked, with their profile, newest first. */
+export async function listBlockedUsers(): Promise<BlockedProfile[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await supabase
+    .from("blocked_users")
+    .select(`
+      blocked_id, created_at,
+      profile:profiles!blocked_users_blocked_id_fkey ( id, display_name, email, avatar_url )
+    `)
+    .eq("blocker_id", user.id)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return ((data ?? []) as any[]).map((r) => ({
+    id: r.blocked_id,
+    display_name: r.profile?.display_name ?? null,
+    email: r.profile?.email ?? null,
+    avatar_url: r.profile?.avatar_url ?? null,
+    blocked_at: r.created_at,
+  }));
+}
+
 /** User ids the current user should never see in the feed (blocked either way). */
 export async function hiddenUserIds(): Promise<Set<string>> {
   const { data, error } = await supabase.rpc("hidden_user_ids");
