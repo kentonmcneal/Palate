@@ -1,0 +1,3 @@
+# Exported user feedback (emails, screenshots) — never commit.
+feedback-export/
+node_modules

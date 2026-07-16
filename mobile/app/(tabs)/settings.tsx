@@ -476,20 +476,18 @@ export default function Settings() {
 
         <Section title="Help">
           <Button
-            title="Send feedback"
-            variant="ghost"
-            onPress={() => Linking.openURL("mailto:hello@palate.app?subject=Palate%20feedback").catch(() => {
-              Alert.alert("No email app", "Email us at hello@palate.app");
-            })}
+            title="Share feedback"
+            onPress={() => router.push("/feedback")}
           />
           <Spacer />
           <Button
             title="Report a bug"
             variant="ghost"
-            onPress={() => Linking.openURL("mailto:hello@palate.app?subject=Palate%20bug%20report").catch(() => {
-              Alert.alert("No email app", "Email us at hello@palate.app");
-            })}
+            onPress={() => router.push({ pathname: "/feedback", params: { category: "bug" } })}
           />
+          <Note>
+            Goes straight to the team — no public post. Screenshots welcome.
+          </Note>
         </Section>
 
         <Section title="About">
