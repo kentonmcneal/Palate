@@ -7,6 +7,7 @@ import { Avatar } from "../../components/Avatar";
 import { colors, spacing, type } from "../../theme";
 import { getFriendProfileSnapshot, type FriendProfileSnapshot } from "../../lib/profile";
 import { requestFriendship, unfriend } from "../../lib/friends";
+import { reportContent, blockUser, unblockUser, isBlocked, REPORT_REASONS } from "../../lib/moderation";
 
 export default function FriendProfileScreen() {
   const router = useRouter();
@@ -16,10 +17,16 @@ export default function FriendProfileScreen() {
   const [snapshot, setSnapshot] = useState<FriendProfileSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
+  const [blocked, setBlocked] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      setSnapshot(await getFriendProfileSnapshot(targetId));
+      const [snap, isB] = await Promise.all([
+        getFriendProfileSnapshot(targetId),
+        isBlocked(targetId),
+      ]);
+      setSnapshot(snap);
+      setBlocked(isB);
     } catch (e: any) {
       console.warn("snapshot load", e?.message);
     } finally {
@@ -67,6 +74,46 @@ export default function FriendProfileScreen() {
         },
       ],
     );
+  }
+
+  const displayName = snapshot?.display_name || snapshot?.email || "this person";
+
+  function handleBlock() {
+    Alert.alert(
+      `Block ${displayName}?`,
+      "You won't see their posts, and you'll be removed as friends.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block", style: "destructive",
+          onPress: async () => {
+            setActing(true);
+            try { await blockUser(targetId); setBlocked(true); await load(); }
+            catch (e: any) { Alert.alert("Couldn't block", e?.message ?? "Try again"); }
+            finally { setActing(false); }
+          },
+        },
+      ],
+    );
+  }
+
+  async function handleUnblock() {
+    setActing(true);
+    try { await unblockUser(targetId); setBlocked(false); }
+    catch (e: any) { Alert.alert("Couldn't unblock", e?.message ?? "Try again"); }
+    finally { setActing(false); }
+  }
+
+  function handleReport() {
+    Alert.alert("Report this profile", "Why are you reporting them?", [
+      ...REPORT_REASONS.map((r) => ({
+        text: r.label,
+        onPress: () => reportContent({ targetType: "profile", targetId, targetUserId: targetId, reason: r.key })
+          .then(() => Alert.alert("Thanks for flagging", "We'll review this within 24 hours."))
+          .catch((e: any) => Alert.alert("Couldn't report", e?.message ?? "Try again")),
+      })),
+      { text: "Cancel", style: "cancel" as const },
+    ]);
   }
 
   return (
@@ -151,8 +198,8 @@ export default function FriendProfileScreen() {
 
             {/* Actions */}
             {!snapshot.is_self && (
-              <View style={{ marginTop: spacing.xl }}>
-                {snapshot.is_friend ? (
+              <View style={{ marginTop: spacing.xl, gap: 12 }}>
+                {!blocked && (snapshot.is_friend ? (
                   <Pressable onPress={handleUnfriend} disabled={acting} style={styles.btnGhost}>
                     <Text style={styles.btnGhostText}>{acting ? "…" : "Remove friend"}</Text>
                   </Pressable>
@@ -160,6 +207,27 @@ export default function FriendProfileScreen() {
                   <Pressable onPress={handleAddFriend} disabled={acting} style={styles.btnPrimary}>
                     <Text style={styles.btnPrimaryText}>{acting ? "…" : "Add friend"}</Text>
                   </Pressable>
+                ))}
+
+                <View style={styles.safetyRow}>
+                  <Pressable onPress={handleReport} disabled={acting} hitSlop={8}>
+                    <Text style={styles.safetyText}>Report</Text>
+                  </Pressable>
+                  <Text style={styles.safetyDot}>·</Text>
+                  {blocked ? (
+                    <Pressable onPress={handleUnblock} disabled={acting} hitSlop={8}>
+                      <Text style={styles.safetyText}>Unblock</Text>
+                    </Pressable>
+                  ) : (
+                    <Pressable onPress={handleBlock} disabled={acting} hitSlop={8}>
+                      <Text style={[styles.safetyText, { color: colors.redText }]}>Block</Text>
+                    </Pressable>
+                  )}
+                </View>
+                {blocked && (
+                  <Text style={[type.small, { textAlign: "center", lineHeight: 18 }]}>
+                    You've blocked {displayName}. They can't appear in your feed.
+                  </Text>
                 )}
               </View>
             )}
@@ -274,4 +342,8 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   btnGhostText: { color: colors.mute, fontSize: 16, fontWeight: "700" },
+
+  safetyRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  safetyText: { color: colors.mute, fontSize: 14, fontWeight: "600" },
+  safetyDot: { color: colors.line, fontSize: 14 },
 });

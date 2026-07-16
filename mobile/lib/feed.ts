@@ -12,6 +12,7 @@
 // ============================================================================
 
 import { supabase } from "./supabase";
+import { hiddenUserIds } from "./moderation";
 
 export type FeedEventKind = "wrapped_shared" | "persona_change" | "milestone" | "visit_logged";
 
@@ -49,16 +50,20 @@ export async function listFeed(limit = 50): Promise<FeedEvent[]> {
   const me = await currentUserId();
   if (!me) return [];
 
-  const { data, error } = await supabase
-    .from("feed_events")
-    .select(`
-      id, user_id, kind, payload, created_at,
-      user:profiles!feed_events_user_id_fkey ( id, email, display_name, avatar_url )
-    `)
-    .order("created_at", { ascending: false })
-    .limit(limit);
+  const [{ data, error }, hidden] = await Promise.all([
+    supabase
+      .from("feed_events")
+      .select(`
+        id, user_id, kind, payload, created_at,
+        user:profiles!feed_events_user_id_fkey ( id, email, display_name, avatar_url )
+      `)
+      .order("created_at", { ascending: false })
+      .limit(limit),
+    hiddenUserIds(),
+  ]);
   if (error) throw error;
-  const events = (data ?? []) as any[];
+  // Drop posts from anyone blocked (either direction) before anything else.
+  const events = ((data ?? []) as any[]).filter((e) => !hidden.has(e.user_id));
   if (!events.length) return [];
 
   // Bulk-load like counts + my likes so we don't N+1

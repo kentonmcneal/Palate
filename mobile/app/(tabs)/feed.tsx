@@ -10,6 +10,7 @@ import { Avatar } from "../../components/Avatar";
 import { colors, spacing, type } from "../../theme";
 import { listFeed, toggleLike, type FeedEvent } from "../../lib/feed";
 import { listIncomingRequests } from "../../lib/friends";
+import { reportContent, blockUser, REPORT_REASONS } from "../../lib/moderation";
 
 export default function FeedTab() {
   const router = useRouter();
@@ -38,6 +39,13 @@ export default function FeedTab() {
     setLoading(true);
     load();
   }, [load]));
+
+  function removeUser(userId: string) {
+    setEvents((curr) => curr.filter((e) => e.user_id !== userId));
+  }
+  function removeEvent(id: string) {
+    setEvents((curr) => curr.filter((e) => e.id !== id));
+  }
 
   async function handleLike(ev: FeedEvent) {
     // Optimistic update
@@ -118,30 +126,87 @@ export default function FeedTab() {
         )}
 
         {events.map((ev) => (
-          <FeedRow key={ev.id} event={ev} onLike={() => handleLike(ev)} />
+          <FeedRow
+            key={ev.id}
+            event={ev}
+            onLike={() => handleLike(ev)}
+            onBlockedUser={removeUser}
+            onReportedEvent={removeEvent}
+          />
         ))}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function FeedRow({ event, onLike }: { event: FeedEvent; onLike: () => void }) {
+function FeedRow({
+  event, onLike, onBlockedUser, onReportedEvent,
+}: {
+  event: FeedEvent;
+  onLike: () => void;
+  onBlockedUser: (userId: string) => void;
+  onReportedEvent: (eventId: string) => void;
+}) {
   const router = useRouter();
   const name = event.user?.display_name || (event.user?.email ? event.user.email.split("@")[0] : "Someone");
   const when = relativeTime(event.created_at);
 
+  function doReport(reason: (typeof REPORT_REASONS)[number]["key"]) {
+    reportContent({ targetType: "feed_event", targetId: event.id, targetUserId: event.user_id, reason })
+      .then(() => {
+        onReportedEvent(event.id);
+        Alert.alert("Thanks for flagging", "We'll review this within 24 hours. It's hidden from your feed now.");
+      })
+      .catch((e: any) => Alert.alert("Couldn't report", e?.message ?? "Try again"));
+  }
+
+  function doBlock() {
+    Alert.alert(
+      `Block ${name}?`,
+      "You won't see their posts anymore, and you'll be removed as friends.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block", style: "destructive",
+          onPress: () => blockUser(event.user_id)
+            .then(() => onBlockedUser(event.user_id))
+            .catch((e: any) => Alert.alert("Couldn't block", e?.message ?? "Try again")),
+        },
+      ],
+    );
+  }
+
+  function openMenu() {
+    Alert.alert(name, undefined, [
+      {
+        text: "Report post",
+        onPress: () => Alert.alert("Report post", "Why are you reporting this?", [
+          ...REPORT_REASONS.map((r) => ({ text: r.label, onPress: () => doReport(r.key) })),
+          { text: "Cancel", style: "cancel" as const },
+        ]),
+      },
+      { text: `Block ${name}`, style: "destructive", onPress: doBlock },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }
+
   return (
     <View style={styles.card}>
-      <Pressable
-        style={styles.row}
-        onPress={() => event.user_id && router.push(`/profile/${event.user_id}`)}
-      >
-        <Avatar uri={event.user?.avatar_url} name={event.user?.display_name} email={event.user?.email} size={40} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.name}>{name}</Text>
-          <Text style={styles.when}>{when}</Text>
-        </View>
-      </Pressable>
+      <View style={styles.row}>
+        <Pressable
+          style={styles.rowMain}
+          onPress={() => event.user_id && router.push(`/profile/${event.user_id}`)}
+        >
+          <Avatar uri={event.user?.avatar_url} name={event.user?.display_name} email={event.user?.email} size={40} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.name}>{name}</Text>
+            <Text style={styles.when}>{when}</Text>
+          </View>
+        </Pressable>
+        <Pressable onPress={openMenu} hitSlop={12} style={styles.menuBtn} accessibilityLabel="Post options">
+          <Text style={styles.menuDots}>•••</Text>
+        </Pressable>
+      </View>
 
       <FeedBody event={event} />
 
@@ -261,7 +326,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paper,
     borderWidth: 1, borderColor: colors.line,
   },
-  row: { flexDirection: "row", alignItems: "center", gap: 12 },
+  row: { flexDirection: "row", alignItems: "center", gap: 8 },
+  rowMain: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 },
+  menuBtn: { paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start" },
+  menuDots: { color: colors.mute, fontSize: 16, fontWeight: "800", letterSpacing: 1 },
   avatar: {
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: colors.red,
