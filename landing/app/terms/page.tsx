@@ -27,7 +27,7 @@ export default function TermsPage() {
         <h1 className="mt-3 text-4xl sm:text-5xl font-semibold tracking-tightest">
           Terms of service
         </h1>
-        <p className="mt-3 text-palate-mute">Last updated: April 2026.</p>
+        <p className="mt-3 text-palate-mute">Last updated: July 2026.</p>
 
         <div className="mt-10 rounded-2xl bg-palate-soft p-6 sm:p-8 border border-palate-line">
           <h2 className="text-lg font-semibold">The plain-English version</h2>
@@ -48,7 +48,10 @@ export default function TermsPage() {
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tightish">3. Acceptable use</h2>
         <p className="mt-3 leading-relaxed">
-          Don't try to break the service, don't scrape it, and don't use it to track other people. Palate is a single-player tool; we will terminate accounts used to surveil others.
+          Don't try to break the service, don't scrape it, and don't use it to surveil or track other people. Palate includes optional social features (friends and a feed). When you use them, don't post or share content that is harassing, abusive, hateful, threatening, sexually explicit, or otherwise objectionable, and don't impersonate anyone.
+        </p>
+        <p className="mt-3 leading-relaxed">
+          We have zero tolerance for objectionable content or abusive behavior. You can report content or block any user directly in the app; we review reports and act on them — including removing content and terminating offending accounts — within 24 hours.
         </p>
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tightish">4. The beta</h2>
@@ -95,7 +98,6 @@ export default function TermsPage() {
           .
         </p>
 
-        <p className="mt-12 text-sm text-palate-mute">This page is a placeholder pending lawyer review.</p>
       </main>
 
       <footer className="border-t border-palate-line mt-16">

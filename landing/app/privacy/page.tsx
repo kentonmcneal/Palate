@@ -31,49 +31,60 @@ export default function PrivacyPage() {
           Privacy policy
         </h1>
         <p className="mt-3 text-palate-mute">
-          Last updated: April 2026. Plain-English version below; the full policy follows.
+          Last updated: July 2026. Plain-English summary first; the full policy follows.
         </p>
 
         <div className="mt-10 rounded-2xl bg-palate-soft p-6 sm:p-8 border border-palate-line">
           <h2 className="text-lg font-semibold">The 30-second version</h2>
           <ul className="mt-3 space-y-2 text-palate-ink leading-relaxed list-disc pl-5">
             <li>
-              We collect the location of restaurants and food spots you visit — only because you confirmed it with a tap.
+              We store the food spots you confirm with a tap, plus anything you choose to add — a profile photo, a meal photo, a name.
+            </li>
+            <li>
+              We use your location only while the app is open, only to figure out which restaurant you might be at. We don't track you in the background.
             </li>
             <li>
               We never sell or share your data with restaurants, advertisers, or other companies.
             </li>
             <li>
-              You can pause tracking any time and delete everything in two taps. "Delete" really deletes.
+              You control what's public — profile visibility, friends, and what shows in any feed are all your call. You can block or report anyone.
             </li>
-            <li>We don't run ads, ever. The plan is a small future subscription.</li>
-            <li>You control what's public — profile visibility, friend list, and what shows up in any feed are all your call.</li>
+            <li>
+              You can pause tracking any time and delete everything in two taps. "Delete" really deletes — no ads, ever.
+            </li>
           </ul>
         </div>
 
         <h2 className="mt-12 text-2xl font-semibold tracking-tightish">1. What we collect</h2>
-        <p className="mt-3 leading-relaxed text-palate-ink">
-          When you create an account we store your email address. When you confirm a visit, we store the restaurant identifier (from Google Places), the timestamp, and an inferred meal type (breakfast, lunch, dinner). When the app checks for nearby places, we send your latitude and longitude to our server to call Google Places — we do not log raw GPS to your account in v1.
-        </p>
+        <ul className="mt-3 space-y-2 leading-relaxed text-palate-ink list-disc pl-5">
+          <li><strong>Account:</strong> your email address.</li>
+          <li><strong>Profile:</strong> anything you choose to add — a display name, a @username, and an optional profile photo.</li>
+          <li><strong>Visits:</strong> when you confirm a visit, the restaurant identifier (from Google Places), the timestamp, an inferred meal type (breakfast/lunch/dinner), and any meal photo you choose to attach.</li>
+          <li><strong>Location:</strong> when the app is open and checking for nearby places, we send your latitude and longitude to our server to call Google Places. We do not record a background location trail.</li>
+          <li><strong>Social activity you opt into:</strong> friend connections, likes, and the feed events you generate or share (Wrapped, persona changes, milestones, logged visits), governed by your visibility setting.</li>
+          <li><strong>Safety actions:</strong> users you block, and any content you report to us.</li>
+          <li><strong>Feedback:</strong> when you send feedback in-app, the message, category, an optional screenshot, and basic technical context (app version, device model, OS version) so we can reproduce issues.</li>
+          <li><strong>Notifications:</strong> a push token, if you enable notifications, so we can send your weekly Wrapped and related alerts.</li>
+        </ul>
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tightish">2. What we don't collect</h2>
         <p className="mt-3 leading-relaxed text-palate-ink">
-          We don't collect your name, phone number, photos, contacts, calendar, microphone, or activity in other apps. We don't fingerprint your device. We don't use third-party advertising or behavioral tracking SDKs.
+          We don't collect your phone number, contacts, calendar, microphone, or activity in other apps. We don't track your location in the background. We don't fingerprint your device, and we don't use third-party advertising or behavioral-tracking SDKs. Photos are only ever the ones you deliberately choose to add.
         </p>
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tightish">3. How we use your data</h2>
         <p className="mt-3 leading-relaxed text-palate-ink">
-          Only to (a) show you the spot you just confirmed in your own visit history, and (b) generate your weekly Wrapped. That's it.
+          To show your own visit history, generate your weekly Wrapped identity read, power taste-based discovery and recommendations, run the social features you opt into, respond to your feedback and fix bugs, and keep the community safe (acting on blocks and reports). That's it.
         </p>
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tightish">4. Who we share it with</h2>
         <p className="mt-3 leading-relaxed text-palate-ink">
-          No one. Restaurants don't see your email or that you visited. We use Supabase (database) and Google (Places lookups, location only — Google does not get your account info). We do not run third-party analytics SDKs in the app. The landing page uses Plausible analytics, which is privacy-friendly and uses no cookies or persistent identifiers.
+          We don't sell your data, and restaurants never see your email or that you visited. We use a small number of infrastructure providers strictly to run the app: Supabase (our database and photo storage), Google (Places lookups — location only; Google does not receive your account info), and Expo (delivering push notifications). We use Anthropic's API to classify <em>restaurants</em>, not your personal data. We do not run third-party analytics SDKs in the app; the landing page uses Plausible, which is cookieless and privacy-friendly.
         </p>
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tightish">5. Your controls</h2>
         <p className="mt-3 leading-relaxed text-palate-ink">
-          In Settings: pause tracking (no new data is recorded), delete a single visit, delete this week, or delete your entire account. Deletion is hard-deletion — no soft-delete, no 30-day "trash". Once you confirm, it's gone and unrecoverable.
+          In Settings you can pause tracking (no new data is recorded), set your profile visibility (private, friends, or public), manage your photos, and block or report other users. You can delete a single visit, delete this week, or delete your entire account. Deletion is hard-deletion — no soft-delete, no 30-day "trash." Once you confirm, it's gone and unrecoverable.
         </p>
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tightish">6. Data export</h2>
@@ -87,7 +98,7 @@ export default function PrivacyPage() {
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tightish">7. Security</h2>
         <p className="mt-3 leading-relaxed text-palate-ink">
-          All traffic is HTTPS. The database enforces row-level security: a user literally cannot read another user's visits, even with a SQL bug in our app. The Google Places API key never touches your phone — it lives only on our server.
+          All traffic is HTTPS. The database enforces row-level security: a user cannot read another user's visits, even given a bug in our app. Profile photos, meal photos, and feedback screenshots live in access-controlled storage. Our Google Places API key never touches your phone — it lives only on our server.
         </p>
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tightish">8. Children</h2>
@@ -111,10 +122,6 @@ export default function PrivacyPage() {
             privacy@palate.app
           </a>
           .
-        </p>
-
-        <p className="mt-12 text-sm text-palate-mute">
-          This page is a placeholder pending lawyer review. It's a faithful description of the engineering reality but should be reviewed before public launch.
         </p>
       </main>
 
