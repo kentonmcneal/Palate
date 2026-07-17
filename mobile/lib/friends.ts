@@ -119,14 +119,18 @@ export async function unfriend(otherUserId: string): Promise<void> {
 }
 
 async function findFriendshipBetween(a: string, b: string): Promise<Friendship | null> {
+  // limit(1) instead of maybeSingle(): maybeSingle() *errors* when >1 row
+  // matches (which a duplicate friendship would produce), and we were
+  // discarding that error → returning null → inserting a third row / failing to
+  // unfriend. Take the first row instead. (0036 also adds a unique-pair index.)
   const { data } = await supabase
     .from("friendships")
     .select("*")
     .or(
       `and(requester_id.eq.${a},addressee_id.eq.${b}),and(requester_id.eq.${b},addressee_id.eq.${a})`,
     )
-    .maybeSingle();
-  return (data as Friendship | null) ?? null;
+    .limit(1);
+  return ((data ?? [])[0] as Friendship | undefined) ?? null;
 }
 
 // ----------------------------------------------------------------------------

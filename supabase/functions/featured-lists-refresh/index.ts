@@ -26,6 +26,8 @@ import {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY   = Deno.env.get("GOOGLE_PLACES_API_KEY")!;
+// Shared secret the pg_cron job must send (x-cron-secret) to run refresh_all_active.
+const CRON_SECRET  = Deno.env.get("CRON_SECRET") ?? "";
 
 const TOP_N = 10;
 // Google text search returns 20 results/page. Only paginate (up to 3 pages /
@@ -79,6 +81,24 @@ serve(async (req) => {
   const action = body.action as string | undefined;
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+
+  // --- Authorization ------------------------------------------------------
+  // This function calls Google Places Text Search directly, OUTSIDE the
+  // places-proxy daily kill-switch, so it must NEVER run for an unauthenticated
+  // caller (the public anon key satisfies the gateway but is NOT a user token).
+  //   • refresh_all_active — cron only: requires the CRON_SECRET header.
+  //   • refresh_city       — requires a signed-in user.
+  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (action === "refresh_all_active") {
+    if (!CRON_SECRET || req.headers.get("x-cron-secret") !== CRON_SECRET) {
+      return json({ error: "unauthorized" }, 401);
+    }
+  } else if (action === "refresh_city") {
+    const { data: { user } } = await admin.auth.getUser(bearer);
+    if (!user) return json({ error: "unauthorized" }, 401);
+  } else {
+    return json({ error: "unknown_action" }, 400);
+  }
 
   try {
     if (action === "refresh_city") {
