@@ -121,7 +121,18 @@ async function main() {
       const newRow = googleToRestaurantRow(place, derived);
 
       if (DRY_RUN) {
-        console.log(`  [would update] ${row.google_place_id} → cuisine=${newRow.cuisine_type}, subregion=${newRow.cuisine_subregion}`);
+        // Show the qualitative tags too so --with-llm dry runs are a real
+        // spot-check of the LLM prompt (name included to eyeball for
+        // over-eager/hallucinated vibes on lesser-known places).
+        const name = place.displayName?.text ?? row.google_place_id;
+        console.log(`  [would update] ${name} → cuisine=${newRow.cuisine_type}/${newRow.cuisine_subregion}`);
+        if (WITH_LLM) {
+          console.log(
+            `      vibe=${newRow.vibe ?? "—"} | occasion=[${(newRow.occasion_tags ?? []).join(", ")}]` +
+            ` | crowd=[${(newRow.crowd_energy ?? []).join(", ")}] | price_feel=${newRow.price_feel ?? "—"}`,
+          );
+          if (newRow.ambiance_notes) console.log(`      ambiance="${newRow.ambiance_notes}"`);
+        }
         continue;
       }
 
