@@ -496,13 +496,13 @@ export default function Settings() {
           <Button
             title="Privacy policy"
             variant="ghost"
-            onPress={() => Linking.openURL("https://palate.app/privacy")}
+            onPress={() => Linking.openURL("https://palate-zm29.vercel.app/privacy")}
           />
           <Spacer />
           <Button
             title="Terms of service"
             variant="ghost"
-            onPress={() => Linking.openURL("https://palate.app/terms")}
+            onPress={() => Linking.openURL("https://palate-zm29.vercel.app/terms")}
           />
           <Note>
             Palate v0.1 — no ads, we don't sell your data, you control what's
