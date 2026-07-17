@@ -98,7 +98,13 @@ export function computeCompatibility(graph: TasteGraph, r: RestaurantInput): Com
 type Dim = { s: number; matched: boolean };
 
 function scoreTaste(g: TasteGraph, r: RestaurantInput): Dim {
-  if (g.totalVisits === 0) return { s: 0.5, matched: false }; // neutral cold-start
+  // Compute whenever ANY taste signal exists — including a quiz-seeded persona
+  // at 0 visits (the seed fills these maps but leaves totalVisits at 0, so the
+  // old `totalVisits === 0` gate silently discarded it). True zero-signal =
+  // neutral (the UI suppresses the number at low confidence regardless).
+  if (!hasEntries(g.cuisinesSubregion) && !hasEntries(g.cuisines) && !hasEntries(g.flavors)) {
+    return { s: 0.5, matched: false };
+  }
   let score = 0;
   let weight = 0;
 
@@ -119,7 +125,9 @@ function scoreTaste(g: TasteGraph, r: RestaurantInput): Dim {
 }
 
 function scoreBehavior(g: TasteGraph, r: RestaurantInput): Dim {
-  if (g.totalVisits === 0) return { s: 0.5, matched: false };
+  if (!hasEntries(g.formats) && !hasEntries(g.occasions) && g.averagePriceLevel <= 0) {
+    return { s: 0.5, matched: false };
+  }
   let score = 0;
   let weight = 0;
 
@@ -177,7 +185,9 @@ function scoreQuality(r: RestaurantInput): Dim {
 function scoreNovelty(g: TasteGraph, r: RestaurantInput): Dim {
   // Higher = MORE novel relative to user pattern.
   // Novelty is a small term in compatibility — it nudges, not dominates.
-  if (g.totalVisits === 0) return { s: 0.6, matched: false };
+  if (!hasEntries(g.cuisinesSubregion) && !hasEntries(g.cuisines)) {
+    return { s: 0.6, matched: false };
+  }
   let novelty = 0.5;
   if (r.cuisine_subregion) {
     const share = shareOf(g.cuisinesSubregion, r.cuisine_subregion);
@@ -244,6 +254,10 @@ function maxValue(map: Record<string, number>): number {
   let m = 0;
   for (const n of Object.values(map)) if (n > m) m = n;
   return m;
+}
+function hasEntries(map: Record<string, number>): boolean {
+  for (const _k in map) return true;
+  return false;
 }
 function affinityOf(map: Record<string, number>, key: string): number {
   const m = maxValue(map);

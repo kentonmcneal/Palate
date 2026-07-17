@@ -123,14 +123,23 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
           <Text style={styles.sub}>{subline || "Nearby"}</Text>
         </View>
         <View style={styles.scoreCol}>
-          <AnimatedNumber
-            value={m.score}
-            duration={750}
-            style={[styles.scoreNum, { color: matchScoreColor(m.score) }]}
-          />
-          <Text style={styles.scoreLabel}>match</Text>
-          {m.confidence === "low" && (
-            <Text style={styles.confLow}>early read</Text>
+          {m.confidence === "low" ? (
+            // No real taste signal yet — don't show a precise "% match" we
+            // can't stand behind (it read ~62% on everything). Once the user
+            // has logged a few visits, confidence rises and the number returns.
+            <>
+              <Text style={styles.newBadge}>NEW</Text>
+              <Text style={styles.scoreLabel}>to you</Text>
+            </>
+          ) : (
+            <>
+              <AnimatedNumber
+                value={m.score}
+                duration={750}
+                style={[styles.scoreNum, { color: matchScoreColor(m.score) }]}
+              />
+              <Text style={styles.scoreLabel}>match</Text>
+            </>
           )}
         </View>
       </View>
@@ -244,6 +253,7 @@ const styles = StyleSheet.create({
   },
   scoreLabel: { fontSize: 10, fontWeight: "700", color: colors.mute, letterSpacing: 1 },
   confLow: { fontSize: 9, fontWeight: "700", color: colors.mute, marginTop: 4 },
+  newBadge: { fontSize: 15, fontWeight: "800", color: colors.mute, letterSpacing: 1 },
 
   reason: { marginTop: 10, fontSize: 14, color: colors.ink, fontStyle: "italic", lineHeight: 20 },
 

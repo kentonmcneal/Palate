@@ -9,7 +9,8 @@ import { Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { supabase } from "../../lib/supabase";
 import { computeTasteVector } from "../../lib/taste-vector";
-import { scoreMatch } from "../../lib/match-score";
+import { assembleGraph, getCompatibility } from "../../lib/recommendation";
+import { loadPersonalSignal } from "../../lib/personal-signal";
 import { addToWishlist } from "../../lib/palate-insights";
 import { openInAppleMaps, openInGoogleMaps } from "../../lib/maps";
 import { triggerHapticSuccess } from "../../lib/haptics";
@@ -77,6 +78,7 @@ export default function RestaurantDetailScreen() {
   const [visits, setVisits] = useState<VisitRow[]>([]);
   const [matchScore, setMatchScore] = useState<number | null>(null);
   const [matchReasons, setMatchReasons] = useState<string[]>([]);
+  const [matchConfidence, setMatchConfidence] = useState<"low" | "medium" | "high">("low");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -151,19 +153,16 @@ export default function RestaurantDetailScreen() {
       setMyItems(mine);
       setTopItems(top);
       if (vector) {
-        const m = scoreMatch(vector, {
-          cuisine: r.cuisine_type,
-          neighborhood: r.neighborhood,
-          price_level: r.price_level,
-        }, {
-          cuisineRegion: r.cuisine_region,
-          cuisineSubregion: r.cuisine_subregion,
-          formatClass: r.format_class,
-          occasionTags: r.occasion_tags,
-          flavorTags: r.flavor_tags,
-        });
-        setMatchScore(m.score);
-        setMatchReasons(m.reasons);
+        // Canonical score — SAME engine + cache as the cards/map (getCompatibility),
+        // so the % here can't disagree with the % that got the user here.
+        // compatibility reads only the tag/rating fields; extra row fields are
+        // ignored, so passing the whole row is safe.
+        const personal = await loadPersonalSignal().catch(() => null);
+        const graph = assembleGraph(vector, personal);
+        const compat = getCompatibility(graph, r as any);
+        setMatchScore(compat.score);
+        setMatchReasons(compat.reasons);
+        setMatchConfidence(compat.confidence);
       }
     } catch (e: any) {
       console.warn("restaurant detail", e?.message);
@@ -316,7 +315,9 @@ export default function RestaurantDetailScreen() {
             <Text style={styles.heroName}>{r.name}</Text>
             {matchScore != null && (
               <View style={styles.matchBadge}>
-                <Text style={styles.matchBadgeText}>{matchScore}% match</Text>
+                <Text style={styles.matchBadgeText}>
+                  {matchConfidence === "low" ? "New to you" : `${matchScore}% match`}
+                </Text>
               </View>
             )}
           </View>
