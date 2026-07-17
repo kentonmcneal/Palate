@@ -4,9 +4,14 @@
 -- Stores per-user Gmail OAuth tokens so the gmail-import edge function can
 -- scan inboxes for restaurant receipts + reservations and backfill visits.
 --
--- Tokens are stored encrypted at rest via Supabase's pgsodium (vault). The
--- mobile app exchanges the OAuth code → tokens server-side via the
--- gmail-import function so the refresh_token never touches the client.
+-- The mobile app exchanges the OAuth code → tokens server-side via the
+-- gmail-import function so the refresh_token never touches the client. RLS
+-- exposes NO select policy, so only the service role can read this table.
+--
+-- NOTE: the token columns below are PLAINTEXT (`text`), not encrypted at rest.
+-- Encrypt-at-rest (pgcrypto + Vault key + SECURITY DEFINER get/set RPCs) is a
+-- deferred post-launch hardening item (#9) — see SHIP_CHECKLIST.md. Until then,
+-- protect via service-role-only access + DB access controls.
 --
 -- visits.import_source tracks where a backfilled visit came from (gmail vs
 -- manual vs auto-detect) so we can show "23 visits imported from Gmail".
