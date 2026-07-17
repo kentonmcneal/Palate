@@ -1,6 +1,6 @@
 import { Tabs } from "expo-router";
 import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { Text, View, type ColorValue } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "../../theme";
 import { latestWrapped } from "../../lib/wrapped";
@@ -93,7 +93,7 @@ export default function TabsLayout() {
 
 function TabIcon({
   glyph, color, bold, dot,
-}: { glyph: string; color: string; bold?: boolean; dot?: boolean }) {
+}: { glyph: string; color: ColorValue; bold?: boolean; dot?: boolean }) {
   return (
     <View style={{ height: 24, alignItems: "center", justifyContent: "center" }}>
       <Text style={{ color, fontSize: bold ? 28 : 22, fontWeight: bold ? "800" : "600" }}>

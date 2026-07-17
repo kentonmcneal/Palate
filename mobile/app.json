@@ -7,14 +7,8 @@
     "icon": "./assets/icon.png",
     "scheme": "palate",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
     "primaryColor": "#FF3008",
     "description": "Start to see how you actually eat. A weekly identity read of your real eating life — plus a habit-based profile and feed.",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.palate.ios",
@@ -51,6 +45,14 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF"
+        }
+      ],
       [
         "expo-location",
         {
