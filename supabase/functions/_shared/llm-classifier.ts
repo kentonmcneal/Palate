@@ -24,6 +24,7 @@ export interface LLMInput {
   primaryType: string | null;
   priceLevel: number | null;
   userRatingCount: number | null;
+  neighborhood?: string | null;
   editorialSummary?: string | null;
   reviewSnippets?: string[];
 }
@@ -169,8 +170,13 @@ export function mergeLLMIntoDerivation(
 
 const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 
-// Static system prompt — kept large so the per-restaurant call is small and
-// the cached prefix wins us a deep discount on repeated invocations.
+// Static system prompt, marked cache_control ephemeral so a backfill (many
+// calls inside the 5-min TTL) can reuse the prefix.
+// NOTE: Haiku 4.5's minimum cacheable prefix is ~4096 tokens. This prompt is
+// currently below that, so the cache_control is effectively a no-op today — it
+// activates automatically only if the prompt grows past that threshold.
+// Confirm with count_tokens before relying on the discount; the classifier is
+// cheap per-call regardless (~$0.0015 input on Haiku), so this is a minor point.
 const SYSTEM_PROMPT = `You classify restaurants from Google Places metadata into a Palate-defined vocabulary.
 
 OUTPUT FORMAT (return ONLY a single JSON object, no prose):
@@ -201,8 +207,10 @@ RULES:
 
 QUALITATIVE TAGS (vibe, crowd_energy, menu_style, price_feel, ambiance_notes, occasion_tags):
 - These capture what Google can't: atmosphere, who's in the room, how the menu eats, and perceived value. They are the heart of Palate.
-- Derive them PRIMARILY from review snippets and the editorial summary — that is where vibe and crowd live. Do not infer them from the name or types alone.
-- Be conservative: return null (and [] for arrays) for any qualitative field the reviews don't actually support. A wrong vibe is worse than a missing one.
+- Ground them in the review snippets and editorial summary first — that is where vibe and crowd actually live.
+- For a widely-known restaurant you genuinely recognize, or one with a very high review count, you MAY also draw on its well-established reputation to fill vibe/occasion when the snippets are thin — but only for what is genuinely well-known, and never invent specific details you can't support.
+- Neighborhood is soft context: a dense nightlife/downtown district leans lively/party, a quiet residential strip leans chill/neighborhood — use it to nudge, never as the sole basis for a tag.
+- Stay honest: return null (and [] for arrays) for any qualitative field you can't support from either the text or genuine knowledge of the place. A wrong vibe is worse than a missing one — but a vibe you confidently know, left blank, is a missed signal.
 - price_feel is about value, not absolute price: a $$$ place reviewers call "worth every penny" is splurge_worthy; a $$ place that "punches above its price" is great_value.
 - ambiance_notes must be grounded in the provided text — one concrete, specific sentence, never generic filler. If nothing distinctive is stated, return null.
 
@@ -218,6 +226,7 @@ function buildUserMessage(input: LLMInput): string {
   lines.push(`Primary type: ${input.primaryType ?? "(none)"}`);
   lines.push(`Price level: ${input.priceLevel ?? "unknown"} (0=free .. 4=very expensive)`);
   lines.push(`Review count: ${input.userRatingCount ?? "unknown"}`);
+  lines.push(`Neighborhood: ${input.neighborhood ?? "unknown"}`);
   if (input.editorialSummary) {
     lines.push(`Editorial summary: ${input.editorialSummary}`);
   }
@@ -329,7 +338,9 @@ export async function classifyWithLLM(
 ): Promise<LLMSuggestion> {
   const resp = await create({
     model: HAIKU_MODEL,
-    max_tokens: 500,
+    // Headroom so a fuller tag set + reasoning can't get truncated mid-JSON —
+    // parseResponse throws on invalid JSON, which would drop the enrichment.
+    max_tokens: 768,
     // Deterministic tags: the same restaurant should classify the same way on
     // every run, so a backfill doesn't scatter inconsistent vibe/ambiance.
     temperature: 0,

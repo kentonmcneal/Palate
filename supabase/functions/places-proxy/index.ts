@@ -22,6 +22,7 @@ import {
   deriveClassification,
   type GooglePlace,
   googleToRestaurantRow,
+  neighborhoodFromPlace,
   PRICE_LEVEL_MAP,
 } from "../_shared/classifier.ts";
 import {
@@ -448,6 +449,7 @@ async function classifyAndBuildRow(
     primaryType: place.primaryType ?? null,
     priceLevel: place.priceLevel ? PRICE_LEVEL_MAP[place.priceLevel] ?? null : null,
     userRatingCount: place.userRatingCount ?? null,
+    neighborhood: neighborhoodFromPlace(place),
     editorialSummary,
     reviewSnippets,
   };

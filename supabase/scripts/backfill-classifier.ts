@@ -26,6 +26,7 @@ import {
   deriveClassification,
   type GooglePlace,
   googleToRestaurantRow,
+  neighborhoodFromPlace,
   PRICE_LEVEL_MAP,
 } from "../functions/_shared/classifier";
 import {
@@ -100,6 +101,7 @@ async function main() {
           primaryType: place.primaryType ?? null,
           priceLevel: place.priceLevel ? PRICE_LEVEL_MAP[place.priceLevel] ?? null : null,
           userRatingCount: place.userRatingCount ?? null,
+          neighborhood: neighborhoodFromPlace(place),
           editorialSummary: place.editorialSummary?.text ?? null,
           reviewSnippets: (place.reviews ?? [])
             .map((r) => r.text?.text ?? "")

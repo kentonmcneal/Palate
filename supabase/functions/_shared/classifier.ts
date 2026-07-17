@@ -7,7 +7,10 @@
 // Keep this module side-effect free. No fetch(), no Deno.env reads, no DB
 // access. That is what lets the eval runner exercise it in isolation.
 
-export const CLASSIFIER_VERSION = "1.4.0";
+// 1.5.0: LLM prompt tuning — pass neighborhood as soft vibe/crowd context;
+// allow reputation-based inference for well-known places (with a hallucination
+// guardrail) instead of abstaining whenever review text is thin.
+export const CLASSIFIER_VERSION = "1.5.0";
 
 // ----- Google place shape (subset we use) -------------------------------
 
