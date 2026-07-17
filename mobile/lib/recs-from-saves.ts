@@ -29,7 +29,14 @@ export interface RecsFromSavesResult {
 }
 
 export async function loadRecsFromSaves(
-  opts: { maxAnchors?: number; perAnchorLimit?: number; resultLimit?: number } = {},
+  opts: {
+    maxAnchors?: number;
+    perAnchorLimit?: number;
+    resultLimit?: number;
+    /** User's current location — bounds matches to nearby so out-of-town saves
+     *  don't surface out-of-town recs. Omit to skip the geo filter. */
+    here?: { lat: number; lng: number } | null;
+  } = {},
 ): Promise<RecsFromSavesResult> {
   const maxAnchors = opts.maxAnchors ?? 5;
   const perAnchorLimit = opts.perAnchorLimit ?? 12;
@@ -47,6 +54,8 @@ export async function loadRecsFromSaves(
       max_anchors: maxAnchors,
       per_anchor_limit: perAnchorLimit,
       result_limit: resultLimit,
+      p_lat: opts.here?.lat ?? null,
+      p_lng: opts.here?.lng ?? null,
     }),
   ]);
   if (matchesRes.error) throw matchesRes.error;

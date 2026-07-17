@@ -77,14 +77,15 @@ export default function Home() {
   const [savesRecs, setSavesRecs] = useState<SaveAnchoredRec[]>([]);
 
   const load = useCallback(async () => {
-    // All independent — fetch in parallel so the screen renders fast.
-    const [v, s, w, loc, wish, saves] = await Promise.allSettled([
+    // Location resolves alongside the independent fetches below; the saves rail
+    // then runs WITH it so matches stay local (no out-of-town recs for
+    // out-of-town saves).
+    const locP = getEffectiveLocation().catch(() => null);
+    const [v, s, w, wish] = await Promise.allSettled([
       recentVisits(10),
       computeStreak(),
       loadCurrentWeekInsight(),
-      getEffectiveLocation(),
       listWishlist(),
-      loadRecsFromSaves(),
     ]);
     if (v.status === "fulfilled") setVisits(v.value);
     if (s.status === "fulfilled") {
@@ -100,7 +101,8 @@ export default function Home() {
       }
     }
     if (w.status === "fulfilled") setWeekInsight(w.value);
-    const hereLoc = loc.status === "fulfilled" && loc.value ? loc.value : null;
+    const loc = await locP;
+    const hereLoc = loc ?? null;
     setHere(hereLoc ? { lat: hereLoc.lat, lng: hereLoc.lng } : null);
     if (wish.status === "fulfilled") {
       setHasAnySaves(wish.value.length > 0);
@@ -109,10 +111,14 @@ export default function Home() {
       setHasAnySaves(false);
       setWishlistRail([]);
     }
-    if (saves.status === "fulfilled") {
-      setSavesAnchors(saves.value.anchors);
-      setSavesRecs(saves.value.recs);
-    } else {
+    // Saves rail — location-aware so matches stay near the user.
+    try {
+      const saves = await loadRecsFromSaves(
+        hereLoc ? { here: { lat: hereLoc.lat, lng: hereLoc.lng } } : {},
+      );
+      setSavesAnchors(saves.anchors);
+      setSavesRecs(saves.recs);
+    } catch {
       setSavesAnchors([]);
       setSavesRecs([]);
     }
