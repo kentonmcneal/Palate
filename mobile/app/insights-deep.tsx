@@ -108,10 +108,10 @@ export default function InsightsDeepScreen() {
             {/* Percentiles */}
             {vector && identities && (
               <View style={styles.card}>
-                <Text style={styles.eyebrow}>WHERE YOU RANK</Text>
+                <Text style={styles.eyebrow}>YOUR PATTERNS THIS SEASON</Text>
                 {generatePercentileCards(vector, identities.primary).map((c, i) => (
                   <View key={i} style={styles.row}>
-                    <Text style={styles.rowLeft}>Top {c.percentile}%</Text>
+                    <Text style={styles.rowLeft}>{c.headline}</Text>
                     <Text style={styles.rowRight}>{c.body}</Text>
                   </View>
                 ))}

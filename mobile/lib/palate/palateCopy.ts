@@ -202,27 +202,27 @@ export const WHAT_ARE_PALATES = {
 };
 
 // ----------------------------------------------------------------------------
-// Ego hook — turns the strongest axis position into "Top X% in {axis} this
-// week." Conservative percentile estimate (no global distribution data yet),
-// so the magnitudes are tied to the score buckets — never inflated.
-// Returns undefined when nothing strong fires; callers should hide the line.
+// Ego hook — describes the strongest axis of the user's OWN week in absolute
+// terms. We deliberately do NOT claim a "Top X%" percentile: there's no global
+// distribution to rank against, so any percentile would be a fabricated
+// statistic. Returns a self-referential observation instead.
 // ----------------------------------------------------------------------------
 export function composeEgoHook(profile: PalateProfile): string {
   const n = profile.noveltyScore;
   const p = profile.premiumScore;
   if (Math.abs(n - 0.5) >= Math.abs(p - 0.5)) {
-    if (n >= 0.85) return "Top 5% in exploration this week.";
-    if (n >= 0.75) return "Top 15% in exploration this week.";
-    if (n >= 0.65) return "Top 30% in exploration this week.";
-    if (n <= 0.15) return "Top 5% in consistency this week.";
-    if (n <= 0.25) return "Top 15% in consistency this week.";
-    if (n <= 0.35) return "Top 30% in consistency this week.";
+    if (n >= 0.85) return "You explored a lot this week.";
+    if (n >= 0.75) return "Plenty of new spots this week.";
+    if (n >= 0.65) return "You branched out this week.";
+    if (n <= 0.15) return "You leaned right into your regulars this week.";
+    if (n <= 0.25) return "Mostly familiar spots this week.";
+    if (n <= 0.35) return "You stuck close to your favorites this week.";
   } else {
-    if (p >= 0.85) return "Top 5% in elevated picks this week.";
-    if (p >= 0.75) return "Top 15% in elevated picks this week.";
-    if (p >= 0.65) return "Top 30% in elevated picks this week.";
-    if (p <= 0.15) return "Top 5% in casual leanings this week.";
-    if (p <= 0.25) return "Top 15% in casual leanings this week.";
+    if (p >= 0.85) return "You went upscale this week.";
+    if (p >= 0.75) return "Some elevated picks this week.";
+    if (p >= 0.65) return "A few elevated picks this week.";
+    if (p <= 0.15) return "All casual this week.";
+    if (p <= 0.25) return "Mostly casual this week.";
   }
   return "You're moving — your Palate is shifting.";
 }

@@ -11,3 +11,6 @@ node_modules
 .next
 dist
 .expo
+
+# Claude Code personal permission grants (machine-local, not committed)
+.claude/settings.local.json

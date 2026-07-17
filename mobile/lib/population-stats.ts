@@ -16,11 +16,11 @@ import { supabase } from "./supabase";
 const REAL_DATA_THRESHOLD = 25;
 
 export type PercentileCard = {
-  /** Short headline ("Top 12%") */
+  /** Qualitative intensity of the user's own signal ("Strong" / "Notable" / "Light") — NOT a percentile rank. */
   headline: string;
-  /** What the percentile is for ("in trying new restaurants") */
+  /** What it's about ("in trying new restaurants"). */
   body: string;
-  /** Numerical percentile value 0..100 */
+  /** The user's own 0..100 self-score (not a rank vs. other users). */
   percentile: number;
 };
 
@@ -48,74 +48,72 @@ export type CohortInsight = {
 export function generatePercentileCards(v: TasteVector, identity: PalateIdentity): PercentileCard[] {
   const out: PercentileCard[] = [];
 
-  // Exploration: high explorationRate → high percentile in "trying new"
   out.push({
-    headline: `Top ${pctRank(v.explorationRate, "explore")}%`,
+    headline: intensityLabel(v.explorationRate),
     body: "in trying new restaurants this season",
-    percentile: pctRank(v.explorationRate, "explore"),
+    percentile: pctScore(v.explorationRate),
   });
 
-  // Loyalty: high repeatRate → high percentile in "repeat behavior"
   out.push({
-    headline: `Top ${pctRank(v.repeatRate, "repeat")}%`,
+    headline: intensityLabel(v.repeatRate),
     body: "in repeat-visit loyalty",
-    percentile: pctRank(v.repeatRate, "repeat"),
+    percentile: pctScore(v.repeatRate),
   });
 
-  // Cuisine breadth
   const breadth = Object.keys(v.cuisineRegion).length;
   const breadthScore = Math.min(1, breadth / 8);
   out.push({
-    headline: `Top ${pctRank(breadthScore, "breadth")}%`,
+    headline: intensityLabel(breadthScore),
     body: `in cuisine variety (${breadth} different regions)`,
-    percentile: pctRank(breadthScore, "breadth"),
+    percentile: pctScore(breadthScore),
   });
 
-  // Late-night vs. early
   const total = v.hourly.reduce((s, n) => s + n, 0);
   if (total > 0) {
     const late = (v.hourly[21] + v.hourly[22] + v.hourly[23] + v.hourly[0]) / total;
     if (late >= 0.2) {
       out.push({
-        headline: `Top ${pctRank(late, "late")}%`,
-        body: "in late-night eating frequency",
-        percentile: pctRank(late, "late"),
+        headline: intensityLabel(late),
+        body: "in late-night eating",
+        percentile: pctScore(late),
       });
     } else {
       const early = (v.hourly[6] + v.hourly[7] + v.hourly[8] + v.hourly[9]) / total;
       if (early >= 0.2) {
         out.push({
-          headline: `Top ${pctRank(early, "early")}%`,
+          headline: intensityLabel(early),
           body: "in early-morning eating",
-          percentile: pctRank(early, "early"),
+          percentile: pctScore(early),
         });
       }
     }
   }
 
-  // Neighborhood loyalty
   if (v.neighborhoodLoyalty >= 0.4) {
     out.push({
-      headline: `Top ${pctRank(v.neighborhoodLoyalty, "hood")}%`,
-      body: "in neighborhood loyalty — most users roam more",
-      percentile: pctRank(v.neighborhoodLoyalty, "hood"),
+      headline: intensityLabel(v.neighborhoodLoyalty),
+      body: "in neighborhood loyalty — you tend to stick close to home",
+      percentile: pctScore(v.neighborhoodLoyalty),
     });
   }
 
   return out.slice(0, 4);
 }
 
-// Deterministic-ish "percentile" — maps a 0..1 signal to a top-N% rank.
-// Stronger signals → smaller "Top X%" number. The slug seeds variation so
-// different metrics don't all show identical numbers when underlying values
-// are similar.
-function pctRank(signal: number, slug: string): number {
-  const clamped = Math.max(0, Math.min(1, signal));
-  // Base mapping: signal 1.0 → top 5%, signal 0.5 → top 30%, signal 0 → top 70%
-  const base = Math.round(70 - clamped * 65);
-  // Add deterministic offset per metric so cards differ a bit
-  const offset = hashOffset(slug);
-  return Math.max(2, Math.min(85, base + offset));
+// Qualitative intensity of the user's OWN signal — deliberately NOT a "Top X%"
+// percentile. There's no population distribution to rank against, so any
+// percentile would be a fabricated statistic (two friends could both be
+// "Top 5%"). Describe the user's own signal instead.
+function intensityLabel(signal: number): string {
+  const s = Math.max(0, Math.min(1, signal));
+  if (s >= 0.66) return "Strong";
+  if (s >= 0.40) return "Notable";
+  return "Light";
+}
+
+// The user's own 0..1 signal as a 0..100 (a self-score, NOT a rank vs others).
+function pctScore(signal: number): number {
+  return Math.round(Math.max(0, Math.min(1, signal)) * 100);
 }
 
 function hashOffset(s: string): number {
