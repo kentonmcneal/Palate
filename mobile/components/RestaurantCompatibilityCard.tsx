@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Alert, Animated, Easing } from "react-native";
 import { useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";
-import type { RankedRestaurant } from "../lib/restaurant-ranking";
+import type { RankedRestaurant } from "../lib/recommendation/types";
 import { addToWishlist } from "../lib/palate-insights";
 import { triggerHapticSuccess, triggerHapticSelection } from "../lib/haptics";
 import { pickSaveCopy } from "../lib/save-copy";
