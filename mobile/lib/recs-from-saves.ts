@@ -66,12 +66,15 @@ export async function loadRecsFromSaves(
   if (matchRows.length === 0) return { anchors, recs: [] };
 
   const ids = matchRows.map((m) => m.restaurant_id);
-  const { data: restaurants } = await supabase
+  const { data: restaurants, error: hydrateErr } = await supabase
     .from("restaurants_resolved")
     .select(
       "id, google_place_id, name, cuisine_type:resolved_cuisine_type, cuisine_subregion:resolved_cuisine_subregion, neighborhood, address, price_level, rating, user_rating_count",
     )
     .in("id", ids);
+  // Propagate a transient hydrate failure instead of silently returning [] —
+  // an empty result would be indistinguishable from "no recommendations."
+  if (hydrateErr) throw hydrateErr;
   const byId = new Map<string, any>((restaurants ?? []).map((r: any) => [r.id, r]));
 
   const recs: SaveAnchoredRec[] = [];

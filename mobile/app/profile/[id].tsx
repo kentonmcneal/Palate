@@ -156,16 +156,28 @@ export default function FriendProfileScreen() {
               )}
             </View>
 
-            {/* Visibility-gated body */}
+            {/* Visibility-gated body. A null persona means one of two very
+                different things — DON'T show "private" to an accepted friend
+                who simply hasn't been classified yet (in week 1 nobody has a
+                persona, so every friend would otherwise read as private). */}
             {snapshot.persona_label === null && !snapshot.is_self && (
-              <View style={styles.privateCard}>
-                <Text style={type.subtitle}>This profile is private.</Text>
-                <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
-                  {snapshot.profile_visibility === "private"
-                    ? "They've set their profile to private. You can still send a friend request."
-                    : "Add them as a friend to see their persona, top spots, and more."}
-                </Text>
-              </View>
+              snapshot.is_friend ? (
+                <View style={styles.privateCard}>
+                  <Text style={type.subtitle}>No persona yet.</Text>
+                  <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
+                    They need a few more visits before their weekly Palate shows up here.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.privateCard}>
+                  <Text style={type.subtitle}>This profile is private.</Text>
+                  <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
+                    {snapshot.profile_visibility === "private"
+                      ? "They've set their profile to private. You can still send a friend request."
+                      : "Add them as a friend to see their persona, top spots, and more."}
+                  </Text>
+                </View>
+              )
             )}
 
             {snapshot.persona_label && (

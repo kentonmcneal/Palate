@@ -116,9 +116,6 @@ export default function FeedTab() {
             <Text style={[type.small, { marginTop: 8, lineHeight: 20 }]}>
               When friends share Wrapped or hit a milestone, it'll show up here.
             </Text>
-            <Text style={[type.small, { marginTop: 6, lineHeight: 20, fontStyle: "italic" }]}>
-              Soon, you'll also see Palates similar to yours.
-            </Text>
             <Spacer />
             <Pressable
               onPress={() => router.push("/friends")}

@@ -51,12 +51,14 @@ export async function loadSimilarRestaurants(
 
   const ids = (matches as Array<{ restaurant_id: string }>).map((m) => m.restaurant_id);
   // Read from the override-resolved view so user corrections win.
-  const { data: restaurants } = await supabase
+  const { data: restaurants, error: hydrateErr } = await supabase
     .from("restaurants_resolved")
     .select(
       "id, google_place_id, name, cuisine_type:resolved_cuisine_type, cuisine_subregion:resolved_cuisine_subregion, neighborhood, address, price_level, rating, user_rating_count, latitude, longitude",
     )
     .in("id", ids);
+  // A transient hydrate failure should surface, not masquerade as "no similar".
+  if (hydrateErr) throw hydrateErr;
 
   const byId = new Map<string, any>((restaurants ?? []).map((r: any) => [r.id, r]));
   return (matches as Array<{ restaurant_id: string; similarity_score: number; signals: SimilarSignals }>)

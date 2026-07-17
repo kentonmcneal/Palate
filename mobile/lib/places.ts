@@ -53,11 +53,16 @@ export async function searchRestaurants(query: string, near?: { lat: number; lng
 
 /** Once the proxy has upserted into restaurants, look up the row id for a place_id. */
 export async function getRestaurantIdByPlaceId(googlePlaceId: string) {
+  // maybeSingle (not single): .single() throws PGRST116 on zero rows, and this
+  // is the first call in saveVisit — if the proxy hasn't upserted the row yet
+  // (slow/failed), that would hard-crash the core log-a-visit flow. Throw a
+  // clear, retryable error instead so the UI can surface it.
   const { data, error } = await supabase
     .from("restaurants")
     .select("id")
     .eq("google_place_id", googlePlaceId)
-    .single();
+    .maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error("Restaurant isn't ready yet — please try again in a moment.");
   return data.id as string;
 }

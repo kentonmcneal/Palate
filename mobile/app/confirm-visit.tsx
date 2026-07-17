@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View, Text, StyleSheet, Alert, FlatList, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -29,9 +29,16 @@ export default function ConfirmVisit() {
     visitId: string;
   } | null>(null);
 
-  const alternates: Restaurant[] = params.alternates
-    ? JSON.parse(params.alternates as string)
-    : [];
+  // Guard the parse: a malformed `alternates` param would otherwise throw
+  // during render and white-screen the app (not a catchable handler). Memoized
+  // so it doesn't re-parse on every render.
+  const alternates: Restaurant[] = useMemo(() => {
+    try {
+      return params.alternates ? JSON.parse(params.alternates as string) : [];
+    } catch {
+      return [];
+    }
+  }, [params.alternates]);
 
   async function handleYes() {
     setBusy(true);

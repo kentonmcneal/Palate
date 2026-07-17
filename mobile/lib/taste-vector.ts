@@ -261,7 +261,10 @@ export function aggregate(visits: VisitRow[], wishlist: WishlistRow[]): TasteVec
 
   // ---- behavioral ----
   v.uniqueRestaurants = restaurantCounts.size;
-  const repeatVisits = [...restaurantCounts.values()].filter((c) => c > 1).reduce((s, c) => s + c, 0);
+  // A repeat is a return visit — the FIRST visit to a place is not a repeat.
+  // Sum (count - 1) over repeated restaurants, not the full count, or two
+  // places visited twice each would read repeatRate = 1.0 (should be 0.5).
+  const repeatVisits = [...restaurantCounts.values()].reduce((s, c) => s + Math.max(0, c - 1), 0);
   v.repeatRate = visits.length > 0 ? repeatVisits / visits.length : 0;
   v.explorationRate = 1 - v.repeatRate;
 

@@ -2,14 +2,19 @@
 // referrals.ts — invite link generation + referral claim.
 // ----------------------------------------------------------------------------
 // The mobile app's Share button generates a URL like
-//   https://palate.app/?ref=<userId>
+//   https://palate-zm29.vercel.app/?ref=<userId>
 // which lands on the marketing site; when the new user signs up in the app
 // (and the deep-link / clipboard contained the ref), we call recordReferral().
+//
+// NOTE: points at the live Vercel URL because palate.app isn't attached to the
+// deployment yet — palate.app/... resolves to nothing. Flip this back to
+// https://palate.app/ once the custom domain is live (and its AASA file is up
+// for the applinks:palate.app universal-link claim in app.json).
 // ============================================================================
 
 import { supabase } from "./supabase";
 
-export const INVITE_BASE_URL = "https://palate.app/";
+export const INVITE_BASE_URL = "https://palate-zm29.vercel.app/";
 
 export async function generateInviteLink(): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();

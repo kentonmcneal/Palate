@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { View, Text, StyleSheet, TextInput, FlatList, Pressable, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -17,6 +17,10 @@ export default function AddTab() {
   const [loading, setLoading] = useState(false);
   const [celebration, setCelebration] = useState<{ name: string } | null>(null);
   const [burst, setBurst] = useState(0);
+  const [saving, setSaving] = useState(false);
+  // Synchronous guard: React state updates aren't immediate, so a fast
+  // double-tap could pass an `if (saving)` check twice. A ref flips now.
+  const savingRef = useRef(false);
 
   async function handleSearch() {
     if (!query.trim()) return;
@@ -39,6 +43,12 @@ export default function AddTab() {
   }
 
   async function pickPlace(p: Restaurant) {
+    // Guard against a rapid double-tap logging the same visit twice —
+    // saveVisit's dedup is a non-atomic select-then-insert, so two concurrent
+    // calls can both slip through and corrupt visit counts.
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
     try {
       const result = await saveVisit({ googlePlaceId: p.google_place_id, source: "manual" });
       if (result.isFirstVisit) {
@@ -51,6 +61,9 @@ export default function AddTab() {
       }
     } catch (e: any) {
       Alert.alert("Couldn't save", e.message ?? "Try again");
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   }
 
@@ -81,7 +94,11 @@ export default function AddTab() {
           data={results}
           keyExtractor={(item) => item.google_place_id}
           renderItem={({ item }) => (
-            <Pressable onPress={() => pickPlace(item)} style={styles.row}>
+            <Pressable
+              onPress={() => pickPlace(item)}
+              disabled={saving}
+              style={[styles.row, saving && { opacity: 0.5 }]}
+            >
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{item.name}</Text>
                 {item.address && <Text style={type.small}>{item.address}</Text>}

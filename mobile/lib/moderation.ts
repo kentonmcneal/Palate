@@ -93,10 +93,20 @@ export async function listBlockedUsers(): Promise<BlockedProfile[]> {
 /** User ids the current user should never see in the feed (blocked either way). */
 export async function hiddenUserIds(): Promise<Set<string>> {
   const { data, error } = await supabase.rpc("hidden_user_ids");
-  if (error || !Array.isArray(data)) return new Set();
-  // A setof-uuid RPC returns scalars; be defensive about the exact shape.
-  const ids = data
-    .map((r: any) => (typeof r === "string" ? r : r?.hidden_user_ids ?? r?.id))
-    .filter(Boolean);
-  return new Set(ids as string[]);
+  if (!error && Array.isArray(data)) {
+    // A setof-uuid RPC returns scalars; be defensive about the exact shape.
+    const ids = data
+      .map((r: any) => (typeof r === "string" ? r : r?.hidden_user_ids ?? r?.id))
+      .filter(Boolean);
+    return new Set(ids as string[]);
+  }
+  // RPC failed — do NOT silently un-hide blocked users (fail-open on a block is
+  // the worst outcome). Fall back to the caller's own block list, the direction
+  // RLS lets us read directly, so people you blocked stay hidden regardless.
+  console.warn("hidden_user_ids RPC failed; using own block list:", error?.message);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return new Set();
+  const { data: rows } = await supabase
+    .from("blocked_users").select("blocked_id").eq("blocker_id", user.id);
+  return new Set(((rows ?? []) as Array<{ blocked_id: string }>).map((r) => r.blocked_id));
 }

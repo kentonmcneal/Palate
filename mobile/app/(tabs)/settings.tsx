@@ -143,10 +143,13 @@ export default function Settings() {
   }
 
   async function changeVisibility(next: ProfileVisibility) {
+    const prev = visibility;
     setVisibility(next); // optimistic
     try {
       await setProfileVisibility(next);
     } catch (e: any) {
+      // Roll back so the UI never shows a privacy setting the DB didn't save.
+      setVisibility(prev);
       Alert.alert("Couldn't update", e.message ?? "Try again");
     }
   }
