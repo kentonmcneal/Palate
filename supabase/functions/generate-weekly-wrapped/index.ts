@@ -22,13 +22,13 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // Authn: only accept calls with the shared cron secret OR the service role key.
+  // Authn: accept the shared cron secret OR the service role key. Fail CLOSED —
+  // if CRON_SECRET is unset, only the service-role key is accepted (never open).
   const auth = req.headers.get("Authorization") ?? "";
-  if (CRON_SECRET && auth !== `Bearer ${CRON_SECRET}`) {
-    // Also allow service-role for manual invocation
-    if (auth !== `Bearer ${SUPABASE_SERVICE_KEY}`) {
-      return json({ error: "unauthorized" }, 401);
-    }
+  const okCron = !!CRON_SECRET && auth === `Bearer ${CRON_SECRET}`;
+  const okService = auth === `Bearer ${SUPABASE_SERVICE_KEY}`;
+  if (!okCron && !okService) {
+    return json({ error: "unauthorized" }, 401);
   }
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
@@ -54,15 +54,13 @@ serve(async (req) => {
 
   for (const uid of ids) {
     try {
-      const { error: rpcErr } = await admin.rpc("generate_weekly_wrapped", {
+      // Service-role-only RPC that takes an explicit user id (0037). The old
+      // call used a p_user_id_override arg the function never accepted, so every
+      // call 404'd and no Wrapped was ever generated.
+      const { error: rpcErr } = await admin.rpc("generate_weekly_wrapped_for", {
+        p_user_id: uid,
         p_week_start: weekStart,
-        p_user_id_override: uid,
-      } as any);
-      // Note: if your RPC doesn't take p_user_id_override, the line above
-      // is harmless — supabase-js will pass extra args; the RPC ignores them.
-      // Some setups don't allow that — in which case set up the RPC to look at
-      // auth.uid() and call from the user's session, or remove the loop entirely
-      // and have the RPC iterate users itself.
+      });
       if (rpcErr) continue;
       generated++;
 
