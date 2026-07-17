@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { nearbyRestaurants, type Restaurant } from "./places";
+import { getOrFetchNearby } from "./nearby-cache";
 
 // ============================================================================
 // Types
@@ -363,7 +364,7 @@ export async function getPalateRecommendations(
 
   // 500m default; broaden when low data so the suggestion list isn't empty.
   const radius = insight.isLowData ? 1200 : 800;
-  const candidates = await nearbyRestaurants(anchor.lat, anchor.lng, radius);
+  const candidates = await getOrFetchNearby(anchor.lat, anchor.lng, radius, nearbyRestaurants);
 
   // Dedupe against this week's visits
   const visitedPlaceIds = await getVisitedPlaceIds(insight.weekStart, insight.weekEnd);

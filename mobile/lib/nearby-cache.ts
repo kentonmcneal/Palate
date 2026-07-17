@@ -45,3 +45,21 @@ export async function setCachedNearby(
     // ignore — cache failure is non-fatal
   }
 }
+
+/**
+ * Cache-first nearby fetch: return a cached bucket if fresh, else call the
+ * (billed) fetcher once and cache it. Use this everywhere instead of calling
+ * nearbyRestaurants directly, so a tab focus / re-open never bills Google Places
+ * twice for the same spot. Fetcher is injected to keep this module free of a
+ * places.ts import cycle.
+ */
+export async function getOrFetchNearby(
+  lat: number, lng: number, radius_m: number,
+  fetcher: (lat: number, lng: number, radius_m: number) => Promise<Restaurant[]>,
+): Promise<Restaurant[]> {
+  const cached = await getCachedNearby(lat, lng, radius_m);
+  if (cached) return cached;
+  const fresh = await fetcher(lat, lng, radius_m);
+  void setCachedNearby(lat, lng, radius_m, fresh);
+  return fresh;
+}

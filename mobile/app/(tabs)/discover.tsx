@@ -8,6 +8,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { nearbyRestaurants, searchRestaurants, type Restaurant } from "../../lib/places";
+import { getOrFetchNearby } from "../../lib/nearby-cache";
 import { supabase } from "../../lib/supabase";
 import { listWishlist, type WishlistEntry } from "../../lib/palate-insights";
 import { getCurrentLocation, classifyAccuracy } from "../../lib/location";
@@ -123,7 +124,7 @@ export default function DiscoverTab() {
       // Taste vector is computed separately (see effect below) so toggling
       // "saves only" recomputes it without refetching nearby places.
       const [nearby, sig, visitedIds] = await Promise.all([
-        nearbyRestaurants(loc.lat, loc.lng, NEARBY_RADIUS_M),
+        getOrFetchNearby(loc.lat, loc.lng, NEARBY_RADIUS_M, nearbyRestaurants),
         loadPersonalSignal().catch(() => null),
         user ? loadVisitedPlaceIds(user.id) : Promise.resolve(new Set<string>()),
       ]);

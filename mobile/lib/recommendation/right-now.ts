@@ -173,7 +173,11 @@ export async function computeRightNow(opts: RightNowOptions): Promise<RightNowRe
   // strategies are user-chosen and shouldn't get randomized away).
   let rightNowPick: RankedRestaurant | null = null;
   if (strategy === "best" && Math.random() < EXPLORATION_RATE.right_now) {
-    const stretchPool = scored
+    // Draw the exploration pick from baseFiltered, NOT scored — otherwise the
+    // ~7% exploration branch bypasses the national-chain + visited-3x filters
+    // and can surface exactly the McDonald's / been-there-5x pick the hero is
+    // supposed to exclude.
+    const stretchPool = baseFiltered
       .filter((s) => s.pool === "stretch_adjacent" || s.restaurant.score.recommendationType === "stretch")
       .sort((a, b) => b.restaurant.score.compatibilityScore - a.restaurant.score.compatibilityScore);
     rightNowPick = stretchPool[0]?.restaurant ?? exploit[0]?.restaurant ?? null;
