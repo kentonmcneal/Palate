@@ -67,12 +67,20 @@ login, and **Palate's login is `signInWithOtp` — email OTP only, no password a
 no reviewer bypass.** A reviewer cannot get in.
 
 Fix before submitting:
-1. Configure a **test OTP** in Supabase Auth (maps a demo email to a fixed code,
-   so no email is ever sent).
-2. Sign in once as that demo user so the account exists.
+1. Create a **dedicated throwaway email account** for review (not a personal
+   inbox) — the reviewer needs to read the code Palate emails them.
+2. Sign in to Palate once with that address so the user row exists.
 3. Seed it with visit history — a reviewer landing on an empty app sees nothing
    of what Palate does, which is its own rejection reason.
-4. Put the email + fixed code in App Store Connect → **App Review Information**.
+4. Put the email address **and that inbox's password** in App Store Connect →
+   **App Review Information**, with instructions for retrieving the code.
+
+> **Do NOT** install the widely-blogged `auth.users` trigger that fakes a fixed
+> OTP by writing a deterministic `recovery_token`. Its own author restricts it to
+> non-production use: a too-broad match pattern would give *real* accounts
+> guessable tokens (account takeover), and it depends on GoTrue internals that
+> can change under you. A throwaway inbox contains the blast radius to one
+> account holding nothing but demo data.
 
 Copy to paste is in `TESTFLIGHT_COPY.md`.
 

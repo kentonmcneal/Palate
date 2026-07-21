@@ -48,23 +48,29 @@ screenshot and tapping Share, but the in-app one gives me more context.
 ---
 
 ## App Review Information — demo account
-*(Required for external review. Reviewers cannot receive an emailed OTP, so this
-must be a fixed test code configured in Supabase Auth. See SHIP_CHECKLIST §3.)*
+*(Required for external review. Palate's login is `signInWithOtp` — email code
+only, no password — so the reviewer must be able to READ the inbox the code is
+sent to. Use a dedicated throwaway email account for this; do not use a personal
+inbox, and do not install an auth trigger in production to fake a fixed code.)*
 
 **Sign-in required:** Yes
-**User name:** `<demo email, e.g. review@palate.app>`
-**Password:** `<the fixed test OTP, e.g. 123456>`
+**User name:** `<review inbox address, e.g. palate.review@gmail.com>`
+**Password:** `<that inbox's password — Apple stores this securely>`
 
 **Notes:**
 ```
-Palate signs in with a one-time code sent by email — there is no password.
+Palate signs in with a one-time code emailed to you — there is no app password.
 
-For review, the account below is configured with a FIXED code, so no email is
-sent and no inbox access is needed:
+The credentials above are for a dedicated email account created for review. Use
+them to read the code:
 
-  1. Enter the email address above on the sign-in screen.
+  1. On the Palate sign-in screen, enter the email address above.
   2. Tap "Send code."
-  3. Enter the fixed code above. It will always be accepted for this account.
+  3. Sign in to that email account (webmail, credentials above) and open the
+     message from Palate.
+  4. Enter the 6-digit code in the app.
+
+The code expires after 1 hour and a new one can be requested every 60 seconds.
 
 This account is pre-populated with visit history so the recommendation engine,
 profile, and weekly Wrapped all have data to display.
