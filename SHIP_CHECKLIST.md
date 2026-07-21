@@ -1,121 +1,154 @@
-# Palate — Ship Checklist (TestFlight)
+# Palate — Ship Checklist
 
-**Status:** All code is on `main`, typechecks, and tests pass. Everything below
-is credential-gated, paid, or a manual dashboard step — run it yourself. Per
-CLAUDE.md, no agent runs `eas build`/`eas update`/`supabase ... deploy`/`db push`
-without your explicit go.
+**Status as of 2026-07-20: LIVE on TestFlight.** Build `0.1.0 (11)` passed Apple
+processing and was verified running on a physical device. The backend is fully
+deployed. What remains is distribution, not engineering.
 
-Migrations included through **0038**: in-app feedback `0034`, report/block
-moderation `0035`, RLS/auth hardening `0036`, weekly-wrapped service-role RPC
-`0037` (fixes Sunday Wrapped that never generated), and the featured-lists cron
-secret `0038` — on top of the recommendation/cost-control work.
-
-⚠️ **NEW hard dependency this cycle — `CRON_SECRET`.** The security pass made both
-`generate-weekly-wrapped` and `featured-lists-refresh` **fail closed**. You MUST
-set up the shared cron secret (step 2a) *before/with* deploying those functions,
-or Sunday Wrapped + the nightly Featured Lists refresh silently stop.
+> **Read this before trusting any doc in this repo.** The previous version of this
+> file described the backend deploy and `CRON_SECRET` as pending for five days
+> after they had shipped. Checklists go stale; live infrastructure does not.
+> Every claim below was verified with a free read-only command, listed inline so
+> you can re-verify in seconds rather than trusting this file.
 
 ---
 
-## 0. Apple Developer Program — the long pole ⏳
-Not started as of 2026-07-15. Enroll first; identity verification can take 2–5 days.
-- https://developer.apple.com/programs/enroll/  ($99/yr, individual is fine)
+## Verified deployed ✅
 
-## 1. Make the privacy + terms URLs resolve  ⚠️ Apple hard-blocks a broken privacy URL
-The app links to `https://palate.app/privacy` and `/terms` (in `mobile/app.json`
-and Settings), but `palate.app` does not currently resolve — the site is live at
-`palate-zm29.vercel.app`. Do ONE of:
-- **Attach the `palate.app` domain** to the Vercel project (Vercel → Project →
-  Settings → Domains) and confirm `https://palate.app/privacy` loads, **or**
-- temporarily point the app's links at the working Vercel URL.
-The privacy page currently renders as a "placeholder pending lawyer review." That
-text is fine for TestFlight beta review, but finalize it (see `LAWYER_REVIEW.md`)
-before a public App Store submission.
+| Thing | State | Verify with |
+|---|---|---|
+| Migrations | Applied through **0040** | `supabase migration list --linked` |
+| Edge functions | All 5 ACTIVE (deployed 2026-07-17) | `supabase functions list --project-ref oxzsspbojeyeelbjqjdx` |
+| `CRON_SECRET` | Set **and proven working** | see "Cron proof" below |
+| `ALERT_PUSH_TOKEN` | Set 2026-07-20 → Places cost alerts live | `supabase secrets list --project-ref …` |
+| Privacy / terms URLs | `palate-zm29.vercel.app/privacy` + `/terms`, both 200 | `curl -I` |
+| iOS build | `0.1.0 (11)`, STORE distribution, submitted | `eas build:list` |
+| App Store Connect | App ID `6765514102` | TestFlight tab |
+| Feedback capture | `feedback` table + private bucket live | `select count(*) from public.feedback` |
 
-## 2a. Set the shared cron secret  🔑 do this FIRST (new this cycle)
-Both `generate-weekly-wrapped` and `featured-lists-refresh` now fail closed and
-authenticate via a shared secret. In the Supabase SQL editor:
+**Cron proof** — don't infer from `cron.job_run_details`; its `succeeded` only means
+pg_net *dispatched* the request. `featured_lists_refresh_nightly` shows a 5000ms
+pg_net timeout every night, which is benign: the function runs longer than
+Postgres waits. Confirm the crons by checking that they **wrote data**:
+
 ```sql
-select vault.create_secret('<paste-a-long-random-string>', 'cron_secret');
+select max(refreshed_at) from public.featured_lists_cache;  -- ~16s after 04:00 UTC
+select max(created_at)   from public.weekly_wrapped;        -- ~3s after Sun 14:00 UTC
 ```
-Then set the **same value** as an Edge Function secret on both functions:
-```
-supabase secrets set CRON_SECRET=<same-long-random-string>
-```
-(The Sunday Wrapped cron `0017` and the featured-lists cron `0038` both read
-`vault: cron_secret` and send it to the functions, which compare against
-`CRON_SECRET`. They must match exactly.)
 
-## 2b. Deploy the backend
-```
-supabase login
-supabase link --project-ref <YOUR-PROJECT-REF>
-supabase db push          # applies migrations through 0038 (hardening + wrapped RPC + cron secret)
-supabase secrets list     # confirm GOOGLE_PLACES key + CRON_SECRET present
-```
-Set the cost-alert push token (from your own device's push_token), then deploy
-the functions. The two hardened functions MUST use `--no-verify-jwt` (they
-authenticate via CRON_SECRET / service-role, not a JWT — matching the existing
-Sunday Wrapped setup):
-```
-supabase secrets set ALERT_PUSH_TOKEN=<your-expo-push-token>
-supabase functions deploy places-proxy                              # ⚠️ turns on Google Places cost; kill-switch/telemetry from migration 0033 protect it
-supabase functions deploy generate-weekly-wrapped --no-verify-jwt   # Sunday Wrapped auto-gen (fixed) + fails closed
-supabase functions deploy featured-lists-refresh  --no-verify-jwt   # nightly Featured Lists; ⚠️ calls Google directly (bounded)
-```
-Optional: `supabase functions deploy notify-feed-post` if not already deployed.
-
-**Post-deploy smoke check (free):** in SQL, `select * from cron.job;` should show
-`palate_sunday_wrapped` and `featured_lists_refresh_nightly`. To verify auth end
-to end without waiting for the schedule, invoke `generate-weekly-wrapped` once
-with the `CRON_SECRET` as a Bearer token and confirm a 200 (not 401).
-
-## 3. Build + submit  ⚠️ paid — needs your explicit go
-```
-cd mobile
-eas build --platform ios --profile production
-eas submit --platform ios --profile production --latest
-```
-(EAS uses remote versioning — the `buildNumber` in app.json is informational.)
-
-## 4. App Store Connect
-- Create the app (Bundle ID `app.palate.ios`) if it doesn't exist — see `TESTFLIGHT_DAY_1.md`.
-- Encryption question → "No, only standard system encryption."
-- **Internal testing** (≤100, no review): add yourself + friends → build is installable in minutes.
-- **External testing** (≤10,000, public link): submit the build for Beta App Review
-  (~24–48h first time). Report/block (migration 0035) satisfies the Guideline 1.2
-  UGC requirement that would otherwise flag the feed.
-
-## 5. Collecting feedback + moderation reports
-Users file feedback in-app (Settings → Share feedback). To pull everything into one
-folder to drop into Claude Code:
-```
-cd supabase/scripts && npm install
-SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npx tsx export-feedback.ts
-# → ./feedback-export/  (feedback.md, feedback.csv, reports.csv, screenshots/)
-```
-Keep the service-role key in your terminal — never paste it into chat.
+Both writing = both authenticated = the Vault `cron_secret` matches the edge
+secret. That is the only end-to-end proof that matters.
 
 ---
 
-### Apple-readiness audit (2026-07-15) — all green except the domain
-- ✅ In-app account deletion (`delete_my_account`)
-- ✅ Login is email magic-link only → no Sign in with Apple requirement
-- ✅ Location is when-in-use only, with clear purpose strings
-- ✅ UGC report + block (feed "•••" menu + profile actions + Blocked list in Settings)
-- ✅ App icon + splash present
-- ⚠️ Privacy/terms URL must resolve (step 1) and be finalized before public launch
+## Remaining work
 
-### Known non-issue
-Typecheck shows 33 stale Expo Router route-type errors (e.g. `/friends`,
-`/feedback`, `/blocked`). They regenerate on `expo start` and are not real bugs.
+### 1. Verify the feedback path  ⚠️ still unproven
+`public.feedback` has **0 rows**. The app writes visits fine (23 logged), but
+nothing has exercised `submitFeedback` end to end. Send one from
+**Settings → Help → Share feedback** with a screenshot attached, then:
 
-### Deferred to post-launch (NOT a TestFlight blocker)
-- **Gmail token encryption (#9).** `gmail_tokens.refresh_token` / `access_token`
-  are stored as plaintext `text` (migration 0022's "encrypted at rest" comment was
-  aspirational — corrected in the file). RLS already blocks all client reads
-  (service-role only), so the only exposure is a DB dump / service-role leak — not
-  a client-facing risk. Fix is a self-contained change: pgcrypto + a Vault key +
-  encrypt-at-rest columns + three SECURITY DEFINER RPCs, shipped atomically with a
-  rewire of the five token touchpoints in `gmail-import`. Needs one live
-  "connect Gmail → scan" test. Do it after TestFlight is live.
+```sql
+select count(*) from public.feedback;
+select count(*) from storage.objects where bucket_id = 'feedback';
+```
+
+A beta whose feedback channel silently fails produces nothing.
+
+### 2. Internal testers — instant, no review
+App Store Connect → **Users and Access** → add each person by Apple ID →
+TestFlight → Internal Testing group. Up to 100, installable within minutes.
+This is the fastest path to other people's phones and needs nothing else on this
+list.
+
+### 3. External testers — needs a demo account first  ⚠️
+A public `testflight.apple.com/join/…` link requires a one-time **Beta App
+Review** (~24–48h). Apple requires a working demo account for anything behind a
+login, and **Palate's login is `signInWithOtp` — email OTP only, no password and
+no reviewer bypass.** A reviewer cannot get in.
+
+Fix before submitting:
+1. Configure a **test OTP** in Supabase Auth (maps a demo email to a fixed code,
+   so no email is ever sent).
+2. Sign in once as that demo user so the account exists.
+3. Seed it with visit history — a reviewer landing on an empty app sees nothing
+   of what Palate does, which is its own rejection reason.
+4. Put the email + fixed code in App Store Connect → **App Review Information**.
+
+Copy to paste is in `TESTFLIGHT_COPY.md`.
+
+---
+
+## Shipping updates to phones
+
+`expo-updates ~57.0.8` is configured, so **JS and asset changes go out over the
+air** — no rebuild, no resubmission, no review. Testers get them on next launch.
+
+```
+cd mobile && eas update --channel production -m "what changed"
+```
+
+Two constraints:
+
+- **JS/assets only.** Native changes — new native deps, permission or plugin
+  changes in `app.json`, SDK bumps — require a full rebuild and resubmit.
+- **`runtimeVersion` policy is `appVersion`.** Updates only reach builds whose
+  `version` matches. **Keep `version` at `0.1.0`** while pushing OTA fixes;
+  bumping it strands every phone running `0.1.0` until they install a new build.
+
+⚠️ `eas update` and `eas build` are paid — per `CLAUDE.md`, no agent runs them
+without an explicit go.
+
+---
+
+## Collecting feedback
+
+**Two inboxes.** Testers will use whichever they find first:
+
+1. **In-app** → your `feedback` table. Export everything into one folder:
+   ```
+   cd supabase/scripts && npm install
+   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npx tsx export-feedback.ts
+   # → ./feedback-export/  (feedback.md, feedback.csv, reports.csv, screenshots/)
+   ```
+   Keep the service-role key in your terminal — never paste it into chat.
+
+2. **TestFlight's built-in feedback** (screenshot → share → TestFlight) → lands in
+   **App Store Connect, not your database.** `export-feedback.ts` cannot see it.
+   Check both.
+
+The in-app entry is buried under Settings → Help. Until that's surfaced better,
+point testers at it in TestFlight's "What to Test" field — the one screen every
+tester reads.
+
+Action moderation reports (`reports.csv`) within 24h once you have real users.
+
+---
+
+## Post-launch backlog
+
+- **Gmail token encryption (#9).** `gmail_tokens.refresh_token`/`access_token` are
+  plaintext. RLS blocks all client reads (service-role only), so exposure is a DB
+  dump or service-role leak, not a client risk. Needs pgcrypto + a Vault key +
+  three SECURITY DEFINER RPCs, shipped atomically with a rewire of the five
+  touchpoints in `gmail-import`, plus one live "connect Gmail → scan" test.
+- **Surface the feedback entry** — a prompt after a few visits, or shake-to-report.
+- **`palate.app` domain.** Doesn't resolve. Nothing user-facing depends on it, but
+  `applinks:palate.app` in `app.json` claims universal links for a dead domain.
+- **Vestigial Info.plist keys.** The expo-location plugin injects
+  `NSLocationAlwaysAndWhenInUseUsageDescription`, `NSLocationAlwaysUsageDescription`,
+  and `NSMotionUsageDescription` **unconditionally** — removing the plugin block
+  from `app.json` does not strip them, it only replaces your custom string with
+  generic boilerplate (verified via `npx expo config --type introspect`). Removing
+  them needs a custom config plugin. Cosmetic: the app only ever calls
+  `requestForegroundPermissionsAsync`, so users only see the When-In-Use prompt.
+- **Chain flagging review.** Migration 0039 flagged 86 restaurants as
+  discovery-ineligible (444 remain eligible of 533). Reviewed 2026-07-20 — no
+  false positives, but Shake Shack (12 locations), Waffle House, and The
+  Cheesecake Factory are judgment calls. Un-flag with:
+  ```sql
+  update public.restaurants set recommendation_eligibility = 1,
+         ineligibility_reason = null
+   where ineligibility_reason = 'national_chain' and name ilike '%shake shack%';
+  ```
+  Many flagged rows are airport locations — if terminal meals are a big share of
+  visit history, consider a separate `airport` reason later.
