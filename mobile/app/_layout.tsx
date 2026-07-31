@@ -1,6 +1,6 @@
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments, type ErrorBoundaryProps } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, AppState, View, Text } from "react-native";
+import { ActivityIndicator, AppState, View, Text, Pressable } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -16,7 +16,7 @@ import { supabase } from "../lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { colors } from "../theme";
 import * as WebBrowser from "expo-web-browser";
-import { initObservability } from "../lib/observability";
+import { initObservability, captureError } from "../lib/observability";
 import { registerPushToken } from "../lib/notifications";
 import { checkForAutoVisitOnForeground } from "../lib/auto-detect";
 
@@ -33,6 +33,43 @@ function fontFamilyForWeight(w: string | number | undefined): string {
   if (n >= 600) return "Inter_600SemiBold";
   if (n >= 500) return "Inter_500Medium";
   return "Inter_400Regular";
+}
+
+// Root error boundary. expo-router renders this instead of letting a render-time
+// exception propagate to a native fatal — which, with expo-updates' error
+// recovery, was aborting the whole app (SIGABRT on expo.controller.errorRecoveryQueue).
+// A single bad screen now degrades to a recoverable in-app fallback.
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  // Report the caught render error to Sentry so we see the real message even on
+  // release builds (where __DEV__ is false). This turns the boundary into a
+  // diagnostic: if the new-account crash is a catchable render throw, it now
+  // surfaces here by name instead of us inferring it.
+  useEffect(() => {
+    void captureError(error, { boundary: "root" });
+  }, [error]);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.paper, alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <Text style={{ fontSize: 18, fontWeight: "800", color: colors.ink, marginBottom: 8 }}>
+        Something went wrong
+      </Text>
+      <Text style={{ fontSize: 14, color: colors.mute, textAlign: "center", marginBottom: 20, lineHeight: 20 }}>
+        The app hit an unexpected error. Tap to try again — your data is safe.
+      </Text>
+      <Pressable
+        onPress={retry}
+        style={{ backgroundColor: colors.red, paddingHorizontal: 22, paddingVertical: 12, borderRadius: 12 }}
+        accessibilityRole="button"
+      >
+        <Text style={{ color: "#fff", fontWeight: "800" }}>Reload</Text>
+      </Pressable>
+      {__DEV__ && (
+        <Text style={{ marginTop: 16, fontSize: 11, color: colors.mute, textAlign: "center" }}>
+          {error?.message}
+        </Text>
+      )}
+    </View>
+  );
 }
 
 export default function RootLayout() {

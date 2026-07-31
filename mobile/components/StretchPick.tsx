@@ -57,10 +57,10 @@ export function StretchPick() {
   useEffect(() => { load(); }, [load, browsingCity?.id]);
 
   if (loading) return null;
-  if (!pick) return null;
+  if (!pick?.restaurant?.match) return null;
 
   const r = pick.restaurant;
-  const score = r.match.score;
+  const score = r.match?.score ?? 0;
   const sub = [r.cuisine_type ? cap(r.cuisine_type) : null, r.neighborhood].filter(Boolean).join(" · ");
 
   return (

@@ -162,7 +162,7 @@ export function RightNowHero({ onTakeMeThere }: Props) {
     );
   }
 
-  if (empty || !pick) {
+  if (empty || !pick?.restaurant?.match) {
     return (
       <View style={[styles.card, styles.cardEmpty]}>
         <Text style={styles.eyebrow}>WHAT SHOULD I EAT RIGHT NOW</Text>
@@ -175,7 +175,7 @@ export function RightNowHero({ onTakeMeThere }: Props) {
   }
 
   const r = pick.restaurant;
-  const score = r.match.score;
+  const score = r.match?.score ?? 0;
   const sub = [r.cuisine_type ? cap(r.cuisine_type) : null, r.neighborhood].filter(Boolean).join(" · ");
   const accent = matchScoreColor(score);
 

@@ -93,7 +93,7 @@ export async function loadRecsFromSaves(
     recs.push({
       ...r,
       totalScore: Number(m.total_score),
-      matchedAgainst: m.matched_against,
+      matchedAgainst: m.matched_against ?? [],
     });
   }
 

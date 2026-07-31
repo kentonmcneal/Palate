@@ -29,6 +29,15 @@ export default function Permission() {
           ],
         );
       }
+    } catch {
+      // A native rejection (not a plain "denied" status) would otherwise escape
+      // as an unhandled promise rejection — which the React ErrorBoundary can't
+      // catch. Degrade gracefully so onboarding never dead-ends here.
+      Alert.alert(
+        "Location unavailable",
+        "We couldn't request location right now. You can continue and add visits manually.",
+        [{ text: "Continue", onPress: () => router.push("/onboarding/privacy") }],
+      );
     } finally {
       setLoading(false);
     }

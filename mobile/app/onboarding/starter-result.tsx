@@ -9,7 +9,11 @@ export default function StarterResultScreen() {
   const router = useRouter();
   const { persona, chips } = useLocalSearchParams<{ persona: string; chips: string }>();
   const key = (persona as StarterPersonaKey) ?? "convenience_loyalist";
-  const p = STARTER_PERSONAS[key];
+  // Guard against an unrecognized/drifted persona key (e.g. a value persisted by
+  // an older build). `??` above only covers null/undefined, so a stale string
+  // key would leave `p` undefined and crash the render below. Fall back to a
+  // valid persona so the screen always renders.
+  const p = STARTER_PERSONAS[key] ?? STARTER_PERSONAS.convenience_loyalist;
   const parsedChips: string[] = (() => {
     try { return JSON.parse(chips ?? "[]"); } catch { return []; }
   })();

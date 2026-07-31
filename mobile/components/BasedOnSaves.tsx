@@ -41,7 +41,7 @@ export function BasedOnSaves({
               ].filter(Boolean).join(" · ")}
             </Text>
             <Text style={styles.why} numberOfLines={1}>
-              Like {r.matchedAgainst.slice(0, 2).join(" + ")}
+              Like {(r.matchedAgainst ?? []).slice(0, 2).join(" + ")}
             </Text>
           </Pressable>
         ))}
