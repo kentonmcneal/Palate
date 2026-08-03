@@ -19,6 +19,14 @@ import * as WebBrowser from "expo-web-browser";
 import { initObservability, captureError } from "../lib/observability";
 import { registerPushToken } from "../lib/notifications";
 import { checkForAutoVisitOnForeground } from "../lib/auto-detect";
+import { installGlobalErrorHandlers } from "../lib/global-error-handler";
+
+// Install app-wide catch-alls for uncaught errors / unhandled rejections BEFORE
+// any app code runs. Under the New Architecture an unhandled rejection would
+// otherwise become a native fatal that expo-updates escalates to a SIGABRT
+// (the brand-new-account launch crash). Runs at module load — earliest point
+// we control in an expo-router app.
+installGlobalErrorHandlers();
 
 // Resolve any pending OAuth session (Gmail Connect) when the app is reopened
 // after the system browser hand-off.
@@ -97,15 +105,30 @@ export default function RootLayout() {
   }, [fontsLoaded]);
 
   useEffect(() => {
-    void initObservability();
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoaded(true);
-    });
+    // These startup tasks are fire-and-forget, so EVERY one must have its own
+    // rejection handler. Under the New Architecture an unhandled promise
+    // rejection becomes a native fatal, which expo-updates' error recovery then
+    // escalates to a SIGABRT (it looks for an update to roll back to, finds
+    // none, and re-raises). That was the brand-new-account launch crash: a
+    // first-run task (push permission / token) rejected with nothing to catch
+    // it. A React ErrorBoundary sits above this layer and cannot help here.
+    void initObservability().catch((e) => captureError(e, { at: "initObservability" }));
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        setSession(data.session);
+        setLoaded(true);
+      })
+      .catch((e) => {
+        // Never let a failed session restore hang the splash or escape unhandled.
+        setLoaded(true);
+        void captureError(e, { at: "getSession" });
+      });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
       setSession(s);
-      // Register push token whenever a session shows up.
-      if (s?.user) void registerPushToken();
+      // Register push token whenever a session shows up — the first-run path
+      // (permission prompt + token fetch) is the one that crashed new accounts.
+      if (s?.user) void registerPushToken().catch((e) => captureError(e, { at: "registerPushToken" }));
     });
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -115,9 +138,9 @@ export default function RootLayout() {
   // The helper itself respects the toggle, throttle, and permission state.
   useEffect(() => {
     if (!session?.user) return;
-    void checkForAutoVisitOnForeground();
+    void checkForAutoVisitOnForeground().catch((e) => captureError(e, { at: "autoVisit:mount" }));
     const sub = AppState.addEventListener("change", (next) => {
-      if (next === "active") void checkForAutoVisitOnForeground();
+      if (next === "active") void checkForAutoVisitOnForeground().catch((e) => captureError(e, { at: "autoVisit:foreground" }));
     });
     return () => sub.remove();
   }, [session?.user]);

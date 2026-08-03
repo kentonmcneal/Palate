@@ -92,16 +92,20 @@ export async function registerPushToken(): Promise<void> {
   // notifications and the rest of the app keep working.
   if (Device && !Device.isDevice) return;
 
-  // Need notification permission first
-  const perm = await Notifications.getPermissionsAsync();
-  let granted = perm.granted;
-  if (!granted) {
-    const ask = await Notifications.requestPermissionsAsync();
-    granted = ask.granted;
-  }
-  if (!granted) return;
-
   try {
+    // Need notification permission first. These calls MUST live inside the try:
+    // on a brand-new account this is the first-ever permission prompt, and a
+    // native rejection here (not a plain "denied" status) would otherwise escape
+    // as an unhandled rejection — which the New Architecture turns into a fatal
+    // that expo-updates escalates to a launch crash.
+    const perm = await Notifications.getPermissionsAsync();
+    let granted = perm.granted;
+    if (!granted) {
+      const ask = await Notifications.requestPermissionsAsync();
+      granted = ask.granted;
+    }
+    if (!granted) return;
+
     const Constants = await import("expo-constants");
     const projectId =
       Constants.default.expoConfig?.extra?.eas?.projectId ??

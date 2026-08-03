@@ -13,6 +13,7 @@ import { openInAppleMaps } from "../../lib/maps";
 import { AnimatedNumber } from "../../components/AnimatedNumber";
 import { computeStreak, type StreakInfo } from "../../lib/streak";
 import { refreshDailyReminder } from "../../lib/notifications";
+import { captureError } from "../../lib/observability";
 import { postMilestoneAndNotify } from "../../lib/feed";
 import { generateInviteLink } from "../../lib/referrals";
 import {
@@ -91,13 +92,16 @@ export default function Home() {
     if (s.status === "fulfilled") {
       setStreak(s.value);
       // Re-engagement: schedule (or clear) tonight's streak-at-risk nudge.
-      void refreshDailyReminder({ loggedToday: s.value.loggedToday, streak: s.value.current });
+      // Guarded: a rejection in the notification-scheduling path must not escape
+      // as an unhandled fatal (see _layout startup effect for why that crashes).
+      void refreshDailyReminder({ loggedToday: s.value.loggedToday, streak: s.value.current })
+        .catch((e) => captureError(e, { at: "refreshDailyReminder" }));
       // Fire confetti once per session when the user crosses a milestone day.
       const m = milestoneFor(s.value.current);
       if (m && celebratedStreak !== m) {
         setMilestoneConfetti((k) => k + 1);
         setCelebratedStreak(m);
-        void celebrateMilestone(m);
+        void celebrateMilestone(m).catch((e) => captureError(e, { at: "celebrateMilestone" }));
       }
     }
     if (w.status === "fulfilled") setWeekInsight(w.value);
@@ -126,7 +130,7 @@ export default function Home() {
 
   useFocusEffect(
     useCallback(() => {
-      load();
+      void load().catch((e) => captureError(e, { at: "home:load" }));
     }, [load]),
   );
 
