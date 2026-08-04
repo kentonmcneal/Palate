@@ -7,7 +7,7 @@ import { Button, Spacer } from "../components/Button";
 import { colors, spacing, type } from "../theme";
 import * as Linking from "expo-linking";
 import { sendMagicLink, verifyEmailCode } from "../lib/auth";
-import { getQuizPersona } from "../lib/profile";
+import { hasCompletedOnboarding } from "../lib/profile";
 import { track } from "../lib/analytics";
 import { recordReferral } from "../lib/referrals";
 
@@ -52,10 +52,12 @@ export default function SignIn() {
         // silent — referral is best-effort
       }
 
-      // Returning users (already finished the Starter Palate quiz) skip
-      // onboarding and land in the tabs. Otherwise run the wizard.
-      const { persona } = await getQuizPersona();
-      router.replace(persona ? "/(tabs)" : "/onboarding/welcome");
+      // Returning users skip onboarding and land in the tabs. We gate on a
+      // dedicated onboarding-complete flag (backfilled for pre-quiz accounts)
+      // rather than quiz_persona alone — older accounts have a null persona and
+      // were being wrongly re-sent through the wizard on re-login.
+      const done = await hasCompletedOnboarding();
+      router.replace(done ? "/(tabs)" : "/onboarding/welcome");
     } catch (e: any) {
       Alert.alert("Couldn't sign in", e.message ?? "Wrong code?");
     } finally {

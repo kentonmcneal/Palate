@@ -74,7 +74,11 @@ export function RecommendationsCard() {
       }
 
       const enriched: RestaurantRecommendation[] = nearby
-        .filter((p) => !visitedHeavy.has(p.google_place_id))
+        // Exclude national chains / non-recommendable places (eligibility 0),
+        // mirroring Discover (discover.tsx). Without this, chains flagged
+        // ineligible leaked into the post-onboarding "Places you'll probably
+        // like" list — the reported fast-food-in-recs bug.
+        .filter((p) => (p.recommendation_eligibility ?? 1) > 0 && !visitedHeavy.has(p.google_place_id))
         .map((p) => {
           const compat = getCompatibility(graph, {
             google_place_id: p.google_place_id,

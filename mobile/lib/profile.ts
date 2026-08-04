@@ -130,9 +130,33 @@ export async function saveQuizResult(personaKey: string, chips: string[]): Promi
       quiz_persona: personaKey,
       quiz_chips: chips,
       quiz_completed_at: new Date().toISOString(),
+      onboarding_complete: true,
     })
     .eq("id", user.id);
   if (error) throw error;
+}
+
+/**
+ * Whether the signed-in user should SKIP onboarding. True if they've finished
+ * onboarding (server flag) OR completed the Starter quiz (persona set) — the
+ * persona check covers accounts created before the `onboarding_complete`
+ * column existed and is backfilled by migration 0041.
+ *
+ * Fails CLOSED: on a query error we treat the user as already onboarded, so a
+ * transient network blip right after login can't re-run the wizard for an
+ * established account. (A brand-new account on a successful read still has both
+ * false/null and is correctly routed to onboarding.)
+ */
+export async function hasCompletedOnboarding(): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("onboarding_complete, quiz_persona")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (error) return true; // fail closed — never re-onboard on a transient error
+  return Boolean(data?.onboarding_complete) || data?.quiz_persona != null;
 }
 
 export async function getQuizPersona(): Promise<{ persona: string | null; chips: string[] }> {
