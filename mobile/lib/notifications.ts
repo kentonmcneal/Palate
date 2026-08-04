@@ -11,6 +11,11 @@
 // ============================================================================
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+// Static named import ONLY. A dynamic `import("react-native")` (or `import *`)
+// enumerates the whole RN namespace, tripping the deprecated PushNotificationIOS
+// lazy getter, which does `new NativeEventEmitter(null)` under the New
+// Architecture and throws a fatal Invariant Violation inside registerPushToken.
+import { Platform } from "react-native";
 
 const PREF_KEY = "palate.notifications.enabled";
 const SCHEDULED_KEY = "palate.notifications.scheduledId";
@@ -66,12 +71,14 @@ export async function enableSundayWrappedReminder(): Promise<{ ok: boolean; reas
       sound: "default",
       data: { type: "weekly_wrapped" },
     },
+    // SDK 57 typed weekly trigger (weekday 1 = Sunday). The old untyped
+    // {weekday,hour,minute,repeats} form throws "invalid trigger" on SDK 57.
     trigger: {
-      weekday: 1, // Sunday
+      type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+      weekday: 1, // 1 = Sunday
       hour: 9,
       minute: 0,
-      repeats: true,
-    } as any,
+    },
   });
 
   await AsyncStorage.setItem(SCHEDULED_KEY, id);
@@ -127,7 +134,6 @@ export async function registerPushToken(): Promise<void> {
       .maybeSingle();
     if (prof?.push_token === token) return;
 
-    const Platform = (await import("react-native")).Platform;
     await supabase.from("profiles").update({
       push_token: token,
       push_platform: Platform.OS === "ios" ? "ios" : "android",
@@ -177,7 +183,9 @@ export async function refreshDailyReminder(opts: { loggedToday: boolean; streak:
   const { title, body } = streakReminderCopy(opts.streak);
   const id = await Notifications.scheduleNotificationAsync({
     content: { title, body, sound: "default", data: { type: "streak_reminder" } },
-    trigger: fire as any,
+    // SDK 57 requires a typed trigger; a bare Date throws "invalid trigger"
+    // (which was rejecting on every Home load and, pre-fix, crashing new accounts).
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: fire },
   });
   await AsyncStorage.setItem(DAILY_REMINDER_KEY, id);
 }
