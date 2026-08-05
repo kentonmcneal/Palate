@@ -24,6 +24,7 @@ import { generateInviteLink, inviteShareMessage, getMyReferralCount } from "../.
 import { GmailImportCard } from "../../components/GmailImportCard";
 import { SavedNearbyCard } from "../../components/SavedNearbyCard";
 import { CollapsibleSection } from "../../components/CollapsibleSection";
+import { isAdmin } from "../../lib/waitlist";
 import { ensureAutoDetectPermission, setAutoDetectEnabled, TRACKING_PAUSED_KEY } from "../../lib/auto-detect";
 
 const CUISINE_LABELS: Record<string, string> = {
@@ -436,6 +437,8 @@ export default function Settings() {
           </Note>
         </Section>
 
+        <AdminEntry />
+
         <CollapsibleSection title="Wrapped & reminders">
           <Row label="Sunday Wrapped reminder" right={<Switch value={sundayReminder} onValueChange={toggleSundayReminder} thumbColor={sundayReminder ? colors.red : "#fff"} trackColor={{ true: colors.redTintBorder, false: colors.line }} />} />
           <Note>One reminder a week, Sunday at 9 AM. That's it.</Note>
@@ -569,6 +572,22 @@ export default function Settings() {
         </View>
       </Modal>
     </SafeAreaView>
+  );
+}
+
+// Waitlist-approvals entry — renders only for admins.
+function AdminEntry() {
+  const router = useRouter();
+  const [admin, setAdmin] = useState(false);
+  useEffect(() => {
+    isAdmin().then(setAdmin).catch(() => {});
+  }, []);
+  if (!admin) return null;
+  return (
+    <CollapsibleSection title="Admin">
+      <Button title="Waitlist approvals" onPress={() => router.push("/admin" as never)} />
+      <Note>Approve or deny people waiting to join.</Note>
+    </CollapsibleSection>
   );
 }
 

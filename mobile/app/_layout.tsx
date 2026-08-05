@@ -20,6 +20,7 @@ import { initObservability, captureError } from "../lib/observability";
 import { registerPushToken } from "../lib/notifications";
 import { checkForAutoVisitOnForeground } from "../lib/auto-detect";
 import { installGlobalErrorHandlers } from "../lib/global-error-handler";
+import { isApproved } from "../lib/waitlist";
 
 // Install app-wide catch-alls for uncaught errors / unhandled rejections BEFORE
 // any app code runs. Under the New Architecture an unhandled rejection would
@@ -86,6 +87,8 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
 
+  const [approved, setApproved] = useState<boolean | null>(null);
+
   const [fontsLoaded] = useFonts({
     Inter_400Regular, Inter_500Medium, Inter_600SemiBold,
     Inter_700Bold, Inter_800ExtraBold,
@@ -133,6 +136,24 @@ export default function RootLayout() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // Waitlist gate: resolve the signed-in user's approval status. Fails OPEN
+  // (approved) on any error so a network blip — or shipping this ahead of the
+  // migration — never strands a real user on the waitlist.
+  useEffect(() => {
+    if (!session?.user) {
+      setApproved(null);
+      return;
+    }
+    let active = true;
+    isApproved()
+      .then((a) => { if (active) setApproved(a); })
+      .catch((e) => {
+        void captureError(e, { at: "approvalCheck" });
+        if (active) setApproved(true);
+      });
+    return () => { active = false; };
+  }, [session?.user]);
+
   // Auto-detect: every time the app comes to foreground (or first launches
   // while already authed), check if the user appears to be at a restaurant.
   // The helper itself respects the toggle, throttle, and permission state.
@@ -150,13 +171,23 @@ export default function RootLayout() {
   // accounts can finish setup before landing in the tabs.
   useEffect(() => {
     if (!loaded) return;
-    const inAuthGroup = segments[0] === "sign-in" || segments[0] === "onboarding";
+    const seg0 = segments[0];
+    const inAuthGroup = seg0 === "sign-in" || seg0 === "onboarding";
     if (!session && !inAuthGroup) {
       router.replace("/sign-in");
-    } else if (session && segments[0] === "sign-in") {
-      router.replace("/(tabs)");
+      return;
     }
-  }, [session, loaded, segments]);
+    if (session) {
+      // Hold routing until approval is known, then gate: pending users are
+      // pinned to /waitlist; approved users never sit on sign-in/waitlist.
+      if (approved === null) return;
+      if (!approved) {
+        if (seg0 !== "waitlist") router.replace("/waitlist");
+        return;
+      }
+      if (seg0 === "sign-in" || seg0 === "waitlist") router.replace("/(tabs)");
+    }
+  }, [session, loaded, approved, segments]);
 
   if (!loaded || !fontsLoaded) {
     return (

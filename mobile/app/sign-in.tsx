@@ -8,6 +8,7 @@ import { colors, spacing, type } from "../theme";
 import * as Linking from "expo-linking";
 import { sendMagicLink, verifyEmailCode } from "../lib/auth";
 import { hasCompletedOnboarding } from "../lib/profile";
+import { isApproved } from "../lib/waitlist";
 import { track } from "../lib/analytics";
 import { recordReferral } from "../lib/referrals";
 
@@ -56,6 +57,11 @@ export default function SignIn() {
       // dedicated onboarding-complete flag (backfilled for pre-quiz accounts)
       // rather than quiz_persona alone — older accounts have a null persona and
       // were being wrongly re-sent through the wizard on re-login.
+      // Waitlist gate first — unapproved accounts land on the waitlist, not the app.
+      if (!(await isApproved())) {
+        router.replace("/waitlist");
+        return;
+      }
       const done = await hasCompletedOnboarding();
       router.replace(done ? "/(tabs)" : "/onboarding/welcome");
     } catch (e: any) {
