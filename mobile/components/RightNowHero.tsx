@@ -176,7 +176,7 @@ export function RightNowHero({ onTakeMeThere }: Props) {
 
   const r = pick.restaurant;
   const score = r.match?.score ?? 0;
-  const sub = [r.cuisine_type ? cap(r.cuisine_type) : null, r.neighborhood].filter(Boolean).join(" · ");
+  const sub = r.cuisine_type ? cap(r.cuisine_type) : "";
   const accent = matchScoreColor(score);
 
   return (
@@ -213,7 +213,6 @@ export function RightNowHero({ onTakeMeThere }: Props) {
 
         <View style={styles.divider} />
 
-        <Text style={styles.reason}>{trimReason(pick.explanation.primary)}</Text>
         <Text style={styles.status}>{pick.explanation.secondary}</Text>
       </Animated.View>
 
@@ -267,10 +266,10 @@ const styles = StyleSheet.create({
     top: 16, right: 16,
     width: 60, height: 60, borderRadius: 30,
     alignItems: "center", justifyContent: "center",
-    // Restrained glow per redesign brief — score chip should NOT outshout
-    // the restaurant name. Was opacity 1 / radius 22.
-    shadowOpacity: 0.5,
-    shadowRadius: 14,
+    // Muted: barely-there glow so the chip reads as a solid chip, not a light
+    // source. (Was 0.5 / 14.)
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
     shadowOffset: { width: 0, height: 0 },
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.95)",
@@ -325,12 +324,12 @@ const styles = StyleSheet.create({
     height: 48, borderRadius: 14,
     alignItems: "center", justifyContent: "center",
     backgroundColor: colors.red,
-    // Subtle brand glow — restrained per redesign brief (was 0.7 → 0.32).
-    shadowColor: colors.red,
-    shadowOpacity: 0.32,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 5,
+    // Muted: a plain soft drop shadow, no red glow. (Was red glow 0.32 / 14.)
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
   primaryBtnText: { color: "#fff", fontWeight: "800", fontSize: 14, letterSpacing: 0.2 },
   ghostBtn: {

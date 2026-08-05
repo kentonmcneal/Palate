@@ -253,10 +253,10 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: "#fff",
     shadowColor: palateColors.red,
-    shadowOpacity: 0.9,
-    shadowRadius: 14,
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 0 },
-    elevation: 6,
+    elevation: 4,
   },
   // Subtle white core so the dot reads "ringed" — gives it more presence.
   dotInner: {

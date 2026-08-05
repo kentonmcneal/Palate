@@ -131,8 +131,8 @@ function PinBody({ score, top, bottom, glow, pulseStrength, fireball }: {
           styles.pinShadow,
           {
             shadowColor: glow,
-            shadowOpacity: 0.4 + 0.5 * pulseStrength,
-            shadowRadius: 6 + 8 * pulseStrength,
+            shadowOpacity: 0.18 + 0.17 * pulseStrength,
+            shadowRadius: 4 + 3 * pulseStrength,
           },
         ]}
       >

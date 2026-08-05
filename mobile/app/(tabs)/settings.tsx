@@ -23,6 +23,7 @@ import { listIncomingRequests } from "../../lib/friends";
 import { generateInviteLink, inviteShareMessage, getMyReferralCount } from "../../lib/referrals";
 import { GmailImportCard } from "../../components/GmailImportCard";
 import { SavedNearbyCard } from "../../components/SavedNearbyCard";
+import { CollapsibleSection } from "../../components/CollapsibleSection";
 import { ensureAutoDetectPermission, setAutoDetectEnabled, TRACKING_PAUSED_KEY } from "../../lib/auto-detect";
 
 const CUISINE_LABELS: Record<string, string> = {
@@ -384,15 +385,6 @@ export default function Settings() {
           </Note>
         </Section>
 
-        <Section title="Next Moves">
-          <Button
-            title="View places you've saved"
-            onPress={() => router.push("/(tabs)/wishlist")}
-            variant="ghost"
-          />
-          <Note>Spots worth a visit. We'll surface them on Home when you're nearby.</Note>
-        </Section>
-
         <Section title="Photos">
           <Button
             title="Your meal photos"
@@ -444,14 +436,11 @@ export default function Settings() {
           </Note>
         </Section>
 
-        <Section title="Notifications">
+        <CollapsibleSection title="Wrapped & reminders">
           <Row label="Sunday Wrapped reminder" right={<Switch value={sundayReminder} onValueChange={toggleSundayReminder} thumbColor={sundayReminder ? colors.red : "#fff"} trackColor={{ true: colors.redTintBorder, false: colors.line }} />} />
           <Note>One reminder a week, Sunday at 9 AM. That's it.</Note>
-        </Section>
-
-        <Section title="Your Wrapped">
+          <Spacer />
           <Button title="Open this week's Wrapped" onPress={() => router.push("/(tabs)/wrapped")} />
-          <Note>One-glance reflection: identity, three stats, one insight.</Note>
           <Spacer />
           <Button title="Generate this week's Wrapped" onPress={manualGenerate} variant="ghost" />
           <Spacer />
@@ -460,25 +449,25 @@ export default function Settings() {
             onPress={() => router.push("/year-in-review")}
             variant="ghost"
           />
-        </Section>
+        </CollapsibleSection>
 
         {/* Insights section removed — all of that content (Palate Lore,
             percentiles, people-like-you, aspirational, top palates in area)
             now lives inline on the Wrapped tab per latest spec. */}
 
-        <Section title="Your data">
+        <CollapsibleSection title="Your data">
           <Button title="Delete all visit history" onPress={deleteHistory} variant="ghost" />
           <Spacer />
           <Button title="Delete my account" onPress={deleteAccount} variant="danger" />
-        </Section>
+        </CollapsibleSection>
 
-        <Section title="Account">
+        <CollapsibleSection title="Account">
           <Button title="Blocked accounts" onPress={() => router.push("/blocked")} variant="ghost" />
           <Spacer />
           <Button title="Sign out" onPress={async () => { await signOut(); router.replace("/sign-in"); }} variant="ghost" />
-        </Section>
+        </CollapsibleSection>
 
-        <Section title="Help">
+        <CollapsibleSection title="Help">
           <Button
             title="Share feedback"
             onPress={() => router.push("/feedback")}
@@ -492,9 +481,9 @@ export default function Settings() {
           <Note>
             Goes straight to the team — no public post. Screenshots welcome.
           </Note>
-        </Section>
+        </CollapsibleSection>
 
-        <Section title="About">
+        <CollapsibleSection title="About">
           <Button
             title="Privacy policy"
             variant="ghost"
@@ -510,7 +499,7 @@ export default function Settings() {
             Palate v0.1 — no ads, we don't sell your data, you control what's
             public. Questions? hello@palate.app.
           </Note>
-        </Section>
+        </CollapsibleSection>
       </ScrollView>
 
       {/* Username editor */}
@@ -654,10 +643,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.8,
     lineHeight: 36,
     marginTop: 6,
-    // Subtle brand-text glow — was 0.65 / 16. Restrained per redesign brief.
-    textShadowColor: "rgba(255,48,8,0.32)",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
+    // Muted: no red text-glow — the name reads as clean colored type. (Was a
+    // red glow at 0.32 / 10.)
   },
   identityDesc: { color: "rgba(255,255,255,0.85)", fontSize: 14, lineHeight: 20, marginTop: 8, fontWeight: "500" },
   identityGlow: {
@@ -665,8 +652,8 @@ const styles = StyleSheet.create({
     top: -60, right: -60,
     width: 200, height: 200, borderRadius: 999,
     backgroundColor: colors.red,
-    // Smaller blob — was 0.32. Should hint, not dominate.
-    opacity: 0.14,
+    // Muted: barely-there tint, not a glow blob. (Was 0.14.)
+    opacity: 0.05,
   },
   profileBlock: {
     marginTop: 18,

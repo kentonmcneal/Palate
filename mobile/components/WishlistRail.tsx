@@ -34,10 +34,9 @@ export function WishlistRail({
             here && r.latitude != null && r.longitude != null
               ? distanceKm(here, { lat: r.latitude, lng: r.longitude })
               : null;
-          const meta = [
-            r.cuisine_type ? r.cuisine_type[0].toUpperCase() + r.cuisine_type.slice(1) : null,
-            r.neighborhood,
-          ].filter(Boolean).join(" · ");
+          const meta = r.cuisine_type
+            ? r.cuisine_type[0].toUpperCase() + r.cuisine_type.slice(1)
+            : "";
           return (
             <Pressable
               key={w.id}

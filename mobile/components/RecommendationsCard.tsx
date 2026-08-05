@@ -218,11 +218,9 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
         <Text style={styles.sub}>
           {[
             rec.cuisine ? capitalize(rec.cuisine) : null,
-            rec.neighborhood,
             rec.distanceKm != null ? formatDistance(rec.distanceKm) : null,
           ].filter(Boolean).join(" · ") || "Nearby"}
         </Text>
-        <Text style={styles.reason}>{rec.reason}</Text>
         <View style={styles.mapsRow}>
           <Pressable onPress={openApple} style={styles.mapsBtn} accessibilityRole="button">
             <Text style={styles.mapsBtnText}>Apple Maps</Text>

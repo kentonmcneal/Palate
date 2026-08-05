@@ -36,12 +36,8 @@ export function BasedOnSaves({
             <Text style={styles.sub} numberOfLines={1}>
               {[
                 r.cuisine_type ? r.cuisine_type[0].toUpperCase() + r.cuisine_type.slice(1) : null,
-                r.neighborhood,
                 r.price_level != null && r.price_level > 0 ? "$".repeat(r.price_level) : null,
               ].filter(Boolean).join(" · ")}
-            </Text>
-            <Text style={styles.why} numberOfLines={1}>
-              Like {(r.matchedAgainst ?? []).slice(0, 2).join(" + ")}
             </Text>
           </Pressable>
         ))}

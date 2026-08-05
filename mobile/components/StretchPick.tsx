@@ -61,7 +61,7 @@ export function StretchPick() {
 
   const r = pick.restaurant;
   const score = r.match?.score ?? 0;
-  const sub = [r.cuisine_type ? cap(r.cuisine_type) : null, r.neighborhood].filter(Boolean).join(" · ");
+  const sub = r.cuisine_type ? cap(r.cuisine_type) : "";
 
   return (
     <Pressable
@@ -76,9 +76,6 @@ export function StretchPick() {
       </View>
       <Text style={styles.name} numberOfLines={2}>{r.name}</Text>
       {sub.length > 0 && <Text style={styles.sub}>{sub}</Text>}
-      <View style={styles.reasonRow}>
-        <Text style={styles.reason}>{pick.explanation.primary}</Text>
-      </View>
       <Text style={styles.status}>{pick.explanation.secondary}</Text>
     </Pressable>
   );
