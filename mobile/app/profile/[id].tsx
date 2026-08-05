@@ -208,6 +208,15 @@ export default function FriendProfileScreen() {
               </View>
             )}
 
+            {snapshot.is_friend && !snapshot.is_self && (
+              <Pressable
+                onPress={() => router.push(`/compatibility/${targetId}` as never)}
+                style={styles.compatBtn}
+              >
+                <Text style={styles.compatBtnText}>See your palate compatibility  →</Text>
+              </Pressable>
+            )}
+
             {/* Actions */}
             {!snapshot.is_self && (
               <View style={{ marginTop: spacing.xl, gap: 12 }}>
@@ -354,6 +363,16 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   btnGhostText: { color: colors.mute, fontSize: 16, fontWeight: "700" },
+
+  compatBtn: {
+    marginTop: spacing.xl,
+    paddingVertical: 16,
+    borderRadius: 16,
+    backgroundColor: colors.ink,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  compatBtnText: { color: "#fff", fontSize: 16, fontWeight: "800", letterSpacing: -0.2 },
 
   safetyRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   safetyText: { color: colors.mute, fontSize: 14, fontWeight: "600" },
