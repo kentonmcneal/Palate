@@ -61,12 +61,13 @@ export function BasedOnSavesEmpty() {
 const styles = StyleSheet.create({
   card: {
     paddingHorizontal: 14, paddingVertical: 12,
-    backgroundColor: colors.ink,
+    backgroundColor: colors.faint,
+    borderWidth: 1, borderColor: colors.line,
     borderRadius: 14,
     minWidth: 180, maxWidth: 240,
   },
-  name: { fontSize: 15, fontWeight: "700", color: "#fff", letterSpacing: -0.2 },
-  sub: { fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 3 },
+  name: { fontSize: 15, fontWeight: "700", color: colors.ink, letterSpacing: -0.2 },
+  sub: { fontSize: 12, color: colors.mute, marginTop: 3 },
   why: { fontSize: 11, color: colors.red, marginTop: 6, fontWeight: "700" },
   empty: {
     backgroundColor: colors.faint,

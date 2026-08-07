@@ -285,10 +285,17 @@ export default function Home() {
           onTap={(gpid) => router.push(`/restaurant/${gpid}` as any)}
         />
 
-        {/* "Because you saved X, Y, Z" — directly addresses the burger-feedback
-            loop problem: surfaces things similar to user's HIGH-INTENT signal
-            (saves), not their latest visits. Shows empty-state nudge when
-            the user has zero saves yet. */}
+        {/* Places you'll probably like — 3 picks. */}
+        <Text style={styles.sectionHead}>Places you'll probably like</Text>
+        <RecommendationsCard />
+
+        {/* One stretch pick — explicitly its own block AFTER the recs. */}
+        <Text style={styles.sectionHead}>Stretch your palate</Text>
+        <StretchPick />
+
+        {/* "Because you saved X, Y, Z" — surfaces things similar to the user's
+            HIGH-INTENT signal (saves). Moved BELOW the primary recs per spec.
+            Empty-state nudge when the user has zero saves yet. */}
         {savesRecs.length > 0 ? (
           <BasedOnSaves
             anchors={savesAnchors}
@@ -298,14 +305,6 @@ export default function Home() {
         ) : hasAnySaves === false ? (
           <BasedOnSavesEmpty />
         ) : null}
-
-        {/* 3. Places you'll probably like — 3 picks. */}
-        <Text style={styles.sectionHead}>Places you'll probably like</Text>
-        <RecommendationsCard />
-
-        {/* 4. One stretch pick — explicitly its own block AFTER the recs. */}
-        <Text style={styles.sectionHead}>Stretch your palate</Text>
-        <StretchPick />
 
         {/* Saved restaurants moved to Profile per spec — Home stays decision-only. */}
 

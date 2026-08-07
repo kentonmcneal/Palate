@@ -53,7 +53,7 @@ export function PalateIntroModal() {
       <Animated.View style={[styles.scrim, { opacity: fade }]}>
         <View style={styles.card}>
           <LinearGradient
-            colors={["#1A0604", "#000000"]}
+            colors={["#ffffff", "#f5f5f5"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFill}
@@ -111,7 +111,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
     paddingBottom: spacing.xl,
     overflow: "hidden",
-    backgroundColor: "#000",
+    backgroundColor: colors.faint,
+    borderWidth: 1,
+    borderColor: colors.line,
   },
   glow: {
     position: "absolute",
@@ -119,19 +121,19 @@ const styles = StyleSheet.create({
     height: 220,
     borderRadius: 999,
     backgroundColor: colors.red,
-    opacity: 0.15,
+    opacity: 0.05,
   },
   eyebrow: {
-    color: "rgba(255,255,255,0.55)",
+    color: colors.mute,
     fontSize: 11, fontWeight: "700", letterSpacing: 1.8,
   },
   headline: {
-    color: "#fff",
+    color: colors.ink,
     fontSize: 28, fontWeight: "800", letterSpacing: -0.6,
     marginTop: 8, lineHeight: 34,
   },
   lede: {
-    color: "rgba(255,255,255,0.78)",
+    color: colors.inkDim,
     fontSize: 15, lineHeight: 22, marginTop: 8, fontWeight: "500",
   },
 
@@ -141,20 +143,20 @@ const styles = StyleSheet.create({
     width: 6, height: 6, borderRadius: 3,
     backgroundColor: colors.red,
   },
-  bulletText: { color: "rgba(255,255,255,0.85)", fontSize: 14, fontWeight: "500" },
+  bulletText: { color: colors.inkDim, fontSize: 14, fontWeight: "500" },
 
   cta: {
     marginTop: spacing.xl,
     height: 50, borderRadius: 14,
     alignItems: "center", justifyContent: "center",
     backgroundColor: colors.red,
-    shadowColor: colors.red,
-    shadowOpacity: 0.4,
-    shadowRadius: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
   },
   ctaText: { color: "#fff", fontSize: 15, fontWeight: "800", letterSpacing: 0.2 },
 
   dismiss: { alignSelf: "center", marginTop: 14, padding: 6 },
-  dismissText: { color: "rgba(255,255,255,0.55)", fontSize: 13, fontWeight: "600" },
+  dismissText: { color: colors.mute, fontSize: 13, fontWeight: "600" },
 });

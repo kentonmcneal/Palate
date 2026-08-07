@@ -466,10 +466,12 @@ const styles = StyleSheet.create({
   identityCard: {
     padding: spacing.lg,
     borderRadius: 22,
-    backgroundColor: colors.ink,
+    backgroundColor: colors.faint,
+    borderWidth: 1,
+    borderColor: colors.line,
     alignItems: "flex-start",
   },
-  identityEyebrow: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
+  identityEyebrow: { color: colors.mute, fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
   identityName: {
     color: colors.red,
     fontSize: 34,
@@ -477,10 +479,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.7,
     lineHeight: 38,
     marginTop: 6,
-    // Subtle brand-text glow per redesign brief — restrained, not blooming.
-    textShadowColor: "rgba(255,48,8,0.28)",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
   },
 
   statRow: {
