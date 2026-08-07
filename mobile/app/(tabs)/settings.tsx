@@ -645,16 +645,17 @@ const styles = StyleSheet.create({
     marginTop: 16,
     padding: 18,
     borderRadius: 18,
-    backgroundColor: colors.ink,
+    backgroundColor: colors.faint,
+    borderWidth: 1,
+    borderColor: colors.line,
     overflow: "hidden",
-    // Restrained brand glow — was 0.4 / 20. Toned down per redesign brief.
-    shadowColor: colors.red,
-    shadowOpacity: 0.18,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
+    elevation: 2,
   },
-  identityEyebrow: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
+  identityEyebrow: { color: colors.mute, fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
   identityName: {
     color: colors.red,
     fontSize: 32,
@@ -665,7 +666,7 @@ const styles = StyleSheet.create({
     // Muted: no red text-glow — the name reads as clean colored type. (Was a
     // red glow at 0.32 / 10.)
   },
-  identityDesc: { color: "rgba(255,255,255,0.85)", fontSize: 14, lineHeight: 20, marginTop: 8, fontWeight: "500" },
+  identityDesc: { color: colors.inkDim, fontSize: 14, lineHeight: 20, marginTop: 8, fontWeight: "500" },
   identityGlow: {
     position: "absolute",
     top: -60, right: -60,

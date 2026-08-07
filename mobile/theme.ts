@@ -7,30 +7,23 @@
 // palette so the brand reads as one continuous system.
 
 export const colors = {
-  // Ember red — warmer and deeper than the old #FF3008 (which was, to the
-  // pixel, DoorDash red). Harmonizes with the wine/oxblood identity palette.
-  // Use sparingly: primary CTA, match score, active state — accent only.
-  red: "#E5391C",
-  // Darker red strictly for small red TEXT on warm-white backgrounds —
-  // #E5391C as text fails WCAG AA (~3.6:1); this clears 4.5:1.
-  redText: "#B82E12",
-  // Semantic role tokens. Reach for `primary` (not `red`) when a component
-  // wants THE one accent on a screen — the primary action or the signature
-  // match score. Keeping a named role stops red from creeping back onto
-  // incidental chrome (links, eyebrows, placeholders) over time.
-  primary: "#E5391C",
-  primaryText: "#B82E12",
-  // Soft ember tints for selected chips / gentle accent cards. Derived from
-  // the new ember (replaces the old DoorDash-derived #FFF1EE / #FFD7CE pair,
-  // which read slightly off against warm white).
-  redTint: "#FBEAE6",
-  redTintBorder: "#F2CFC6",
-  ink: "#141210",     // warm near-black (was #111111)
-  paper: "#FAF7F4",   // warm white (was pure #FFFFFF — read clinical)
-  mute: "#77706C",    // warm gray (was #6B6B6B)
-  line: "#E7E2DF",    // warm border (was #EAEAEA)
-  inkDim: "#2A2724",  // warm (was #2A2A2A)
-  faint: "#F4F1EF",   // warm faint surface (was #F6F6F6)
+  // OpenTable/Airbnb re-skin: one restrained accent on a clean, neutral ground.
+  // Ember red pulled back from #E5391C — used ONLY where it earns attention
+  // (primary CTA, match chip, save/active). Everything else is near-black/grey.
+  red: "#E0473C",
+  // Darker red strictly for small red TEXT on light backgrounds (WCAG AA).
+  redText: "#C13A2F",
+  primary: "#E0473C",
+  primaryText: "#C13A2F",
+  // Soft tint for selected chips / gentle accent surfaces.
+  redTint: "#FDECEA",
+  redTintBorder: "#F6D3CE",
+  ink: "#222222",     // near-black (Airbnb/OpenTable body ink)
+  paper: "#F6F6F6",   // light grey PAGE ground — cards sit on this as white
+  mute: "#717171",    // neutral grey secondary text
+  line: "#EBEBEB",    // hairline border, used sparingly (rely on shadow + space)
+  inkDim: "#3A3A3A",
+  faint: "#FFFFFF",   // white CARD surface — pops off the grey page
 };
 
 // Secondary palette — warm, on-brand category hues for cuisine tags, trending
@@ -71,9 +64,10 @@ export const fonts = {
   semibold: "Inter_600SemiBold",
   bold: "Inter_700Bold",
   heavy: "Inter_800ExtraBold",
-  // Editorial display face — identity words, screen titles, hero headlines.
-  display: "Fraunces_700Bold",
-  displaySemi: "Fraunces_600SemiBold",
+  // Full clean-sans (OpenTable/Airbnb direction): display roles use Inter's
+  // heavy weights instead of the Fraunces serif, for a clean, modern UI feel.
+  display: "Inter_800ExtraBold",
+  displaySemi: "Inter_700Bold",
 };
 
 export const type = {

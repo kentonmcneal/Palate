@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Share } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { colors, spacing, type } from "../../theme";
@@ -7,6 +7,7 @@ import { getEffectiveLocation } from "../../lib/browsing-location";
 import { getFriendProfileSnapshot } from "../../lib/profile";
 import { computePairCompatibility, type PairResult } from "../../lib/palate/pairCompatibility";
 import { captureError } from "../../lib/observability";
+import { generateInviteLink, inviteShareMessage } from "../../lib/referrals";
 
 export default function CompatibilityScreen() {
   const router = useRouter();
@@ -39,6 +40,15 @@ export default function CompatibilityScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function handleInvite() {
+    try {
+      const link = await generateInviteLink();
+      await Share.share({ message: inviteShareMessage(link) });
+    } catch (e) {
+      void captureError(e, { at: "compatibility:invite" });
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -135,6 +145,17 @@ export default function CompatibilityScreen() {
               ))
             )}
           </>
+        )}
+
+        {/* Growth hook: turn compatibility into a reason to invite more friends. */}
+        {!loading && (
+          <Pressable style={styles.inviteCard} onPress={handleInvite}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.inviteTitle}>Compare palates with more friends</Text>
+              <Text style={styles.inviteSub}>Invite someone and see how your tastes line up.</Text>
+            </View>
+            <Text style={styles.inviteArrow}>→</Text>
+          </Pressable>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -249,4 +270,19 @@ const styles = StyleSheet.create({
   pickScore: { alignItems: "center", minWidth: 48 },
   pickScoreNum: { fontSize: 22, fontWeight: "800", color: colors.red, letterSpacing: -0.5 },
   pickScoreLabel: { ...type.micro, color: colors.mute, marginTop: 0 },
+
+  inviteCard: {
+    marginTop: spacing.xl,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: spacing.lg,
+    borderRadius: 18,
+    backgroundColor: colors.redTint,
+    borderWidth: 1,
+    borderColor: colors.redTintBorder,
+  },
+  inviteTitle: { fontSize: 16, fontWeight: "800", color: colors.ink },
+  inviteSub: { ...type.small, marginTop: 3, lineHeight: 18 },
+  inviteArrow: { fontSize: 20, fontWeight: "800", color: colors.red },
 });

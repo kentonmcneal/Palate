@@ -182,7 +182,7 @@ export function RightNowHero({ onTakeMeThere }: Props) {
   return (
     <View style={styles.card}>
       <LinearGradient
-        colors={["#1A1A1A", "#0E0E0E"]}
+        colors={["#ffffff", "#f5f5f5"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
@@ -246,12 +246,19 @@ const styles = StyleSheet.create({
   card: {
     padding: spacing.lg,
     borderRadius: 24,
-    backgroundColor: colors.ink,
+    backgroundColor: colors.faint,
+    borderWidth: 1,
+    borderColor: colors.line,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
     overflow: "hidden",
     minHeight: 260,
   },
   cardLoading: {
-    backgroundColor: colors.ink,
+    backgroundColor: colors.faint,
     minHeight: 220,
   },
   cardEmpty: {
@@ -283,32 +290,32 @@ const styles = StyleSheet.create({
   },
 
   eyebrow: {
-    color: "rgba(255,255,255,0.55)",
+    color: colors.mute,
     fontSize: 11, fontWeight: "700", letterSpacing: 1.5,
     marginBottom: 8,
   },
   name: {
-    color: "#fff",
+    color: colors.ink,
     fontSize: 28, fontWeight: "800", letterSpacing: -0.6,
     lineHeight: 32,
     paddingRight: 70,  // leave room for score chip
   },
   sub: {
-    color: "rgba(255,255,255,0.72)",
+    color: colors.mute,
     fontSize: 14, fontWeight: "600",
     marginTop: 6,
   },
   divider: {
     height: 1,
-    backgroundColor: "rgba(255,255,255,0.14)",
+    backgroundColor: colors.line,
     marginVertical: 16,
   },
   reason: {
-    color: "#fff",
+    color: colors.ink,
     fontSize: 16, fontWeight: "700", lineHeight: 22,
   },
   status: {
-    color: "rgba(255,255,255,0.65)",
+    color: colors.mute,
     fontSize: 12, fontWeight: "700",
     marginTop: 6,
     letterSpacing: 0.3,
@@ -336,11 +343,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, height: 48,
     alignItems: "center", justifyContent: "center",
     borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: colors.paper,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
+    borderColor: colors.line,
   },
-  ghostBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
+  ghostBtnText: { color: colors.ink, fontWeight: "700", fontSize: 13 },
 
   emptyTitle: { fontSize: 17, fontWeight: "800", color: colors.ink, marginTop: 6 },
   emptySub: { fontSize: 13, color: colors.mute, marginTop: 6, lineHeight: 18 },
@@ -350,11 +357,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingHorizontal: 10, paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: colors.redTint,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: colors.redTintBorder,
   },
   strategyBadgeText: {
-    color: "#fff", fontSize: 10, fontWeight: "800", letterSpacing: 1.4,
+    color: colors.redText, fontSize: 10, fontWeight: "800", letterSpacing: 1.4,
   },
 });
