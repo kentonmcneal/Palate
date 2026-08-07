@@ -84,7 +84,9 @@ export function RightNowHero({ onTakeMeThere }: Props) {
       // Add the new exclusion (if any) to the running dismissed set
       if (extraExcludeId) dismissedRef.current.add(extraExcludeId);
 
-      const filtered = nearby.filter((r) => !dismissedRef.current.has(r.google_place_id));
+      const filtered = nearby.filter(
+        (r) => (r.recommendation_eligibility ?? 1) > 0 && !dismissedRef.current.has(r.google_place_id),
+      );
 
       // Canonical pipeline: build graph once, then computeRightNow.
       const graph = assembleGraph(vector, personal);

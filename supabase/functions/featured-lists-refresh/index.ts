@@ -352,13 +352,50 @@ function isOpenForBrunch(p: GooglePlace): boolean {
   return false;
 }
 
-function filterByCategorySlug(places: GooglePlace[], slug: string): GooglePlace[] {
-  switch (slug) {
-    case "late-night":    return places.filter(isOpenLate);
-    case "early-morning": return places.filter(isOpenEarly);
-    case "brunch":        return places.filter(isOpenForBrunch);
-    default:              return places;
+// Slugs that name a specific dish — a bar or wrong-cuisine place shouldn't
+// headline these just because Google's text search matched the keyword. (Broad
+// slugs like date-night / late-night / american intentionally allow bars.)
+const SPECIFIC_FOOD_SLUGS = new Set([
+  "steaks", "pizza", "sushi", "burgers", "wings", "fries", "hummus", "bbq", "tacos",
+]);
+const CATEGORY_PREFERRED_TYPES: Record<string, string[]> = {
+  steaks: ["steak_house"],
+  pizza: ["pizza_restaurant"],
+  sushi: ["sushi_restaurant"],
+  burgers: ["hamburger_restaurant"],
+  bbq: ["barbecue_restaurant"],
+  tacos: ["mexican_restaurant"],
+};
+
+// Category validation: keep a place only if it actually fits a specific-dish
+// list. Prevents "Top 10 Steaks" from filling with bars (The Dandelion) and
+// cheesesteak shops (Shay's Steaks) that merely rank on the word "steak".
+function matchesCategoryCuisine(p: GooglePlace, slug: string): boolean {
+  if (!SPECIFIC_FOOD_SLUGS.has(slug)) return true;
+  const gp = p as unknown as { types?: string[]; primaryType?: string; displayName?: { text?: string } };
+  const types = gp.types ?? [];
+  const primary = gp.primaryType ?? "";
+  const name = (gp.displayName?.text ?? "").toLowerCase();
+  const preferred = CATEGORY_PREFERRED_TYPES[slug] ?? [];
+  if (preferred.some((t) => primary === t || types.includes(t))) return true;
+  // Bars/pubs/nightlife don't headline a specific-dish list.
+  if (["bar", "pub", "wine_bar", "night_club"].includes(primary)) return false;
+  // Steaks: keep steakhouses distinct from cheesesteak/sandwich shops.
+  if (slug === "steaks") {
+    if (/(cheese\s?steak|hoagie|sandwich|deli|sub shop)/.test(name)) return false;
+    if (primary === "sandwich_shop" || types.includes("sandwich_shop")) return false;
   }
+  return true;
+}
+
+function filterByCategorySlug(places: GooglePlace[], slug: string): GooglePlace[] {
+  let out = places;
+  switch (slug) {
+    case "late-night":    out = out.filter(isOpenLate); break;
+    case "early-morning": out = out.filter(isOpenEarly); break;
+    case "brunch":        out = out.filter(isOpenForBrunch); break;
+  }
+  return out.filter((p) => matchesCategoryCuisine(p, slug));
 }
 
 // ----------------------------------------------------------------------------

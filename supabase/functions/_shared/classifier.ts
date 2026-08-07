@@ -10,7 +10,11 @@
 // 1.5.0: LLM prompt tuning — pass neighborhood as soft vibe/crowd context;
 // allow reputation-based inference for well-known places (with a hallucination
 // guardrail) instead of abstaining whenever review text is thin.
-export const CLASSIFIER_VERSION = "1.5.0";
+// 1.6.0: positive food-type gate — reject non-food primaryType (clothing/
+// cinema/transit/bank) and any place with no food-serving type. Fixes UNIQLO-
+// as-café and other non-restaurant leaks. Bumping forces re-classification so
+// already-cached bad rows get re-scored to eligibility 0.
+export const CLASSIFIER_VERSION = "1.6.0";
 
 // ----- Google place shape (subset we use) -------------------------------
 
@@ -802,6 +806,31 @@ function hasRestaurantType(types: string[]): boolean {
   return types.some((t) => RESTAURANT_TYPES.has(t) || t.endsWith("_restaurant"));
 }
 
+// Non-food DOMINANT venues. When Google's primaryType is one of these, the place
+// is fundamentally not a dining destination — even if a secondary `cafe`
+// coffee-counter type is present (UNIQLO's café, a bookstore café, a bank café).
+// These must never be recommended, regardless of name or review text.
+// Types where being the DOMINANT (primary) type means the place is not a dining
+// destination — even if a secondary cafe/restaurant type is present. This gates
+// on primaryType, so a real hotel-attached restaurant (Le Coucou — primaryType
+// `french_restaurant`, lodging only in `types`) stays eligible, while the hotel
+// itself (primaryType `lodging` — "Marriott Restaurant") does not.
+// `department_store`/`shopping_mall` are NOT here — food-hall stalls are kept by
+// the rescue logic below.
+const NON_FOOD_PRIMARY_TYPES = new Set([
+  "clothing_store", "shoe_store", "furniture_store", "home_goods_store",
+  "electronics_store", "book_store", "jewelry_store", "hardware_store", "pet_store",
+  "movie_theater", "tourist_attraction", "amusement_park", "museum", "art_gallery",
+  "transit_station", "train_station", "subway_station", "light_rail_station",
+  "bus_station", "airport", "parking",
+  "bank", "atm", "finance", "insurance_agency", "real_estate_agency",
+  "gym", "spa", "beauty_salon", "hair_salon", "car_repair", "car_dealer",
+  "lodging", "hotel",
+  "church", "place_of_worship", "school", "university", "library",
+  "hospital", "doctor", "pharmacy", "gas_station", "post_office",
+  "local_government_office",
+]);
+
 export function inferRecommendationEligibility(
   place: GooglePlace,
   derived: { chain_type: string; cuisine_type: string | null; format_class: string },
@@ -812,6 +841,23 @@ export function inferRecommendationEligibility(
   const haystack = `${name} ${address}`;
 
   // ---- HARD EXCLUDES (eligibility = 0) ----
+
+  // POSITIVE FOOD-TYPE GATE (allowlist) — the primary defense against non-dining
+  // venues (clothing stores, cinemas, transit hubs, banks) leaking into recs. We
+  // trust Google's own place typing over any name/review guessing:
+  //   1. If the DOMINANT (primary) type is a non-food venue, reject — even if a
+  //      secondary `cafe` coffee-counter type is present (e.g. UNIQLO's café).
+  //   2. If the place carries NO food-serving type at all, it is not a dining
+  //      venue (e.g. a cinema or transit hub from a text search). Reject.
+  if (place.primaryType && NON_FOOD_PRIMARY_TYPES.has(place.primaryType)) {
+    const reason = place.primaryType === "lodging" || place.primaryType === "hotel"
+      ? "hotel"
+      : "non_food_primary_type";
+    return { eligibility: 0, reason };
+  }
+  if (!hasRestaurantType(types)) {
+    return { eligibility: 0, reason: "not_a_food_venue" };
+  }
 
   // Non-restaurant venues: grocery/convenience/gas/etc. with no real dining
   // type present. (A market stall Google also tags `restaurant` survives.)

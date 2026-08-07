@@ -44,7 +44,7 @@ export function StretchPick() {
       const result = await computeRightNow({
         graph,
         here,
-        preFetched: nearby.map(toCandidateInput),
+        preFetched: nearby.filter((r) => (r.recommendation_eligibility ?? 1) > 0).map(toCandidateInput),
       });
       setPick(result.stretch);
     } catch {
