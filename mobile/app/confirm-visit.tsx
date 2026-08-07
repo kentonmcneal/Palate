@@ -167,10 +167,10 @@ export default function ConfirmVisit() {
         <Button title={params.confidence === "medium" ? "Yes, log visit" : "Yes, log visit"} onPress={handleYes} loading={busy} />
         <Spacer />
         <View style={{ flexDirection: "row", gap: 8 }}>
-          <Pressable onPress={() => openInAppleMaps(params.name as string, params.address as string | undefined)} style={styles.mapsBtn}>
+          <Pressable onPress={() => openInAppleMaps(params.name as string, { address: params.address as string | undefined })} style={styles.mapsBtn}>
             <Text style={styles.mapsBtnText}>Apple Maps</Text>
           </Pressable>
-          <Pressable onPress={() => openInGoogleMaps(params.name as string, params.address as string | undefined)} style={styles.mapsBtn}>
+          <Pressable onPress={() => openInGoogleMaps(params.name as string, { address: params.address as string | undefined })} style={styles.mapsBtn}>
             <Text style={styles.mapsBtnText}>Google Maps</Text>
           </Pressable>
         </View>

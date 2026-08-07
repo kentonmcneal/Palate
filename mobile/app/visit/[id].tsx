@@ -246,10 +246,10 @@ export default function VisitDetailScreen() {
           </View>
           {r?.name && (
             <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-              <Pressable onPress={() => openInAppleMaps(r.name, r.neighborhood ?? r.address)} style={styles.mapsBtnInline}>
+              <Pressable onPress={() => openInAppleMaps(r.name, { address: r.address })} style={styles.mapsBtnInline}>
                 <Text style={styles.mapsBtnInlineText}>Apple Maps</Text>
               </Pressable>
-              <Pressable onPress={() => openInGoogleMaps(r.name, r.neighborhood ?? r.address)} style={styles.mapsBtnInline}>
+              <Pressable onPress={() => openInGoogleMaps(r.name, { address: r.address, placeId: r.google_place_id })} style={styles.mapsBtnInline}>
                 <Text style={styles.mapsBtnInlineText}>Google Maps</Text>
               </Pressable>
             </View>

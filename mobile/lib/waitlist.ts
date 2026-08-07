@@ -62,3 +62,30 @@ export async function setApproval(
   });
   if (error) throw error;
 }
+
+// Admin curation override — force a place out of (or back into) recommendations.
+// The exclusion is enforced at the DB layer (migration 0044) so it survives
+// re-classification. Use for venues Google mis-types as a food place (e.g. a
+// music venue typed `bar`) that the classifier's food-gate can't catch.
+export async function blacklistPlace(
+  googlePlaceId: string,
+  blacklisted = true,
+): Promise<void> {
+  const { error } = await supabase.rpc("admin_blacklist_place", {
+    gpid: googlePlaceId,
+    blacklisted,
+  });
+  if (error) throw error;
+}
+
+export type BlacklistedPlace = {
+  google_place_id: string;
+  name: string | null;
+  neighborhood: string | null;
+};
+
+export async function listBlacklistedPlaces(): Promise<BlacklistedPlace[]> {
+  const { data, error } = await supabase.rpc("admin_list_blacklisted");
+  if (error) throw error;
+  return (data ?? []) as BlacklistedPlace[];
+}

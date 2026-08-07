@@ -14,7 +14,7 @@
 // cinema/transit/bank) and any place with no food-serving type. Fixes UNIQLO-
 // as-café and other non-restaurant leaks. Bumping forces re-classification so
 // already-cached bad rows get re-scored to eligibility 0.
-export const CLASSIFIER_VERSION = "1.6.0";
+export const CLASSIFIER_VERSION = "1.7.0";
 
 // ----- Google place shape (subset we use) -------------------------------
 
@@ -815,8 +815,23 @@ function hasRestaurantType(types: string[]): boolean {
 // `*_store` types are handled by a pattern in `isNonFoodPrimaryType` (no food
 // type is a `*_store`), so they are intentionally NOT enumerated here — this set
 // is only the non-`*_store` non-food types.
+// Entertainment / event venues — surfaced with a distinct `event_venue` reason
+// so the UI hint and admin views read clearly. Subset of NON_FOOD_PRIMARY_TYPES.
+const ENTERTAINMENT_PRIMARY_TYPES = new Set([
+  "movie_theater", "amusement_park", "performing_arts_theater", "concert_hall",
+  "event_venue", "night_club", "casino", "bowling_alley", "stadium", "arena",
+  "amphitheatre",
+]);
+
 const NON_FOOD_PRIMARY_TYPES = new Set([
   "movie_theater", "tourist_attraction", "amusement_park", "museum", "art_gallery",
+  // Entertainment / event / live-music venues. A concert hall or event space is
+  // not a dining destination even when it runs a bar (Union Transfer, typed
+  // `performing_arts_theater`/`event_venue`). A place whose *primary* purpose is
+  // a night_club is a club, not a restaurant.
+  "performing_arts_theater", "concert_hall", "event_venue", "night_club",
+  "casino", "bowling_alley", "stadium", "arena", "amphitheatre",
+  "zoo", "aquarium", "park", "national_park", "marina",
   "transit_station", "train_station", "subway_station", "light_rail_station",
   "bus_station", "airport", "parking",
   "bank", "atm", "finance", "insurance_agency", "real_estate_agency",
@@ -857,8 +872,11 @@ export function inferRecommendationEligibility(
   //   2. If the place carries NO food-serving type at all, it is not a dining
   //      venue (e.g. a cinema or transit hub from a text search). Reject.
   if (isNonFoodPrimaryType(place.primaryType)) {
-    const reason = place.primaryType === "lodging" || place.primaryType === "hotel"
+    const pt = place.primaryType ?? "";
+    const reason = pt === "lodging" || pt === "hotel"
       ? "hotel"
+      : ENTERTAINMENT_PRIMARY_TYPES.has(pt)
+      ? "event_venue"
       : "non_food_primary_type";
     return { eligibility: 0, reason };
   }

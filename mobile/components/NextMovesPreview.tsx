@@ -43,7 +43,7 @@ export function NextMovesPreview() {
                 {[r.cuisine_type ? cap(r.cuisine_type) : null, r.neighborhood].filter(Boolean).join(" · ")}
               </Text>
               <Pressable
-                onPress={() => openInAppleMaps(r.name, r.neighborhood ?? null)}
+                onPress={() => openInAppleMaps(r.name, { lat: r.latitude, lng: r.longitude })}
                 style={styles.mapsBtn}
               >
                 <Text style={styles.mapsBtnText}>Maps</Text>

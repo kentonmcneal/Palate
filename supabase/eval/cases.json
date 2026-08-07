@@ -552,7 +552,22 @@
       },
       "expected": {
         "recommendation_eligibility": 0,
-        "ineligibility_reason": "non_food_primary_type"
+        "ineligibility_reason": "event_venue"
+      }
+    },
+    {
+      "id": "eligibility-music-venue-with-bar",
+      "notes": "REGRESSION (Union Transfer): a live-music / event venue that runs a bar is not a dining destination. Google types it performing_arts_theater; the bar sub-type must not rescue it.",
+      "input": {
+        "id": "synthetic_venue_1",
+        "displayName": { "text": "Union Transfer" },
+        "types": ["performing_arts_theater", "event_venue", "bar"],
+        "primaryType": "performing_arts_theater",
+        "userRatingCount": 3298
+      },
+      "expected": {
+        "recommendation_eligibility": 0,
+        "ineligibility_reason": "event_venue"
       }
     },
     {

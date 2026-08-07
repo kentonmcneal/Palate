@@ -190,8 +190,8 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
     }
   }
 
-  function openApple() { openInAppleMaps(rec.name, rec.neighborhood); }
-  function openGoogle() { openInGoogleMaps(rec.name, rec.neighborhood); }
+  function openApple() { openInAppleMaps(rec.name, { lat: rec.latitude, lng: rec.longitude }); }
+  function openGoogle() { openInGoogleMaps(rec.name, { lat: rec.latitude, lng: rec.longitude, placeId: rec.google_place_id }); }
 
   return (
     <View style={styles.row}>

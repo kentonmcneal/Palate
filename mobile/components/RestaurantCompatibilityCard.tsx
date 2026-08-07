@@ -166,8 +166,8 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
           <SaveBurst fire={burstKey} />
         </View>
         <Pressable
-          onPress={(e) => { e.stopPropagation(); openInAppleMaps(restaurant.name, restaurant.neighborhood); }}
-          onLongPress={(e) => { e.stopPropagation(); openInGoogleMaps(restaurant.name, restaurant.neighborhood); }}
+          onPress={(e) => { e.stopPropagation(); openInAppleMaps(restaurant.name, { lat: restaurant.latitude, lng: restaurant.longitude }); }}
+          onLongPress={(e) => { e.stopPropagation(); openInGoogleMaps(restaurant.name, { lat: restaurant.latitude, lng: restaurant.longitude, placeId: restaurant.google_place_id }); }}
           style={styles.btnGhost}
         >
           <Text style={styles.btnGhostText}>Maps</Text>

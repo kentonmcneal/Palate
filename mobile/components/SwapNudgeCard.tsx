@@ -19,7 +19,7 @@ import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
 const MIN_REPEATS = 3;
 
 type Nudge = {
-  saved: { name: string; neighborhood: string | null; cuisine: string | null };
+  saved: { name: string; neighborhood: string | null; cuisine: string | null; google_place_id: string | null; latitude: number | null; longitude: number | null };
   goto: { name: string; visits: number };
 };
 
@@ -46,8 +46,8 @@ export function SwapNudgeCard() {
 
   if (!nudge) return null;
 
-  function openApple() { openInAppleMaps(nudge!.saved.name, nudge!.saved.neighborhood); }
-  function openGoogle() { openInGoogleMaps(nudge!.saved.name, nudge!.saved.neighborhood); }
+  function openApple() { openInAppleMaps(nudge!.saved.name, { lat: nudge!.saved.latitude, lng: nudge!.saved.longitude }); }
+  function openGoogle() { openInGoogleMaps(nudge!.saved.name, { lat: nudge!.saved.latitude, lng: nudge!.saved.longitude, placeId: nudge!.saved.google_place_id }); }
 
   return (
     <View style={styles.card}>
@@ -87,6 +87,9 @@ async function findSwap(wishlist: Awaited<ReturnType<typeof listWishlist>>): Pro
         name: savedEntry.restaurant!.name,
         neighborhood: savedEntry.restaurant!.neighborhood,
         cuisine,
+        google_place_id: savedEntry.restaurant!.google_place_id ?? null,
+        latitude: savedEntry.restaurant!.latitude ?? null,
+        longitude: savedEntry.restaurant!.longitude ?? null,
       },
       goto,
     };

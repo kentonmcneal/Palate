@@ -1,28 +1,53 @@
 // ============================================================================
-// maps.ts — opens Apple Maps or Google Maps with a search query.
+// maps.ts — opens Apple Maps or Google Maps pointed at a specific venue.
 // ----------------------------------------------------------------------------
-// Apple Maps is iOS-native and doesn't need the app installed (opens Maps.app).
-// Google Maps tries the app first via comgooglemaps://, then falls back to
-// the web URL which opens in Safari.
+// Anchor precedence (most reliable first):
+//   1. lat/lng   — exact coordinates resolve the venue even when the name is
+//                  ambiguous or shared by several places.
+//   2. full street address — e.g. "1026 Spring Garden St, Philadelphia".
+//   3. name only.
+//
+// IMPORTANT: never pass a bare neighborhood (e.g. "Callowhill") as the address.
+// A neighborhood over-constrains the query — Maps searches for a business
+// *named like the neighborhood* and fails to find the actual venue. Pass the
+// real street address (and coordinates when available) instead.
 // ============================================================================
 
 import { Linking, Platform, Alert } from "react-native";
 
-export function openInAppleMaps(name: string, address?: string | null) {
-  const query = encodeURIComponent(address ? `${name}, ${address}` : name);
-  const url = Platform.OS === "ios"
-    ? `maps://?q=${query}`
-    : `https://maps.apple.com/?q=${query}`;
-  Linking.openURL(url).catch(() => {
+export type MapsTarget = {
+  /** Full street address — NOT a bare neighborhood. */
+  address?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  /** Google place id — gives Google Maps an exact, unambiguous match. */
+  placeId?: string | null;
+};
+
+export function openInAppleMaps(name: string, target: MapsTarget = {}) {
+  const { lat, lng, address } = target;
+  // With coordinates, search at the exact spot so the right venue surfaces.
+  // Otherwise fall back to name + full street address.
+  const params =
+    lat != null && lng != null
+      ? `q=${encodeURIComponent(name)}&ll=${lat},${lng}`
+      : `q=${encodeURIComponent(address ? `${name}, ${address}` : name)}`;
+  const base = Platform.OS === "ios" ? "maps://" : "https://maps.apple.com/";
+  Linking.openURL(`${base}?${params}`).catch(() => {
     Alert.alert("Couldn't open Maps", "Try searching for it directly.");
   });
 }
 
-export async function openInGoogleMaps(name: string, address?: string | null) {
+export async function openInGoogleMaps(name: string, target: MapsTarget = {}) {
+  const { lat, lng, address, placeId } = target;
   const query = encodeURIComponent(address ? `${name}, ${address}` : name);
-  // Try the Google Maps app first (custom URL scheme); fall back to the web.
-  const appUrl = `comgooglemaps://?q=${query}`;
-  const webUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
+  // An exact place id beats any text query; coordinates anchor the app view.
+  const idParam = placeId ? `&query_place_id=${encodeURIComponent(placeId)}` : "";
+  const webUrl = `https://www.google.com/maps/search/?api=1&query=${query}${idParam}`;
+  const appUrl =
+    lat != null && lng != null
+      ? `comgooglemaps://?q=${query}&center=${lat},${lng}`
+      : `comgooglemaps://?q=${query}`;
   try {
     const canOpenApp = await Linking.canOpenURL(appUrl);
     await Linking.openURL(canOpenApp ? appUrl : webUrl);

@@ -482,7 +482,7 @@ function VisitRow({ v, onPress, onLongPress }: { v: Visit; onPress: () => void; 
       <Pressable
         onPress={(e) => {
           e.stopPropagation();
-          if (r?.name) openInAppleMaps(r.name, r.neighborhood ?? null);
+          if (r?.name) openInAppleMaps(r.name, { address: r.address, lat: r.latitude, lng: r.longitude });
         }}
         style={styles.visitMapsBtn}
         accessibilityLabel="Open in Maps"

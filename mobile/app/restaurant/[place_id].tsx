@@ -13,6 +13,7 @@ import { assembleGraph, getCompatibility } from "../../lib/recommendation";
 import { loadPersonalSignal } from "../../lib/personal-signal";
 import { addToWishlist } from "../../lib/palate-insights";
 import { openInAppleMaps, openInGoogleMaps } from "../../lib/maps";
+import { isAdmin, blacklistPlace } from "../../lib/waitlist";
 import { triggerHapticSuccess } from "../../lib/haptics";
 import { pickSaveCopy } from "../../lib/save-copy";
 import { Confetti } from "../../components/Confetti";
@@ -38,6 +39,8 @@ type RestaurantRow = {
   occasion_tags: string[] | null;
   flavor_tags: string[] | null;
   neighborhood: string | null;
+  latitude: number | null;
+  longitude: number | null;
   price_level: number | null;
   rating: number | null;
   user_rating_count: number | null;
@@ -89,6 +92,37 @@ export default function RestaurantDetailScreen() {
   const [cuisineOverridden, setCuisineOverridden] = useState(false);
   const [blurb, setBlurb] = useState<string | null>(null);
   const [blurbLoading, setBlurbLoading] = useState(false);
+  const [admin, setAdmin] = useState(false);
+
+  useEffect(() => {
+    isAdmin().then(setAdmin).catch(() => {});
+  }, []);
+
+  const handleBlacklist = useCallback(() => {
+    const r = restaurant;
+    if (!r) return;
+    Alert.alert(
+      "Remove from recommendations?",
+      `"${r.name}" will never be recommended again. This is enforced permanently, even after re-classification.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await blacklistPlace(r.google_place_id, true);
+              triggerHapticSuccess();
+              Alert.alert("Removed", `"${r.name}" is out of recommendations.`);
+              router.back();
+            } catch {
+              Alert.alert("Couldn't remove", "Try again in a moment.");
+            }
+          },
+        },
+      ],
+    );
+  }, [restaurant, router]);
 
   const load = useCallback(async () => {
     try {
@@ -375,10 +409,10 @@ export default function RestaurantDetailScreen() {
               {saving ? "…" : showSaved ? "Saved" : "Save"}
             </Text>
           </Pressable>
-          <Pressable onPress={() => openInAppleMaps(r.name, r.neighborhood)} style={styles.actionGhost}>
+          <Pressable onPress={() => openInAppleMaps(r.name, { address: r.address, lat: r.latitude, lng: r.longitude })} style={styles.actionGhost}>
             <Text style={styles.actionGhostText}>Apple Maps</Text>
           </Pressable>
-          <Pressable onPress={() => openInGoogleMaps(r.name, r.neighborhood)} style={styles.actionGhost}>
+          <Pressable onPress={() => openInGoogleMaps(r.name, { address: r.address, lat: r.latitude, lng: r.longitude, placeId: r.google_place_id })} style={styles.actionGhost}>
             <Text style={styles.actionGhostText}>Google Maps</Text>
           </Pressable>
         </View>
@@ -389,6 +423,15 @@ export default function RestaurantDetailScreen() {
         >
           <Text style={styles.similarBtnText}>Find more like {r.name}</Text>
         </Pressable>
+
+        {admin && (
+          <Pressable
+            onPress={handleBlacklist}
+            style={({ pressed }) => [styles.blacklistBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.blacklistBtnText}>Remove from recommendations (admin)</Text>
+          </Pressable>
+        )}
 
         <Spacer size={24} />
 
@@ -610,6 +653,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   similarBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+
+  blacklistBtn: {
+    marginTop: 12,
+    borderRadius: 999,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  blacklistBtnText: { color: colors.red, fontSize: 13, fontWeight: "700" },
 
   visitCount: { ...type.subtitle, marginBottom: 10 },
   visitRow: {
