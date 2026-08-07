@@ -526,6 +526,66 @@
       }
     },
     {
+      "id": "eligibility-clothing-store-with-cafe",
+      "notes": "REGRESSION (UNIQLO 5th Ave): a clothing store with a coffee counter. Google's primaryType is clothing_store — must never be recommended despite the secondary cafe type.",
+      "input": {
+        "id": "synthetic_uniqlo_1",
+        "displayName": { "text": "UNIQLO 5th Avenue" },
+        "types": ["clothing_store", "store", "cafe"],
+        "primaryType": "clothing_store",
+        "userRatingCount": 900
+      },
+      "expected": {
+        "recommendation_eligibility": 0,
+        "ineligibility_reason": "non_food_primary_type"
+      }
+    },
+    {
+      "id": "eligibility-movie-theater-with-cafe",
+      "notes": "REGRESSION (Angelika Film Center / FRIENDS Experience): a cinema/attraction is not a dining venue, even with a cafe concession.",
+      "input": {
+        "id": "synthetic_cinema_1",
+        "displayName": { "text": "Angelika Film Center & Cafe" },
+        "types": ["movie_theater", "tourist_attraction", "cafe"],
+        "primaryType": "movie_theater",
+        "userRatingCount": 1200
+      },
+      "expected": {
+        "recommendation_eligibility": 0,
+        "ineligibility_reason": "non_food_primary_type"
+      }
+    },
+    {
+      "id": "eligibility-transit-hub",
+      "notes": "REGRESSION (Grand Central Terminal): a transit hub is not a dining venue.",
+      "input": {
+        "id": "synthetic_transit_1",
+        "displayName": { "text": "Grand Central Terminal" },
+        "types": ["train_station", "transit_station", "tourist_attraction"],
+        "primaryType": "train_station",
+        "userRatingCount": 5000
+      },
+      "expected": {
+        "recommendation_eligibility": 0,
+        "ineligibility_reason": "non_food_primary_type"
+      }
+    },
+    {
+      "id": "eligibility-bank-cafe",
+      "notes": "REGRESSION (Capital One Café): a bank branch with a café is not a dining venue.",
+      "input": {
+        "id": "synthetic_bank_1",
+        "displayName": { "text": "Capital One Café" },
+        "types": ["bank", "finance", "cafe"],
+        "primaryType": "bank",
+        "userRatingCount": 200
+      },
+      "expected": {
+        "recommendation_eligibility": 0,
+        "ineligibility_reason": "non_food_primary_type"
+      }
+    },
+    {
       "id": "review-mining-brunch-anchor",
       "notes": "Reviews establish a weekend brunch anchor even though Google types only say restaurant.",
       "input": {

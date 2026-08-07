@@ -810,16 +810,12 @@ function hasRestaurantType(types: string[]): boolean {
 // is fundamentally not a dining destination — even if a secondary `cafe`
 // coffee-counter type is present (UNIQLO's café, a bookstore café, a bank café).
 // These must never be recommended, regardless of name or review text.
-// Types where being the DOMINANT (primary) type means the place is not a dining
-// destination — even if a secondary cafe/restaurant type is present. This gates
-// on primaryType, so a real hotel-attached restaurant (Le Coucou — primaryType
-// `french_restaurant`, lodging only in `types`) stays eligible, while the hotel
-// itself (primaryType `lodging` — "Marriott Restaurant") does not.
-// `department_store`/`shopping_mall` are NOT here — food-hall stalls are kept by
-// the rescue logic below.
+// Non-food DOMINANT (primary) types — a place whose primaryType is one of these
+// is not a dining destination even if it has a secondary `cafe` counter. Retail
+// `*_store` types are handled by a pattern in `isNonFoodPrimaryType` (no food
+// type is a `*_store`), so they are intentionally NOT enumerated here — this set
+// is only the non-`*_store` non-food types.
 const NON_FOOD_PRIMARY_TYPES = new Set([
-  "clothing_store", "shoe_store", "furniture_store", "home_goods_store",
-  "electronics_store", "book_store", "jewelry_store", "hardware_store", "pet_store",
   "movie_theater", "tourist_attraction", "amusement_park", "museum", "art_gallery",
   "transit_station", "train_station", "subway_station", "light_rail_station",
   "bus_station", "airport", "parking",
@@ -830,6 +826,17 @@ const NON_FOOD_PRIMARY_TYPES = new Set([
   "hospital", "doctor", "pharmacy", "gas_station", "post_office",
   "local_government_office",
 ]);
+
+// True when the primaryType marks a non-dining venue. Allowlist-guarded: a food
+// primaryType (Le Coucou's `french_restaurant`, even with `lodging` in types) is
+// NEVER non-food. Otherwise reject the enumerated set OR any retail `*_store`.
+// Gating on primaryType keeps the hotel *itself* (primaryType `lodging`) out
+// while keeping a hotel-attached restaurant (primaryType `*_restaurant`) in.
+function isNonFoodPrimaryType(primaryType: string | undefined): boolean {
+  if (!primaryType) return false;
+  if (RESTAURANT_TYPES.has(primaryType) || primaryType.endsWith("_restaurant")) return false;
+  return NON_FOOD_PRIMARY_TYPES.has(primaryType) || primaryType.endsWith("_store");
+}
 
 export function inferRecommendationEligibility(
   place: GooglePlace,
@@ -849,7 +856,7 @@ export function inferRecommendationEligibility(
   //      secondary `cafe` coffee-counter type is present (e.g. UNIQLO's café).
   //   2. If the place carries NO food-serving type at all, it is not a dining
   //      venue (e.g. a cinema or transit hub from a text search). Reject.
-  if (place.primaryType && NON_FOOD_PRIMARY_TYPES.has(place.primaryType)) {
+  if (isNonFoodPrimaryType(place.primaryType)) {
     const reason = place.primaryType === "lodging" || place.primaryType === "hotel"
       ? "hotel"
       : "non_food_primary_type";
