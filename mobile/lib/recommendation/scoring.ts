@@ -12,6 +12,7 @@ import type {
   RestaurantInput, RestaurantScore, RecommendationType, ScoreContext,
 } from "./types";
 import type { TasteGraph } from "./taste-graph";
+import { shareOf } from "./taste-graph";
 import { computeCompatibility } from "./compatibility";
 
 const FINAL_W = {
@@ -40,7 +41,9 @@ export function scoreRestaurant(
     confidenceScore * FINAL_W.confidence +
     // Discovery-signal nudge from classifier tags: reward critic acclaim and
     // hidden gems, gently demote overexposed/tourist-heavy places.
-    signalTagAdjustment(r.tags);
+    signalTagAdjustment(r.tags) +
+    // Keep cafés/coffee shops from crowding out actual restaurants in recs.
+    cafeFormatAdjustment(graph, r, ctx);
 
   return {
     restaurantId: r.google_place_id,
@@ -125,6 +128,31 @@ function signalTagAdjustment(tags?: string[] | null): number {
   let adj = 0;
   for (const t of tags) adj += SIGNAL_TAG_ADJUST[t] ?? 0;
   return Math.max(-8, Math.min(8, adj));
+}
+
+// Cafés, coffee shops, bakeries and dessert spots flood a nearby search and win
+// on proximity, but they're rarely the "nice restaurant" someone wants for a
+// meal. Demote them — unless the user has actually shown they gravitate there
+// (their own café share cancels the penalty), and soften at breakfast/brunch
+// when a café is a legitimate pick.
+const CAFE_FORMATS = new Set(["café", "cafe", "bakery", "dessert"]);
+function cafeFormatAdjustment(graph: TasteGraph, r: RestaurantInput, ctx: ScoreContext): number {
+  const fc = (r.format_class ?? "").toLowerCase();
+  if (!CAFE_FORMATS.has(fc)) return 0;
+
+  const isCoffee = fc === "café" || fc === "cafe";
+  let penalty = isCoffee ? -20 : -12; // bakery/dessert are a milder demotion
+
+  // A café at 9am is fine; a café for dinner usually isn't.
+  if (ctx.now) {
+    const slot = currentSlot(ctx.now);
+    if (slot === "breakfast" || slot === "brunch") penalty *= 0.4;
+  }
+
+  // Users who genuinely favor cafés keep seeing them — their café share of
+  // visits (×3, capped) scales the penalty back toward zero.
+  const affinity = Math.min(1, shareOf(graph.formats, r.format_class ?? "") * 3);
+  return penalty * (1 - affinity);
 }
 
 function currentSlot(d: Date): keyof typeof SLOT_TO_OCCASIONS {

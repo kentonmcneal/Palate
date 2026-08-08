@@ -85,7 +85,7 @@ export async function loadPersonalSignal(): Promise<PersonalSignal> {
       const [visitsRes, eventsRes, itemsRes, friendsRes, friendVisitsRes] = await Promise.all([
         supabase
           .from("visits")
-          .select("restaurant_id, restaurant:restaurants(google_place_id)")
+          .select("restaurant_id, overall_rating, restaurant:restaurants(google_place_id, cuisine_type)")
           .eq("user_id", user.id),
         supabase
           .from("analytics_events")
@@ -123,6 +123,25 @@ export async function loadPersonalSignal(): Promise<PersonalSignal> {
         const r = Array.isArray(row.restaurant) ? row.restaurant[0] : row.restaurant;
         if (r?.google_place_id) {
           sig.visitsByPlaceId.set(r.google_place_id, (sig.visitsByPlaceId.get(r.google_place_id) ?? 0) + 1);
+        }
+        // Overall "how was this place" reaction (visit-level) flows through the
+        // SAME sentiment maps as menu-item ratings, so a loved/not-for-me visit
+        // shifts recommendations for that restaurant AND its cuisine.
+        const rating = row.overall_rating as "loved" | "ok" | "not_for_me" | null;
+        if (rating === "loved" || rating === "ok" || rating === "not_for_me") {
+          if (row.restaurant_id) {
+            const cur = sig.itemSentimentByRestaurantId.get(row.restaurant_id)
+              ?? { loved: 0, ok: 0, not_for_me: 0 };
+            cur[rating]++;
+            sig.itemSentimentByRestaurantId.set(row.restaurant_id, cur);
+          }
+          // Cross-learning to cuisine: only loved/not_for_me carry signal.
+          const cuisine: string | null = r?.cuisine_type ?? null;
+          if (cuisine && (rating === "loved" || rating === "not_for_me")) {
+            const cur = sig.itemSentimentByCuisine.get(cuisine) ?? { loved: 0, not_for_me: 0 };
+            cur[rating]++;
+            sig.itemSentimentByCuisine.set(cuisine, cur);
+          }
         }
       }
 

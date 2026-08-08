@@ -2,6 +2,7 @@ import { supabase } from "./supabase";
 import { getRestaurantIdByPlaceId, type Restaurant } from "./places";
 import { track } from "./analytics";
 import { triggerHapticSuccess } from "./haptics";
+import { invalidatePersonalSignal } from "./personal-signal";
 
 export type Visit = {
   id: string;
@@ -295,6 +296,8 @@ export async function rateVisit(
   // Tolerate the column not existing yet (JS shipped ahead of the migration) —
   // never crash the rating flow over it.
   if (error && !/column .* does not exist/i.test(error.message)) throw error;
+  // The next scoring pass should reflect this reaction — bust the cache.
+  invalidatePersonalSignal();
 }
 
 export async function attachPhotoToVisit(visitId: string, fileUri: string): Promise<string> {
