@@ -10,6 +10,7 @@ import {
   listForRestaurant, addAndRate, rateItem,
   type MenuItem, type ItemRating,
 } from "../lib/menu-items";
+import { rateVisit } from "../lib/visits";
 import { triggerHapticSelection, triggerHapticSuccess } from "../lib/haptics";
 
 // ============================================================================
@@ -43,6 +44,9 @@ export default function RateItemsScreen() {
   const [newName, setNewName] = useState("");
   const [newPending, setNewPending] = useState<ItemRating | null>(null);
   const [adding, setAdding] = useState(false);
+  // True once a lone reaction (no dish name) has been saved as the visit's
+  // overall rating — lets the button read "Saved" instead of re-inviting a tap.
+  const [savedOverall, setSavedOverall] = useState(false);
 
   const load = useCallback(async () => {
     if (!params.restaurant_id) { setLoading(false); return; }
@@ -78,23 +82,33 @@ export default function RateItemsScreen() {
   }
 
   async function handleAddNew() {
-    if (!newName.trim() || !newPending || adding || !params.restaurant_id) return;
+    // A reaction is the only requirement now — the dish name is optional.
+    if (!newPending || adding) return;
+    const named = newName.trim().length > 0;
     setAdding(true);
     try {
-      const created = await addAndRate({
-        restaurantId: params.restaurant_id,
-        visitId: params.visit_id ?? null,
-        name: newName,
-        rating: newPending,
-      });
-      setItems((curr) => [{ ...created, visit_count: created.visit_count + 1 }, ...curr.filter((i) => i.id !== created.id)]);
-      setPending((p) => ({ ...p, [created.id]: newPending }));
-      setSavedCount((n) => n + 1);
-      setNewName("");
-      setNewPending(null);
+      if (named) {
+        if (!params.restaurant_id) return;
+        const created = await addAndRate({
+          restaurantId: params.restaurant_id,
+          visitId: params.visit_id ?? null,
+          name: newName,
+          rating: newPending,
+        });
+        setItems((curr) => [{ ...created, visit_count: created.visit_count + 1 }, ...curr.filter((i) => i.id !== created.id)]);
+        setPending((p) => ({ ...p, [created.id]: newPending }));
+        setSavedCount((n) => n + 1);
+        setNewName("");
+        setNewPending(null);
+      } else {
+        // No dish named — save the reaction as the visit's overall rating.
+        if (params.visit_id) await rateVisit(params.visit_id, newPending);
+        setSavedOverall(true);
+        setSavedCount((n) => n + 1);
+      }
       void triggerHapticSuccess();
     } catch (e: any) {
-      Alert.alert("Couldn't add", e.message ?? "Try again");
+      Alert.alert("Couldn't save", e.message ?? "Try again");
     } finally {
       setAdding(false);
     }
@@ -122,7 +136,7 @@ export default function RateItemsScreen() {
               <TextInput
                 value={newName}
                 onChangeText={setNewName}
-                placeholder="What did you eat?"
+                placeholder="What did you eat? (optional)"
                 placeholderTextColor={colors.mute}
                 style={styles.addInput}
                 autoCapitalize="words"
@@ -135,17 +149,25 @@ export default function RateItemsScreen() {
                     label={r.label}
                     emoji={r.emoji}
                     selected={newPending === r.key}
-                    onPress={() => setNewPending(r.key)}
+                    onPress={() => { setNewPending(r.key); setSavedOverall(false); }}
                     disabled={adding}
                   />
                 ))}
               </View>
               <Spacer size={10} />
               <Button
-                title={adding ? "Adding…" : "Add"}
+                title={
+                  adding
+                    ? "Saving…"
+                    : newName.trim()
+                      ? "Add dish"
+                      : savedOverall
+                        ? "Saved ✓"
+                        : "Save how it was"
+                }
                 onPress={handleAddNew}
                 loading={adding}
-                disabled={!newName.trim() || !newPending}
+                disabled={!newPending || (savedOverall && !newName.trim())}
               />
             </View>
 

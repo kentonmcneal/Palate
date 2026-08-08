@@ -13,6 +13,7 @@ export type Visit = {
   confirmed_by_user: boolean;
   notes: string | null;
   photo_url: string | null;
+  overall_rating: "loved" | "ok" | "not_for_me" | null;
   restaurant?: Restaurant;
 };
 
@@ -278,6 +279,22 @@ export async function updateVisit(
     return;
   }
   if (error) throw error;
+}
+
+// Overall "how was this place" reaction for a visit — independent of any
+// specific dish. Used when someone taps Loved / OK / Not for me without naming
+// a dish. Idempotent (a plain column update), so re-tapping just overwrites.
+export async function rateVisit(
+  visitId: string,
+  rating: "loved" | "ok" | "not_for_me",
+): Promise<void> {
+  const { error } = await supabase
+    .from("visits")
+    .update({ overall_rating: rating })
+    .eq("id", visitId);
+  // Tolerate the column not existing yet (JS shipped ahead of the migration) —
+  // never crash the rating flow over it.
+  if (error && !/column .* does not exist/i.test(error.message)) throw error;
 }
 
 export async function attachPhotoToVisit(visitId: string, fileUri: string): Promise<string> {
