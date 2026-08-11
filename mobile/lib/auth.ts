@@ -28,6 +28,26 @@ export async function verifyEmailCode(email: string, code: string) {
   return data;
 }
 
+/**
+ * Sign in with a Google ID token obtained natively via expo-auth-session
+ * (the iOS id_token flow — see sign-in.tsx). No email round-trip, so it's
+ * the reliable path for users on domains that filter our OTP mail (e.g.
+ * university / corporate addresses).
+ *
+ * Requires the Google provider enabled in Supabase with our iOS client id in
+ * the authorized-client-id list. Nonce validation is skipped server-side
+ * (external_google_skip_nonce_check) because expo-auth-session does not expose
+ * the raw nonce for us to forward here.
+ */
+export async function signInWithGoogleIdToken(idToken: string) {
+  const { data, error } = await supabase.auth.signInWithIdToken({
+    provider: "google",
+    token: idToken,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function signOut() {
   await supabase.auth.signOut();
 }

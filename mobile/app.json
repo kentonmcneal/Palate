@@ -12,7 +12,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.palate.ios",
-      "buildNumber": "46",
+      "buildNumber": "47",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Palate uses your location only when the app is open, to detect which restaurant or café you may be eating at. We never share or sell your location.",
         "NSUserNotificationsUsageDescription": "We send a single notification on Sunday morning when your weekly Wrapped is ready. You can turn this off in Settings.",
@@ -22,6 +22,13 @@
           "comgooglemaps",
           "instagram",
           "instagram-stories"
+        ],
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.239407939279-g4v2vualn6mqlljtkt53vi0k2mhkuqtu"
+            ]
+          }
         ],
         "ITSAppUsesNonExemptEncryption": false
       },
