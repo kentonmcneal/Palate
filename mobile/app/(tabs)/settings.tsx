@@ -22,6 +22,7 @@ import { getMyProfile, setProfileVisibility, setDisplayName, setUsername, upload
 import { listIncomingRequests } from "../../lib/friends";
 import { generateInviteLink, inviteShareMessage, getMyReferralCount } from "../../lib/referrals";
 import { GmailImportCard } from "../../components/GmailImportCard";
+import { isFlagEnabled } from "../../lib/flags";
 import { SavedNearbyCard } from "../../components/SavedNearbyCard";
 import { CollapsibleSection } from "../../components/CollapsibleSection";
 import { isAdmin } from "../../lib/waitlist";
@@ -437,6 +438,7 @@ export default function Settings() {
           </Note>
         </Section>
 
+        <PassiveInboxEntry />
         <AdminEntry />
 
         <CollapsibleSection title="Wrapped & reminders">
@@ -589,6 +591,24 @@ function AdminEntry() {
       <Note>Approve or deny people waiting to join.</Note>
       <Button title="Passive capture (debug)" onPress={() => router.push("/debug-visits" as never)} />
       <Note>Phase 1 visit detection — inject a test visit and watch the raw queue.</Note>
+    </CollapsibleSection>
+  );
+}
+
+// Detected-visits inbox — a real user-facing entry, shown only once passive
+// confirmation is switched on (flag), so suppressed/quiet-hours visits are
+// reachable and never lost.
+function PassiveInboxEntry() {
+  const router = useRouter();
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    isFlagEnabled("passive_capture_confirm").then(setOn).catch(() => {});
+  }, []);
+  if (!on) return null;
+  return (
+    <CollapsibleSection title="Detected visits">
+      <Button title="Recent visits to confirm" onPress={() => router.push("/passive-inbox" as never)} />
+      <Note>Places we noticed you spent time at, waiting for a quick confirm.</Note>
     </CollapsibleSection>
   );
 }

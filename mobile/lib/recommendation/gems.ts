@@ -14,7 +14,12 @@
 
 import type { RestaurantInput } from "./types";
 
-const FAST_FORMATS = new Set(["fast_food", "fast food", "quick_service", "quick-service", "meal_takeaway"]);
+// NOTE: intentionally NOT keying off the classifier's "quick_service"
+// format_class — the classifier assigns that to ANY price_level<=1 venue as a
+// proxy, which would wrongly hard-exclude cheap independent gems (taquerias,
+// banh mi, dumpling counters). Real fast food is caught by Google's explicit
+// types below + chain_name, not by price.
+const FAST_FORMATS = new Set(["fast_food", "fast food", "meal_takeaway"]);
 const CAFE_FORMATS = new Set(["café", "cafe", "bakery", "dessert", "coffee_shop"]);
 // Raw Google Places types (available pre-classification).
 const GOOGLE_FAST_TYPES = new Set(["fast_food_restaurant", "meal_takeaway", "meal_delivery"]);

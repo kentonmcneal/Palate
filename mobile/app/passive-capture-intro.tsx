@@ -7,6 +7,7 @@ import { Button, Spacer } from "../components/Button";
 import { track } from "../lib/analytics";
 import { requestWhenInUse } from "../lib/passive-permissions";
 import { startPassiveCaptureIfEnabled } from "../lib/passive-capture";
+import { ensureNotificationPermission } from "../lib/notifications";
 
 // Custom pre-permission screen. We explain the value and get a soft yes BEFORE
 // ever touching the system dialog — firing the OS prompt cold is how opt-in dies.
@@ -18,20 +19,29 @@ export default function PassiveCaptureIntro() {
   }, []);
 
   async function onEnable() {
-    void track("perm_prescreen_accepted");
-    const granted = await requestWhenInUse();
-    if (!granted) {
-      Alert.alert(
-        "No problem",
-        "You can still log meals yourself. Turn this on anytime in Settings.",
-      );
+    try {
+      void track("perm_prescreen_accepted");
+      const granted = await requestWhenInUse();
+      if (!granted) {
+        Alert.alert(
+          "No problem",
+          "You can still log meals yourself. Turn this on anytime in Settings.",
+        );
+        router.back();
+        return;
+      }
+      // Ask for notifications now too — confirmations are the payoff, and a
+      // visit detected later can't prompt without this.
+      await ensureNotificationPermission();
+      // When-In-Use is enough to begin; Always is upgraded later, after the user
+      // has seen the payoff (a confirmed visit). Start capture if the flag is on.
+      await startPassiveCaptureIfEnabled();
       router.back();
-      return;
+    } catch {
+      // Never let a rejected permission/start call escape as an unhandled
+      // rejection (New-Arch fatal pattern). Degrade to manual silently.
+      router.back();
     }
-    // When-In-Use is enough to begin; Always is upgraded later, after the user
-    // has seen the payoff (a confirmed visit). Start capture if the flag is on.
-    await startPassiveCaptureIfEnabled();
-    router.back();
   }
 
   function onNotNow() {

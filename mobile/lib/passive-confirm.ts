@@ -148,6 +148,14 @@ export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): 
     return "inboxed-rate-limited";
   }
 
+  // No notification permission → leave it in the inbox and DON'T burn the daily
+  // cap on a prompt the OS will never present.
+  const perm = await Notifications.getPermissionsAsync().catch(() => null);
+  if (!perm?.granted) {
+    void track("confirm_notif_suppressed", { reason: "no_permission", place_id: entry.place_id });
+    return "inboxed-quiet";
+  }
+
   await scheduleConfirmNotification(entry);
   await bumpNotifCount();
   void track("confirm_notif_sent", { place_id: entry.place_id });

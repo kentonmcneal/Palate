@@ -33,6 +33,17 @@ import { PermissionRepairBanner } from "../components/PermissionRepairBanner";
 // we control in an expo-router app.
 installGlobalErrorHandlers();
 
+// Present notifications while the app is foregrounded — otherwise a confirm
+// prompt scheduled during a foreground pipeline run is silently not shown.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+  }),
+});
+
 // Resolve any pending OAuth session (Gmail Connect) when the app is reopened
 // after the system browser hand-off.
 WebBrowser.maybeCompleteAuthSession();
@@ -181,23 +192,29 @@ export default function RootLayout() {
     return () => sub.remove();
   }, [session?.user]);
 
-  // Route a tapped passive-capture confirmation notification to /confirm-visit.
+  // Route a tapped passive-capture confirmation notification to /confirm-visit —
+  // both live taps and a cold-start tap (app was terminated).
   useEffect(() => {
+    const route = (data: Record<string, unknown> | undefined) => {
+      if (data?.kind !== "passive_confirm") return;
+      router.push({
+        pathname: "/confirm-visit",
+        params: {
+          place_id: String(data.place_id ?? ""),
+          name: String(data.name ?? ""),
+          address: String(data.address ?? ""),
+          alternates: String(data.alternates ?? "[]"),
+          confidence: "high",
+          inbox_id: String(data.inbox_id ?? ""),
+        },
+      });
+    };
+    // Cold-start: the tap that launched the app fires before this listener mounts.
+    void Notifications.getLastNotificationResponseAsync()
+      .then((r) => route(r?.notification.request.content.data as Record<string, unknown> | undefined))
+      .catch(() => {});
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as Record<string, unknown>;
-      if (data?.kind === "passive_confirm") {
-        router.push({
-          pathname: "/confirm-visit",
-          params: {
-            place_id: String(data.place_id ?? ""),
-            name: String(data.name ?? ""),
-            address: String(data.address ?? ""),
-            alternates: String(data.alternates ?? "[]"),
-            confidence: "high",
-            inbox_id: String(data.inbox_id ?? ""),
-          },
-        });
-      }
+      route(response.notification.request.content.data as Record<string, unknown>);
     });
     return () => sub.remove();
   }, [router]);

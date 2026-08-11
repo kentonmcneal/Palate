@@ -6,11 +6,24 @@ function r(p: Partial<RestaurantInput>): RestaurantInput {
 }
 
 describe("gems-first hard gate", () => {
-  it("excludes fast food, quick service, chains, and downranked venues", () => {
+  it("excludes real fast food, chains, and downranked venues", () => {
     expect(isRecIneligible(r({ format_class: "fast_food" }))).toBe(true);
-    expect(isRecIneligible(r({ format_class: "quick_service" }))).toBe(true);
     expect(isRecIneligible(r({ chain_name: "Chipotle" }))).toBe(true);
     expect(isRecIneligible(r({ recommendation_eligibility: 0.2 }))).toBe(true);
+  });
+  it("does NOT exclude a cheap independent gem mislabeled quick_service (price proxy)", () => {
+    // The classifier tags any price<=1 venue "quick_service" — a taqueria must
+    // survive. Only Google's explicit fast-food types hard-exclude.
+    const taqueria = r({
+      format_class: "quick_service",
+      primary_type: "mexican_restaurant",
+      types: ["restaurant", "mexican_restaurant"],
+      rating: 4.7,
+      user_rating_count: 250,
+      price_level: 1,
+      recommendation_eligibility: 1,
+    });
+    expect(isRecIneligible(taqueria)).toBe(false);
   });
   it("does NOT exclude an unclassified (null-eligibility) sit-down place", () => {
     expect(isRecIneligible(r({ format_class: "restaurant", recommendation_eligibility: null }))).toBe(false);

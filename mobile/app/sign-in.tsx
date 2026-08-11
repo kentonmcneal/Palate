@@ -33,9 +33,13 @@ export default function SignIn() {
   });
 
   useEffect(() => {
-    if (gResponse?.type !== "success") {
-      if (gResponse?.type === "error") {
-        setLoading(false);
+    if (!gResponse) return;
+    // Cancel/dismiss RESOLVE (they don't throw), so clear loading here for every
+    // non-success outcome — otherwise the shared `loading` sticks true and both
+    // sign-in buttons stay disabled/spinning until the app is relaunched.
+    if (gResponse.type !== "success") {
+      setLoading(false);
+      if (gResponse.type === "error") {
         Alert.alert("Couldn't sign in with Google", "Please try again or use your email.");
       }
       return;

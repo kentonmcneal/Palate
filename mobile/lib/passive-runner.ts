@@ -79,11 +79,26 @@ export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
   };
 }
 
+// In-flight guard: the foreground effect can fire twice in quick succession
+// (mount + AppState "active", or a token refresh re-running the effect). Without
+// this, two overlapping runs read the same processedIds and double-notify.
+let running = false;
+
 /** Drain + process everything unprocessed. Safe to call on every foreground. */
 export async function processPendingVisits(): Promise<RunSummary> {
+  if (running) return { ran: false, detected: 0, outcomes: [] };
   if (!(await isFlagEnabled(PASSIVE_CAPTURE_FLAG))) {
     return { ran: false, detected: 0, outcomes: [] };
   }
+  running = true;
+  try {
+    return await runProcess();
+  } finally {
+    running = false;
+  }
+}
+
+async function runProcess(): Promise<RunSummary> {
   const queue = await drainNativeVisits();
   const processed = await loadProcessed();
   const fresh = queue.filter((v) => !processed.has(v.id));

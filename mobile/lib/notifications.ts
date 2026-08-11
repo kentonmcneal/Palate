@@ -41,6 +41,20 @@ export async function isReminderEnabled(): Promise<boolean> {
 }
 
 /**
+ * Ensure notification permission (request once if undetermined). Used by passive
+ * capture so a later-detected visit can actually prompt. Returns whether granted.
+ */
+export async function ensureNotificationPermission(): Promise<boolean> {
+  const Notifications = await loadNotificationsLib();
+  if (!Notifications) return false;
+  const perm = await Notifications.getPermissionsAsync();
+  if (perm.granted) return true;
+  if (!perm.canAskAgain) return false;
+  const ask = await Notifications.requestPermissionsAsync();
+  return ask.granted;
+}
+
+/**
  * Asks for notification permission and schedules a weekly Sunday-9am
  * "Your Palate Wrapped is ready" local notification.
  */
