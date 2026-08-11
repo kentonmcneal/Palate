@@ -27,6 +27,17 @@
 //   friend_accepted
 //   feed_liked
 //   maps_opened
+//   --- passive capture (Phase 2 funnel) ---
+//   perm_prescreen_shown / perm_prescreen_accepted / perm_prescreen_dismissed
+//   perm_wheninuse_requested / perm_wheninuse_granted / perm_wheninuse_denied
+//   perm_always_prompt_shown / perm_always_granted / perm_always_denied / perm_always_deferred
+//   perm_always_revoked
+//   perm_repair_banner_shown / perm_repair_tapped
+//   --- passive capture (Phases 3–4 pipeline) ---
+//   visit_detected / visit_qualified / visit_suppressed / visit_resolved
+//   confirm_notif_sent / confirm_notif_suppressed
+//   confirm_yes / confirm_no / confirm_corrected
+//   inbox_opened / inbox_confirmed
 // ============================================================================
 
 import { supabase } from "./supabase";

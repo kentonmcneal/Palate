@@ -21,6 +21,10 @@ import { registerPushToken } from "../lib/notifications";
 import { checkForAutoVisitOnForeground } from "../lib/auto-detect";
 import { installGlobalErrorHandlers } from "../lib/global-error-handler";
 import { isApproved } from "../lib/waitlist";
+import * as Notifications from "expo-notifications";
+import { processPendingVisits } from "../lib/passive-runner";
+import { checkPermissionDowngrade } from "../lib/passive-permissions";
+import { PermissionRepairBanner } from "../components/PermissionRepairBanner";
 
 // Install app-wide catch-alls for uncaught errors / unhandled rejections BEFORE
 // any app code runs. Under the New Architecture an unhandled rejection would
@@ -88,6 +92,7 @@ export default function RootLayout() {
   const segments = useSegments();
 
   const [approved, setApproved] = useState<boolean | null>(null);
+  const [repairVisible, setRepairVisible] = useState(false);
 
   const [fontsLoaded] = useFonts({
     Inter_400Regular, Inter_500Medium, Inter_600SemiBold,
@@ -159,12 +164,43 @@ export default function RootLayout() {
   // The helper itself respects the toggle, throttle, and permission state.
   useEffect(() => {
     if (!session?.user) return;
-    void checkForAutoVisitOnForeground().catch((e) => captureError(e, { at: "autoVisit:mount" }));
+    const onForeground = () => {
+      void checkForAutoVisitOnForeground().catch((e) => captureError(e, { at: "autoVisit:foreground" }));
+      // Passive capture (Phases 3–4): drain + qualify + resolve + confirm any
+      // visits captured while backgrounded. Gated internally by the kill switch.
+      void processPendingVisits().catch((e) => captureError(e, { at: "passive:process" }));
+      // Detect a silent Always downgrade and surface the repair banner.
+      void checkPermissionDowngrade()
+        .then((downgraded) => { if (downgraded) setRepairVisible(true); })
+        .catch((e) => captureError(e, { at: "passive:downgrade" }));
+    };
+    onForeground();
     const sub = AppState.addEventListener("change", (next) => {
-      if (next === "active") void checkForAutoVisitOnForeground().catch((e) => captureError(e, { at: "autoVisit:foreground" }));
+      if (next === "active") onForeground();
     });
     return () => sub.remove();
   }, [session?.user]);
+
+  // Route a tapped passive-capture confirmation notification to /confirm-visit.
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as Record<string, unknown>;
+      if (data?.kind === "passive_confirm") {
+        router.push({
+          pathname: "/confirm-visit",
+          params: {
+            place_id: String(data.place_id ?? ""),
+            name: String(data.name ?? ""),
+            address: String(data.address ?? ""),
+            alternates: String(data.alternates ?? "[]"),
+            confidence: "high",
+            inbox_id: String(data.inbox_id ?? ""),
+          },
+        });
+      }
+    });
+    return () => sub.remove();
+  }, [router]);
 
   // Route guard: kick to /sign-in if not authed; bounce away from /sign-in
   // once authed. Signed-in users are allowed to be in /onboarding so brand-new
@@ -201,11 +237,14 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar style="dark" />
+        <PermissionRepairBanner visible={repairVisible} onDismiss={() => setRepairVisible(false)} />
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.paper } }}>
           <Stack.Screen name="sign-in" />
           <Stack.Screen name="onboarding" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="confirm-visit" options={{ presentation: "modal" }} />
+          <Stack.Screen name="passive-capture-intro" options={{ presentation: "modal" }} />
+          <Stack.Screen name="passive-inbox" options={{ presentation: "modal" }} />
           <Stack.Screen name="year-in-review" options={{ presentation: "modal" }} />
           <Stack.Screen name="insights" options={{ presentation: "modal" }} />
           <Stack.Screen name="friends" options={{ presentation: "modal" }} />

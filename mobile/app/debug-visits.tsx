@@ -16,27 +16,38 @@ import {
   type RawVisit,
 } from "../lib/passive-capture";
 import { isFlagEnabled } from "../lib/flags";
+import { processPendingVisits, RESOLVE_FLAG, CONFIRM_FLAG, type VisitOutcome } from "../lib/passive-runner";
+import { currentPermissionState, requestAlways } from "../lib/passive-permissions";
+import { getCacheHitRate } from "../lib/passive-pipeline";
 
-// A plausible Atlanta coordinate for injected test visits (downtown).
+// Downtown Atlanta — Places returns real food venues here, so an injected visit
+// exercises the whole qualify → resolve → confirm path end to end.
 const TEST_LAT = 33.749;
 const TEST_LNG = -84.388;
 
 function fmt(ms: number | null): string {
-  if (ms == null) return "—";
-  const d = new Date(ms);
-  return d.toLocaleString();
+  return ms == null ? "—" : new Date(ms).toLocaleString();
 }
 
 export default function DebugVisitsScreen() {
   const router = useRouter();
   const [visits, setVisits] = useState<RawVisit[]>([]);
-  const [auth, setAuth] = useState<string>("…");
-  const [flagOn, setFlagOn] = useState<boolean | null>(null);
-  const [monitoring, setMonitoring] = useState<string>("");
+  const [auth, setAuth] = useState("…");
+  const [perm, setPerm] = useState<{ whenInUse: boolean; always: boolean }>({ whenInUse: false, always: false });
+  const [flags, setFlags] = useState<{ detect: boolean; resolve: boolean; confirm: boolean } | null>(null);
+  const [cache, setCache] = useState<{ hits: number; total: number; rate: number }>({ hits: 0, total: 0, rate: 0 });
+  const [outcomes, setOutcomes] = useState<VisitOutcome[]>([]);
+  const [note, setNote] = useState("");
 
   const refresh = useCallback(async () => {
     setAuth(authorizationStatus());
-    setFlagOn(await isFlagEnabled(PASSIVE_CAPTURE_FLAG));
+    setPerm(await currentPermissionState());
+    setFlags({
+      detect: await isFlagEnabled(PASSIVE_CAPTURE_FLAG),
+      resolve: await isFlagEnabled(RESOLVE_FLAG),
+      confirm: await isFlagEnabled(CONFIRM_FLAG),
+    });
+    setCache(await getCacheHitRate());
     setVisits(await drainNativeVisits());
   }, []);
 
@@ -46,26 +57,30 @@ export default function DebugVisitsScreen() {
 
   async function onStart() {
     const r = await startPassiveCaptureIfEnabled();
-    setMonitoring(r.started ? "monitoring started" : `not started: ${r.reason}`);
+    setNote(r.started ? "monitoring started" : `not started: ${r.reason}`);
     await refresh();
-  }
-
-  function onStop() {
-    stopPassiveCapture();
-    setMonitoring("monitoring stopped");
   }
 
   async function onSimulate() {
     const v = simulateVisit(TEST_LAT, TEST_LNG, 45);
     if (!v) {
-      Alert.alert("Native module unavailable", "Simulated visits require a dev/production build (not Expo Go).");
+      Alert.alert("Native module unavailable", "Simulated visits need a dev/production build (not Expo Go).");
       return;
     }
+    setNote("injected simulated visit (45 min dwell)");
     await refresh();
   }
 
-  async function onClear() {
-    await clearQueuedVisits();
+  async function onRun() {
+    const summary = await processPendingVisits();
+    setOutcomes(summary.outcomes);
+    setNote(summary.ran ? `processed ${summary.detected} new` : "pipeline off (detection kill switch)");
+    await refresh();
+  }
+
+  async function onRequestAlways() {
+    const r = await requestAlways();
+    setNote(`Always → ${r}`);
     await refresh();
   }
 
@@ -83,27 +98,45 @@ export default function DebugVisitsScreen() {
         {!isVisitMonitorAvailable && (
           <View style={[styles.card, styles.warn]}>
             <Text style={styles.warnText}>
-              Native visit monitor not in this binary. Detection + simulated visits need a dev/production
-              build that includes the module. The queue below still renders.
+              Native visit monitor not in this binary — needs a dev/production build. The queue + pipeline
+              still render.
             </Text>
           </View>
         )}
 
         <View style={styles.card}>
           <Row label="Native module" value={isVisitMonitorAvailable ? "available" : "unavailable"} />
-          <Row label="Location auth" value={auth} />
-          <Row label="Kill switch" value={flagOn == null ? "…" : flagOn ? "ON" : "OFF (killed)"} />
-          {!!monitoring && <Row label="Last action" value={monitoring} />}
+          <Row label="Location auth (native)" value={auth} />
+          <Row label="When-In-Use" value={perm.whenInUse ? "granted" : "no"} />
+          <Row label="Always" value={perm.always ? "granted" : "no"} />
+          <Row label="Kill switch (detect)" value={flags ? (flags.detect ? "ON" : "OFF") : "…"} />
+          <Row label="Resolve flag" value={flags ? (flags.resolve ? "ON" : "OFF") : "…"} />
+          <Row label="Confirm flag" value={flags ? (flags.confirm ? "ON" : "OFF") : "…"} />
+          <Row label="Cache hit rate" value={`${Math.round(cache.rate * 100)}% (${cache.hits}/${cache.total})`} />
+          {!!note && <Row label="Last action" value={note} />}
         </View>
 
-        <View style={{ gap: 10, marginBottom: spacing.lg }}>
+        <View style={{ gap: 8, marginBottom: spacing.lg }}>
+          <Button title="Pre-permission screen" variant="ghost" onPress={() => router.push("/passive-capture-intro")} />
+          <Button title="Request Always" variant="ghost" onPress={onRequestAlways} />
           <Button title="Start monitoring" onPress={onStart} />
-          <Button title="Stop monitoring" variant="ghost" onPress={onStop} />
+          <Button title="Stop monitoring" variant="ghost" onPress={() => { stopPassiveCapture(); setNote("monitoring stopped"); }} />
           <Button title="Inject simulated visit" variant="secondary" onPress={onSimulate} />
+          <Button title="Run pipeline now" onPress={onRun} />
+          <Button title="Open inbox" variant="ghost" onPress={() => router.push("/passive-inbox")} />
         </View>
+
+        {outcomes.length > 0 && (
+          <View style={styles.card}>
+            <Text style={[type.subtitle, { marginBottom: 6 }]}>Last run</Text>
+            {outcomes.map((o) => (
+              <Text key={o.id} style={styles.outcome}>• {o.stage}: {o.detail}</Text>
+            ))}
+          </View>
+        )}
 
         <View style={styles.listHead}>
-          <Text style={type.subtitle}>Detections ({visits.length})</Text>
+          <Text style={type.subtitle}>Raw detections ({visits.length})</Text>
           <Pressable onPress={refresh} hitSlop={8}>
             <Text style={styles.link}>Refresh</Text>
           </Pressable>
@@ -115,23 +148,18 @@ export default function DebugVisitsScreen() {
           </View>
         )}
 
-        {visits
-          .slice()
-          .reverse()
-          .map((v) => (
-            <View key={v.id} style={styles.row}>
-              <Text style={styles.mono}>
-                {v.lat.toFixed(5)}, {v.lng.toFixed(5)}  ±{Math.round(v.horizontalAccuracy)}m
-                {v.simulated ? "  (sim)" : ""}
-              </Text>
-              <Text style={styles.sub}>arrive: {fmt(v.arrivalAt)}</Text>
-              <Text style={styles.sub}>depart: {fmt(v.departureAt)}</Text>
-              <Text style={styles.sub}>captured: {fmt(v.capturedAt)}</Text>
-            </View>
-          ))}
+        {visits.slice().reverse().map((v) => (
+          <View key={v.id} style={styles.row}>
+            <Text style={styles.mono}>
+              {v.lat.toFixed(5)}, {v.lng.toFixed(5)}  ±{Math.round(v.horizontalAccuracy)}m{v.simulated ? "  (sim)" : ""}
+            </Text>
+            <Text style={styles.sub}>arrive: {fmt(v.arrivalAt)}</Text>
+            <Text style={styles.sub}>depart: {fmt(v.departureAt)}</Text>
+          </View>
+        ))}
 
         {visits.length > 0 && (
-          <Pressable onPress={onClear} style={{ marginTop: spacing.md }}>
+          <Pressable onPress={async () => { await clearQueuedVisits(); await refresh(); }} style={{ marginTop: spacing.md }}>
             <Text style={[styles.link, { color: colors.red }]}>Clear queue</Text>
           </Pressable>
         )}
@@ -152,51 +180,31 @@ function Row({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.paper },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomColor: colors.line,
-    borderBottomWidth: 1,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+    borderBottomColor: colors.line, borderBottomWidth: 1,
   },
   closeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.faint,
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: "center", justifyContent: "center", backgroundColor: colors.faint,
   },
   closeText: { fontSize: 18, fontWeight: "700", color: colors.ink },
   body: { padding: spacing.lg, paddingBottom: 80 },
   card: {
-    padding: spacing.lg,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.paper,
-    marginBottom: spacing.lg,
+    padding: spacing.lg, borderRadius: 16, borderWidth: 1,
+    borderColor: colors.line, backgroundColor: colors.paper, marginBottom: spacing.lg,
   },
-  warn: { backgroundColor: colors.faint, borderColor: colors.line },
+  warn: { backgroundColor: colors.faint },
   warnText: { ...type.small, color: colors.ink },
   kv: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
   kvLabel: { ...type.small, color: colors.mute },
   kvValue: { ...type.small, color: colors.ink, fontWeight: "700" },
-  listHead: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 10,
-  },
+  listHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   link: { ...type.small, color: colors.red, fontWeight: "700" },
+  outcome: { ...type.small, color: colors.ink, marginTop: 2 },
   row: {
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.paper,
-    marginBottom: 10,
+    padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.line,
+    backgroundColor: colors.paper, marginBottom: 10,
   },
   mono: { fontSize: 13, fontWeight: "700", color: colors.ink },
   sub: { ...type.small, marginTop: 2 },
