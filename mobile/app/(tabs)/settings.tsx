@@ -587,6 +587,8 @@ function AdminEntry() {
     <CollapsibleSection title="Admin">
       <Button title="Waitlist approvals" onPress={() => router.push("/admin" as never)} />
       <Note>Approve or deny people waiting to join.</Note>
+      <Button title="Passive capture (debug)" onPress={() => router.push("/debug-visits" as never)} />
+      <Note>Phase 1 visit detection — inject a test visit and watch the raw queue.</Note>
     </CollapsibleSection>
   );
 }
