@@ -14,6 +14,7 @@ import type {
 import type { TasteGraph } from "./taste-graph";
 import { shareOf } from "./taste-graph";
 import { computeCompatibility } from "./compatibility";
+import { gemAdjustment } from "./gems";
 
 const FINAL_W = {
   compatibility: 0.60,
@@ -39,9 +40,9 @@ export function scoreRestaurant(
     compat.score * FINAL_W.compatibility +
     contextFit   * FINAL_W.context +
     confidenceScore * FINAL_W.confidence +
-    // Discovery-signal nudge from classifier tags: reward critic acclaim and
-    // hidden gems, gently demote overexposed/tourist-heavy places.
-    signalTagAdjustment(r.tags) +
+    // Gems-first: a strong boost/penalty from objective quality/price/aesthetic/
+    // acclaim signals so genuine gems rise and ordinary places sink to fallback.
+    gemAdjustment(r) +
     // Keep cafés/coffee shops from crowding out actual restaurants in recs.
     cafeFormatAdjustment(graph, r, ctx);
 
@@ -105,30 +106,6 @@ const SLOT_TO_OCCASIONS: Record<string, string[]> = {
   dinner:    ["date_night", "group_dinner", "casual_solo", "celebration", "business_dinner", "family_gathering"],
   late_night:["late_night", "party"],
 };
-
-// Discovery-signal weighting for the free-form `tags` the classifier emits.
-// Critic recognition and hidden gems get a boost; overexposed/tourist-heavy
-// spots get a gentle demotion. Net adjustment is clamped so it nudges, not
-// dominates, the score.
-const SIGNAL_TAG_ADJUST: Record<string, number> = {
-  "michelin": 6,
-  "james-beard": 5,
-  "bib-gourmand": 5,
-  "critically-acclaimed": 4,
-  "celebrity-chef": 3,
-  "hidden-gem": 5,
-  "local-favorite": 3,
-  "buzzy": 2,
-  "tourist-heavy": -6,
-  "high-traffic": -2,
-};
-
-function signalTagAdjustment(tags?: string[] | null): number {
-  if (!tags?.length) return 0;
-  let adj = 0;
-  for (const t of tags) adj += SIGNAL_TAG_ADJUST[t] ?? 0;
-  return Math.max(-8, Math.min(8, adj));
-}
 
 // Cafés, coffee shops, bakeries and dessert spots flood a nearby search and win
 // on proximity, but they're rarely the "nice restaurant" someone wants for a

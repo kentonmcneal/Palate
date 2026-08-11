@@ -34,12 +34,22 @@ export type RestaurantInput = {
   // Free-form classifier tags (e.g. "michelin", "hidden-gem", "tourist-heavy")
   // used for discovery-signal score adjustment.
   tags?: string[] | null;
+  // Single dominant atmosphere from the classifier (e.g. "rooftop", "romantic").
+  vibe?: string | null;
   neighborhood?: string | null;
   price_level?: number | null;
   rating?: number | null;
   user_rating_count?: number | null;
   latitude?: number | null;
   longitude?: number | null;
+  // Gems policy inputs. eligibility: 1 = full discovery candidate, lower =
+  // classifier downrank (chains/fast food/hotels). chain_name: set for chains.
+  recommendation_eligibility?: number | null;
+  chain_name?: string | null;
+  // Raw Google Places types — available even before LLM classification, so the
+  // gems gate can catch fast food / cafés on an unclassified venue.
+  primary_type?: string | null;
+  types?: string[] | null;
 };
 
 // ----------------------------------------------------------------------------
