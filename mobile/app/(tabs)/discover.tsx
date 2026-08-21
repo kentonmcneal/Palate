@@ -154,6 +154,15 @@ export default function DiscoverTab() {
   // on browsingCity now, so the focus effect picks up city changes via its dep.)
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  // The search suggestion panel caches its city list for ONE location and the
+  // openSearch guard below never refetches. Switching cities therefore left the
+  // previous city's restaurants under "All restaurants nearby" while the chip
+  // read the new city (reported: chip said Memphis, list was DC). Dropping the
+  // cache on a city change makes the next open refetch for the new location.
+  useEffect(() => {
+    setSearchCityList([]);
+  }, [browsingCity?.name]);
+
   // Compute the taste vector independently of the nearby fetch so the
   // "saves only" toggle re-ranks instantly without another places call.
   useEffect(() => {
@@ -184,15 +193,26 @@ export default function DiscoverTab() {
   // focused. Both queries are independent; run them in parallel.
   async function openSearch() {
     setSearchActive(true);
-    if (searchWishlist.length > 0 || searchCityList.length > 0 || searchPanelLoading) return;
+    if (searchPanelLoading) return;
+    // The two halves cache INDEPENDENTLY. The wishlist is city-independent and
+    // is kept; the city list is dropped on every city change, so it has to be
+    // refetchable on its own. The old single guard ("either half is populated
+    // => skip") meant a cached wishlist blocked the city list from ever
+    // reloading, which is what pinned the nearby list to the previous city.
+    const needWishlist = searchWishlist.length === 0;
+    const needCity = searchCityList.length === 0 && !!here;
+    if (!needWishlist && !needCity) return;
+
     setSearchPanelLoading(true);
     try {
-      const [wishRes, cityRes] = await Promise.allSettled([
-        listWishlist(),
-        here ? loadCityRestaurants(here) : Promise.resolve([] as CityRestaurant[]),
+      await Promise.all([
+        needWishlist
+          ? listWishlist().then((w) => setSearchWishlist(w.slice(0, 8))).catch(() => {})
+          : Promise.resolve(),
+        needCity
+          ? loadCityRestaurants(here).then(setSearchCityList).catch(() => {})
+          : Promise.resolve(),
       ]);
-      if (wishRes.status === "fulfilled") setSearchWishlist(wishRes.value.slice(0, 8));
-      if (cityRes.status === "fulfilled") setSearchCityList(cityRes.value);
     } finally {
       setSearchPanelLoading(false);
     }
