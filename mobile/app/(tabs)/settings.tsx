@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, Switch, Alert, Linking, ScrollView, Share, Pressable, Modal, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Button, Spacer } from "../../components/Button";
@@ -27,6 +27,14 @@ import { SavedNearbyCard } from "../../components/SavedNearbyCard";
 import { CollapsibleSection } from "../../components/CollapsibleSection";
 import { isAdmin } from "../../lib/waitlist";
 import { ensureAutoDetectPermission, setAutoDetectEnabled, TRACKING_PAUSED_KEY } from "../../lib/auto-detect";
+import {
+  isPassiveOptedIn,
+  optOutOfPassiveCapture,
+  setPassiveOptIn,
+  startPassiveCaptureIfEnabled,
+  PASSIVE_CAPTURE_FLAG,
+} from "../../lib/passive-capture";
+import { hasAlways } from "../../lib/passive-permissions";
 
 const CUISINE_LABELS: Record<string, string> = {
   italian: "Italian", mexican: "Mexican", japanese: "Japanese", chinese: "Chinese",
@@ -436,6 +444,7 @@ export default function Settings() {
             to confirm if you're at a restaurant. Removes the friction of remembering to
             log every visit. Past visits stay if you turn this off.
           </Note>
+          <PassiveCaptureEntry />
         </Section>
 
         <PassiveInboxEntry />
@@ -592,6 +601,87 @@ function AdminEntry() {
       <Button title="Passive capture (debug)" onPress={() => router.push("/debug-visits" as never)} />
       <Note>Phase 1 visit detection — inject a test visit and watch the raw queue.</Note>
     </CollapsibleSection>
+  );
+}
+
+// The user-facing opt-in for background visit logging. Hidden entirely while
+// the remote kill switch is off, so the switch stays the single source of truth
+// for whether the feature exists at all.
+//
+// "On" means all three gates are satisfied — opted in AND iOS Always granted.
+// If iOS later downgrades the permission (it does this silently), the row drops
+// to off and offers the repair rather than lying about being on.
+function PassiveCaptureEntry() {
+  const router = useRouter();
+  const [visible, setVisible] = useState(false);
+  const [on, setOn] = useState(false);
+  const [needsRepair, setNeedsRepair] = useState(false);
+
+  const refresh = useCallback(async () => {
+    const [flag, opted, always] = await Promise.all([
+      isFlagEnabled(PASSIVE_CAPTURE_FLAG),
+      isPassiveOptedIn(),
+      hasAlways(),
+    ]);
+    setVisible(flag);
+    setOn(opted && always);
+    setNeedsRepair(opted && !always);
+  }, []);
+
+  // Re-read on focus, not just mount: the user returns here from the opt-in
+  // modal and from iOS Settings, and both change the answer.
+  useFocusEffect(
+    useCallback(() => {
+      refresh().catch(() => {});
+    }, [refresh]),
+  );
+
+  async function toggle(next: boolean) {
+    if (!next) {
+      setOn(false);
+      setNeedsRepair(false);
+      await optOutOfPassiveCapture();
+      return;
+    }
+    // Permission already granted (re-enabling after a manual off) — no need to
+    // walk the funnel again.
+    if (await hasAlways()) {
+      await setPassiveOptIn(true);
+      await startPassiveCaptureIfEnabled();
+      setOn(true);
+      setNeedsRepair(false);
+      return;
+    }
+    router.push("/passive-capture-intro" as never);
+  }
+
+  if (!visible) return null;
+  return (
+    <>
+      <Spacer />
+      <Row
+        label="Log visits in the background"
+        right={
+          <Switch
+            value={on}
+            onValueChange={(v) => { void toggle(v); }}
+            thumbColor={on ? colors.red : "#fff"}
+            trackColor={{ true: colors.redTintBorder, false: colors.line }}
+          />
+        }
+      />
+      <Note>
+        {needsRepair
+          ? "Background logging is paused — iOS turned location back to \"While Using.\" Set it to Always in iOS Settings → Palate → Location to resume."
+          : "When on, Palate notices when you've spent a while at a restaurant — even with the app closed — and asks you afterward if you ate there. You confirm every visit; nothing is logged silently."}
+      </Note>
+      {needsRepair && (
+        <>
+          <Spacer />
+          <Button title="Open iOS Settings" variant="ghost" onPress={() => Linking.openSettings()} />
+        </>
+      )}
+    </>
   );
 }
 

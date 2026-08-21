@@ -6,6 +6,8 @@ import { Button, Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { requestForegroundPermission } from "../../lib/location";
 import { track } from "../../lib/analytics";
+import { isFlagEnabled } from "../../lib/flags";
+import { PASSIVE_CAPTURE_FLAG } from "../../lib/passive-capture";
 
 export default function Permission() {
   const router = useRouter();
@@ -17,7 +19,18 @@ export default function Permission() {
       const { granted, status } = await requestForegroundPermission();
       if (granted) {
         void track("permission_granted", { kind: "foreground" });
-        router.push("/onboarding/privacy");
+        // Offer background logging while location is already top of mind. Gated
+        // on the kill switch so onboarding is untouched when the feature is off,
+        // and skippable — the intro routes on to privacy either way.
+        const passiveOn = await isFlagEnabled(PASSIVE_CAPTURE_FLAG).catch(() => false);
+        if (passiveOn) {
+          router.push({
+            pathname: "/passive-capture-intro",
+            params: { next: "/onboarding/privacy" },
+          });
+        } else {
+          router.push("/onboarding/privacy");
+        }
       } else if (status === "denied") {
         void track("permission_denied", { kind: "foreground" });
         Alert.alert(

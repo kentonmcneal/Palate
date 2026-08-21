@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import * as Location from "expo-location";
 import { colors, spacing, type } from "../theme";
 import { Button } from "../components/Button";
 import { isVisitMonitorAvailable } from "../modules/palate-visit-monitor";
@@ -34,6 +35,7 @@ export default function DebugVisitsScreen() {
   const [visits, setVisits] = useState<RawVisit[]>([]);
   const [auth, setAuth] = useState("…");
   const [perm, setPerm] = useState<{ whenInUse: boolean; always: boolean }>({ whenInUse: false, always: false });
+  const [expoAlways, setExpoAlways] = useState("…");
   const [flags, setFlags] = useState<{ detect: boolean; resolve: boolean; confirm: boolean } | null>(null);
   const [cache, setCache] = useState<{ hits: number; total: number; rate: number }>({ hits: 0, total: 0, rate: 0 });
   const [outcomes, setOutcomes] = useState<VisitOutcome[]>([]);
@@ -42,6 +44,13 @@ export default function DebugVisitsScreen() {
   const refresh = useCallback(async () => {
     setAuth(authorizationStatus());
     setPerm(await currentPermissionState());
+    // Expo's own read, kept side by side with the native one on purpose: under a
+    // PROVISIONAL Always grant these two disagree (native "always" vs Expo
+    // "denied"), and that disagreement is the only way to see provisional from
+    // the outside. If they disagree here, provisional is working.
+    setExpoAlways(
+      (await Location.getBackgroundPermissionsAsync().catch(() => null))?.status ?? "error",
+    );
     setFlags({
       detect: await isFlagEnabled(PASSIVE_CAPTURE_FLAG),
       resolve: await isFlagEnabled(RESOLVE_FLAG),
@@ -108,7 +117,8 @@ export default function DebugVisitsScreen() {
           <Row label="Native module" value={isVisitMonitorAvailable ? "available" : "unavailable"} />
           <Row label="Location auth (native)" value={auth} />
           <Row label="When-In-Use" value={perm.whenInUse ? "granted" : "no"} />
-          <Row label="Always" value={perm.always ? "granted" : "no"} />
+          <Row label="Always (CoreLocation)" value={perm.always ? "granted" : "no"} />
+          <Row label="Always (expo-location)" value={expoAlways} />
           <Row label="Kill switch (detect)" value={flags ? (flags.detect ? "ON" : "OFF") : "…"} />
           <Row label="Resolve flag" value={flags ? (flags.resolve ? "ON" : "OFF") : "…"} />
           <Row label="Confirm flag" value={flags ? (flags.confirm ? "ON" : "OFF") : "…"} />

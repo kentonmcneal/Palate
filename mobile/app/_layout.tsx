@@ -23,6 +23,7 @@ import { installGlobalErrorHandlers } from "../lib/global-error-handler";
 import { isApproved } from "../lib/waitlist";
 import * as Notifications from "expo-notifications";
 import { processPendingVisits } from "../lib/passive-runner";
+import { resumePassiveCaptureIfOptedIn, isPassiveOptedIn } from "../lib/passive-capture";
 import { checkPermissionDowngrade } from "../lib/passive-permissions";
 import { PermissionRepairBanner } from "../components/PermissionRepairBanner";
 
@@ -180,9 +181,17 @@ export default function RootLayout() {
       // Passive capture (Phases 3–4): drain + qualify + resolve + confirm any
       // visits captured while backgrounded. Gated internally by the kill switch.
       void processPendingVisits().catch((e) => captureError(e, { at: "passive:process" }));
-      // Detect a silent Always downgrade and surface the repair banner.
+      // Re-arm monitoring for a user who opted in — covers a reinstall, a
+      // permission re-granted in iOS Settings, or a kill switch flipped on
+      // after they opted in. Never prompts; no-ops for everyone else.
+      void resumePassiveCaptureIfOptedIn().catch((e) => captureError(e, { at: "passive:resume" }));
+      // Detect a silent Always downgrade and surface the repair banner — but
+      // only nag someone who actually opted in. Anyone else revoking location
+      // is doing exactly what they meant to.
       void checkPermissionDowngrade()
-        .then((downgraded) => { if (downgraded) setRepairVisible(true); })
+        .then(async (downgraded) => {
+          if (downgraded && (await isPassiveOptedIn())) setRepairVisible(true);
+        })
         .catch((e) => captureError(e, { at: "passive:downgrade" }));
     };
     onForeground();
