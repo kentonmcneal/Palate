@@ -8,7 +8,6 @@ incur cost, it must STOP, describe the action and its cost, and wait for the
 user to say go.
 
 This includes, but is not limited to:
-- `eas build`, `eas update`, and any other paid Expo command
 - Paid API calls (LLM/classifier calls, Google Places, geocoding, email sends)
   beyond what a normal local dev run requires
 - Provisioning or scaling any paid cloud resource (Supabase, hosting, etc.)
@@ -21,22 +20,39 @@ When unsure whether something costs money, assume it does and ask first.
 
 ## Build / ship policy
 
-**Never run `eas build` (or any EAS command that triggers a build) without an
-explicit "build N", "ship", or "run the build" instruction from the user.**
+**EAS builds and updates are PRE-AUTHORIZED** (2026-08-21). They are covered by
+the monthly Expo subscription and the user is explicitly not cost-sensitive
+about them: "not worried about build costs on a monthly subscription — do
+whatever you need to do to create a good app."
 
-EAS builds cost real money on the user's paid plan once the monthly included
-quota is exceeded. The user wants to batch multiple changes into a single
-build instead of shipping incrementally.
+So `eas build`, `eas update`, and `eas submit` may be run without stopping to
+ask first. Still:
+- Type-check and run tests before building; don't burn a build on a typo.
+- Say what the build/update contains and report the result.
+- Prefer batching related changes into one build over shipping incrementally —
+  that's about review cycles and tester churn, not money.
 
-When code changes are ready:
-- Make the edits
-- Type-check
-- Bump `mobile/app.json` `buildNumber`
-- **Stop and report.** Wait for the user to explicitly say "build" before
-  invoking `eas build`.
+**This exemption is ONLY for EAS build/update/submit.** Everything else in the
+spending policy above still requires explicit per-action approval: paid API
+calls (LLM/classifier, Google Places, geocoding, email sends) beyond normal
+local dev, and provisioning or scaling any paid cloud resource.
 
-This applies to `eas build`, `eas update`, and any other paid Expo command.
-Free reads (`eas whoami`, `eas build:list`, `eas env:list`) are fine.
+### Runtime version gotcha (learned the hard way, 2026-08-21)
+
+`runtimeVersion` uses the `appVersion` policy, so **the runtime IS the
+`version` string in app.json**. Every build through 0.1.0 shared runtime
+`0.1.0`, which meant an OTA carrying new JS was delivered to old binaries that
+lacked the native code it needed — passive capture failed silently as
+`native-module-unavailable` on older installs.
+
+**When a build adds or changes native code, bump `version` in app.json** so it
+gets its own runtime and old binaries can't receive its updates.
+
+Do NOT switch to `{"policy": "fingerprint"}` without debugging it first — it
+was tried on 2026-08-21 and every build failed in the "Configure expo-updates"
+phase within ~84s (build `d0050c72`). The fingerprint itself resolved fine
+locally and remotely; the failure is server-side in the configure step and the
+log needs an authenticated browser session to read.
 
 ## Build numbering note
 
