@@ -89,7 +89,7 @@
     },
     "owner": "kentonmcneal",
     "runtimeVersion": {
-      "policy": "appVersion"
+      "policy": "fingerprint"
     },
     "updates": {
       "url": "https://u.expo.dev/07df10b4-2e73-4f01-aceb-1990fbe59fcf"
