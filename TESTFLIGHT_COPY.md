@@ -75,9 +75,17 @@ The code expires after 1 hour and a new one can be requested every 60 seconds.
 This account is pre-populated with visit history so the recommendation engine,
 profile, and weekly Wrapped all have data to display.
 
-Location: Palate requests location ONLY while the app is in use, to detect which
-restaurant you may be at when you open it. There is no background location
-tracking, no geofencing, and no background location mode in the app.
+Location: Palate requests location while the app is in use, to detect which
+restaurant you may be at when you open it.
+
+The app also offers OPTIONAL background visit logging, which is OFF by default
+and lives at Settings -> Passive tracking -> "Log visits in the background". It
+shows an explanation screen before requesting "Always" access. When on, the app
+uses Apple's visit-detection service to notice that you stopped somewhere, and
+asks you afterward whether you ate there — nothing is logged unless you confirm.
+Stops are filtered on the device (dwell length, accuracy, and home/work
+suppression) before any coordinate is sent to our server. No continuous location
+trail is recorded, and there is no geofencing. You can turn it off at any time.
 
 User-generated content: the social feed supports reporting posts and blocking
 users (••• menu on any post, and on user profiles). Blocked accounts are

@@ -48,13 +48,20 @@ For each, mark "Yes, we collect this data" and answer follow-ups:
 - **Used for app functionality** ✅
 - **Linked to user identity** ✅
 - **Used for tracking** ❌ NO
-- **Why**: Detecting which restaurant you're near, only when the app is open
+- **Why**: Detecting which restaurant you're near
 
 #### 3. Precise Location
 - **Used for app functionality** ✅
 - **Linked to user identity** ✅
 - **Used for tracking** ❌ NO
-- **Why**: Same as above — restaurant detection
+- **Why**: Restaurant detection. Collected while the app is open, and — only
+  for users who explicitly opt in and grant "Always" — in the background, to
+  detect that they stopped at a restaurant and ask them to confirm the visit.
+  Background detection is OFF by default and can be turned off at any time in
+  Settings. No continuous location trail is recorded: iOS reports discrete
+  stops (Apple's visit-detection service), and stops are filtered on-device
+  (dwell 20 min–4 hr, accuracy threshold, home/work suppression) before any
+  coordinate is transmitted.
 
 #### 4. User Content (notes on visits)
 - **Used for app functionality** ✅
@@ -188,9 +195,22 @@ email code (no password). To test:
 5. The Wrapped tab generates a weekly summary after at least one visit is logged.
 6. Settings → Delete account fully removes the test account and all visits.
 
-Location use is foreground-only in this build. Background detection
-is on the roadmap, gated behind a separate "Always" permission prompt
-which is not yet implemented.
+Location use: foreground location powers the "Check now" flow above.
+
+This build also includes OPTIONAL background visit logging, which is OFF by
+default. To review it: Settings -> Passive tracking -> "Log visits in the
+background". That runs an explanation screen first, then requests "Always"
+location access. When enabled, the app uses Apple's visit-detection service
+(CLVisit) to learn that the user stopped somewhere; stops are filtered on the
+device (20 min-4 hr dwell, accuracy threshold, and home/work suppression)
+before any coordinate is sent to our server to identify the restaurant. The
+user then gets a notification asking whether they ate there, and NOTHING is
+saved to their diary unless they confirm it. It can be switched off at any
+time in the same place, and the feature is additionally behind a
+server-side flag we can disable remotely.
+
+The app does not sell or share location data, and does not use it for
+tracking or advertising.
 
 Thanks!
 — Kenton

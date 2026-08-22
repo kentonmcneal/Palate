@@ -31,7 +31,7 @@ export default function PrivacyPage() {
           Privacy policy
         </h1>
         <p className="mt-3 text-palate-mute">
-          Last updated: July 2026. Plain-English summary first; the full policy follows.
+          Last updated: August 2026. Plain-English summary first; the full policy follows.
         </p>
 
         <div className="mt-10 rounded-2xl bg-palate-soft p-6 sm:p-8 border border-palate-line">
@@ -41,7 +41,7 @@ export default function PrivacyPage() {
               We store the food spots you confirm with a tap, plus anything you choose to add — a profile photo, a meal photo, a name.
             </li>
             <li>
-              We use your location only while the app is open, only to figure out which restaurant you might be at. We don't track you in the background.
+              We use your location for one thing: figuring out which restaurant you might be at. By default that only happens while the app is open. You can optionally turn on background visit logging, which lets Palate notice when you've spent time somewhere and ask you afterward whether you ate there. It's off unless you switch it on.
             </li>
             <li>
               We never sell or share your data with restaurants, advertisers, or other companies.
@@ -60,7 +60,11 @@ export default function PrivacyPage() {
           <li><strong>Account:</strong> your email address.</li>
           <li><strong>Profile:</strong> anything you choose to add — a display name, a @username, and an optional profile photo.</li>
           <li><strong>Visits:</strong> when you confirm a visit, the restaurant identifier (from Google Places), the timestamp, an inferred meal type (breakfast/lunch/dinner), and any meal photo you choose to attach.</li>
-          <li><strong>Location:</strong> when the app is open and checking for nearby places, we send your latitude and longitude to our server to call Google Places. We do not record a background location trail.</li>
+          <li><strong>Location (app open):</strong> when the app is open and checking for nearby places, we send your latitude and longitude to our server to call Google Places.</li>
+          <li>
+            <strong>Location (background visit logging — optional, off by default):</strong> if you turn this on, and grant iOS &ldquo;Always&rdquo; location access, Palate asks iOS to tell it when you arrive at and leave a place. This uses Apple&rsquo;s visit-detection service: iOS reports the places you <em>stopped</em>, not a continuous trail of everywhere you went, and Palate never records one. Each detection is stored on your phone first. Before anything leaves your device, we check it on your phone: stops shorter than 20 minutes or longer than 4 hours are discarded, low-accuracy readings are discarded, and places you visit repeatedly overnight or on a weekday routine — your home and your workplace — are filtered out. The pattern data used for that home/work filtering stays on your phone and is never sent to us. Only for a stop that survives those checks do we send the coordinates to our server to look up nearby restaurants via Google Places, then ask you whether you ate there. Nothing is added to your diary unless you confirm it, and if you dismiss or ignore the question, no visit is recorded. You can turn background logging off at any time in Settings, which stops the detection entirely.
+          </li>
+          <li><strong>Product analytics:</strong> we record basic in-app events (for example, that a permission screen was shown or a visit prompt was confirmed) in our own database so we can tell which parts of the app work. These are tied to your account; they are not sold, shared, or sent to an advertising network.</li>
           <li><strong>Social activity you opt into:</strong> friend connections, likes, and the feed events you generate or share (Wrapped, persona changes, milestones, logged visits), governed by your visibility setting.</li>
           <li><strong>Safety actions:</strong> users you block, and any content you report to us.</li>
           <li><strong>Feedback:</strong> when you send feedback in-app, the message, category, an optional screenshot, and basic technical context (app version, device model, OS version) so we can reproduce issues.</li>
@@ -69,7 +73,7 @@ export default function PrivacyPage() {
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tightish">2. What we don't collect</h2>
         <p className="mt-3 leading-relaxed text-palate-ink">
-          We don't collect your phone number, contacts, calendar, microphone, or activity in other apps. We don't track your location in the background. We don't fingerprint your device, and we don't use third-party advertising or behavioral-tracking SDKs. Photos are only ever the ones you deliberately choose to add.
+          We don't collect your phone number, contacts, calendar, microphone, or activity in other apps. We never record a continuous location trail — even with background visit logging switched on, we receive the places you stopped, not your route between them, and only after the on-device filtering described above. We don't fingerprint your device, and we don't use third-party advertising or behavioral-tracking SDKs. Photos are only ever the ones you deliberately choose to add.
         </p>
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tightish">3. How we use your data</h2>
@@ -84,7 +88,7 @@ export default function PrivacyPage() {
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tightish">5. Your controls</h2>
         <p className="mt-3 leading-relaxed text-palate-ink">
-          In Settings you can pause tracking (no new data is recorded), set your profile visibility (private, friends, or public), manage your photos, and block or report other users. You can delete a single visit, delete this week, or delete your entire account. Deletion is hard-deletion — no soft-delete, no 30-day "trash." Once you confirm, it's gone and unrecoverable.
+          In Settings you can pause tracking (no new data is recorded), turn background visit logging on or off at any time, set your profile visibility (private, friends, or public), manage your photos, and block or report other users. Turning background logging off stops the detection immediately; you can also revoke location access entirely in iOS Settings &rarr; Palate &rarr; Location, which has the same effect. You can delete a single visit, delete this week, or delete your entire account. Deletion is hard-deletion — no soft-delete, no 30-day "trash." Once you confirm, it's gone and unrecoverable.
         </p>
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tightish">6. Data export</h2>

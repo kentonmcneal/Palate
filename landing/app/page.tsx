@@ -104,7 +104,7 @@ const FAQS = [
   },
   {
     q: "Will Palate kill my battery?",
-    a: "No. Palate only uses location when you open the app and tap to log a visit. Nothing runs in the background today, so there's no measurable battery impact. (Optional background detection is on the roadmap and will be opt-in.)",
+    a: "By default, no — Palate only uses location when you open the app, so there's no measurable battery impact. If you switch on optional background visit logging, Palate uses Apple's built-in visit detection, the low-power service iOS already runs for its own features. It doesn't keep GPS running or track you continuously, and you can turn it off at any time in Settings.",
   },
   {
     q: "How accurate is finding the right place?",
