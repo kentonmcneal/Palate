@@ -2,7 +2,7 @@
   "expo": {
     "name": "Palate",
     "slug": "palate-app",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "palate",
@@ -89,7 +89,7 @@
     },
     "owner": "kentonmcneal",
     "runtimeVersion": {
-      "policy": "fingerprint"
+      "policy": "appVersion"
     },
     "updates": {
       "url": "https://u.expo.dev/07df10b4-2e73-4f01-aceb-1990fbe59fcf"
