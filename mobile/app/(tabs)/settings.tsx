@@ -438,12 +438,8 @@ export default function Settings() {
         </Section>
 
         <Section title="Passive tracking">
-          <Row label="Auto-detect visits" right={<Switch value={tracking} onValueChange={toggleTracking} thumbColor={tracking ? colors.red : "#fff"} trackColor={{ true: colors.redTintBorder, false: colors.line }} />} />
-          <Note>
-            When on, Palate checks your location whenever the app opens and prompts you
-            to confirm if you're at a restaurant. Removes the friction of remembering to
-            log every visit. Past visits stay if you turn this off.
-          </Note>
+          <Row label="Check when I open the app" right={<Switch value={tracking} onValueChange={toggleTracking} thumbColor={tracking ? colors.red : "#fff"} trackColor={{ true: colors.redTintBorder, false: colors.line }} />} />
+          <Note>Looks for a nearby restaurant each time you open Palate.</Note>
           <PassiveCaptureEntry />
         </Section>
 
@@ -672,8 +668,8 @@ function PassiveCaptureEntry() {
       />
       <Note>
         {needsRepair
-          ? "Background logging is paused — iOS turned location back to \"While Using.\" Set it to Always in iOS Settings → Palate → Location to resume."
-          : "When on, Palate notices when you've spent a while at a restaurant — even with the app closed — and asks you afterward if you ate there. You confirm every visit; nothing is logged silently."}
+          ? "Paused — iOS set location back to \"While Using.\" Switch it to Always to resume."
+          : "Notices restaurant stops with the app closed, then asks. Nothing is logged until you confirm."}
       </Note>
       {needsRepair && (
         <>
@@ -698,7 +694,7 @@ function PassiveInboxEntry() {
   return (
     <CollapsibleSection title="Detected visits">
       <Button title="Recent visits to confirm" onPress={() => router.push("/passive-inbox" as never)} />
-      <Note>Places we noticed you spent time at, waiting for a quick confirm.</Note>
+      <Note>Stops we noticed, waiting for a quick confirm.</Note>
     </CollapsibleSection>
   );
 }
