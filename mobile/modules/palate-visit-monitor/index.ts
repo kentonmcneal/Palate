@@ -20,6 +20,14 @@ export type NativeRawVisit = {
   departureAt: number | null;
   capturedAt: number;
   simulated: boolean;
+  /**
+   * How this detection was produced.
+   *   "visit" — CLVisit (precise, but unreliable on iOS 26)
+   *   "slc"   — derived from significant-location-change dwell (coarse, reliable)
+   * Absent on records written by builds before the significant-change path
+   * existed; treat undefined as "visit".
+   */
+  source?: "visit" | "slc";
 };
 
 export type AuthStatus =

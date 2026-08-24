@@ -22,6 +22,23 @@ const MAX_DWELL_MIN = 240; // 4 hours
 const MAX_ACCURACY_M = 100;
 const RESOLVE_RADIUS_M = 75;
 
+// Significant-change fixes are far coarser than a CLVisit centroid — a few
+// hundred metres is normal. Judging them by the CLVisit thresholds would reject
+// every one, so each source gets its own bounds. The wider search radius means
+// more candidates, which is acceptable: resolution already returns a top-3 and
+// the user confirms the venue, so a coarse fix costs an extra tap, not a wrong
+// entry in their diary.
+const SLC_MAX_ACCURACY_M = 500;
+const SLC_RESOLVE_RADIUS_M = 300;
+
+function accuracyBound(raw: RawVisit): number {
+  return raw.source === "slc" ? SLC_MAX_ACCURACY_M : MAX_ACCURACY_M;
+}
+
+export function resolveRadius(raw: RawVisit): number {
+  return raw.source === "slc" ? SLC_RESOLVE_RADIUS_M : RESOLVE_RADIUS_M;
+}
+
 // Home/work suppression tuning.
 const CLUSTER_HISTORY_KEY = "palate.passive.clusterHistory";
 const CLUSTER_RADIUS_M = 60;
@@ -116,7 +133,7 @@ export async function qualifyVisit(raw: RawVisit): Promise<QualifyOutcome> {
   if (dwell == null) return { ok: false, reason: "open-visit" };
   if (dwell < MIN_DWELL_MIN) return { ok: false, reason: "dwell-too-short" };
   if (dwell > MAX_DWELL_MIN) return { ok: false, reason: "dwell-too-long" };
-  if (raw.horizontalAccuracy > MAX_ACCURACY_M) return { ok: false, reason: "low-accuracy" };
+  if (raw.horizontalAccuracy > accuracyBound(raw)) return { ok: false, reason: "low-accuracy" };
   if (await isHomeOrWorkSuppressed(raw)) return { ok: false, reason: "home-work-suppressed" };
   return { ok: true, dwellMin: dwell };
 }
@@ -155,16 +172,17 @@ function mealWindowBoost(hour: number): number {
 
 /** Resolve a qualified raw visit to its top candidate restaurants (cache-first). */
 export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null> {
-  const cached = await getCachedNearby(raw.lat, raw.lng, RESOLVE_RADIUS_M);
+  const radius = resolveRadius(raw);
+  const cached = await getCachedNearby(raw.lat, raw.lng, radius);
   let places: Restaurant[];
   let cacheHit: boolean;
   if (cached) {
     places = cached;
     cacheHit = true;
   } else {
-    places = await nearbyRestaurants(raw.lat, raw.lng, RESOLVE_RADIUS_M);
+    places = await nearbyRestaurants(raw.lat, raw.lng, radius);
     cacheHit = false;
-    void setCachedNearby(raw.lat, raw.lng, RESOLVE_RADIUS_M, places);
+    void setCachedNearby(raw.lat, raw.lng, radius, places);
   }
   void bumpCacheStats(cacheHit);
 

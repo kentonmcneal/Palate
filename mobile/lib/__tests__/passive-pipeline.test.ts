@@ -6,6 +6,7 @@ import {
   isHomeOrWorkSuppressed,
   recordForClustering,
 } from "../passive-pipeline";
+import { resolveRadius } from "../passive-pipeline";
 import { isQuietHours } from "../passive-confirm";
 import type { RawVisit } from "../passive-capture";
 
@@ -87,5 +88,45 @@ describe("quiet hours", () => {
     expect(isQuietHours(new Date(2026, 7, 10, 23, 0))).toBe(true);
     expect(isQuietHours(new Date(2026, 7, 10, 6, 0))).toBe(true);
     expect(isQuietHours(new Date(2026, 7, 10, 12, 0))).toBe(false);
+  });
+});
+
+describe("significant-change source thresholds", () => {
+  // A significant-change fix is coarse by nature. Judging it by the CLVisit
+  // accuracy bound would reject every one, which is what made the backstop
+  // useless in the first place.
+  it("accepts a coarse fix from the slc source that CLVisit bounds would reject", async () => {
+    const coarse = visit({ horizontalAccuracy: 300, source: "slc" });
+    await expect(qualifyVisit(coarse)).resolves.toMatchObject({ ok: true });
+  });
+
+  it("still rejects a coarse fix that claims to be a CLVisit", async () => {
+    const coarse = visit({ horizontalAccuracy: 300 });
+    await expect(qualifyVisit(coarse)).resolves.toMatchObject({
+      ok: false,
+      reason: "low-accuracy",
+    });
+  });
+
+  it("rejects an slc fix that is coarse even by slc standards", async () => {
+    const useless = visit({ horizontalAccuracy: 900, source: "slc" });
+    await expect(qualifyVisit(useless)).resolves.toMatchObject({
+      ok: false,
+      reason: "low-accuracy",
+    });
+  });
+
+  it("searches a wider radius for slc fixes, and treats a missing source as CLVisit", () => {
+    expect(resolveRadius(visit({ source: "slc" }))).toBeGreaterThan(resolveRadius(visit()));
+    expect(resolveRadius(visit())).toBe(resolveRadius(visit({ source: "visit" })));
+  });
+
+  it("applies dwell rules identically regardless of source", async () => {
+    const short = visit({
+      source: "slc",
+      arrivalAt: Date.parse("2026-08-10T12:55:00"),
+      departureAt: Date.parse("2026-08-10T13:00:00"),
+    });
+    await expect(qualifyVisit(short)).resolves.toMatchObject({ reason: "dwell-too-short" });
   });
 });

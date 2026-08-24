@@ -161,7 +161,7 @@ export default function DebugVisitsScreen() {
         {visits.slice().reverse().map((v) => (
           <View key={v.id} style={styles.row}>
             <Text style={styles.mono}>
-              {v.lat.toFixed(5)}, {v.lng.toFixed(5)}  ±{Math.round(v.horizontalAccuracy)}m{v.simulated ? "  (sim)" : ""}
+              {v.lat.toFixed(5)}, {v.lng.toFixed(5)}  ±{Math.round(v.horizontalAccuracy)}m  [{v.source ?? "visit"}]{v.simulated ? "  (sim)" : ""}
             </Text>
             <Text style={styles.sub}>arrive: {fmt(v.arrivalAt)}</Text>
             <Text style={styles.sub}>depart: {fmt(v.departureAt)}</Text>
