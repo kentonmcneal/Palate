@@ -24,6 +24,7 @@ import { isApproved } from "../lib/waitlist";
 import * as Notifications from "expo-notifications";
 import { processPendingVisits } from "../lib/passive-runner";
 import { resumePassiveCaptureIfOptedIn, isPassiveOptedIn } from "../lib/passive-capture";
+import { addVisitListener } from "../modules/palate-visit-monitor";
 import { checkPermissionDowngrade } from "../lib/passive-permissions";
 import { PermissionRepairBanner } from "../components/PermissionRepairBanner";
 
@@ -199,6 +200,20 @@ export default function RootLayout() {
       if (next === "active") onForeground();
     });
     return () => sub.remove();
+  }, [session?.user]);
+
+  // Process a visit the moment the native layer captures one, rather than
+  // waiting for the next foreground. iOS wakes us for a location event without
+  // making the app "active", so the AppState listener above never fires on a
+  // background delivery — the detection would sit on disk until the user
+  // happened to open Palate, which defeats the whole point. processPendingVisits
+  // has its own in-flight guard, so overlapping with the foreground run is safe.
+  useEffect(() => {
+    if (!session?.user) return;
+    const sub = addVisitListener(() => {
+      void processPendingVisits().catch((e) => captureError(e, { at: "passive:onVisitEvent" }));
+    });
+    return () => sub?.remove();
   }, [session?.user]);
 
   // Route a tapped passive-capture confirmation notification to /confirm-visit —

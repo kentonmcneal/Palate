@@ -44,6 +44,7 @@ type NativeModule = {
   getPendingVisits(): NativeRawVisit[];
   clearVisits(ids: string[]): number;
   authorizationStatus(): AuthStatus;
+  addListener(event: "onVisit", listener: (visit: NativeRawVisit) => void): { remove: () => void };
   simulateVisit(lat: number, lng: number, dwellMinutes: number): NativeRawVisit;
 };
 
@@ -56,3 +57,22 @@ try {
 
 export const PalateVisitMonitor = nativeModule;
 export const isVisitMonitorAvailable = nativeModule !== null;
+
+/**
+ * Subscribe to visits the native layer persists while the app is ALIVE —
+ * foreground or background. This is the difference between passive and
+ * not: iOS wakes us for a location event without ever making the app
+ * "active", so an AppState-driven pipeline would leave the visit sitting on
+ * disk until the user happened to open Palate. Returns null when the native
+ * module is absent (Expo Go, older binaries), so callers must null-check.
+ */
+export function addVisitListener(
+  listener: (visit: NativeRawVisit) => void,
+): { remove: () => void } | null {
+  if (!nativeModule) return null;
+  try {
+    return nativeModule.addListener("onVisit", listener);
+  } catch {
+    return null;
+  }
+}
