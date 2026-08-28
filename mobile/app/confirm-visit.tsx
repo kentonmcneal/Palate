@@ -21,14 +21,30 @@ export default function ConfirmVisit() {
     alternates?: string;
     confidence?: "high" | "medium" | "low";
     inbox_id?: string;
+    // Detection characteristics, for outcome analytics only.
+    dwell_min?: string;
+    accuracy_m?: string;
+    detect_source?: string;
+    candidate_count?: string;
   }>();
+
+
+  // The detection characteristics behind this prompt, attached to every outcome
+  // so thresholds can be tuned from what people actually accept. No
+  // coordinates — place_id identifies a venue, not the user's position.
+  const detectionProps = {
+    dwell_min: params.dwell_min ? Number(params.dwell_min) : null,
+    accuracy_m: params.accuracy_m ? Number(params.accuracy_m) : null,
+    detect_source: (params.detect_source as string) || null,
+    candidate_count: params.candidate_count ? Number(params.candidate_count) : null,
+  };
 
   // Clear the source inbox entry (if this confirmation came from one) and log
   // the passive-capture funnel event.
   async function clearInboxIfNeeded() {
     if (params.inbox_id) {
       await removeFromInbox(params.inbox_id as string).catch(() => {});
-      void track("inbox_confirmed", { place_id: params.place_id });
+      void track("inbox_confirmed", { place_id: params.place_id, ...detectionProps });
     }
   }
 
@@ -57,7 +73,7 @@ export default function ConfirmVisit() {
     try {
       const result = await saveVisit({ googlePlaceId: params.place_id as string, source: "auto" });
       await recordPromptDecision(params.place_id as string, "confirmed");
-      void track("confirm_yes", { place_id: params.place_id });
+      void track("confirm_yes", { place_id: params.place_id, ...detectionProps });
       await clearInboxIfNeeded();
       if (result.isFirstVisit) {
         setCelebration({
@@ -88,7 +104,7 @@ export default function ConfirmVisit() {
 
   async function handleNotNow() {
     await recordPromptDecision(params.place_id as string, "dismissed");
-    void track("confirm_no", { place_id: params.place_id });
+    void track("confirm_no", { place_id: params.place_id, ...detectionProps });
     await clearInboxIfNeeded();
     router.back();
   }
@@ -100,7 +116,7 @@ export default function ConfirmVisit() {
 
   async function handleWrong() {
     await recordPromptDecision(params.place_id as string, "wrong_place");
-    void track("confirm_corrected", { place_id: params.place_id });
+    void track("confirm_corrected", { place_id: params.place_id, ...detectionProps });
     setShowAlts(true);
   }
 

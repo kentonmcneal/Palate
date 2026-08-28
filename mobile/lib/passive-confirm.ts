@@ -33,6 +33,13 @@ export type InboxEntry = {
   alternates: Restaurant[];
   detectedAt: number; // epoch ms
   dwellMin: number;
+  // Detection characteristics, carried through to the confirm/dismiss event so
+  // thresholds can be tuned against what people actually accept rather than
+  // against a guess. Optional: entries written before this existed lack them.
+  accuracyM?: number;
+  source?: string;
+  /** How many venues were in range — the honest measure of attribution difficulty. */
+  candidateCount?: number;
 };
 
 export function isQuietHours(date = new Date()): boolean {
@@ -102,6 +109,12 @@ export function confirmParamsFor(entry: InboxEntry) {
     alternates: JSON.stringify(entry.alternates),
     confidence: "high" as const,
     inbox_id: entry.id,
+    // Threaded through so the outcome event can report what the detection
+    // looked like. Strings: expo-router params are strings either way.
+    dwell_min: String(Math.round(entry.dwellMin)),
+    accuracy_m: entry.accuracyM == null ? "" : String(Math.round(entry.accuracyM)),
+    detect_source: entry.source ?? "",
+    candidate_count: String(entry.candidateCount ?? 0),
   };
 }
 
@@ -133,11 +146,21 @@ export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): 
     alternates: rest,
     detectedAt: resolved.raw.departureAt ?? resolved.raw.capturedAt,
     dwellMin,
+    accuracyM: resolved.raw.horizontalAccuracy,
+    source: resolved.raw.source ?? "visit",
+    candidateCount: resolved.candidates.length,
   };
 
   // Always land in the inbox so a suppressed prompt is never lost.
   await addToInbox(entry);
-  void track("visit_resolved", { place_id: entry.place_id, dwell_min: Math.round(dwellMin), cache_hit: resolved.cacheHit });
+  void track("visit_resolved", {
+    place_id: entry.place_id,
+    dwell_min: Math.round(dwellMin),
+    cache_hit: resolved.cacheHit,
+    accuracy_m: Math.round(resolved.raw.horizontalAccuracy),
+    source: resolved.raw.source ?? "visit",
+    candidate_count: resolved.candidates.length,
+  });
 
   if (isQuietHours()) {
     void track("confirm_notif_suppressed", { reason: "quiet_hours", place_id: entry.place_id });

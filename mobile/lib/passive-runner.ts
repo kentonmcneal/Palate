@@ -47,7 +47,11 @@ async function markProcessed(ids: Set<string>): Promise<void> {
 
 /** Run the full pipeline for a single raw visit. Exposed for the debug screen. */
 export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
-  void track("visit_detected", { simulated: raw.simulated });
+  void track("visit_detected", {
+    simulated: raw.simulated,
+    source: raw.source ?? "visit",
+    accuracy_m: Math.round(raw.horizontalAccuracy),
+  });
   // Feed clustering AFTER using it for suppression, so a place needs history to
   // be suppressed (its own first visit never suppresses itself).
   const q = await qualifyVisit(raw);
@@ -58,9 +62,18 @@ export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
       void track("visit_suppressed", { reason: q.reason });
       return { id: raw.id, stage: "suppressed", detail: q.reason };
     }
+    void track("visit_unqualified", {
+      reason: q.reason,
+      source: raw.source ?? "visit",
+      accuracy_m: Math.round(raw.horizontalAccuracy),
+    });
     return { id: raw.id, stage: "unqualified", detail: q.reason };
   }
-  void track("visit_qualified", { dwell_min: Math.round(q.dwellMin) });
+  void track("visit_qualified", {
+    dwell_min: Math.round(q.dwellMin),
+    source: raw.source ?? "visit",
+    accuracy_m: Math.round(raw.horizontalAccuracy),
+  });
 
   if (!(await isFlagEnabled(RESOLVE_FLAG))) {
     return { id: raw.id, stage: "resolved", detail: "resolve-flag-off" };
