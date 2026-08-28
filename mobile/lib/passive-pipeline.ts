@@ -227,21 +227,29 @@ async function visitedPlaceIdsAmong(placeIds: string[]): Promise<Set<string>> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return new Set();
-    const { data } = await supabase
+
+    // Two bounded queries rather than one unbounded one. Selecting every visit
+    // and filtering client-side would pull a heavy user's entire history over
+    // the network on every detected stop — in the background, on cellular.
+    // Both queries here are capped by the candidate count (at most a handful).
+    const { data: rests } = await supabase
+      .from("restaurants")
+      .select("id, google_place_id")
+      .in("google_place_id", placeIds);
+    const rows = (rests ?? []) as Array<{ id: string; google_place_id: string }>;
+    if (!rows.length) return new Set();
+
+    const byId = new Map(rows.map((r) => [r.id, r.google_place_id]));
+    const { data: visits } = await supabase
       .from("visits")
-      .select("restaurant:restaurants(google_place_id)")
-      .eq("user_id", user.id);
-    const wanted = new Set(placeIds);
+      .select("restaurant_id")
+      .eq("user_id", user.id)
+      .in("restaurant_id", rows.map((r) => r.id));
+
     const out = new Set<string>();
-    for (const row of (data ?? []) as unknown as Array<{
-      restaurant: { google_place_id?: string } | Array<{ google_place_id?: string }> | null;
-    }>) {
-      const r = row.restaurant;
-      if (!r) continue;
-      const list = Array.isArray(r) ? r : [r];
-      for (const rr of list) {
-        if (rr.google_place_id && wanted.has(rr.google_place_id)) out.add(rr.google_place_id);
-      }
+    for (const v of (visits ?? []) as Array<{ restaurant_id: string }>) {
+      const placeId = byId.get(v.restaurant_id);
+      if (placeId) out.add(placeId);
     }
     return out;
   } catch {
