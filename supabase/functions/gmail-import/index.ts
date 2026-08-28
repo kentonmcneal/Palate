@@ -23,6 +23,9 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // for native client IDs anyway).
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_IOS_CLIENT_ID")!;
 const GOOGLE_PLACES_API_KEY = Deno.env.get("GOOGLE_PLACES_API_KEY")!;
+// Shared secret a scheduled job must send (x-cron-secret) to run scan_all.
+// Same mechanism as featured-lists-refresh (migration 0038).
+const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,6 +53,19 @@ const RECEIPT_SENDERS = [
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
+    const body = await req.json().catch(() => ({}));
+    const action = body.action as "connect" | "scan" | "disconnect" | "scan_all" | undefined;
+
+    // scan_all is the ONLY action without a user session — a scheduler has no
+    // user to be. It is gated on the shared cron secret instead, and fails
+    // closed when the secret is unset so it can never run open by accident.
+    if (action === "scan_all") {
+      if (!CRON_SECRET || req.headers.get("x-cron-secret") !== CRON_SECRET) {
+        return json({ error: "unauthorized" }, 401);
+      }
+      return await handleScanAll(createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY), body);
+    }
+
     const authHeader = req.headers.get("Authorization") ?? "";
     const jwt = authHeader.replace("Bearer ", "");
     if (!jwt) return json({ error: "missing auth" }, 401);
@@ -60,8 +76,6 @@ serve(async (req) => {
     if (!userId) return json({ error: "unauthorized" }, 401);
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    const body = await req.json().catch(() => ({}));
-    const action = body.action as "connect" | "scan" | "disconnect" | undefined;
 
     if (action === "connect") return await handleConnect(admin, userId, body);
     if (action === "scan")    return await handleScan(admin, userId, body);
@@ -144,6 +158,45 @@ async function handleConnect(admin: ReturnType<typeof createClient>, userId: str
 // ----------------------------------------------------------------------------
 // scan — refresh token if expired, fetch new messages, parse + insert
 // ----------------------------------------------------------------------------
+/**
+ * Scan every connected inbox. Not scheduled — the cron migration is
+ * deliberately absent, because turning this on is recurring Google spend and
+ * that is the operator's call, not a deploy artifact.
+ *
+ * Users are processed sequentially and a failure is recorded rather than
+ * thrown: one revoked token must not abort everyone else's import. The daily
+ * Google cap is shared, so a fan-out that exhausts the budget degrades to
+ * "no new place lookups" instead of an unbounded bill.
+ */
+async function handleScanAll(admin: ReturnType<typeof createClient>, body: any) {
+  const sinceDays = Math.min(Number(body.sinceDays ?? 3), 30);
+  const { data: rows, error } = await admin.from("gmail_tokens").select("user_id");
+  if (error) return json({ error: error.message }, 500);
+
+  const users = (rows ?? []) as Array<{ user_id: string }>;
+  let imported = 0;
+  let failed = 0;
+  const perUser: Array<{ user_id: string; imported?: number; error?: string }> = [];
+
+  for (const { user_id } of users) {
+    if (await budgetSpent(admin)) {
+      perUser.push({ user_id, error: "google_budget_spent" });
+      failed++;
+      continue;
+    }
+    try {
+      const result = await runScan(admin, user_id, sinceDays);
+      imported += result.imported ?? 0;
+      perUser.push({ user_id, imported: result.imported ?? 0 });
+    } catch (e) {
+      failed++;
+      perUser.push({ user_id, error: String(e) });
+    }
+  }
+
+  return json({ scanned: users.length, imported, failed, perUser });
+}
+
 async function handleScan(admin: ReturnType<typeof createClient>, userId: string, body: any) {
   const sinceDays = (body.since_days as number) ?? 30;
   const result = await runScan(admin, userId, sinceDays);
@@ -401,7 +454,7 @@ async function createImportedVisit(
   admin: ReturnType<typeof createClient>, userId: string, messageId: string, parsed: ParsedReceipt,
 ): Promise<boolean> {
   // Resolve restaurant via Google Places text search
-  const placeId = await placeIdForName(parsed.restaurantName);
+  const placeId = await placeIdForName(admin, parsed.restaurantName);
   if (!placeId) return false;
 
   // Ensure the restaurant exists in our cache (places-proxy upserts)
@@ -423,7 +476,65 @@ async function createImportedVisit(
   return !error;
 }
 
-async function placeIdForName(name: string): Promise<string | null> {
+// ---------------------------------------------------------------------------
+// Google Places metering
+// ---------------------------------------------------------------------------
+// This function called Google uncapped while places-proxy has been metered and
+// kill-switched since migration 0033. That was survivable while the only
+// trigger was a human tapping "Rescan"; it is not once a scheduled scan can
+// fan out across every connected inbox. Same counter, same daily cap, same
+// kill switch — one budget for the whole project, not one per caller.
+
+const GOOGLE_DAILY_CALL_CAP = Number(Deno.env.get("GOOGLE_DAILY_CALL_CAP") ?? 2000);
+
+function todayUTC(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function budgetSpent(admin: ReturnType<typeof createClient>): Promise<boolean> {
+  try {
+    const { data } = await admin
+      .from("google_usage_counter")
+      .select("tripped")
+      .eq("day", todayUTC())
+      .maybeSingle();
+    return (data as any)?.tripped === true;
+  } catch {
+    // Fail OPEN on a metering read error: a database blip should not silently
+    // stop importing people's receipts. The counter below still records the
+    // call, so the cap re-asserts itself on the next request.
+    return false;
+  }
+}
+
+async function meterGoogleCall(admin: ReturnType<typeof createClient>): Promise<void> {
+  try {
+    await admin.rpc("bump_google_usage", { p_day: todayUTC(), p_cap: GOOGLE_DAILY_CALL_CAP });
+    await admin.rpc("record_api_usage", { p_day: todayUTC(), p_action: "gmail_place_lookup", p_source: "google" });
+  } catch {
+    /* metering must never break the import */
+  }
+}
+
+async function placeIdForName(
+  admin: ReturnType<typeof createClient>,
+  name: string,
+): Promise<string | null> {
+  // Cheap first: a receipt for a restaurant we already know needs no Google
+  // call at all. Most repeat imports hit this.
+  try {
+    const { data: known } = await admin
+      .from("restaurants")
+      .select("google_place_id")
+      .ilike("name", name)
+      .limit(1)
+      .maybeSingle();
+    if ((known as any)?.google_place_id) return (known as any).google_place_id;
+  } catch { /* fall through to the metered lookup */ }
+
+  if (await budgetSpent(admin)) return null;
+  await meterGoogleCall(admin);
+
   try {
     const r = await fetch("https://places.googleapis.com/v1/places:searchText", {
       method: "POST",
