@@ -13,6 +13,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { RawVisit } from "./passive-capture";
 import type { Restaurant } from "./places";
+import { supabase } from "./supabase";
 import { nearbyRestaurants } from "./places";
 import { getCachedNearby, setCachedNearby } from "./nearby-cache";
 
@@ -172,10 +173,114 @@ export async function getCacheHitRate(): Promise<{ hits: number; total: number; 
   }
 }
 
-function mealWindowBoost(hour: number): number {
-  // Small ranking signal, not a hard filter: nudge candidates during meal hours.
-  if ((hour >= 6 && hour < 10) || (hour >= 11 && hour < 15) || (hour >= 17 && hour < 22)) return 1;
-  return 0;
+type MealWindow = "breakfast" | "lunch" | "dinner" | "off";
+
+export function mealWindow(hour: number): MealWindow {
+  if (hour >= 6 && hour < 10) return "breakfast";
+  if (hour >= 11 && hour < 15) return "lunch";
+  if (hour >= 17 && hour < 22) return "dinner";
+  return "off";
+}
+
+// Types that suit a given meal. Breakfast at a bakery or cafe is far likelier
+// than breakfast at a bar; dinner is the reverse.
+const MEAL_TYPE_HINTS: Record<MealWindow, string[]> = {
+  breakfast: ["bakery", "cafe", "coffee_shop", "breakfast_restaurant", "brunch_restaurant"],
+  lunch: ["sandwich_shop", "fast_food_restaurant", "cafe", "deli", "restaurant"],
+  dinner: ["restaurant", "bar", "steak_house", "fine_dining_restaurant", "pizza_restaurant"],
+  off: [],
+};
+
+// Scores are in METRES, so every signal is expressed as "how much closer would
+// this place have to be for distance alone to justify picking it". That keeps
+// the weights arguable in concrete terms instead of as opaque constants.
+export const RANK_WEIGHTS = {
+  /** You return to places you like; a place you've been to before is a strong prior. */
+  visited: 45,
+  /** A busy venue is likelier than the quiet office suite sharing its wall. */
+  popularityMax: 25,
+  /** Type suits the time of day. */
+  mealFit: 20,
+};
+
+function popularityBoost(count: number | null | undefined): number {
+  if (!count || count <= 0) return 0;
+  // Log-scaled and capped: the gap between 10 and 100 reviews should matter far
+  // more than the gap between 5,000 and 50,000.
+  return Math.min(RANK_WEIGHTS.popularityMax, Math.log10(count) * 8);
+}
+
+function mealFitBoost(place: Restaurant, window: MealWindow): number {
+  if (window === "off") return 0;
+  const hints = MEAL_TYPE_HINTS[window];
+  const types = [place.primary_type, ...(place.types ?? [])].filter(Boolean) as string[];
+  return types.some((t) => hints.includes(t)) ? RANK_WEIGHTS.mealFit : 0;
+}
+
+/**
+ * Which of these places the user has already logged. Scoped to the candidate
+ * ids so it stays a small query, and failure-tolerant: losing this signal
+ * should degrade ranking, never drop a detected visit.
+ */
+async function visitedPlaceIdsAmong(placeIds: string[]): Promise<Set<string>> {
+  if (!placeIds.length) return new Set();
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return new Set();
+    const { data } = await supabase
+      .from("visits")
+      .select("restaurant:restaurants(google_place_id)")
+      .eq("user_id", user.id);
+    const wanted = new Set(placeIds);
+    const out = new Set<string>();
+    for (const row of (data ?? []) as unknown as Array<{
+      restaurant: { google_place_id?: string } | Array<{ google_place_id?: string }> | null;
+    }>) {
+      const r = row.restaurant;
+      if (!r) continue;
+      const list = Array.isArray(r) ? r : [r];
+      for (const rr of list) {
+        if (rr.google_place_id && wanted.has(rr.google_place_id)) out.add(rr.google_place_id);
+      }
+    }
+    return out;
+  } catch {
+    return new Set();
+  }
+}
+
+export type RankContext = {
+  hour: number;
+  /** google_place_ids the user has already logged a visit to. */
+  visitedPlaceIds?: Set<string>;
+};
+
+/**
+ * Rank nearby candidates for a detected stop. Pure and exported so the tuning
+ * decisions are testable with fixtures rather than only observable in the field.
+ *
+ * Lower score wins. Distance dominates — it is the only direct evidence — and
+ * every other signal is a discount measured in metres.
+ */
+export function rankCandidates(
+  raw: { lat: number; lng: number },
+  places: Restaurant[],
+  ctx: RankContext,
+): Restaurant[] {
+  const window = mealWindow(ctx.hour);
+  return places
+    .map((p) => {
+      const dist =
+        p.latitude != null && p.longitude != null
+          ? distanceMeters(raw.lat, raw.lng, p.latitude, p.longitude)
+          : RESOLVE_RADIUS_M;
+      const visited = ctx.visitedPlaceIds?.has(p.google_place_id) ? RANK_WEIGHTS.visited : 0;
+      const score = dist - visited - popularityBoost(p.user_rating_count) - mealFitBoost(p, window);
+      return { p, score };
+    })
+    .sort((a, b) => a.score - b.score)
+    .slice(0, 3)
+    .map((x) => x.p);
 }
 
 /** Resolve a qualified raw visit to its top candidate restaurants (cache-first). */
@@ -196,19 +301,10 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
 
   const hour = new Date(raw.departureAt ?? raw.capturedAt).getHours();
   const eligible = places.filter((p) => p.recommendation_eligibility !== 0);
-  const ranked = eligible
-    .map((p) => {
-      const dist =
-        p.latitude != null && p.longitude != null
-          ? distanceMeters(raw.lat, raw.lng, p.latitude, p.longitude)
-          : RESOLVE_RADIUS_M;
-      // Lower score = better. Distance dominates; meal window is a light nudge.
-      const score = dist - mealWindowBoost(hour) * 15;
-      return { p, score };
-    })
-    .sort((a, b) => a.score - b.score)
-    .slice(0, 3)
-    .map((x) => x.p);
+  const ranked = rankCandidates(raw, eligible, {
+    hour,
+    visitedPlaceIds: await visitedPlaceIdsAmong(eligible.map((p) => p.google_place_id)),
+  });
 
   if (!ranked.length) return null;
   return { raw, candidates: ranked, cacheHit };
