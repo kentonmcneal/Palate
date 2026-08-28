@@ -31,6 +31,10 @@ export type NativeStopState = {
   minDwellSec: number;
   stopRadiusM: number;
   awaitingPreciseFix: boolean;
+  /** "active" | "resting" | "saver" — see PalateVisitManager power profile. */
+  powerProfile: string;
+  /** -1 when unavailable. */
+  batteryLevel: number;
   candidate?: NativeStopCandidate;
   log: string[];
 };

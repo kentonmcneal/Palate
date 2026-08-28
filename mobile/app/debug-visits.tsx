@@ -178,6 +178,14 @@ export default function DebugVisitsScreen() {
               </Text>
             </>
           )}
+          {!!stopState && (
+            <Row
+              label="Power profile"
+              value={`${stopState.powerProfile}${
+                stopState.batteryLevel >= 0 ? ` · ${Math.round(stopState.batteryLevel * 100)}%` : ""
+              }`}
+            />
+          )}
           {!!stopState?.awaitingPreciseFix && (
             <Text style={styles.sub}>Awaiting high-accuracy fix…</Text>
           )}
