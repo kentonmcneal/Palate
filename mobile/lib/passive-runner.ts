@@ -87,7 +87,7 @@ export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
   const result = await notifyOrInbox(resolved, q.dwellMin);
   return {
     id: raw.id,
-    stage: result === "notified" ? "notified" : "inboxed",
+    stage: result === "notified" ? "notified" : result === "suppressed-recent" ? "suppressed" : "inboxed",
     detail: `${resolved.candidates[0].name} — ${result}`,
   };
 }

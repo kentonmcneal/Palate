@@ -13,12 +13,18 @@ import * as Notifications from "expo-notifications";
 import type { Restaurant } from "./places";
 import type { ResolvedVisit } from "./passive-pipeline";
 import { track } from "./analytics";
+import { recentlyPrompted } from "./visits";
 
 // Quiet hours (local): default ~9pm–8am. Suppressed visits go to the inbox.
 const QUIET_START_HOUR = 21;
 const QUIET_END_HOUR = 8;
 // Hard cap on confirmation notifications per day.
-const MAX_NOTIFS_PER_DAY = 3;
+export const MAX_NOTIFS_PER_DAY = 3;
+
+/** How long a dismissed venue stays suppressed. Short enough that lunch and
+ *  dinner at the same place both get asked about; long enough that walking
+ *  back past somewhere you just rejected stays quiet. */
+export const REPROMPT_SUPPRESSION_MIN = 180;
 // Inbox entries older than this are dropped so the list never becomes a chore.
 const INBOX_EXPIRY_HOURS = 24;
 
@@ -53,7 +59,8 @@ function todayKey(date = new Date()): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-async function notifCountToday(): Promise<number> {
+/** Exported for tests: the daily cap is a promise to the user, so it needs one. */
+export async function notifCountToday(): Promise<number> {
   try {
     const raw = await AsyncStorage.getItem(RATE_KEY);
     if (!raw) return 0;
@@ -64,7 +71,7 @@ async function notifCountToday(): Promise<number> {
   }
 }
 
-async function bumpNotifCount(): Promise<void> {
+export async function bumpNotifCount(): Promise<void> {
   const day = todayKey();
   const current = await notifCountToday();
   await AsyncStorage.setItem(RATE_KEY, JSON.stringify({ day, count: current + 1 }));
@@ -133,7 +140,11 @@ async function scheduleConfirmNotification(entry: InboxEntry): Promise<void> {
   });
 }
 
-export type NotifyResult = "notified" | "inboxed-quiet" | "inboxed-rate-limited";
+export type NotifyResult =
+  | "notified"
+  | "inboxed-quiet"
+  | "inboxed-rate-limited"
+  | "suppressed-recent";
 
 /** Fire a confirmation for a resolved visit, or route it to the inbox. */
 export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): Promise<NotifyResult> {
@@ -151,7 +162,17 @@ export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): 
     candidateCount: resolved.candidates.length,
   };
 
-  // Always land in the inbox so a suppressed prompt is never lost.
+  // A venue the user just dismissed does NOT go to the inbox. The
+  // "never lose a prompt" rule protects prompts we couldn't deliver; this one
+  // was delivered and actively rejected, so re-surfacing it is nagging. With a
+  // 5-minute floor this matters more than it used to: walking past a place
+  // twice in an afternoon is ordinary.
+  if (await recentlyPrompted(entry.place_id, REPROMPT_SUPPRESSION_MIN).catch(() => false)) {
+    void track("confirm_notif_suppressed", { reason: "recently_dismissed", place_id: entry.place_id });
+    return "suppressed-recent";
+  }
+
+  // Always land in the inbox so a prompt we couldn't deliver is never lost.
   await addToInbox(entry);
   void track("visit_resolved", {
     place_id: entry.place_id,
