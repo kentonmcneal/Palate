@@ -9,6 +9,32 @@
 
 import { requireNativeModule } from "expo-modules-core";
 
+/** One line of the detector's rolling trace: "<epochSeconds>|<kind>|<detail>". */
+export type StopLogEntry = { at: number; kind: string; detail: string };
+
+export type NativeStopCandidate = {
+  lat: number;
+  lng: number;
+  accuracy: number;
+  firstSeenAt: number;
+  lastSeenAt: number;
+  dwellSec: number;
+  /** How long since the last location fix — large values mean iOS went quiet. */
+  sinceLastFixSec: number;
+  emitted: boolean;
+  /** Negative once the dwell threshold has passed. */
+  secUntilDwellCheck: number;
+};
+
+export type NativeStopState = {
+  monitoring: boolean;
+  minDwellSec: number;
+  stopRadiusM: number;
+  awaitingPreciseFix: boolean;
+  candidate?: NativeStopCandidate;
+  log: string[];
+};
+
 export type NativeRawVisit = {
   id: string;
   lat: number;
@@ -46,6 +72,8 @@ type NativeModule = {
   getPendingVisits(): NativeRawVisit[];
   clearVisits(ids: string[]): number;
   authorizationStatus(): AuthStatus;
+  stopState(): NativeStopState;
+  clearStopLog(): boolean;
   addListener(event: "onVisit", listener: (visit: NativeRawVisit) => void): { remove: () => void };
   simulateVisit(lat: number, lng: number, dwellMinutes: number): NativeRawVisit;
 };
@@ -77,4 +105,39 @@ export function addVisitListener(
   } catch {
     return null;
   }
+}
+
+/**
+ * Live detector state for the debug screen. Detection happens in the background
+ * over minutes with nobody watching, so without this a failed field test only
+ * ever reports "nothing happened" — identical whether no fix arrived, the
+ * candidate kept resetting, or the emit fired and the JS pipeline dropped it.
+ */
+export function getStopState(): NativeStopState | null {
+  if (!nativeModule) return null;
+  try {
+    return nativeModule.stopState();
+  } catch {
+    return null;
+  }
+}
+
+export function clearStopLog(): void {
+  try {
+    nativeModule?.clearStopLog();
+  } catch {
+    // debug-only affordance; never surface a failure
+  }
+}
+
+/** Parse the native "<epochSeconds>|<kind>|<detail>" trace lines. */
+export function parseStopLog(lines: string[]): StopLogEntry[] {
+  return lines
+    .map((line) => {
+      const [at, kind, ...rest] = line.split("|");
+      const seconds = Number(at);
+      if (!Number.isFinite(seconds) || !kind) return null;
+      return { at: seconds * 1000, kind, detail: rest.join("|") };
+    })
+    .filter((e): e is StopLogEntry => e !== null);
 }

@@ -3,6 +3,10 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
+import {
+  getStopState, clearStopLog, parseStopLog,
+  type NativeStopState,
+} from "../modules/palate-visit-monitor";
 import { colors, spacing, type } from "../theme";
 import { Button } from "../components/Button";
 import { isVisitMonitorAvailable } from "../modules/palate-visit-monitor";
@@ -36,6 +40,7 @@ export default function DebugVisitsScreen() {
   const [auth, setAuth] = useState("…");
   const [perm, setPerm] = useState<{ whenInUse: boolean; always: boolean }>({ whenInUse: false, always: false });
   const [expoAlways, setExpoAlways] = useState("…");
+  const [stopState, setStopState] = useState<NativeStopState | null>(null);
   const [flags, setFlags] = useState<{ detect: boolean; resolve: boolean; confirm: boolean } | null>(null);
   const [cache, setCache] = useState<{ hits: number; total: number; rate: number }>({ hits: 0, total: 0, rate: 0 });
   const [outcomes, setOutcomes] = useState<VisitOutcome[]>([]);
@@ -57,12 +62,20 @@ export default function DebugVisitsScreen() {
       confirm: await isFlagEnabled(CONFIRM_FLAG),
     });
     setCache(await getCacheHitRate());
+    setStopState(getStopState());
     setVisits(await drainNativeVisits());
   }, []);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Live-poll only the cheap native read. drainNativeVisits() hits disk and
+  // AsyncStorage, so it stays on the manual Refresh.
+  useEffect(() => {
+    const id = setInterval(() => setStopState(getStopState()), 3000);
+    return () => clearInterval(id);
+  }, []);
 
   async function onStart() {
     const r = await startPassiveCaptureIfEnabled();
@@ -124,6 +137,69 @@ export default function DebugVisitsScreen() {
           <Row label="Confirm flag" value={flags ? (flags.confirm ? "ON" : "OFF") : "…"} />
           <Row label="Cache hit rate" value={`${Math.round(cache.rate * 100)}% (${cache.hits}/${cache.total})`} />
           {!!note && <Row label="Last action" value={note} />}
+        </View>
+
+        <View style={styles.card}>
+          <Text style={[type.subtitle, { marginBottom: 6 }]}>Detector (live)</Text>
+          {!stopState ? (
+            <Text style={type.small}>Native module unavailable.</Text>
+          ) : !stopState.candidate ? (
+            <>
+              <Row label="Current stop" value="none yet" />
+              <Text style={styles.sub}>
+                Waiting for a location fix. A candidate appears on the first fix after
+                monitoring starts.
+              </Text>
+            </>
+          ) : (
+            <>
+              <Row
+                label="Dwell so far"
+                value={`${Math.round(stopState.candidate.dwellSec)}s / ${Math.round(stopState.minDwellSec)}s`}
+              />
+              <Row label="Emitted" value={stopState.candidate.emitted ? "yes" : "not yet"} />
+              <Row
+                label="Fires in"
+                value={
+                  stopState.candidate.emitted
+                    ? "—"
+                    : `${Math.round(stopState.candidate.secUntilDwellCheck)}s`
+                }
+              />
+              <Row label="Accuracy" value={`±${Math.round(stopState.candidate.accuracy)}m`} />
+              {/* A large value here means iOS stopped delivering fixes — the
+                  case the scheduled timer exists to cover. */}
+              <Row
+                label="Since last fix"
+                value={`${Math.round(stopState.candidate.sinceLastFixSec)}s`}
+              />
+              <Text style={styles.mono}>
+                {stopState.candidate.lat.toFixed(5)}, {stopState.candidate.lng.toFixed(5)}
+              </Text>
+            </>
+          )}
+          {!!stopState?.awaitingPreciseFix && (
+            <Text style={styles.sub}>Awaiting high-accuracy fix…</Text>
+          )}
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.listHead}>
+            <Text style={type.subtitle}>Detector log</Text>
+            <Pressable onPress={() => { clearStopLog(); void refresh(); }} hitSlop={8}>
+              <Text style={[styles.link, { color: colors.red }]}>Clear</Text>
+            </Pressable>
+          </View>
+          {!stopState?.log?.length ? (
+            <Text style={type.small}>No detector events yet.</Text>
+          ) : (
+            parseStopLog(stopState.log).slice().reverse().map((e, i) => (
+              <Text key={`${e.at}-${i}`} style={styles.mono}>
+                {new Date(e.at).toLocaleTimeString()}  {e.kind}
+                {e.detail ? `  ${e.detail}` : ""}
+              </Text>
+            ))
+          )}
         </View>
 
         <View style={{ gap: 8, marginBottom: spacing.lg }}>
