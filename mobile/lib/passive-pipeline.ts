@@ -17,7 +17,11 @@ import { nearbyRestaurants } from "./places";
 import { getCachedNearby, setCachedNearby } from "./nearby-cache";
 
 // Qualifying thresholds (spec Phase 3).
-const MIN_DWELL_MIN = 20;
+// Five minutes. A sit-down meal and a Shake Shack counter order are both real
+// signals, and the confirmation step absorbs the false positives a short floor
+// lets through — a dismissed prompt costs a tap, a missed meal costs the entire
+// premise of the feature.
+const MIN_DWELL_MIN = 5;
 const MAX_DWELL_MIN = 240; // 4 hours
 const MAX_ACCURACY_M = 100;
 const RESOLVE_RADIUS_M = 75;
@@ -31,6 +35,10 @@ const RESOLVE_RADIUS_M = 75;
 const SLC_MAX_ACCURACY_M = 500;
 const SLC_RESOLVE_RADIUS_M = 300;
 
+// Only the legacy significant-change source is coarse. "stop" records are
+// emitted alongside a one-shot high-accuracy fix, so they earn the same tight
+// bounds as CLVisit — which is what lets us name one restaurant instead of
+// offering a neighbourhood.
 function accuracyBound(raw: RawVisit): number {
   return raw.source === "slc" ? SLC_MAX_ACCURACY_M : MAX_ACCURACY_M;
 }

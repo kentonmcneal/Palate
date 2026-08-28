@@ -22,12 +22,14 @@ export type NativeRawVisit = {
   simulated: boolean;
   /**
    * How this detection was produced.
+   *   "stop"  — on-device stop detection + a one-shot precise fix (primary)
    *   "visit" — CLVisit (precise, but unreliable on iOS 26)
-   *   "slc"   — derived from significant-location-change dwell (coarse, reliable)
+   *   "slc"   — legacy significant-change dwell (coarse); no longer emitted,
+   *             but may still be queued on a device that ran 0.1.2
    * Absent on records written by builds before the significant-change path
    * existed; treat undefined as "visit".
    */
-  source?: "visit" | "slc";
+  source?: "stop" | "visit" | "slc";
 };
 
 export type AuthStatus =

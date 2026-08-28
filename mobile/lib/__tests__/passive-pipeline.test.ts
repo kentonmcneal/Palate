@@ -50,8 +50,22 @@ describe("qualifyVisit thresholds", () => {
   });
   it("rejects a too-short dwell", async () => {
     const depart = Date.parse("2026-08-10T13:00:00");
-    const q = await qualifyVisit(visit({ arrivalAt: depart - 10 * 60_000, departureAt: depart }));
+    const q = await qualifyVisit(visit({ arrivalAt: depart - 3 * 60_000, departureAt: depart }));
     expect(q).toMatchObject({ ok: false, reason: "dwell-too-short" });
+  });
+
+  // The two cases the feature exists for, stated as the spec: a short sit-down
+  // and a fast-food counter stop both have to qualify.
+  it("accepts a 10-minute sit-down", async () => {
+    const depart = Date.parse("2026-08-10T13:00:00");
+    const q = await qualifyVisit(visit({ arrivalAt: depart - 10 * 60_000, departureAt: depart }));
+    expect(q).toMatchObject({ ok: true });
+  });
+
+  it("accepts a 5-minute fast-food stop", async () => {
+    const depart = Date.parse("2026-08-10T13:00:00");
+    const q = await qualifyVisit(visit({ arrivalAt: depart - 5 * 60_000, departureAt: depart }));
+    expect(q).toMatchObject({ ok: true });
   });
   it("rejects a too-long dwell", async () => {
     const depart = Date.parse("2026-08-10T13:00:00");
@@ -124,9 +138,25 @@ describe("significant-change source thresholds", () => {
   it("applies dwell rules identically regardless of source", async () => {
     const short = visit({
       source: "slc",
-      arrivalAt: Date.parse("2026-08-10T12:55:00"),
+      arrivalAt: Date.parse("2026-08-10T12:58:00"),
       departureAt: Date.parse("2026-08-10T13:00:00"),
     });
     await expect(qualifyVisit(short)).resolves.toMatchObject({ reason: "dwell-too-short" });
+  });
+});
+
+describe("stop source (primary detector)", () => {
+  // A "stop" record ships with a one-shot high-accuracy fix, so it must be held
+  // to the tight bounds — that precision is the whole reason we can name one
+  // restaurant rather than list a block.
+  it("holds stop records to the precise accuracy bound", async () => {
+    await expect(qualifyVisit(visit({ source: "stop", horizontalAccuracy: 30 })))
+      .resolves.toMatchObject({ ok: true });
+    await expect(qualifyVisit(visit({ source: "stop", horizontalAccuracy: 300 })))
+      .resolves.toMatchObject({ ok: false, reason: "low-accuracy" });
+  });
+
+  it("searches the tight radius for stop records", () => {
+    expect(resolveRadius(visit({ source: "stop" }))).toBe(resolveRadius(visit()));
   });
 });

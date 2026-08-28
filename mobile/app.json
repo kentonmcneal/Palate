@@ -2,7 +2,7 @@
   "expo": {
     "name": "Palate",
     "slug": "palate-app",
-    "version": "0.1.2",
+    "version": "0.1.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "palate",
@@ -12,7 +12,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.palate.ios",
-      "buildNumber": "50",
+      "buildNumber": "51",
       "infoPlist": {
         "UIBackgroundModes": ["location"],
         "NSLocationWhenInUseUsageDescription": "Palate uses your location only when the app is open, to detect which restaurant or café you may be eating at. We never share or sell your location.",
