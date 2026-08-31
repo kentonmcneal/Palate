@@ -125,7 +125,10 @@ final class PalateVisitManager: NSObject, CLLocationManagerDelegate {
     ]
     if let c = candidate {
       let now = Date()
-      out["candidate"] = [
+      // Explicitly typed: a heterogeneous literal assigned into Any is at best
+      // a warning, and the ternary below would otherwise try to unify Int with
+      // TimeInterval.
+      let cand: [String: Any] = [
         "lat": c.center.coordinate.latitude,
         "lng": c.center.coordinate.longitude,
         "accuracy": c.accuracy,
@@ -136,8 +139,11 @@ final class PalateVisitManager: NSObject, CLLocationManagerDelegate {
         "emitted": c.emitted,
         // Negative once the threshold has passed — tells you at a glance
         // whether the scheduled check should already have run.
-        "secUntilDwellCheck": c.emitted ? 0 : (self.minDwellSec - now.timeIntervalSince(c.firstSeen))
+        "secUntilDwellCheck": c.emitted
+          ? TimeInterval(0)
+          : (self.minDwellSec - now.timeIntervalSince(c.firstSeen))
       ]
+      out["candidate"] = cand
     }
     return out
   }
