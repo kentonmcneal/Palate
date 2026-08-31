@@ -1,0 +1,73 @@
+-- ============================================================================
+-- 0051_gmail_import_cron.sql
+-- ----------------------------------------------------------------------------
+-- Nightly Gmail receipt import.
+--
+-- ⚠️ THIS MIGRATION SCHEDULES NOTHING. The cron.schedule call is commented out
+-- on purpose. Applying this file is safe and free; UNCOMMENTING it starts
+-- recurring Google Places spend across every connected inbox, every night.
+-- That is a spending decision, not a deployment detail.
+--
+-- ----------------------------------------------------------------------------
+-- WHAT IT WILL COST WHEN ENABLED
+--
+-- Each run scans up to MAX_USERS_PER_RUN (200) inboxes, least-recently-scanned
+-- first, over a 3-day window. A Google Places call is only spent when a receipt
+-- names a restaurant that is NOT already in `restaurants` — repeat imports from
+-- the same venues cost nothing. So the realistic per-night cost is roughly
+-- "number of NEW restaurants your users ate at yesterday", not one call per
+-- user.
+--
+-- The run is bounded by the same daily kill switch as the rest of the app:
+-- gmail-import checks `google_usage_counter.tripped` before EVERY user and
+-- bumps `bump_google_usage` on each billable call, sharing one budget with
+-- places-proxy. Worst case is that the cron exhausts the daily budget and the
+-- live app degrades to cached results until UTC midnight — which is why the
+-- per-run user ceiling exists and why 03:00 UTC is chosen: it is the quietest
+-- hour for US users, leaving the day's budget intact for real traffic.
+--
+-- ----------------------------------------------------------------------------
+-- PREREQUISITES (all must be true before uncommenting)
+--
+--   1. Vault secret `cron_secret` exists and equals the CRON_SECRET env var set
+--      on the gmail-import edge function:
+--        select vault.create_secret('cron_secret', '<your-random-string>');
+--      This is the SAME secret used by featured-lists-refresh (migration 0038).
+--   2. gmail-import is deployed with --no-verify-jwt, since a scheduler has no
+--      user session:
+--        supabase functions deploy gmail-import --no-verify-jwt
+--   3. You have watched `record_api_usage` for the `gmail_place_lookup` action
+--      for at least a day of MANUAL scans and are comfortable with the volume.
+--
+-- Verify the secret is readable before relying on it:
+--   select name from vault.decrypted_secrets where name = 'cron_secret';
+--
+-- ----------------------------------------------------------------------------
+-- TO ENABLE: uncomment the block below and re-run this migration.
+-- TO DISABLE LATER: select cron.unschedule('gmail-import-nightly');
+-- ============================================================================
+
+-- select cron.schedule(
+--   'gmail-import-nightly',
+--   '0 3 * * *',                     -- 03:00 UTC daily
+--   $$
+--   select net.http_post(
+--     url := 'https://<PROJECT_REF>.supabase.co/functions/v1/gmail-import',
+--     headers := jsonb_build_object(
+--       'Content-Type', 'application/json',
+--       'x-cron-secret', coalesce(
+--         (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret' limit 1),
+--         ''
+--       ),
+--       'Authorization', 'Bearer ' || coalesce(
+--         (select decrypted_secret from vault.decrypted_secrets where name = 'supabase_anon_key' limit 1),
+--         ''
+--       )
+--     ),
+--     body := jsonb_build_object('action', 'scan_all', 'sinceDays', 3)
+--   );
+--   $$
+-- );
+
+-- Intentionally a no-op so the migration is recordable and idempotent.
+select 1;

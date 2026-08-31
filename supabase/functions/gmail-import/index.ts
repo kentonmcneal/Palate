@@ -168,9 +168,26 @@ async function handleConnect(admin: ReturnType<typeof createClient>, userId: str
  * Google cap is shared, so a fan-out that exhausts the budget degrades to
  * "no new place lookups" instead of an unbounded bill.
  */
+// Ceiling on how many inboxes one scheduled run will touch. Two reasons, and
+// the daily Google cap covers neither:
+//   1. An edge function has a wall-clock limit. Scanning every connected inbox
+//      in one pass gets slower as the user base grows until the run is killed
+//      part-way through, silently and always at the same point in the list.
+//   2. The daily Google budget is shared with the live app. A cron that spends
+//      it all before breakfast leaves real users staring at cached results.
+// Users are taken least-recently-scanned first, so a capped run rotates through
+// everyone across successive days instead of starving the tail of the table.
+const MAX_USERS_PER_RUN = 200;
+
 async function handleScanAll(admin: ReturnType<typeof createClient>, body: any) {
   const sinceDays = Math.min(Number(body.sinceDays ?? 3), 30);
-  const { data: rows, error } = await admin.from("gmail_tokens").select("user_id");
+  const limit = Math.min(Number(body.maxUsers ?? MAX_USERS_PER_RUN), MAX_USERS_PER_RUN);
+  const { data: rows, error } = await admin
+    .from("gmail_tokens")
+    .select("user_id")
+    // nullsFirst: a never-scanned account is the most urgent, not the least.
+    .order("last_scanned_at", { ascending: true, nullsFirst: true })
+    .limit(limit);
   if (error) return json({ error: error.message }, 500);
 
   const users = (rows ?? []) as Array<{ user_id: string }>;
@@ -194,7 +211,15 @@ async function handleScanAll(admin: ReturnType<typeof createClient>, body: any) 
     }
   }
 
-  return json({ scanned: users.length, imported, failed, perUser });
+  // perUser is capped in the response: a cron does not read it, and an
+  // unbounded array grows with the user base for no benefit.
+  return json({
+    scanned: users.length,
+    imported,
+    failed,
+    truncated: users.length >= limit,
+    perUser: perUser.slice(0, 25),
+  });
 }
 
 async function handleScan(admin: ReturnType<typeof createClient>, userId: string, body: any) {
