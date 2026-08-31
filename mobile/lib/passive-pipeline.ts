@@ -257,6 +257,54 @@ async function visitedPlaceIdsAmong(placeIds: string[]): Promise<Set<string>> {
   }
 }
 
+// ----------------------------------------------------------------------------
+// Loggability
+// ----------------------------------------------------------------------------
+//
+// recommendation_eligibility answers "should we RECOMMEND this place?".
+// Passive capture asks a different question: "did you eat here?" — and the
+// answers diverge. Chipotle and Shake Shack are deliberately eligibility 0 so
+// the gems-first recommender never suggests them, but they are absolutely
+// places people eat, and a food diary that silently refuses to log them is
+// broken.
+//
+// So we do NOT reuse the eligibility flag as a logging filter. We drop only
+// the venues where eating is not the plausible reason for the stop.
+//
+// Verified against classifier.ts rather than assumed: every eligibility-0
+// branch there sets one of these reasons ("event_venue" and
+// "non_food_primary_type" are assigned through a variable, so they do not
+// appear in a naive grep for the literal).
+const NOT_A_DINING_STOP = new Set([
+  // Not food at all.
+  "not_a_food_venue",
+  "not_a_restaurant",
+  "non_food_primary_type",
+  "event_venue",
+  // Captive venues: a stop here is transit or a stay, not a chosen meal, and
+  // prompting about them is noise.
+  "airport",
+  "captive_venue",
+  "lounge_gated",
+  "hotel",
+  "hotel_generic",
+]);
+
+/**
+ * Whether a venue is worth asking "did you eat here?" about.
+ *
+ * Deliberately generous. A wrong candidate costs the user one tap on a prompt
+ * they dismiss; a missing one costs the entire premise of passive capture. So
+ * fast food, chains, food courts and bars all stay — they are excluded from
+ * recommendations, not from reality.
+ */
+export function isLoggableVenue(p: Restaurant): boolean {
+  if (p.recommendation_eligibility !== 0) return true;
+  // Hard-rejected with no reason recorded: unknown provenance, leave it out.
+  if (!p.ineligibility_reason) return false;
+  return !NOT_A_DINING_STOP.has(p.ineligibility_reason);
+}
+
 export type RankContext = {
   hour: number;
   /** google_place_ids the user has already logged a visit to. */
@@ -308,7 +356,7 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
   void bumpCacheStats(cacheHit);
 
   const hour = new Date(raw.departureAt ?? raw.capturedAt).getHours();
-  const eligible = places.filter((p) => p.recommendation_eligibility !== 0);
+  const eligible = places.filter(isLoggableVenue);
   const ranked = rankCandidates(raw, eligible, {
     hour,
     visitedPlaceIds: await visitedPlaceIdsAmong(eligible.map((p) => p.google_place_id)),
