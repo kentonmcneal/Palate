@@ -275,7 +275,13 @@ final class PalateVisitManager: NSObject, CLLocationManagerDelegate {
       if shouldEmit { c.emitted = true }
       candidate = c
       saveCandidate()
-      logEvent("candidate_extended", String(format: "dwell=%.0fs acc=%.0fm", held, fix.horizontalAccuracy))
+      // emitted=y here means the latch is holding: we already prompted for this
+      // candidate, so a SECOND venue within the same 120m radius (a food hall,
+      // a dense block) cannot produce its own prompt. Logged rather than
+      // redesigned — if this shows up in real traces it is worth fixing, and if
+      // it never does it is not.
+      logEvent("candidate_extended", String(format: "dwell=%.0fs acc=%.0fm emitted=%@",
+                                            held, fix.horizontalAccuracy, c.emitted ? "y" : "n"))
       if shouldEmit {
         logEvent("emit_threshold_reached", String(format: "dwell=%.0fs", held))
         emitStop(c)
