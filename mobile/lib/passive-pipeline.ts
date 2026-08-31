@@ -115,11 +115,24 @@ export async function recordForClustering(raw: RawVisit): Promise<void> {
   await AsyncStorage.setItem(CLUSTER_HISTORY_KEY, JSON.stringify(trimmed));
 }
 
+const LUNCH_START_HOUR = 11;
+const LUNCH_END_HOUR = 15;
+
 function isOvernight(hour: number): boolean {
   return hour >= 22 || hour < 6;
 }
-function isWorkHours(hour: number, weekday: boolean): boolean {
-  return weekday && hour >= 9 && hour < 17;
+// Weekday desk hours MINUS the lunch window. The exclusion is the whole point:
+// a 9-17 test swallows lunch, so eating at the same weekday spot three times
+// used to classify it as the user's workplace and suppress it permanently.
+// That silently killed exactly the restaurants someone visits most.
+//
+// A real workplace still accumulates evidence easily — arrivals, afternoons,
+// anything outside 11:00-15:00 — while a lunch habit no longer counts against
+// itself.
+export function isWorkHours(hour: number, weekday: boolean): boolean {
+  if (!weekday) return false;
+  if (hour >= LUNCH_START_HOUR && hour < LUNCH_END_HOUR) return false;
+  return hour >= 9 && hour < 17;
 }
 
 export async function isHomeOrWorkSuppressed(raw: RawVisit): Promise<boolean> {
