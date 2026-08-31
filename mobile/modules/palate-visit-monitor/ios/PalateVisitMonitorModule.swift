@@ -47,6 +47,14 @@ public class PalateVisitMonitorModule: Module {
       PalateVisitManager.shared.stopStateDict()
     }
 
+    // Lets the JS pipeline write into the same trace as the native detector, so
+    // the debug screen shows one timeline: why a stop was detected AND why it
+    // did or did not produce a prompt.
+    Function("logNote") { (kind: String, detail: String) -> Bool in
+      PalateVisitManager.shared.logEvent(kind, detail)
+      return true
+    }
+
     Function("clearStopLog") { () -> Bool in
       PalateVisitManager.shared.clearEventLog()
       return true

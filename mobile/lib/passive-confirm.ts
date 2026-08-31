@@ -19,7 +19,12 @@ import { recentlyPrompted } from "./visits";
 const QUIET_START_HOUR = 21;
 const QUIET_END_HOUR = 8;
 // Hard cap on confirmation notifications per day.
-export const MAX_NOTIFS_PER_DAY = 3;
+// Raised from 3 (2026-08-31). Three was set when the dwell floor was 20 minutes
+// and chains were excluded, so a prompt was a rare event. With a 5-minute floor
+// and fast food now loggable, an ordinary food day — coffee, lunch, a snack,
+// dinner — exceeds three, and the surplus was silently inboxed. From the user's
+// seat that is indistinguishable from the feature not working.
+export const MAX_NOTIFS_PER_DAY = 6;
 
 /** How long a dismissed venue stays suppressed. Short enough that lunch and
  *  dinner at the same place both get asked about; long enough that walking

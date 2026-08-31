@@ -13,6 +13,7 @@ import { qualifyVisit, resolveVenue, recordForClustering } from "./passive-pipel
 import { notifyOrInbox } from "./passive-confirm";
 import { isFlagEnabled } from "./flags";
 import { track } from "./analytics";
+import { logDetectorNote } from "../modules/palate-visit-monitor";
 
 const PROCESSED_KEY = "palate.passive.processedIds";
 export const RESOLVE_FLAG = "passive_capture_resolve";
@@ -60,6 +61,7 @@ export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
   if (!q.ok) {
     if (q.reason === "home-work-suppressed") {
       void track("visit_suppressed", { reason: q.reason });
+      logDetectorNote("miss", "home/work suppressed");
       return { id: raw.id, stage: "suppressed", detail: q.reason };
     }
     void track("visit_unqualified", {
@@ -67,6 +69,7 @@ export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
       source: raw.source ?? "visit",
       accuracy_m: Math.round(raw.horizontalAccuracy),
     });
+    logDetectorNote("miss", `unqualified: ${q.reason}`);
     return { id: raw.id, stage: "unqualified", detail: q.reason };
   }
   void track("visit_qualified", {
@@ -76,15 +79,35 @@ export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
   });
 
   if (!(await isFlagEnabled(RESOLVE_FLAG))) {
+    logDetectorNote("miss", "resolve kill switch off");
     return { id: raw.id, stage: "resolved", detail: "resolve-flag-off" };
   }
   const resolved = await resolveVenue(raw);
-  if (!resolved) return { id: raw.id, stage: "unqualified", detail: "no-venue-found" };
+  if (!resolved) {
+    // The single most important miss to surface: the stop was real and
+    // qualified, and we simply could not name anywhere you might have eaten.
+    void track("visit_unresolved", {
+      reason: "no-venue-found",
+      source: raw.source ?? "visit",
+      accuracy_m: Math.round(raw.horizontalAccuracy),
+    });
+    logDetectorNote("miss", "no food venue in range");
+    return { id: raw.id, stage: "unqualified", detail: "no-venue-found" };
+  }
 
   if (!(await isFlagEnabled(CONFIRM_FLAG))) {
+    logDetectorNote("miss", "confirm kill switch off");
     return { id: raw.id, stage: "resolved", detail: `${resolved.candidates[0].name} (+${resolved.candidates.length - 1})` };
   }
   const result = await notifyOrInbox(resolved, q.dwellMin);
+  if (result === "notified") {
+    logDetectorNote("prompted", resolved.candidates[0].name);
+  } else {
+    // Not a failure, but from the user's seat it looks identical to one: no
+    // notification appeared.
+    void track("visit_unresolved", { reason: result, source: raw.source ?? "visit" });
+    logDetectorNote("miss", `${result}: ${resolved.candidates[0].name}`);
+  }
   return {
     id: raw.id,
     stage: result === "notified" ? "notified" : result === "suppressed-recent" ? "suppressed" : "inboxed",

@@ -77,6 +77,7 @@ type NativeModule = {
   clearVisits(ids: string[]): number;
   authorizationStatus(): AuthStatus;
   stopState(): NativeStopState;
+  logNote(kind: string, detail: string): boolean;
   clearStopLog(): boolean;
   addListener(event: "onVisit", listener: (visit: NativeRawVisit) => void): { remove: () => void };
   simulateVisit(lat: number, lng: number, dwellMinutes: number): NativeRawVisit;
@@ -144,4 +145,17 @@ export function parseStopLog(lines: string[]): StopLogEntry[] {
       return { at: seconds * 1000, kind, detail: rest.join("|") };
     })
     .filter((e): e is StopLogEntry => e !== null);
+}
+
+/**
+ * Append a line to the detector trace from JS. Detection and the pipeline that
+ * consumes it fail for different reasons; putting both in one timeline is what
+ * makes a single field test explain itself.
+ */
+export function logDetectorNote(kind: string, detail = ""): void {
+  try {
+    nativeModule?.logNote(kind, detail);
+  } catch {
+    // diagnostics only — never let tracing break the pipeline
+  }
 }
