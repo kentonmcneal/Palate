@@ -64,6 +64,17 @@ export default function PrivacyPage() {
           <li>
             <strong>Location (background visit logging — optional, off by default):</strong> if you turn this on, and grant iOS &ldquo;Always&rdquo; location access, your phone watches your location in the background to work out when you have stopped somewhere. That processing happens <em>on your device</em>: the app reads your position, decides whether you have settled in one place, and discards everything else. We never receive a trail of where you went, and none of it is transmitted unless a stop qualifies. Before anything leaves your device, we check it on your phone: stops shorter than 5 minutes or longer than 4 hours are discarded, low-accuracy readings are discarded, and places you visit repeatedly overnight or on a weekday routine — your home and your workplace — are filtered out. The pattern data used for that home/work filtering stays on your phone and is never sent to us. Only for a stop that survives those checks do we send the coordinates to our server to look up nearby restaurants via Google Places, then ask you whether you ate there. Nothing is added to your diary unless you confirm it, and if you dismiss or ignore the question, no visit is recorded. You can turn background logging off at any time in Settings, which stops the detection entirely.
           </li>
+          <li>
+            <strong>Email receipts (optional, off unless you connect it):</strong> if you connect
+            Gmail in Settings, Palate requests Google&rsquo;s read-only mail permission and searches
+            your inbox <em>only</em> for messages from a fixed list of restaurant, reservation and
+            delivery senders (OpenTable, Resy, Tock, SevenRooms, DoorDash, Uber Eats, Grubhub,
+            Caviar, Square, Yelp). We do not read, index or store your wider mailbox. From a matching
+            message we keep the restaurant name and the date so the visit can appear in your diary;
+            we do not store the message itself. Disconnecting in Settings deletes the stored
+            credentials and revokes our access with Google, and you can also revoke it directly in
+            your Google account.
+          </li>
           <li><strong>Product analytics:</strong> we record basic in-app events (for example, that a permission screen was shown or a visit prompt was confirmed) in our own database so we can tell which parts of the app work. These are tied to your account; they are not sold, shared, or sent to an advertising network.</li>
           <li><strong>Social activity you opt into:</strong> friend connections, likes, and the feed events you generate or share (Wrapped, persona changes, milestones, logged visits), governed by your visibility setting.</li>
           <li><strong>Safety actions:</strong> users you block, and any content you report to us.</li>

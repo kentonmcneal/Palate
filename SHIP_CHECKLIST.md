@@ -139,6 +139,27 @@ Action moderation reports (`reports.csv`) within 24h once you have real users.
   dump or service-role leak, not a client risk. Needs pgcrypto + a Vault key +
   three SECURITY DEFINER RPCs, shipped atomically with a rewire of the five
   touchpoints in `gmail-import`, plus one live "connect Gmail → scan" test.
+
+  **This becomes a PREREQUISITE, not backlog, the day the nightly cron in
+  migration 0051 is enabled.** The stored secret is identical either way, but
+  what changes is how it is used. Today a refresh token is only exercised when a
+  user taps Rescan: usage is user-initiated, bounded, and correlated with
+  someone actually sitting in the app. Under a cron the server autonomously
+  mints an access token for every connected inbox every night, forever, with no
+  user present.
+
+  Three things that shifts:
+  - **Exposure surface over time.** A live access token exists nightly for every
+    user rather than occasionally for one. A leak is no longer a snapshot of
+    whoever happened to be scanning.
+  - **What people consented to.** "I connected Gmail so it could find my
+    receipts" and "a server reads my mail every night indefinitely" are
+    different bargains, even under the same read-only scope.
+  - **Detectability.** Anomalous token use currently stands out against
+    user-initiated traffic. Once nightly bulk access is normal, it does not.
+
+  Recommendation: encrypt before scheduling, not after. The work is already
+  scoped above and does not grow — only the cost of deferring it does.
 - **Surface the feedback entry** — a prompt after a few visits, or shake-to-report.
 - **`palate.app` domain.** Doesn't resolve. Nothing user-facing depends on it, but
   `applinks:palate.app` in `app.json` claims universal links for a dead domain.
