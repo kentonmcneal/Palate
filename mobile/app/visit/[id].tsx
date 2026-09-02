@@ -488,7 +488,7 @@ const styles = StyleSheet.create({
   noteSaveText: { fontSize: 13, fontWeight: "700", color: "#fff" },
 
   searchInput: {
-    height: 50, borderRadius: 14, borderWidth: 1, borderColor: colors.line,
+    minHeight: 50, paddingVertical: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.line,
     paddingHorizontal: 16, fontSize: 16, color: colors.ink,
   },
   resultRow: {

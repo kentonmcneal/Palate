@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: "600", color: colors.ink },
   chipTextActive: { color: colors.red },
   input: {
-    height: 50, borderRadius: 14,
+    minHeight: 50, paddingVertical: 12, borderRadius: 14,
     borderWidth: 1, borderColor: colors.line,
     paddingHorizontal: 16, fontSize: 16, color: colors.ink,
   },

@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   badgeText: { color: "#fff", fontSize: 14, fontWeight: "800" },
   label: { ...type.micro, marginBottom: 6 },
   input: {
-    height: 50,
+    minHeight: 50, paddingVertical: 12,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.line,

@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
 
   cta: {
     marginTop: spacing.xl,
-    height: 50, borderRadius: 14,
+    minHeight: 50, paddingVertical: 12, borderRadius: 14,
     alignItems: "center", justifyContent: "center",
     backgroundColor: colors.red,
     shadowColor: "#000",

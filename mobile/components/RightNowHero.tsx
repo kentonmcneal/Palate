@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     flex: 1,
-    height: 48, borderRadius: 14,
+    minHeight: 48, paddingVertical: 12, borderRadius: 14,
     alignItems: "center", justifyContent: "center",
     backgroundColor: colors.red,
     // Muted: a plain soft drop shadow, no red glow. (Was red glow 0.32 / 14.)

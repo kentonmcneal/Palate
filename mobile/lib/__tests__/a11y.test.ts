@@ -22,6 +22,12 @@ describe("font scale caps", () => {
     expect(FONT_CAP.chrome).toBeLessThanOrEqual(FONT_CAP.eyebrow);
   });
 
+  it("caps chart annotations tighter than chrome — they sit at fixed positions", () => {
+    // Axis and quadrant labels are absolutely positioned inside a fixed square.
+    // Past this they overlap each other rather than becoming readable.
+    expect(FONT_CAP.chart).toBeLessThanOrEqual(FONT_CAP.chrome);
+  });
+
   it("stacks before it declutters — reflow first, drop ornament later", () => {
     expect(STACK_THRESHOLD).toBeLessThan(DECLUTTER_THRESHOLD);
   });

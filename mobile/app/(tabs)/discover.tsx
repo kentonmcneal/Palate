@@ -907,7 +907,7 @@ const styles = StyleSheet.create({
   },
   mapPill: {
     paddingHorizontal: 16,
-    height: 44, borderRadius: 14,
+    minHeight: 44, paddingVertical: 8, borderRadius: 14,
     backgroundColor: colors.ink,
     alignItems: "center", justifyContent: "center",
   },
