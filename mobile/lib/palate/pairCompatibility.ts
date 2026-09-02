@@ -208,3 +208,61 @@ export async function loadPalateMatch(targetId: string): Promise<PalateMatch> {
 }
 
 
+
+/**
+ * Palate match for MANY people in one round trip.
+ *
+ * The per-person loadPalateMatch() is correct and stays — the profile screen
+ * genuinely wants one person. But a directory rendering N rows was making N
+ * calls, each one re-fetching the CALLER'S own vector as well. This computes
+ * the caller's side once and reuses it.
+ *
+ * Unauthorized entries come back as not-ready rather than being dropped, so a
+ * caller can tell "you can't see this person" from "this person has no data" —
+ * batching must not quietly widen or narrow what you're allowed to know.
+ */
+export async function loadPalateMatches(
+  targetIds: string[],
+): Promise<Record<string, PalateMatch>> {
+  const ids = [...new Set(targetIds)].filter(Boolean).slice(0, 100);
+  if (ids.length === 0) return {};
+
+  const [mine, personal, batch] = await Promise.all([
+    computeTasteVector(),
+    loadPersonalSignal().catch(() => null),
+    supabase.rpc("friend_taste_features_batch", { target_ids: ids }),
+  ]);
+
+  if (batch.error) throw batch.error;
+  const payload = (batch.data ?? {}) as Record<string, FriendTasteResponse>;
+  const mineIds = new Set(personal?.visitsByPlaceId.keys() ?? []);
+
+  const out: Record<string, PalateMatch> = {};
+  for (const id of ids) {
+    const res = payload[id];
+    if (!res?.authorized) {
+      out[id] = {
+        ready: false,
+        yourVisits: mine.visitCount,
+        theirVisits: 0,
+        threshold: MATCH_MIN_VISITS,
+      };
+      continue;
+    }
+
+    const vector = aggregate((res.visits ?? []) as never, []);
+    const theirIds = new Set<string>();
+    for (const v of res.visits ?? []) {
+      const gid = (v.restaurant as { google_place_id?: string } | null)?.google_place_id;
+      if (gid) theirIds.add(gid);
+    }
+    let shared = 0;
+    for (const gid of theirIds) if (mineIds.has(gid)) shared++;
+
+    out[id] = computePalateMatch(mine, vector, {
+      sharedPlaceCount: shared,
+      unionPlaceCount: new Set([...mineIds, ...theirIds]).size,
+    });
+  }
+  return out;
+}

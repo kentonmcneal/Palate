@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { loadPalateMatch } from "../lib/palate/pairCompatibility";
+import { loadPalateMatches } from "../lib/palate/pairCompatibility";
 import type { PalateMatch } from "../lib/recommendation/palate-match";
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
@@ -36,20 +36,9 @@ export default function FriendsScreen() {
   useEffect(() => {
     if (friends.length === 0) return;
     let alive = true;
-    void Promise.all(
-      friends.map(async (f) => {
-        try {
-          return [f.friend.id, await loadPalateMatch(f.friend.id)] as const;
-        } catch {
-          return null;
-        }
-      }),
-    ).then((rows) => {
-      if (!alive) return;
-      const next: Record<string, PalateMatch> = {};
-      for (const row of rows) if (row) next[row[0]] = row[1];
-      setMatches(next);
-    });
+    void loadPalateMatches(friends.map((f) => f.friend.id))
+      .then((next) => { if (alive) setMatches(next); })
+      .catch(() => {});
     return () => { alive = false; };
   }, [friends]);
 

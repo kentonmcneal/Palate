@@ -12,7 +12,7 @@ import {
   type PublicProfile,
 } from "../lib/social";
 import { setProfileVisibility } from "../lib/profile";
-import { loadPalateMatch } from "../lib/palate/pairCompatibility";
+import { loadPalateMatches } from "../lib/palate/pairCompatibility";
 import type { PalateMatch } from "../lib/recommendation/palate-match";
 import { triggerHapticSelection } from "../lib/haptics";
 import { captureError } from "../lib/observability";
@@ -46,22 +46,14 @@ export default function PeopleScreen() {
       const rows = await browseProfiles(50, 0);
       setPeople(rows);
 
-      // Matches load AFTER the list renders — the directory must not wait on
-      // one round trip per person. (Batching this into a single RPC is the
-      // right fix once there are more than a handful of people; noted in
-      // SPRINT_LOG.)
-      const settled = await Promise.all(
-        rows.map(async (p) => {
-          try {
-            return [p.id, await loadPalateMatch(p.id)] as const;
-          } catch {
-            return null;
-          }
-        }),
-      );
-      const next: Record<string, PalateMatch> = {};
-      for (const row of settled) if (row) next[row[0]] = row[1];
-      setMatches(next);
+      // Matches load AFTER the list renders, and in ONE round trip — this
+      // used to be a call per person, each re-fetching the caller's own
+      // vector as well (migration 0065).
+      try {
+        setMatches(await loadPalateMatches(rows.map((p) => p.id)));
+      } catch {
+        // A directory without scores is still a directory.
+      }
     } catch (e: unknown) {
       void captureError(e, { at: "people:load" });
       setError("Couldn't load people. Pull to retry.");
