@@ -109,6 +109,20 @@ function formatRange(start: string, end: string) {
   return `${fmt(s)} — ${fmt(e)}`;
 }
 
+// This card is the one deliberately DARK surface in the app — it is the share
+// artifact, and a dark Wrapped card is the convention people recognise. That
+// makes the shared tokens wrong here: colors.ink is #222222, which is correct
+// on the app's light ground and invisible on this gradient. These are the
+// on-dark equivalents, and the reason they are literals rather than theme
+// tokens is that nothing else in the app draws on black.
+const ON_DARK = {
+  primary: "#FFFFFF",
+  secondary: "rgba(255,255,255,0.72)",
+  label: "rgba(255,255,255,0.55)",
+  faintLabel: "rgba(255,255,255,0.42)",
+  hairline: "rgba(255,255,255,0.14)",
+} as const;
+
 const styles = StyleSheet.create({
   card: {
     borderRadius: 28,
@@ -147,9 +161,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   logoP: { color: "#FFF", fontWeight: "800", fontSize: 18 },
-  weekText: { color: colors.mute, fontSize: 13 },
+  weekText: { color: ON_DARK.secondary, fontSize: 13 },
   youAre: {
-    color: colors.mute,
+    color: ON_DARK.label,
     fontSize: 12,
     letterSpacing: 1.5,
     textTransform: "uppercase",
@@ -164,7 +178,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   personaDescription: {
-    color: colors.inkDim,
+    color: ON_DARK.secondary,
     fontSize: 14,
     lineHeight: 20,
     marginTop: 8,
@@ -188,7 +202,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   topLabel: {
-    color: colors.mute,
+    color: ON_DARK.label,
     fontSize: 12,
     letterSpacing: 1.5,
     textTransform: "uppercase",
@@ -198,13 +212,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     paddingVertical: 8,
-    borderBottomColor: colors.line,
+    borderBottomColor: ON_DARK.hairline,
     borderBottomWidth: 1,
   },
-  topName: { color: colors.ink, fontSize: 15 },
-  topRank: { color: colors.mute },
-  topCount: { color: colors.mute },
-  brand: { color: colors.mute, marginTop: 24, fontSize: 12 },
+  topName: { color: ON_DARK.primary, fontSize: 15 },
+  topRank: { color: ON_DARK.label },
+  topCount: { color: ON_DARK.secondary },
+  brand: { color: ON_DARK.faintLabel, marginTop: 24, fontSize: 12 },
 
   cuisineRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
   cuisineChip: {
