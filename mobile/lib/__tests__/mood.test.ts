@@ -26,8 +26,22 @@ describe("mood chips", () => {
     expect(buildMoodChips(breakdown).some((c) => c.key === "other")).toBe(false);
   });
 
-  it("drops one-off cuisines: one visit is not a habit", () => {
+  it("drops one-off cuisines once there are real habits to show instead", () => {
     expect(buildMoodChips(breakdown).some((c) => c.key === "thai")).toBe(false);
+  });
+
+  it("falls back to every cuisine when the user has barely any history", () => {
+    // Real data from the founder's account: american:2, bar:1, cafe:1,
+    // mediterranean:1. Requiring 2+ visits left exactly ONE chip, which is a
+    // worse answer than showing the four things he has actually eaten.
+    const sparse = [
+      { cuisine: "american", count: 2, pct: 40 },
+      { cuisine: "bar", count: 1, pct: 20 },
+      { cuisine: "cafe", count: 1, pct: 20 },
+      { cuisine: "mediterranean", count: 1, pct: 20 },
+    ];
+    const labels = buildMoodChips(sparse).map((c) => c.label);
+    expect(labels).toEqual(["Anything", "American", "Bar", "Cafe", "Mediterranean", "Surprise me"]);
   });
 
   it("renders just Anything + Surprise on a brand-new account (row hides itself)", () => {

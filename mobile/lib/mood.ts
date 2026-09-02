@@ -49,8 +49,16 @@ export function cuisineLabel(cuisine: string): string {
  * a habit, and a row of eight chips is a menu, not a shortcut.
  */
 export function buildMoodChips(breakdown: CuisineSlice[], limit = 5): MoodChip[] {
-  const top = breakdown
-    .filter((c) => c.cuisine && c.cuisine !== "other" && c.count >= 2)
+  const named = breakdown.filter((c) => c.cuisine && c.cuisine !== "other");
+
+  // Prefer real habits — two visits is a pattern, one is an outing. But a user
+  // six visits in has maybe ONE cuisine at 2+, and offering them a single chip
+  // is a worse answer than offering the handful of things they have actually
+  // eaten. So: habits if there are enough of them, otherwise everything.
+  const habits = named.filter((c) => c.count >= 2);
+  const source = habits.length >= 2 ? habits : named;
+
+  const top = source
     .slice(0, limit)
     .map((c) => ({ key: c.cuisine as Mood, label: cuisineLabel(c.cuisine) }));
 
