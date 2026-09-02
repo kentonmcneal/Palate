@@ -32,7 +32,6 @@ import { initObservability, captureError } from "../lib/observability";
 import { registerPushToken } from "../lib/notifications";
 import { checkForAutoVisitOnForeground } from "../lib/auto-detect";
 import { installGlobalErrorHandlers } from "../lib/global-error-handler";
-import { isApproved } from "../lib/waitlist";
 import * as Notifications from "expo-notifications";
 import { processPendingVisits } from "../lib/passive-runner";
 import { resumePassiveCaptureIfOptedIn, isPassiveOptedIn } from "../lib/passive-capture";
@@ -116,7 +115,6 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
 
-  const [approved, setApproved] = useState<boolean | null>(null);
   const [repairVisible, setRepairVisible] = useState(false);
 
   const [fontsLoaded] = useFonts({
@@ -164,24 +162,6 @@ export default function RootLayout() {
     });
     return () => sub.subscription.unsubscribe();
   }, []);
-
-  // Waitlist gate: resolve the signed-in user's approval status. Fails OPEN
-  // (approved) on any error so a network blip — or shipping this ahead of the
-  // migration — never strands a real user on the waitlist.
-  useEffect(() => {
-    if (!session?.user) {
-      setApproved(null);
-      return;
-    }
-    let active = true;
-    isApproved()
-      .then((a) => { if (active) setApproved(a); })
-      .catch((e) => {
-        void captureError(e, { at: "approvalCheck" });
-        if (active) setApproved(true);
-      });
-    return () => { active = false; };
-  }, [session?.user]);
 
   // Auto-detect: every time the app comes to foreground (or first launches
   // while already authed), check if the user appears to be at a restaurant.
@@ -373,16 +353,16 @@ export default function RootLayout() {
       return;
     }
     if (session) {
-      // Hold routing until approval is known, then gate: pending users are
-      // pinned to /waitlist; approved users never sit on sign-in/waitlist.
-      if (approved === null) return;
-      if (!approved) {
-        if (seg0 !== "waitlist") router.replace("/waitlist");
-        return;
-      }
+      // The invite-only gate is GONE (migration 0061). New accounts are
+      // approved on arrival, so nothing routes to /waitlist any more —
+      // signing in takes you straight into the app.
+      //
+      // Anyone who somehow still lands on /waitlist is bounced out rather
+      // than stranded, and the routing no longer waits on an approval lookup
+      // before deciding where to send someone.
       if (seg0 === "sign-in" || seg0 === "waitlist") router.replace("/(tabs)");
     }
-  }, [session, loaded, approved, segments]);
+  }, [session, loaded, segments]);
 
   if (!loaded || !fontsLoaded) {
     return (
