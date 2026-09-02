@@ -4,6 +4,8 @@ import { useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import { listWishlist, type WishlistEntry } from "../lib/palate-insights";
 import { openInAppleMaps } from "../lib/maps";
+import { TapCard } from "./TapCard";
+import { triggerHapticSelection } from "../lib/haptics";
 
 // ============================================================================
 // NextMovesPreview — Home tab card showing your saved spots so they don't
@@ -37,18 +39,28 @@ export function NextMovesPreview() {
           const r = e.restaurant;
           if (!r) return null;
           return (
-            <View key={e.id} style={styles.card}>
+            <TapCard
+              key={e.id}
+              style={styles.card}
+              onPress={() => {
+                void triggerHapticSelection();
+                router.push(`/restaurant/${r.google_place_id}` as any);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`${r.name}. Open place details.`}
+            >
               <Text style={styles.name} numberOfLines={2}>{r.name}</Text>
               <Text style={styles.sub} numberOfLines={1}>
                 {[r.cuisine_type ? cap(r.cuisine_type) : null, r.neighborhood].filter(Boolean).join(" · ")}
               </Text>
               <Pressable
-                onPress={() => openInAppleMaps(r.name, { lat: r.latitude, lng: r.longitude })}
+                onPress={(e2) => { e2.stopPropagation(); openInAppleMaps(r.name, { lat: r.latitude, lng: r.longitude }); }}
                 style={styles.mapsBtn}
+                accessibilityRole="button"
               >
                 <Text style={styles.mapsBtnText}>Maps</Text>
               </Pressable>
-            </View>
+            </TapCard>
           );
         })}
       </ScrollView>

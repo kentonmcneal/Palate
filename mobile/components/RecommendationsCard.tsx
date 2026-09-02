@@ -19,12 +19,14 @@ import { nearbyRestaurants } from "../lib/places";
 import { getOrFetchNearby } from "../lib/nearby-cache";
 import { assembleGraph, getCompatibility } from "../lib/recommendation";
 import { filterRecommendable } from "../lib/recommendation/eligibility";
-import { triggerHapticSuccess } from "../lib/haptics";
+import { triggerHapticSuccess, triggerHapticSelection } from "../lib/haptics";
 import { pickSaveCopy } from "../lib/save-copy";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
 import { matchScoreColor, matchScoreTint } from "../lib/match-score";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { SaveBurst } from "./SaveBurst";
+import { useRouter } from "expo-router";
+import { TapCard } from "./TapCard";
 
 // ============================================================================
 // RecommendationsCard — always-visible spot suggestions on the Home tab.
@@ -166,6 +168,7 @@ export function RecommendationsCard() {
 }
 
 function RecRow({ rec }: { rec: RestaurantRecommendation }) {
+  const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [burstKey, setBurstKey] = useState(0);
@@ -193,9 +196,21 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
   function openApple() { openInAppleMaps(rec.name, { lat: rec.latitude, lng: rec.longitude }); }
   function openGoogle() { openInGoogleMaps(rec.name, { lat: rec.latitude, lng: rec.longitude, placeId: rec.google_place_id }); }
 
+  function openDetail() {
+    void triggerHapticSelection();
+    router.push(`/restaurant/${rec.google_place_id}` as any);
+  }
+
   return (
     <View style={styles.row}>
-      <View style={{ flex: 1 }}>
+      {/* The row body is the tap target — StretchPick has always opened place
+          detail on tap and this card did not, which read as a dead card. */}
+      <TapCard
+        style={{ flex: 1 }}
+        onPress={openDetail}
+        accessibilityRole="button"
+        accessibilityLabel={`${rec.name}. Open place details.`}
+      >
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={2}>{rec.name}</Text>
           {rec.matchScore != null && (
@@ -222,17 +237,26 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
           ].filter(Boolean).join(" · ") || "Nearby"}
         </Text>
         <View style={styles.mapsRow}>
-          <Pressable onPress={openApple} style={styles.mapsBtn} accessibilityRole="button">
+          {/* Nested pressables stop propagation so Maps never opens detail. */}
+          <Pressable
+            onPress={(e) => { e.stopPropagation(); openApple(); }}
+            style={styles.mapsBtn}
+            accessibilityRole="button"
+          >
             <Text style={styles.mapsBtnText}>Apple Maps</Text>
           </Pressable>
-          <Pressable onPress={openGoogle} style={styles.mapsBtn} accessibilityRole="button">
+          <Pressable
+            onPress={(e) => { e.stopPropagation(); openGoogle(); }}
+            style={styles.mapsBtn}
+            accessibilityRole="button"
+          >
             <Text style={styles.mapsBtnText}>Google Maps</Text>
           </Pressable>
         </View>
-      </View>
+      </TapCard>
       <View>
         <Pressable
-          onPress={save}
+          onPress={(e) => { e.stopPropagation(); save(); }}
           style={[styles.saveBtn, saved && styles.saveBtnDone]}
           accessibilityRole="button"
         >

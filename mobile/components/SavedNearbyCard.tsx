@@ -5,6 +5,7 @@ import { colors, spacing, type } from "../theme";
 import { listWishlist, type WishlistEntry } from "../lib/palate-insights";
 import { getEffectiveLocation, useBrowsingCity } from "../lib/browsing-location";
 import { distanceKm, formatDistance } from "../lib/match-score";
+import { triggerHapticSelection } from "../lib/haptics";
 
 // ============================================================================
 // SavedNearbyCard — "Places you've been meaning to go".
@@ -71,6 +72,7 @@ export function SavedNearbyCard() {
 }
 
 function SavedRow({ pick }: { pick: Pick }) {
+  const router = useRouter();
   const r = pick.entry.restaurant!;
   const sub = [
     pick.km != null ? formatDistance(pick.km) : null,
@@ -87,12 +89,31 @@ function SavedRow({ pick }: { pick: Pick }) {
     });
   }
 
+  // The chevron promised navigation but the row opened Maps. Tapping a
+  // restaurant anywhere in the app now opens its place page; Maps is its own
+  // affordance.
   return (
-    <Pressable style={styles.row} onPress={openInMaps}>
+    <Pressable
+      style={styles.row}
+      onPress={() => {
+        void triggerHapticSelection();
+        router.push(`/restaurant/${r.google_place_id}` as any);
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`${r.name}. Open place details.`}
+    >
       <View style={{ flex: 1 }}>
         <Text style={styles.name} numberOfLines={1}>{r.name}</Text>
         {sub.length > 0 && <Text style={styles.sub}>{sub}</Text>}
       </View>
+      <Pressable
+        onPress={(e) => { e.stopPropagation(); openInMaps(); }}
+        style={styles.mapsBtn}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${r.name} in Maps`}
+      >
+        <Text style={styles.mapsBtnText}>Maps</Text>
+      </Pressable>
       <Text style={styles.chev}>›</Text>
     </Pressable>
   );
@@ -119,6 +140,11 @@ const styles = StyleSheet.create({
     borderTopColor: colors.line, borderTopWidth: 1,
   },
   name: { fontSize: 16, fontWeight: "700", color: colors.ink },
+  mapsBtn: {
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999,
+    backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
+  },
+  mapsBtnText: { fontSize: 12, fontWeight: "700", color: colors.ink },
   sub: { ...type.small, marginTop: 2 },
   chev: { fontSize: 22, color: colors.mute, marginLeft: 8 },
 });
