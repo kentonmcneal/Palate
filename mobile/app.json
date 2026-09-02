@@ -2,20 +2,22 @@
   "expo": {
     "name": "Palate",
     "slug": "palate-app",
-    "version": "0.1.6",
+    "version": "0.1.7",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "palate",
     "userInterfaceStyle": "light",
     "primaryColor": "#FF3008",
-    "description": "Start to see how you actually eat. A weekly identity read of your real eating life — plus a habit-based profile and feed.",
+    "description": "Start to see how you actually eat. A weekly identity read of your real eating life \u2014 plus a habit-based profile and feed.",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.palate.ios",
       "buildNumber": "54",
       "infoPlist": {
-        "UIBackgroundModes": ["location"],
-        "NSLocationWhenInUseUsageDescription": "Palate uses your location only when the app is open, to detect which restaurant or café you may be eating at. We never share or sell your location.",
+        "UIBackgroundModes": [
+          "location"
+        ],
+        "NSLocationWhenInUseUsageDescription": "Palate uses your location only when the app is open, to detect which restaurant or caf\u00e9 you may be eating at. We never share or sell your location.",
         "NSUserNotificationsUsageDescription": "We send a single notification on Sunday morning when your weekly Wrapped is ready. You can turn this off in Settings.",
         "NSPhotoLibraryUsageDescription": "Palate uses your photos only when you choose a profile picture.",
         "NSCameraUsageDescription": "Palate uses your camera only when you take a photo of a meal.",
