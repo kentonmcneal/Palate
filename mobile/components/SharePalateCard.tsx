@@ -1,8 +1,9 @@
-import { View, Text, StyleSheet, Dimensions } from "react-native";
+import { View, StyleSheet, Dimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { palateColors, palateGradients } from "../lib/theme/palateTheme";
 import type { PalateProfile, PrimaryIdentity } from "../lib/palate";
 import { IDENTITY_BLURB } from "../lib/palate";
+import { CanvasText } from "./CanvasText";
 
 // ============================================================================
 // SharePalateCard — 9:16 vertical share card. Spotify-Wrapped energy.
@@ -59,24 +60,24 @@ export function SharePalateCard({ identity, weekRange, stats, tags, egoHook }: P
       {/* Header — logo + eyebrow */}
       <View style={styles.header}>
         <View style={styles.logoBadge}>
-          <Text style={styles.logoP}>p</Text>
+          <CanvasText style={styles.logoP}>p</CanvasText>
         </View>
-        <Text style={styles.brandText}>palate</Text>
+        <CanvasText style={styles.brandText}>palate</CanvasText>
       </View>
-      <Text style={styles.eyebrow}>YOUR PALATE THIS WEEK</Text>
-      <Text style={styles.weekRange}>{weekRange}</Text>
+      <CanvasText style={styles.eyebrow}>YOUR PALATE THIS WEEK</CanvasText>
+      <CanvasText style={styles.weekRange}>{weekRange}</CanvasText>
 
       {/* Hero identity */}
       <View style={styles.heroBlock}>
-        <Text
+        <CanvasText
           style={styles.identity}
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.7}
         >
           {identity}
-        </Text>
-        <Text style={styles.descriptor}>{blurb.shareDescriptor}</Text>
+        </CanvasText>
+        <CanvasText style={styles.descriptor}>{blurb.shareDescriptor}</CanvasText>
       </View>
 
       {/* Stats row */}
@@ -84,8 +85,8 @@ export function SharePalateCard({ identity, weekRange, stats, tags, egoHook }: P
         <View style={styles.stats}>
           {safeStats.map((s) => (
             <View key={s.label} style={styles.statBlock}>
-              <Text style={styles.statValue}>{s.value}</Text>
-              <Text style={styles.statLabel}>{s.label}</Text>
+              <CanvasText style={styles.statValue}>{s.value}</CanvasText>
+              <CanvasText style={styles.statLabel}>{s.label}</CanvasText>
             </View>
           ))}
         </View>
@@ -93,18 +94,18 @@ export function SharePalateCard({ identity, weekRange, stats, tags, egoHook }: P
 
       {/* Tags row */}
       {safeTags.length > 0 && (
-        <Text style={styles.tagsLine}>{safeTags.join(" · ")}</Text>
+        <CanvasText style={styles.tagsLine}>{safeTags.join(" · ")}</CanvasText>
       )}
 
       {/* Optional ego hook */}
       {egoHook && (
         <View style={styles.egoChip}>
-          <Text style={styles.egoChipText}>{egoHook}</Text>
+          <CanvasText style={styles.egoChipText}>{egoHook}</CanvasText>
         </View>
       )}
 
       {/* Footer */}
-      <Text style={styles.footer}>palate.app</Text>
+      <CanvasText style={styles.footer}>palate.app</CanvasText>
     </View>
   );
 }

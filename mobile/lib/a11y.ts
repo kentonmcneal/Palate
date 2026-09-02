@@ -47,6 +47,11 @@ export const FONT_CAP = {
   badge: 1.5,
   /** Section eyebrows, already uppercase and small. */
   eyebrow: 1.6,
+  /** Chart annotations — axis labels, quadrant names, legend values. These sit
+   *  at absolute positions inside a fixed-size drawing, so past a point they
+   *  overlap each other rather than becoming readable. A chart that has to be
+   *  deciphered defeats itself; the surrounding prose carries the meaning. */
+  chart: 1.3,
 } as const;
 
 /** Above this, single-line rows should stack instead of compressing. */

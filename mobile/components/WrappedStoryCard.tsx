@@ -1,7 +1,8 @@
-import { View, Text, StyleSheet, Dimensions } from "react-native";
+import { View, StyleSheet, Dimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../theme";
 import type { Wrapped } from "../lib/wrapped";
+import { CanvasText } from "./CanvasText";
 
 // Instagram story aspect ratio: 9:16. Width = ~1080 ideal but we render at
 // device width and let view-shot capture pixel-perfect.
@@ -31,18 +32,18 @@ export function WrappedStoryCard({
 
       {/* Top: brand + week */}
       <View style={styles.head}>
-        <View style={styles.logoBox}><Text style={styles.logoP}>p</Text></View>
-        <Text style={styles.brandText}>palate</Text>
+        <View style={styles.logoBox}><CanvasText style={styles.logoP}>p</CanvasText></View>
+        <CanvasText style={styles.brandText}>palate</CanvasText>
       </View>
 
-      <Text style={styles.weekRange}>{formatRange(data.week_start, data.week_end)}</Text>
+      <CanvasText style={styles.weekRange}>{formatRange(data.week_start, data.week_end)}</CanvasText>
 
       {/* Center: persona */}
       <View style={styles.center}>
-        <Text style={styles.youAre}>YOU ARE</Text>
-        <Text style={styles.persona} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.7}>
+        <CanvasText style={styles.youAre}>YOU ARE</CanvasText>
+        <CanvasText style={styles.persona} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.7}>
           {personaLabel}
-        </Text>
+        </CanvasText>
       </View>
 
       {/* Stats row */}
@@ -55,14 +56,14 @@ export function WrappedStoryCard({
       {/* Top spots */}
       {top3.length > 0 && (
         <View style={styles.top}>
-          <Text style={styles.topLabel}>TOP SPOTS</Text>
+          <CanvasText style={styles.topLabel}>TOP SPOTS</CanvasText>
           {top3.slice(0, 3).map((row, i) => (
             <View key={`${row.name}-${i}`} style={styles.topRow}>
-              <Text style={styles.topName}>
-                <Text style={styles.topRank}>{i + 1}.  </Text>
+              <CanvasText style={styles.topName}>
+                <CanvasText style={styles.topRank}>{i + 1}.  </CanvasText>
                 {row.name}
-              </Text>
-              <Text style={styles.topCount}>×{row.count}</Text>
+              </CanvasText>
+              <CanvasText style={styles.topCount}>×{row.count}</CanvasText>
             </View>
           ))}
         </View>
@@ -70,7 +71,7 @@ export function WrappedStoryCard({
 
       {/* Bottom: handle */}
       <View style={styles.footer}>
-        <Text style={styles.footerText}>palate.app</Text>
+        <CanvasText style={styles.footerText}>palate.app</CanvasText>
       </View>
     </View>
   );
@@ -79,8 +80,8 @@ export function WrappedStoryCard({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      <CanvasText style={styles.statValue}>{value}</CanvasText>
+      <CanvasText style={styles.statLabel}>{label}</CanvasText>
     </View>
   );
 }

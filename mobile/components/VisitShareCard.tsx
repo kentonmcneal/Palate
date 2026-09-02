@@ -1,7 +1,8 @@
-import { View, Text, StyleSheet, Image, Dimensions } from "react-native";
+import { View, StyleSheet, Image, Dimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../theme";
 import type { Visit } from "../lib/visits";
+import { CanvasText } from "./CanvasText";
 
 // ============================================================================
 // VisitShareCard — 1080×1920 (9:16) shareable card for a single visit.
@@ -45,9 +46,9 @@ export function VisitShareCard({ visit, restaurantName, neighborhood, cuisine, i
       {/* Top: Palate wordmark */}
       <View style={styles.header}>
         <View style={styles.logoBadge}>
-          <Text style={styles.logoP}>p</Text>
+          <CanvasText style={styles.logoP}>p</CanvasText>
         </View>
-        <Text style={styles.brand}>palate</Text>
+        <CanvasText style={styles.brand}>palate</CanvasText>
       </View>
 
       {/* Body: photo or color block */}
@@ -55,30 +56,30 @@ export function VisitShareCard({ visit, restaurantName, neighborhood, cuisine, i
         <Image source={{ uri: visit.photo_url }} style={styles.photo} resizeMode="cover" />
       ) : (
         <View style={styles.photoPlaceholder}>
-          <Text style={styles.photoFallback}>{initials(restaurantName)}</Text>
+          <CanvasText style={styles.photoFallback}>{initials(restaurantName)}</CanvasText>
         </View>
       )}
 
       {/* Bottom: name + meta + optional notes */}
       <View style={styles.bottom}>
-        <Text style={styles.eyebrow}>{dateLabel.toUpperCase()}</Text>
-        <Text style={styles.name} numberOfLines={2}>{restaurantName}</Text>
+        <CanvasText style={styles.eyebrow}>{dateLabel.toUpperCase()}</CanvasText>
+        <CanvasText style={styles.name} numberOfLines={2}>{restaurantName}</CanvasText>
         {(cuisine || neighborhood) && (
-          <Text style={styles.sub}>
+          <CanvasText style={styles.sub}>
             {[cuisine ? cap(cuisine) : null, neighborhood].filter(Boolean).join(" · ")}
-          </Text>
+          </CanvasText>
         )}
         {visit.notes && visit.notes.trim().length > 0 && (
-          <Text style={styles.notes} numberOfLines={3}>"{visit.notes.trim()}"</Text>
+          <CanvasText style={styles.notes} numberOfLines={3}>"{visit.notes.trim()}"</CanvasText>
         )}
         {identityLabel && (
           <View style={styles.identityChip}>
-            <Text style={styles.identityChipText}>As told by a {identityLabel}</Text>
+            <CanvasText style={styles.identityChipText}>As told by a {identityLabel}</CanvasText>
           </View>
         )}
       </View>
 
-      <Text style={styles.footer}>palate.app</Text>
+      <CanvasText style={styles.footer}>palate.app</CanvasText>
     </View>
   );
 }

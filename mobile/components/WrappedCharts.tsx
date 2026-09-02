@@ -5,6 +5,7 @@ import { colors, spacing, type } from "../theme";
 import { loadAnalytics, type AnalyticsSummary } from "../lib/analytics-stats";
 import { DonutChart, type DonutSlice } from "./charts/DonutChart";
 import { VerticalBars, type VBar } from "./charts/VerticalBars";
+import { FONT_CAP, useFontScale } from "../lib/a11y";
 
 const CUISINE_PALETTE = [
   colors.red, "#FF6B45", "#FF9466", "#FFB68C", "#1F1F1F", "#555555", "#9A9A9A",
@@ -22,6 +23,7 @@ const CUISINE_LABELS: Record<string, string> = {
 const DOW_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
 export function WrappedCharts() {
+  const { stack } = useFontScale();
   const [data, setData] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [focusedSlice, setFocusedSlice] = useState<number | null>(null);
@@ -108,11 +110,14 @@ export function WrappedCharts() {
                     <View style={[styles.dot, { backgroundColor: s.color }]} />
                     <Text
                       style={[styles.legendLabel, isFocused && { color: colors.ink, fontWeight: "800" }]}
-                      numberOfLines={1}
+                      numberOfLines={stack ? 2 : 1}
                     >
                       {s.label}
                     </Text>
-                    <Text style={[styles.legendValue, isFocused && { color: colors.red }]}>
+                    <Text
+                      style={[styles.legendValue, isFocused && { color: colors.red }]}
+                      maxFontSizeMultiplier={FONT_CAP.chart}
+                    >
                       {s.value}
                     </Text>
                   </Pressable>
