@@ -74,6 +74,8 @@ export function tiktokUrl(handle: string): string {
 }
 
 export async function saveSocialFields(input: {
+  firstName?: string | null;
+  lastName?: string | null;
   bio?: string | null;
   school?: string | null;
   instagram?: string | null;
@@ -83,6 +85,16 @@ export async function saveSocialFields(input: {
   if (!user) throw new Error("Not signed in");
 
   const patch: Record<string, string | null> = {};
+  // display_name is derived from these by a trigger (migration 0063) — but
+  // only when the parts are what changed, so a chosen display name survives.
+  if (input.firstName !== undefined) {
+    const v = (input.firstName ?? "").trim();
+    patch.first_name = v ? v.slice(0, 40) : null;
+  }
+  if (input.lastName !== undefined) {
+    const v = (input.lastName ?? "").trim();
+    patch.last_name = v ? v.slice(0, 40) : null;
+  }
   if (input.bio !== undefined) {
     const b = (input.bio ?? "").trim();
     patch.bio = b ? b.slice(0, BIO_MAX) : null;

@@ -71,6 +71,8 @@ export default function Settings() {
   const [displayName, setDisplayNameState] = useState<string | null>(null);
   // Social profile fields. Without an edit surface the People directory lists
   // everyone with a blank bio forever — schema without a way in is not shipped.
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [bio, setBio] = useState("");
   const [school, setSchool] = useState("");
   const [ig, setIg] = useState("");
@@ -108,6 +110,8 @@ export default function Settings() {
       if (!p) return;
       setVisibility(p.profile_visibility);
       setDisplayNameState(p.display_name);
+      setFirstName((p as { first_name?: string | null }).first_name ?? "");
+      setLastName((p as { last_name?: string | null }).last_name ?? "");
       setBio((p as { bio?: string | null }).bio ?? "");
       setSchool((p as { school?: string | null }).school ?? "");
       setIg((p as { instagram_handle?: string | null }).instagram_handle ?? "");
@@ -444,9 +448,37 @@ export default function Settings() {
           </Note>
         </Section>
 
+        <Section title="Your ranking">
+          <Note>Every time you log a meal we ask one head-to-head. This is the order that comes out.</Note>
+          <Spacer size={10} />
+          <Button title="See your ranked places" onPress={() => router.push("/rankings")} />
+        </Section>
+
         <Section title="Your profile">
           <Note>Shown to anyone who can see your profile.</Note>
           <Spacer size={10} />
+          <Text style={styles.fieldLabel}>First name</Text>
+          <TextInput
+            value={firstName}
+            onChangeText={(v) => { setFirstName(v.slice(0, 40)); setSocialSaved(false); }}
+            placeholder="First"
+            placeholderTextColor={colors.mute}
+            style={styles.input}
+            autoCapitalize="words"
+            maxLength={40}
+          />
+
+          <Text style={styles.fieldLabel}>Last name</Text>
+          <TextInput
+            value={lastName}
+            onChangeText={(v) => { setLastName(v.slice(0, 40)); setSocialSaved(false); }}
+            placeholder="Last"
+            placeholderTextColor={colors.mute}
+            style={styles.input}
+            autoCapitalize="words"
+            maxLength={40}
+          />
+
           <Text style={styles.fieldLabel}>Bio</Text>
           <TextInput
             value={bio}
@@ -496,7 +528,7 @@ export default function Settings() {
             onPress={async () => {
               setSavingSocial(true);
               try {
-                await saveSocialFields({ bio, school, instagram: ig, tiktok: tt });
+                await saveSocialFields({ firstName, lastName, bio, school, instagram: ig, tiktok: tt });
                 // Echo back what was actually stored: a pasted URL becomes a
                 // bare handle, and anything unusable becomes empty, so the
                 // field should stop showing text that was not saved.
