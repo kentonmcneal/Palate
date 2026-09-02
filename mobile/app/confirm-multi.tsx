@@ -88,13 +88,20 @@ export default function ConfirmMulti() {
         await saveVisit({ googlePlaceId: id, source: "auto" });
         await recordPromptDecision(id, "confirmed").catch(() => {});
       }
-      // Everything offered and not checked is an explicit "not this one", so
-      // the cluster doesn't come back asking again.
-      for (const o of options) {
-        if (!checked.has(o.google_place_id)) {
-          await recordPromptDecision(o.google_place_id, "dismissed").catch(() => {});
-        }
-      }
+      // Deliberately records NOTHING for the unchecked places.
+      //
+      // The first version marked every unchecked option "dismissed", which
+      // looked tidy and was wrong: recentlyPrompted() suppresses any place with
+      // a decision in the last THREE HOURS, so answering one food-hall prompt
+      // silently blacklisted every neighbouring restaurant for the rest of the
+      // evening. That is exactly what happened on 2026-09-02 — a multi-select
+      // answered at 17:43 produced four `recently_dismissed` suppressions at
+      // 17:49 and a missed prompt at a place the founder actually walked into.
+      //
+      // "This is not where I ate at 5:43pm" is not "do not ask me about this
+      // place tonight". Re-prompting is already bounded by the inbox's
+      // one-hour per-place dedupe and the 15-minute global gap; it does not
+      // need a three-hour blacklist on top.
       void track("confirm_multi_saved", {
         place_id: params.place_id,
         selected_count: checked.size,
@@ -113,8 +120,13 @@ export default function ConfirmMulti() {
 
   async function noneOfThese() {
     setBusy(true);
-    for (const o of options) {
-      await recordPromptDecision(o.google_place_id, "dismissed").catch(() => {});
+    // Only the place the prompt was actually ABOUT gets the dismissal. The
+    // alternates were options we offered, not places the user rejected, and a
+    // dismissal costs three hours of silence at that venue (recentlyPrompted).
+    // Blacklisting a whole block because none of it was right at 5:43pm is how
+    // the founder walked into two restaurants at 6:37pm and heard nothing.
+    if (params.place_id) {
+      await recordPromptDecision(params.place_id as string, "dismissed").catch(() => {});
     }
     void track("confirm_multi_none", {
       place_id: params.place_id,
