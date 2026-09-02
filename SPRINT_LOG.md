@@ -1,4 +1,105 @@
-# Sprint log — tester feedback (2026-09-02)
+# Sprint log
+
+## Session 2 — accessibility + the zero-cost sprint (2026-09-02, later)
+
+Baseline at start: `tsc` clean, 154 tests. After: `tsc` clean, **155 tests**.
+Six commits, `b681a45` … `e2220bb`.
+
+### Dynamic Type — finished
+
+Reported by the founder's mother, who runs her iPhone at a large text size.
+Session 1 covered Home, the tab bar and the shared Button/chip primitives; this
+finishes it.
+
+The pass needed a distinction session 1 didn't: **not all text in the app is
+interface text.**
+
+- **Share cards are pictures.** WrappedCard, WrappedStoryCard, SharePalateCard
+  and VisitShareCard all render inside `<ViewShot>` and are captured to PNG.
+  Scaling a fixed 280pt canvas to 235% doesn't make a more readable image, it
+  makes a clipped one that the user then shares. They use `CanvasText`
+  (`allowFontScaling={false}`), which documents why at length so it isn't
+  "fixed" later.
+- **Chart annotations get a cap** (`FONT_CAP.chart`, 1.3). PalateAxisGraph
+  positions four axis labels and four quadrant names absolutely inside a fixed
+  square; past ~1.3x they overlap rather than become readable.
+- **The cuisine legend is real UI** and now behaves like it — scales fully, stops
+  truncating at one line.
+- **Nine fixed-height text containers → `minHeight` + padding.** The one that
+  mattered most: `sign-in`'s 54pt email field clipped what you were typing, on
+  the first screen, before an account exists.
+- **The Wrapped story screen** keeps `adjustsFontSizeToFit` (a full-screen card
+  must fit) but gets more lines before it starts shrinking — shrinking text
+  someone asked to be bigger should be the last resort, not the first.
+
+Left alone deliberately: avatars, progress bars, the welcome glow, circular
+close buttons. Fixed heights there are circles and bars, not text.
+
+### W1 — places-proxy read-through cache (migration applied, function NOT deployed)
+
+The finding behind it: **places-proxy had no cache at all.** The one path
+recording `source='cache'` fires only after the kill switch trips, i.e. as a
+degraded fallback once the day's budget is spent. Telemetry agrees — 579 nearby
+calls in 30 days, every one billed, zero cache rows.
+
+What was missing was *coverage*: row timestamps cannot distinguish "this area is
+empty" from "nobody has ever looked here." Migration **0054** records it
+explicitly — cell, radius, when, how many results. Fails open on every doubt.
+
+### W2 — server push (migrations applied, function NOT deployed, flag OFF)
+
+`registerPushToken()` has written tokens to `profiles.push_token` since build 14
+and nothing ever read them. This is the read side.
+
+- **Quiet hours needed a timezone we didn't have.** `profiles` had no such
+  column. Added, set from `Intl` beside the token. **Null timezone = no
+  proactive push at all** — failing closed, because the failure mode is buzzing
+  a stranger at 3am. Verified against real instants: midnight ET defers to 08:00
+  ET, 2pm ET sends now, null returns null.
+- **An outbox, not fire-and-forget** — attempts, error, unique `(user,
+  dedupe_key)` so a retried trigger can't buzz twice for one visit.
+- **One proactive push per user per day**, enforced at send time against what was
+  actually delivered, not at enqueue against what we intended.
+- **Friend activity is opt-in, default OFF.** Product decision: the setting is
+  reciprocal, and defaulting people into broadcasting where they eat costs trust
+  exactly once.
+
+### Builds
+
+- **27** (`34ba143`) — finished. Contains the complete Dynamic Type work.
+- **28** (`e2220bb`) — cut so one artifact carries everything including the W1/W2
+  client bits. Check status before installing.
+
+### Needs you — three things I could not do
+
+1. **Deploy the two edge functions.** Both are held deliberately. `send-push`
+   messages real people and `places-proxy` is the live money path; the session
+   brief makes both ask-first, and neither can be verified end-to-end without
+   spending a Google call or notifying someone.
+   `supabase functions deploy places-proxy` / `... send-push`
+2. **Verify lock-screen confirm actions on a physical device.** Still the
+   highest-value unverified thing in the product. Simulator cannot exercise
+   notification action buttons. Install build 28, trigger a confirm
+   notification, tap "Yes, I ate here" with the app fully closed, reopen, check
+   the visit landed. It fails *silently* by design if the background write drops.
+3. **Decide on distribution and the merge.** Branch is 16 commits ahead of
+   `main`, unmerged, nothing submitted.
+
+### Scoped, not done
+
+- **Feed posts still don't link to places.** `top_restaurant` is only a name
+  string produced by the `generate_weekly_wrapped` SQL function. Linking it means
+  changing that function, the feed payload, and the renderer — more surface than
+  a "small debt", and it touches the Wrapped path, so I stopped rather than
+  half-do it.
+- **Batching the friends-list palate-match RPC.** Real, but premature at three
+  users.
+- **Before/after design screenshots** — still blocked on the space-in-path local
+  build issue from session 1.
+
+---
+
+## Session 1 — tester feedback (2026-09-02)
 
 Branch: `sprint/tester-feedback` (branched from `main` @ `bfc23a7`).
 Baseline before any change: `tsc` clean, 91/91 tests passing.
