@@ -25,6 +25,7 @@ import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
 import { matchScoreColor, matchScoreTint } from "../lib/match-score";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { SaveBurst } from "./SaveBurst";
+import { applyMood, moodFallbackNote, type Mood } from "../lib/mood";
 import { useRouter } from "expo-router";
 import { TapCard } from "./TapCard";
 
@@ -40,11 +41,20 @@ import { TapCard } from "./TapCard";
 // No time-of-day blurbs, no explanatory subtitles — the title and the rows
 // are the whole story.
 
-export function RecommendationsCard() {
+export function RecommendationsCard({
+  mood = null,
+  habitualCuisines = [],
+}: {
+  /** Temporary cuisine override from the mood row. null = Anything. */
+  mood?: Mood;
+  /** The user's usual cuisines — what "Surprise me" must avoid. */
+  habitualCuisines?: string[];
+} = {}) {
   const [recs, setRecs] = useState<RestaurantRecommendation[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [earlyEstimate, setEarlyEstimate] = useState(false);
+  const [allRecs, setAllRecs] = useState<RestaurantRecommendation[] | null>(null);
   const [browsingCity] = useBrowsingCity();
 
   const load = useCallback(async () => {
@@ -117,8 +127,11 @@ export function RecommendationsCard() {
           } as RestaurantRecommendation;
         });
 
-      // Sort by canonical compatibility (high → low) and take top 3.
+      // Sort by canonical compatibility (high → low). Keep the full ranked
+      // list so a mood can re-slice it without another network round trip —
+      // switching mood should feel instant.
       enriched.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+      setAllRecs(enriched);
       setRecs(enriched.slice(0, 3));
     } catch {
       setError(true);
@@ -128,6 +141,17 @@ export function RecommendationsCard() {
   }, []);
 
   useEffect(() => { load(); }, [load, browsingCity?.id]);
+
+  // A mood filters the SAME personally-ranked list. The compat score still
+  // comes from the user's own history — we only restrict which venues are
+  // eligible for the three slots.
+  const [moodNote, setMoodNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!allRecs) return;
+    const { items, matched } = applyMood(allRecs, mood, habitualCuisines);
+    setRecs(items.slice(0, 3));
+    setMoodNote(mood && !matched ? moodFallbackNote(mood) : null);
+  }, [allRecs, mood, habitualCuisines]);
 
   // Hide the card entirely until we know if we have anything to show — keeps
   // the Home tab from flashing a useless block on first load.
@@ -158,6 +182,7 @@ export function RecommendationsCard() {
           )}
         </View>
       </View>
+      {!!moodNote && <Text style={styles.moodNote}>{moodNote}</Text>}
       <View style={{ marginTop: 16 }}>
         {recs.map((rec) => (
           <RecRow key={rec.google_place_id} rec={rec} />
@@ -298,6 +323,7 @@ function capitalize(s: string): string {
 }
 
 const styles = StyleSheet.create({
+  moodNote: { fontSize: 12, color: colors.mute, marginTop: 10, lineHeight: 17 },
   card: {
     // No top margin — the parent section header controls spacing now.
     padding: spacing.md,
