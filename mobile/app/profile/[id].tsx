@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Linking } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Linking, Share } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Spacer } from "../../components/Button";
 import { Avatar } from "../../components/Avatar";
 import { colors, spacing, type, shadow, card } from "../../theme";
-import { getFriendProfileSnapshot, type FriendProfileSnapshot } from "../../lib/profile";
+import { getFriendProfileSnapshot, getMyProfile, type FriendProfileSnapshot } from "../../lib/profile";
+import { captureRef } from "react-native-view-shot";
+import { MatchShareCard } from "../../components/MatchShareCard";
 import { loadPalateMatch } from "../../lib/palate/pairCompatibility";
 import { instagramUrl, tiktokUrl } from "../../lib/social";
 import { matchHeadline, type PalateMatch } from "../../lib/recommendation/palate-match";
@@ -21,6 +23,24 @@ export default function FriendProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [match, setMatch] = useState<PalateMatch | null>(null);
+  const [me, setMe] = useState<{ name: string | null; avatarUrl: string | null } | null>(null);
+  const matchCardRef = useRef<View>(null);
+
+  useEffect(() => {
+    void getMyProfile()
+      .then((p) => p && setMe({ name: p.display_name, avatarUrl: p.avatar_url }))
+      .catch(() => {});
+  }, []);
+
+  async function shareMatch() {
+    if (!matchCardRef.current) return;
+    try {
+      const uri = await captureRef(matchCardRef, { format: "png", quality: 1 });
+      await Share.share({ url: uri });
+    } catch (e: unknown) {
+      Alert.alert("Couldn't share", "Try again in a moment.");
+    }
+  }
   useEffect(() => {
     if (!snapshot?.is_friend || snapshot?.is_self) return;
     let alive = true;
@@ -279,6 +299,11 @@ export default function FriendProfileScreen() {
                     )}
                   </View>
                 )}
+                {match?.ready && (
+                  <Pressable onPress={shareMatch} style={styles.shareBtn} accessibilityRole="button">
+                    <Text style={styles.shareBtnText}>Share this match</Text>
+                  </Pressable>
+                )}
                 <Pressable
                   onPress={() => router.push(`/compatibility/${targetId}` as never)}
                   style={styles.compatBtn}
@@ -326,6 +351,21 @@ export default function FriendProfileScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* Off-screen render target for the share capture. Positioned far off
+          the left edge rather than hidden — a display:none subtree has no
+          layout, so ViewShot would capture nothing. */}
+      {match?.ready && snapshot && (
+        <View style={styles.offscreen} pointerEvents="none">
+          <View ref={matchCardRef} collapsable={false}>
+            <MatchShareCard
+              match={match}
+              you={{ name: me?.name ?? "You", avatarUrl: me?.avatarUrl ?? null }}
+              them={{ name: snapshot.display_name, avatarUrl: snapshot.avatar_url }}
+            />
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -445,6 +485,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line,
   },
   socialChipText: { fontSize: 13, fontWeight: "700", color: colors.ink },
+  offscreen: { position: "absolute", left: -9999, top: 0 },
+  shareBtn: {
+    marginTop: 10, paddingVertical: 12, borderRadius: 999,
+    backgroundColor: colors.red, alignItems: "center",
+  },
+  shareBtnText: { color: "#fff", fontSize: 14, fontWeight: "800" },
   matchHero: {
     marginTop: spacing.lg,
     alignItems: "center",
