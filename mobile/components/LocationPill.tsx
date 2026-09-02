@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import * as Location from "expo-location";
 import { colors } from "../theme";
 import { useBrowsingCity } from "../lib/browsing-location";
+import { FONT_CAP } from "../lib/a11y";
 
 // ============================================================================
 // LocationPill — small chip showing the user's current "browse" location.
@@ -84,7 +85,11 @@ export function LocationPill() {
           ]}
         />
       </View>
-      <Text style={[styles.text, city && styles.textActive]} numberOfLines={1}>
+      <Text
+        style={[styles.text, city && styles.textActive]}
+        numberOfLines={1}
+        maxFontSizeMultiplier={FONT_CAP.chrome}
+      >
         {label}
       </Text>
       <Text style={[styles.chev, city && styles.textActive]}>⌄</Text>

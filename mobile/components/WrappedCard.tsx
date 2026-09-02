@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   },
   logoBox: {
     width: 32,
-    height: 32,
+    minHeight: 32, paddingVertical: 6,
     borderRadius: 10,
     backgroundColor: colors.red,
     alignItems: "center",

@@ -6,10 +6,12 @@ import { colors } from "../../theme";
 import { latestWrapped } from "../../lib/wrapped";
 import { triggerHapticSelection } from "../../lib/haptics";
 import { PalateIntroModal } from "../../components/PalateIntroModal";
+import { FONT_CAP, useFontScale, scaleSpace } from "../../lib/a11y";
 
 export const LAST_SEEN_WRAPPED_KEY = "palate.wrapped.lastSeen";
 
 export default function TabsLayout() {
+  const { scale: fontScale } = useFontScale();
   const [wrappedHasNew, setWrappedHasNew] = useState(false);
 
   // Poll for fresh wrapped on mount + every minute. Light enough.
@@ -41,8 +43,18 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.red,
         tabBarInactiveTintColor: colors.mute,
-        tabBarStyle: { borderTopColor: colors.line, height: 84, paddingTop: 8 },
+        // Five labels across a fixed-width bar — the tightest type budget in
+        // the app, so the cap here is the strictest. The bar itself grows a
+        // little rather than clipping, but it cannot grow without eating the
+        // screen, hence the ceiling on both.
+        tabBarStyle: {
+          borderTopColor: colors.line,
+          height: scaleSpace(84, fontScale, FONT_CAP.tabBar),
+          paddingTop: 8,
+        },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+        tabBarLabelPosition: "below-icon",
+        tabBarAllowFontScaling: true,
       }}
       screenListeners={{
         tabPress: () => { void triggerHapticSelection(); },

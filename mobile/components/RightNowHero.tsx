@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: { color: "#fff", fontWeight: "800", fontSize: 14, letterSpacing: 0.2 },
   ghostBtn: {
-    paddingHorizontal: 16, height: 48,
+    paddingHorizontal: 16, minHeight: 48, paddingVertical: 12,
     alignItems: "center", justifyContent: "center",
     borderRadius: 14,
     backgroundColor: colors.paper,

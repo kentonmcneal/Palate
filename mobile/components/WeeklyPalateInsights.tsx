@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     paddingHorizontal: 14,
-    height: 32,
+    minHeight: 32, paddingVertical: 6,
     borderRadius: 16,
     backgroundColor: colors.red,
     alignItems: "center",

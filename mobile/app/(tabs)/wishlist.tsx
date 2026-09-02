@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
   actions: { marginTop: 12, flexDirection: "row", gap: 10 },
   btnPrimary: {
     paddingHorizontal: 14,
-    height: 36,
+    minHeight: 36, paddingVertical: 8,
     borderRadius: 18,
     backgroundColor: colors.red,
     alignItems: "center",
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
   btnPrimaryText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   btnGhost: {
     paddingHorizontal: 14,
-    height: 36,
+    minHeight: 36, paddingVertical: 8,
     borderRadius: 18,
     backgroundColor: colors.faint,
     borderWidth: 1,

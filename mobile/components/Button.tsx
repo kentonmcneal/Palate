@@ -1,5 +1,6 @@
 import { Pressable, Text, StyleSheet, ActivityIndicator, View } from "react-native";
 import { colors, radius } from "../theme";
+import { FONT_CAP, useFontScale, scaleSpace } from "../lib/a11y";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 
@@ -16,8 +17,13 @@ export function Button({
   loading?: boolean;
   disabled?: boolean;
 }) {
+  const { scale } = useFontScale();
+
   const style = [
     styles.base,
+    // Grow the control with its label. A fixed 52pt box clipped the text
+    // outright at large accessibility sizes.
+    { minHeight: scaleSpace(52, scale) },
     variant === "primary" && styles.primary,
     variant === "secondary" && styles.secondary,
     variant === "ghost" && styles.ghost,
@@ -42,7 +48,7 @@ export function Button({
       {loading ? (
         <ActivityIndicator color={variant === "primary" ? "#fff" : colors.ink} />
       ) : (
-        <Text style={textStyle}>{title}</Text>
+        <Text style={textStyle} maxFontSizeMultiplier={FONT_CAP.chrome}>{title}</Text>
       )}
     </Pressable>
   );
@@ -50,7 +56,9 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    height: 52,
+    // minHeight, not height — see the Pressable above. Kept here as the floor.
+    minHeight: 52,
+    paddingVertical: 12,
     borderRadius: radius.full,
     alignItems: "center",
     justifyContent: "center",

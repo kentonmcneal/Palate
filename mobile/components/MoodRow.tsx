@@ -2,6 +2,7 @@ import { ScrollView, StyleSheet, Text, Pressable, View } from "react-native";
 import { colors, spacing } from "../theme";
 import { triggerHapticSelection } from "../lib/haptics";
 import type { Mood, MoodChip } from "../lib/mood";
+import { FONT_CAP } from "../lib/a11y";
 
 // ============================================================================
 // MoodRow — "what do you actually want tonight?"
@@ -45,7 +46,7 @@ export function MoodRow({
               accessibilityState={{ selected: active }}
               accessibilityLabel={`Show ${c.label}`}
             >
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>{c.label}</Text>
+              <Text style={[styles.chipText, active && styles.chipTextActive]} maxFontSizeMultiplier={FONT_CAP.chrome}>{c.label}</Text>
             </Pressable>
           );
         })}

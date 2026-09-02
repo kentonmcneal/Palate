@@ -776,7 +776,7 @@ const styles = StyleSheet.create({
     bottom: -2,
     right: -2,
     width: 22,
-    height: 22,
+    minHeight: 22, paddingVertical: 3,
     borderRadius: 11,
     backgroundColor: colors.ink,
     borderWidth: 2,

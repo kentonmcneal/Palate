@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
   searchRow: { flexDirection: "row" },
   input: {
     flex: 1,
-    height: 52,
+    minHeight: 52, paddingVertical: 12,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.line,

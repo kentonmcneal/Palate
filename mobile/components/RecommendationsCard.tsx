@@ -26,6 +26,7 @@ import { matchScoreColor, matchScoreTint } from "../lib/match-score";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { SaveBurst } from "./SaveBurst";
 import { applyMood, moodFallbackNote, type Mood } from "../lib/mood";
+import { FONT_CAP, useFontScale } from "../lib/a11y";
 import { useRouter } from "expo-router";
 import { TapCard } from "./TapCard";
 
@@ -179,7 +180,7 @@ export function RecommendationsCard({
               A disclaimer stapled to a recommendation is the app apologizing
               for its own output. The eyebrow carries the confidence instead —
               it says what the list IS, and stops promising to improve. */}
-          <Text style={styles.eyebrow}>
+          <Text style={styles.eyebrow} maxFontSizeMultiplier={FONT_CAP.eyebrow}>
             {earlyEstimate ? "A FIRST READ ON YOUR PALATE" : "MOST COMPATIBLE"}
           </Text>
         </View>
@@ -196,6 +197,10 @@ export function RecommendationsCard({
 
 function RecRow({ rec }: { rec: RestaurantRecommendation }) {
   const router = useRouter();
+  // At large accessibility sizes [name | match | Save] compresses the name to
+  // an ellipsis and the buttons to slivers. Past the threshold the row becomes
+  // a column: same information, in an order that still reads.
+  const { stack } = useFontScale();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [burstKey, setBurstKey] = useState(0);
@@ -229,7 +234,7 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
   }
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, stack && styles.rowStacked]}>
       {/* The row body is the tap target — StretchPick has always opened place
           detail on tap and this card did not, which read as a dead card. */}
       <TapCard
@@ -238,8 +243,10 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
         accessibilityRole="button"
         accessibilityLabel={`${rec.name}. Open place details.`}
       >
-        <View style={styles.nameRow}>
-          <Text style={styles.name} numberOfLines={2}>{rec.name}</Text>
+        <View style={[styles.nameRow, stack && styles.nameRowStacked]}>
+          {/* numberOfLines lifts with scale — two lines at 100% is generous,
+              at 235% it is a truncated word. */}
+          <Text style={styles.name} numberOfLines={stack ? 4 : 2}>{rec.name}</Text>
           {rec.matchScore != null && (
             <View style={[
               styles.matchBadge,
@@ -253,6 +260,7 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
                 suffix="% match"
                 duration={650}
                 style={[styles.matchBadgeText, { color: matchScoreColor(rec.matchScore) }]}
+                maxFontSizeMultiplier={FONT_CAP.badge}
               />
             </View>
           )}
@@ -270,14 +278,14 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
             style={styles.mapsBtn}
             accessibilityRole="button"
           >
-            <Text style={styles.mapsBtnText}>Apple Maps</Text>
+            <Text style={styles.mapsBtnText} maxFontSizeMultiplier={FONT_CAP.chrome}>Apple Maps</Text>
           </Pressable>
           <Pressable
             onPress={(e) => { e.stopPropagation(); openGoogle(); }}
             style={styles.mapsBtn}
             accessibilityRole="button"
           >
-            <Text style={styles.mapsBtnText}>Google Maps</Text>
+            <Text style={styles.mapsBtnText} maxFontSizeMultiplier={FONT_CAP.chrome}>Google Maps</Text>
           </Pressable>
         </View>
       </TapCard>
@@ -287,7 +295,7 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
           style={[styles.saveBtn, saved && styles.saveBtnDone]}
           accessibilityRole="button"
         >
-          <Text style={[styles.saveText, saved && styles.saveTextDone]}>
+          <Text style={[styles.saveText, saved && styles.saveTextDone]} maxFontSizeMultiplier={FONT_CAP.chrome}>
             {saving ? "…" : saved ? "Saved" : "Save"}
           </Text>
         </Pressable>
@@ -325,6 +333,8 @@ function capitalize(s: string): string {
 }
 
 const styles = StyleSheet.create({
+  rowStacked: { flexDirection: "column", alignItems: "stretch", gap: 10 },
+  nameRowStacked: { flexDirection: "column", alignItems: "flex-start", gap: 6 },
   moodNote: { fontSize: 12, color: colors.mute, marginTop: 10, lineHeight: 17 },
   card: {
     // No top margin — the parent section header controls spacing now.
