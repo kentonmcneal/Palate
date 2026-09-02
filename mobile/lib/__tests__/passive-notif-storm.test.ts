@@ -50,30 +50,37 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-describe("duplicate confirm notifications", () => {
+// These tests were written after a tester's lock screen showed Kobe twice and
+// Nashmi three times in nine minutes. Real-time prompts are now off by default
+// (REALTIME_PROMPTS_ENABLED=false) and confirmation happens in the nightly
+// digest, so the storm cannot recur by construction. The deduplication they
+// protect still matters though: a repeat detection must collapse into ONE inbox
+// entry, or the digest lists the same meal three times.
+describe("duplicate capture handling", () => {
   it("notifies once for a venue, then suppresses the repeat detection", async () => {
     const t = NOON.getTime();
     const first = await notifyOrInbox(resolved("kobe", "Kobe Japanese Express", t), 22);
     const second = await notifyOrInbox(resolved("kobe", "Kobe Japanese Express", t + 60_000), 22);
 
-    expect(first).toBe("notified");
+    expect(first).toBe("inboxed-digest");
     expect(second).toBe("suppressed-duplicate");
-    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+    // One entry, so the digest lists this meal once.
     expect(await getInbox()).toHaveLength(1);
   });
 
-  it("holds a different venue back until the minimum gap has passed", async () => {
+  it("captures a second venue rather than holding it back", async () => {
     const t = NOON.getTime();
     await notifyOrInbox(resolved("kobe", "Kobe Japanese Express", t), 22);
     const other = await notifyOrInbox(resolved("nashmi", "Nashmi Bakery & Sweets", t + 120_000), 15);
 
-    // Still captured — the inbox never loses a prompt — but no second buzz.
-    expect(other).toBe("inboxed-rate-limited");
-    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+    // Two distinct venues, two entries, no per-visit interruption for either.
+    expect(other).toBe("inboxed-digest");
     expect(await getInbox()).toHaveLength(2);
   });
 
-  it("notifies again once the gap has elapsed", async () => {
+  it("sends no per-visit notification at all, whatever the gap", async () => {
+    // The storm is impossible now: nothing schedules a per-visit prompt. The
+    // only notification of the day is the digest, scheduled separately.
     const t = NOON.getTime();
     await notifyOrInbox(resolved("kobe", "Kobe Japanese Express", t), 22);
 
@@ -83,15 +90,18 @@ describe("duplicate confirm notifications", () => {
       15,
     );
 
-    expect(later).toBe("notified");
-    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(2);
+    expect(later).toBe("inboxed-digest");
+    const perVisit = (Notifications.scheduleNotificationAsync as jest.Mock).mock.calls
+      .filter((c) => c[0]?.content?.categoryIdentifier === "passive_confirm");
+    expect(perVisit).toHaveLength(0);
   });
 
-  it("attaches the Yes/No action category to the notification", async () => {
-    await notifyOrInbox(resolved("kobe", "Kobe Japanese Express", NOON.getTime()), 22);
-    const arg = (Notifications.scheduleNotificationAsync as jest.Mock).mock.calls[0][0];
-    expect(arg.content.categoryIdentifier).toBe("passive_confirm");
-    expect(arg.content.data.place_id).toBe("kobe");
+  it("still lands both meals in the inbox for the digest to show", async () => {
+    const t = NOON.getTime();
+    await notifyOrInbox(resolved("kobe", "Kobe Japanese Express", t), 22);
+    await notifyOrInbox(resolved("nashmi", "Nashmi Bakery & Sweets", t + 120_000), 15);
+    const inbox = await getInbox();
+    expect(inbox.map((e: any) => e.place_id).sort()).toEqual(["kobe", "nashmi"]);
   });
 });
 

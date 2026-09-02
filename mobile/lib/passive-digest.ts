@@ -113,3 +113,82 @@ export function digestNotificationBody(digest: Digest, formatTime: (ms: number) 
 export function allowsRealtimePrompt(entry: InboxEntry): boolean {
   return (entry.confidence ?? 0) >= HIGH_BAND_MIN;
 }
+
+// ----------------------------------------------------------------------------
+// Scheduling
+// ----------------------------------------------------------------------------
+//
+// A local notification's content is fixed when it is scheduled, and iOS gives
+// us no reliable way to run code just before one fires. So we cannot schedule a
+// blank 8:30pm digest each morning and fill it in later.
+//
+// Instead the digest is (re)scheduled every time a visit lands in the inbox,
+// for tonight at DIGEST_HOUR, with copy reflecting everything captured so far.
+// The consequence is the behaviour we want: a day with no captures schedules
+// nothing and the user hears nothing.
+
+import * as Notifications from "expo-notifications";
+import { track } from "./analytics";
+
+export const DIGEST_HOUR = 20;
+export const DIGEST_MINUTE = 30;
+export const DIGEST_KIND = "passive_digest";
+
+const DIGEST_NOTIF_ID_KEY = "palate.passive.digestNotifId";
+
+/**
+ * When tonight's digest should fire, or null if that moment has already passed.
+ * A capture at 11pm does not get a digest — it rolls into tomorrow's, which is
+ * better than buzzing someone at midnight about dinner.
+ */
+export function digestTimeFor(now: Date): Date | null {
+  const at = new Date(now);
+  at.setHours(DIGEST_HOUR, DIGEST_MINUTE, 0, 0);
+  return at.getTime() <= now.getTime() ? null : at;
+}
+
+/**
+ * Schedule (or reschedule) tonight's digest. Cancels the previous one first —
+ * every new capture rewrites the copy, and two digests in an evening would
+ * spend the notification budget twice for one job.
+ */
+export async function scheduleDigest(
+  entries: InboxEntry[],
+  getStoredId: () => Promise<string | null>,
+  setStoredId: (id: string | null) => Promise<void>,
+  now = new Date(),
+): Promise<string | null> {
+  const digest = buildDigest(entries, now);
+  const when = digestTimeFor(now);
+
+  const previous = await getStoredId();
+  if (previous) {
+    await Notifications.cancelScheduledNotificationAsync(previous).catch(() => {});
+    await setStoredId(null);
+  }
+
+  if (!when || !isDigestWorthSending(digest)) return null;
+
+  const body = digestNotificationBody(digest, (ms) =>
+    new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+  );
+
+  const id = await Notifications.scheduleNotificationAsync({
+    content: {
+      title: digest.total === 1 ? "One place to confirm" : `${digest.high.length + digest.medium.length} places to confirm`,
+      body,
+      data: { kind: DIGEST_KIND, date: digest.date },
+    },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when },
+  });
+  await setStoredId(id);
+  void track("digest_scheduled", {
+    at: when.toISOString(),
+    high: digest.high.length,
+    medium: digest.medium.length,
+    low: digest.low.length,
+  });
+  return id;
+}
+
+export const DIGEST_NOTIF_ID_STORAGE_KEY = DIGEST_NOTIF_ID_KEY;

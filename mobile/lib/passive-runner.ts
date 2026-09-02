@@ -102,6 +102,9 @@ export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
   const result = await notifyOrInbox(resolved, q.dwellMin);
   if (result === "notified") {
     logDetectorNote("prompted", resolved.candidates[0].name);
+  } else if (result === "inboxed-digest") {
+    // Captured and queued for tonight's digest — the intended path, not a miss.
+    logDetectorNote("queued_for_digest", resolved.candidates[0].name);
   } else {
     // Not a failure, but from the user's seat it looks identical to one: no
     // notification appeared.

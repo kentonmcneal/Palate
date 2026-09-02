@@ -14,6 +14,7 @@ import type { Restaurant } from "./places";
 import type { ResolvedVisit } from "./passive-pipeline";
 import { track } from "./analytics";
 import { recentlyPrompted } from "./visits";
+import { allowsRealtimePrompt } from "./passive-digest";
 
 // Quiet hours (local): default ~9pm–8am. Suppressed visits go to the inbox.
 const QUIET_START_HOUR = 21;
@@ -46,6 +47,20 @@ export const MIN_NOTIF_GAP_MIN = 15;
 
 /** Notification category carrying the Yes/No lock-screen actions. */
 export const CONFIRM_CATEGORY = "passive_confirm";
+
+/**
+ * Real-time per-visit prompts. OFF: confirmation happens in the nightly digest.
+ *
+ * The digest is the engagement loop — perfect passive capture leaves the user
+ * no reason to open the app, and a prompt answered on the lock screen does not
+ * bring them back either. Confirming a day at once is also cheaper than being
+ * interrupted per meal, and it frees the notification budget for one message
+ * that carries something back.
+ *
+ * Flip to true to restore per-visit prompts; the path below is intact and
+ * gated on the High band only.
+ */
+export const REALTIME_PROMPTS_ENABLED = false;
 
 export type InboxEntry = {
   id: string;
@@ -271,12 +286,30 @@ async function scheduleConfirmNotification(entry: InboxEntry): Promise<void> {
   });
 }
 
+/** Rewrite tonight's digest to include everything captured so far today. */
+async function rescheduleDigest(): Promise<void> {
+  try {
+    const { scheduleDigest, DIGEST_NOTIF_ID_STORAGE_KEY } = await import("./passive-digest");
+    await scheduleDigest(
+      await getInbox(),
+      () => AsyncStorage.getItem(DIGEST_NOTIF_ID_STORAGE_KEY),
+      async (id) => {
+        if (id) await AsyncStorage.setItem(DIGEST_NOTIF_ID_STORAGE_KEY, id);
+        else await AsyncStorage.removeItem(DIGEST_NOTIF_ID_STORAGE_KEY);
+      },
+    );
+  } catch {
+    // Scheduling is best-effort; the entry is already safely in the inbox.
+  }
+}
+
 export type NotifyResult =
   | "notified"
   | "inboxed-quiet"
   | "inboxed-rate-limited"
   | "suppressed-recent"
-  | "suppressed-duplicate";
+  | "suppressed-duplicate"
+  | "inboxed-digest";
 
 /** Fire a confirmation for a resolved visit, or route it to the inbox. */
 export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): Promise<NotifyResult> {
@@ -329,6 +362,21 @@ export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): 
   if (!isNew) {
     void track("confirm_notif_suppressed", { reason: "duplicate_recent", place_id: entry.place_id });
     return "suppressed-duplicate";
+  }
+
+  // Digest-only: the entry is captured, and tonight's digest is rewritten to
+  // include it. No per-visit interruption.
+  if (!REALTIME_PROMPTS_ENABLED) {
+    await rescheduleDigest();
+    return "inboxed-digest";
+  }
+
+  // Everything below is the real-time path, kept intact behind the flag.
+  // High band only — a Medium guess is not worth interrupting anyone for.
+  if (!allowsRealtimePrompt(entry)) {
+    void track("confirm_notif_suppressed", { reason: "below_high_band", place_id: entry.place_id });
+    await rescheduleDigest();
+    return "inboxed-digest";
   }
 
   if (isQuietHours()) {
