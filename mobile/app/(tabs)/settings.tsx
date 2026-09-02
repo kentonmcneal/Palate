@@ -6,6 +6,7 @@ import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Button, Spacer } from "../../components/Button";
 import { Avatar } from "../../components/Avatar";
+import { TopFive } from "../../components/TopFive";
 import { colors, spacing, type } from "../../theme";
 import { supabase } from "../../lib/supabase";
 import { signOut } from "../../lib/auth";
@@ -448,10 +449,12 @@ export default function Settings() {
           </Note>
         </Section>
 
+        {/* The list itself, not a button to it. A ranked list is an identity
+            object — it belongs on the profile, which is the whole Letterboxd
+            lesson. "See the whole list" still opens /rankings. */}
         <Section title="Your ranking">
           <Note>Every time you log a meal we ask one head-to-head. This is the order that comes out.</Note>
-          <Spacer size={10} />
-          <Button title="See your ranked places" onPress={() => router.push("/rankings")} />
+          <TopFive mine />
         </Section>
 
         <Section title="Your profile">

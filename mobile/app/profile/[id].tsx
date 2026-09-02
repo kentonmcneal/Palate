@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Spacer } from "../../components/Button";
 import { Avatar } from "../../components/Avatar";
+import { TopFive } from "../../components/TopFive";
 import { colors, spacing, type, shadow, card } from "../../theme";
 import { getFriendProfileSnapshot, getMyProfile, type FriendProfileSnapshot } from "../../lib/profile";
 import { captureRef } from "react-native-view-shot";
@@ -309,6 +310,12 @@ export default function FriendProfileScreen() {
                     )}
                   </View>
                 )}
+                {/* The single most interesting thing on a stranger's page, and
+                    the reason the People directory is worth opening at all.
+                    Renders nothing when their list is private or empty — the
+                    two are indistinguishable from here on purpose. */}
+                <TopFive userId={targetId} mine={false} displayName={snapshot.display_name} />
+
                 {sharedPlaces.length > 0 && (
                   <View style={styles.sharedBox}>
                     <Text style={styles.sharedTitle}>

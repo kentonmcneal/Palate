@@ -12,6 +12,7 @@ import {
 } from "../lib/menu-items";
 import { rateVisit } from "../lib/visits";
 import { triggerHapticSelection, triggerHapticSuccess } from "../lib/haptics";
+import { loadVisitPayoff } from "../lib/visit-payoff";
 import { PhotoPrompt } from "../components/PhotoPrompt";
 import { ComparisonPrompt } from "../components/ComparisonPrompt";
 
@@ -44,6 +45,10 @@ export default function RateItemsScreen() {
   const [savedCount, setSavedCount] = useState(0);
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
+  // What the visit changed — one line, or nothing. Fetched rather than passed
+  // in params because it has to count the visit that was just written.
+  const [payoff, setPayoff] = useState<string | null>(null);
+
   const [newName, setNewName] = useState("");
   const [newPending, setNewPending] = useState<ItemRating | null>(null);
   const [adding, setAdding] = useState(false);
@@ -63,6 +68,11 @@ export default function RateItemsScreen() {
   }, [params.restaurant_id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!params.visit_id) return;
+    void loadVisitPayoff(params.visit_id).then(setPayoff);
+  }, [params.visit_id]);
 
   async function handleRate(item: MenuItem, rating: ItemRating) {
     if (busyKey) return;
@@ -126,6 +136,11 @@ export default function RateItemsScreen() {
       <View style={styles.header}>
         <Text style={styles.eyebrow}>WHAT DID YOU GET?</Text>
         {params.name && <Text style={styles.title}>{params.name}</Text>}
+        {/* The whole point of the Swarm lesson: logging has to DO something,
+            visibly, right now. One line, always true, or absent. It arrives a
+            beat after the screen does — that is fine, and better than holding
+            the screen back for it. */}
+        {!!payoff && <Text style={styles.payoff}>{payoff}</Text>}
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
@@ -265,6 +280,7 @@ const styles = StyleSheet.create({
   },
   eyebrow: { ...type.micro, color: colors.mute },
   title: { fontSize: 22, fontWeight: "800", color: colors.ink, marginTop: 6, letterSpacing: -0.5 },
+  payoff: { fontSize: 14, fontWeight: "700", color: colors.redText, marginTop: 6, lineHeight: 19 },
 
   body: { padding: spacing.lg, paddingBottom: 40 },
   center: { padding: 60, alignItems: "center" },

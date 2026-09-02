@@ -146,3 +146,63 @@ export async function recordComparison(
 
   return next;
 }
+
+// ---------------------------------------------------------------------------
+// The public face of the list
+// ---------------------------------------------------------------------------
+// A ranked list is an identity object — the most interesting thing on a
+// stranger's profile and the reason to keep answering the question on your
+// own. Showing it required splitting "the list" from "how the list was made":
+// the order is shareable, the comparison history is not.
+
+export type TopPlace = {
+  googlePlaceId: string;
+  name: string;
+  cuisine: string | null;
+  position: number;
+};
+
+/**
+ * Somebody's top places, best first — theirs or your own.
+ *
+ * Own rows come straight from `place_ratings` under RLS. Another person's come
+ * from `top_ranked_places` (0069), which enforces the friend/public-profile
+ * rule server-side and returns position only, never ratings. Returns [] when
+ * you are not allowed to see it, which is deliberately the same shape as
+ * "they haven't ranked anything" — a caller cannot tell a private list from an
+ * empty one, and shouldn't be able to.
+ */
+export async function topRankedPlaces(userId?: string, limit = 5): Promise<TopPlace[]> {
+  const me = (await supabase.auth.getUser()).data.user?.id;
+  const target = userId ?? me;
+  if (!target) return [];
+
+  if (me && target === me) {
+    const mine = await loadRankedPlaces(me);
+    return mine
+      // An unanswered place still sits at DEFAULT_RATING and would outrank
+      // something actually judged worse. Only earned positions get shown.
+      .filter((p) => p.comparisons > 0)
+      .slice(0, limit)
+      .map((p, i) => ({
+        googlePlaceId: p.googlePlaceId,
+        name: p.name,
+        cuisine: p.cuisine,
+        position: i + 1,
+      }));
+  }
+
+  const { data, error } = await supabase.rpc("top_ranked_places", {
+    target_id: target,
+    p_limit: limit,
+  });
+  if (error) return [];
+  return ((data ?? []) as {
+    google_place_id: string; name: string; cuisine_type: string | null; rank_position: number;
+  }[]).map((r) => ({
+    googlePlaceId: r.google_place_id,
+    name: r.name,
+    cuisine: r.cuisine_type,
+    position: r.rank_position,
+  }));
+}
