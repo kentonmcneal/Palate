@@ -1,5 +1,50 @@
 # Sprint log
 
+## Session 4 — TONIGHT.md, complete (2026-09-02, overnight)
+
+`tsc` clean, **187 tests** (up from 168). Migrations applied through **0065**.
+All JS-only plus additive SQL, so the whole sprint is **staged for an OTA** to
+runtime 0.1.7 and not yet published — build 30 is in Beta App Review.
+
+W1–W7 all shipped. The parts worth remembering:
+
+- **Waitlist removed** (0061). The evidence was weaker than my own hypothesis:
+  three real users signed in and never started onboarding, all post-gate — but
+  three others who joined post-gate started the same day. n=3 either way. The
+  gate was costing more than it protected at seven testers, so it went, and the
+  column, admin RPCs and screen all stay for a one-line revert. Caught while
+  doing it: the "someone joined" broadcast fires on an UPDATE into approved, so
+  accounts born approved would have silently stopped announcing. Added an
+  INSERT-path trigger sharing the dedupe key.
+- **Generated card art was reverted** on the founder's screenshot. I had the
+  reasoning backwards — a photo is information, initials are not, so a 132pt
+  block of gradient made the feed emptier and pushed the name, match and reason
+  below the fold. Art now renders only when a real photo exists.
+- **Pairwise ranking** uses Elo rather than insertion sort, because the product
+  constraint is one question and never a queue. 19 tests including a property
+  test that recovers a known order from 400 comparisons with 15% wrong answers.
+- **Group recs are minimax with a veto pass**, cache-only, server-side.
+
+### Needs a human
+
+1. **Publish the OTA** once build 30 clears review. Everything since build 30 —
+   photos, heartbeat, ranking, names, match card, shared places, group recs —
+   is JS-only and reaches installed 0.1.7 binaries in one `eas update`.
+2. **The three device checks** are still unverified: lock-screen confirm
+   actions, Dynamic Type at large text, Gmail connect.
+3. **Flip `server_push` and `discovery_pings`** only after (2).
+
+### Known divergence, flagged not buried
+
+The group scorer is simpler than the client's five-dimension compatibility
+model (cuisine, format, price, quality). A per-person number in a group result
+may therefore not equal that person's solo match % for the same place. Fixing
+it properly means porting `compatibility.ts` to Deno — real work, and the right
+call is to do it deliberately rather than at 5am.
+
+---
+
+
 ## Session 3 — social, generated art, activity push (2026-09-02, overnight)
 
 > **SHIPPED: build 30** (`6809803`, 0.1.7, runtime 0.1.7) built and **submitted
