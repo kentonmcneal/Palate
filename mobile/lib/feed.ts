@@ -17,7 +17,7 @@ import { hiddenUserIds } from "./moderation";
 export type FeedEventKind = "wrapped_shared" | "persona_change" | "milestone" | "visit_logged";
 
 export type FeedEventPayload =
-  | { kind: "wrapped_shared"; persona_label: string; tagline: string; week_start: string; week_end: string; total_visits: number; top_restaurant: string | null }
+  | { kind: "wrapped_shared"; persona_label: string; tagline: string; week_start: string; week_end: string; total_visits: number; top_restaurant: string | null; top_restaurant_place_id?: string | null }
   | { kind: "persona_change"; from_persona: string | null; to_persona: string }
   | { kind: "milestone"; streak_days: number }
   | { kind: "visit_logged"; restaurant_name: string; cuisine: string | null; neighborhood: string | null; google_place_id?: string };
@@ -106,6 +106,20 @@ export async function shareWrappedToFeed(opts: {
 }): Promise<void> {
   const me = await currentUserId();
   if (!me) throw new Error("Not signed in");
+
+  // Resolve the top restaurant to a place id so the name in the feed is
+  // tappable. Done HERE rather than in generate_weekly_wrapped because the
+  // poster is reading their own visits — no permission widening, and no
+  // rewrite of a service-role function that a cron depends on.
+  //
+  // Null when the name maps to more than one place: top_restaurant groups by
+  // coalesce(chain_name, name), so a chain visited at two locations has no
+  // single destination, and guessing one would send people somewhere the
+  // post did not mean.
+  const topPlaceId = opts.topRestaurant
+    ? await resolveTopPlaceId(me, opts.weekStart, opts.weekEnd, opts.topRestaurant)
+    : null;
+
   const { data, error } = await supabase.from("feed_events").insert({
     user_id: me,
     kind: "wrapped_shared",
@@ -116,6 +130,7 @@ export async function shareWrappedToFeed(opts: {
       week_end: opts.weekEnd,
       total_visits: opts.totalVisits,
       top_restaurant: opts.topRestaurant,
+      top_restaurant_place_id: topPlaceId,
     },
   }).select("id").single();
   if (error) throw error;
@@ -170,5 +185,40 @@ export async function toggleLike(eventId: string, currentlyLiked: boolean): Prom
       .from("feed_likes")
       .insert({ feed_event_id: eventId, user_id: me });
     if (error && !`${error.message}`.includes("duplicate")) throw error;
+  }
+}
+
+/**
+ * The google_place_id behind a Wrapped's top_restaurant, or null when there
+ * isn't exactly one. Reads only the poster's own visits.
+ */
+async function resolveTopPlaceId(
+  userId: string,
+  weekStart: string,
+  weekEnd: string,
+  topName: string,
+): Promise<string | null> {
+  try {
+    const { data } = await supabase
+      .from("visits")
+      .select("restaurant:restaurants(google_place_id, name, chain_name)")
+      .eq("user_id", userId)
+      .gte("visited_at", `${weekStart}T00:00:00Z`)
+      .lte("visited_at", `${weekEnd}T23:59:59Z`);
+
+    type Row = { restaurant: { google_place_id: string; name: string; chain_name: string | null }
+      | { google_place_id: string; name: string; chain_name: string | null }[] | null };
+
+    const ids = new Set<string>();
+    for (const row of (data ?? []) as Row[]) {
+      const r = Array.isArray(row.restaurant) ? row.restaurant[0] : row.restaurant;
+      if (!r) continue;
+      // Match the SQL function's grouping key exactly, or we would resolve a
+      // different "top" than the one the post displays.
+      if ((r.chain_name ?? r.name) === topName) ids.add(r.google_place_id);
+    }
+    return ids.size === 1 ? [...ids][0] : null;
+  } catch {
+    return null;
   }
 }

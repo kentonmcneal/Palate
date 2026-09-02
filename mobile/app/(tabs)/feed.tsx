@@ -230,8 +230,12 @@ function FeedRow({
 }
 
 function FeedBody({ event }: { event: FeedEvent }) {
+  const router = useRouter();
   if (event.kind === "wrapped_shared") {
-    const p = event.payload as { persona_label: string; tagline: string; total_visits: number; top_restaurant: string | null };
+    const p = event.payload as {
+      persona_label: string; tagline: string; total_visits: number;
+      top_restaurant: string | null; top_restaurant_place_id?: string | null;
+    };
     return (
       <View style={styles.wrappedCard}>
         <Text style={styles.wrappedEyebrow}>WEEKLY WRAPPED</Text>
@@ -243,10 +247,19 @@ function FeedBody({ event }: { event: FeedEvent }) {
             <Text style={styles.wrappedStatL}>visits</Text>
           </View>
           {p.top_restaurant && (
-            <View style={[styles.wrappedStat, { flex: 1.5 }]}>
+            <Pressable
+              style={[styles.wrappedStat, { flex: 1.5 }]}
+              disabled={!p.top_restaurant_place_id}
+              onPress={() => p.top_restaurant_place_id
+                && router.push(`/restaurant/${p.top_restaurant_place_id}` as never)}
+              accessibilityRole={p.top_restaurant_place_id ? "button" : undefined}
+            >
+              {/* Tappable only when the name resolves to exactly one place —
+                  older posts carry no id, and a chain visited twice has no
+                  single destination. */}
               <Text style={styles.wrappedStatV} numberOfLines={1}>{p.top_restaurant}</Text>
               <Text style={styles.wrappedStatL}>top spot</Text>
-            </View>
+            </Pressable>
           )}
         </View>
       </View>
