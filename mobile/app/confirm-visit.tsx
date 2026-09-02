@@ -25,6 +25,7 @@ export default function ConfirmVisit() {
     dwell_min?: string;
     accuracy_m?: string;
     detect_source?: string;
+    confidence_score?: string;
     candidate_count?: string;
   }>();
 
@@ -36,6 +37,10 @@ export default function ConfirmVisit() {
     dwell_min: params.dwell_min ? Number(params.dwell_min) : null,
     accuracy_m: params.accuracy_m ? Number(params.accuracy_m) : null,
     detect_source: (params.detect_source as string) || null,
+    // The calibration pair: what we claimed, against what actually happened.
+    // The calibration pair: what we claimed, against what actually happened.
+    confidence: params.confidence_score ? Number(params.confidence_score) : null,
+    confidence_band: (params.confidence as string) || null,
     candidate_count: params.candidate_count ? Number(params.candidate_count) : null,
   };
 

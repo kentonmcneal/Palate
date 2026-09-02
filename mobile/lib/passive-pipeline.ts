@@ -16,6 +16,7 @@ import type { Restaurant } from "./places";
 import { supabase } from "./supabase";
 import { nearbyRestaurants } from "./places";
 import { getCachedNearby, setCachedNearby } from "./nearby-cache";
+import { confidenceScore, confidenceBand, type ConfidenceBand } from "./passive-confidence";
 import { recordMiss } from "./passive-misses";
 
 // Qualifying thresholds (spec Phase 3).
@@ -66,6 +67,11 @@ export type ResolvedVisit = {
   raw: RawVisit;
   candidates: Restaurant[];
   cacheHit: boolean;
+  /** Confidence in the TOP candidate, 0-1. Drives pre-check and prompt gating.
+   *  Optional because objects built before scoring existed still flow through
+   *  the inbox. */
+  confidence?: number;
+  confidenceBand?: ConfidenceBand;
 };
 
 export function dwellMinutes(raw: RawVisit): number | null {
@@ -402,5 +408,17 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
     });
     return null;
   }
-  return { raw, candidates: ranked, cacheHit };
+  // Score the top candidate. candidateCount is the ambiguity measure — how many
+  // plausible venues were in range, not how many we chose to show.
+  const visited = await visitedPlaceIdsAmong([ranked[0].google_place_id]);
+  const confidence = confidenceScore({
+    dwellMin: dwellMinutes(raw) ?? 0,
+    accuracyM: raw.horizontalAccuracy,
+    candidateCount: eligible.length,
+    hour,
+    place: ranked[0],
+    visitedBefore: visited.has(ranked[0].google_place_id),
+  });
+
+  return { raw, candidates: ranked, cacheHit, confidence, confidenceBand: confidenceBand(confidence) };
 }

@@ -60,6 +60,11 @@ export type InboxEntry = {
   // against a guess. Optional: entries written before this existed lack them.
   accuracyM?: number;
   source?: string;
+  /** Confidence in this attribution at the time it was raised, plus its band.
+   *  Recorded so calibration is answerable: of entries scored High, what
+   *  fraction get confirmed? Below ~85% the pre-check is costing trust. */
+  confidence?: number;
+  confidenceBand?: string;
   /** How many venues were in range — the honest measure of attribution difficulty. */
   candidateCount?: number;
   /** Several venues within CLUSTER_RADIUS_M — ask as a multi-select rather
@@ -185,13 +190,14 @@ export function confirmParamsFor(entry: InboxEntry) {
     name: entry.name,
     address: entry.address,
     alternates: JSON.stringify(entry.alternates),
-    confidence: "high" as const,
+    confidence: (entry.confidenceBand ?? "high") as "high" | "medium" | "low",
     inbox_id: entry.id,
     // Threaded through so the outcome event can report what the detection
     // looked like. Strings: expo-router params are strings either way.
     dwell_min: String(Math.round(entry.dwellMin)),
     accuracy_m: entry.accuracyM == null ? "" : String(Math.round(entry.accuracyM)),
     detect_source: entry.source ?? "",
+    confidence_score: entry.confidence == null ? "" : entry.confidence.toFixed(3),
     candidate_count: String(entry.candidateCount ?? 0),
     cluster: entry.cluster ? "1" : "",
   };
@@ -267,6 +273,8 @@ export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): 
     dwellMin,
     accuracyM: resolved.raw.horizontalAccuracy,
     source: resolved.raw.source ?? "visit",
+    confidence: resolved.confidence,
+    confidenceBand: resolved.confidenceBand,
     candidateCount: resolved.candidates.length,
     cluster: clusteredCandidates(resolved.candidates).length >= 2,
   };
@@ -290,6 +298,11 @@ export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): 
     accuracy_m: Math.round(resolved.raw.horizontalAccuracy),
     source: resolved.raw.source ?? "visit",
     candidate_count: resolved.candidates.length,
+    // Optional on purpose: a ResolvedVisit built by an older build — or held in
+    // the inbox from before scoring existed — has no confidence, and telemetry
+    // must not throw on it.
+    confidence: resolved.confidence == null ? null : Number(resolved.confidence.toFixed(3)),
+    confidence_band: resolved.confidenceBand ?? null,
   });
 
   // Already holding this venue from a recent detection: the inbox collapsed
@@ -324,7 +337,10 @@ export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): 
 
   await scheduleConfirmNotification(entry);
   await bumpNotifCount();
-  void track("confirm_notif_sent", { place_id: entry.place_id });
+  void track("confirm_notif_sent", {
+    place_id: entry.place_id,
+    confidence_band: entry.confidenceBand ?? null,
+  });
   return "notified";
 }
 
