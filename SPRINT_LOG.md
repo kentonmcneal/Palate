@@ -1,5 +1,145 @@
 # Sprint log
 
+## Session 5 — GYM.md, complete (2026-09-02)
+
+`tsc` clean, **235 tests** (up from 205). Every commit JS-only, so the whole
+sprint is **staged for an OTA** to runtime 0.1.7 and **not published** — build
+30 is in Beta App Review. `app.json` untouched, no native modules, no flags
+flipped, no Apple submission, no Gmail import run.
+
+W1–W6 all shipped. What matters:
+
+### Migrations 0068 and 0069 are NOT APPLIED — and I could not apply them
+
+The Supabase CLI access token has expired. Both `supabase db push --dry-run`
+and `supabase migration list` return `LegacyPlatformAuthRequiredError`, and
+`supabase login` is interactive, so this needs Kenton:
+
+```bash
+npx supabase login && npx supabase db push --dry-run
+```
+
+There is no local Postgres or Docker on this machine either, so **neither
+migration has been parse-checked against a real server**. Treat the dry-run as
+required, not optional. One identifier was renamed by eye for this reason:
+`position` is a `col_name_keyword` in Postgres and is not safe as a bare
+identifier in a `RETURNS TABLE` declaration, so 0069 returns `rank_position`.
+
+Both degrade to silence if the RPC is missing — `visit_payoff_facts` returning
+an error shows no line, `top_ranked_places` returning an error shows no list —
+so shipping the JS ahead of the SQL is safe, just inert.
+
+Migrations applied through **0067**.
+
+### W1 — Gmail refresh tokens encrypted at rest (`c5f1cf0`)
+
+Vault-held key + pgcrypto (0066). Round-trip verified before anything was
+dropped: decrypt returns the original, the plaintext column is null, and the
+ciphertext is 95 bytes of valid PGP.
+
+Two things this turned up. The encrypted write failed first time because
+`refresh_token` was still `NOT NULL` — caught by the mandated round-trip check
+before any real token existed, fixed in 0067. And `handleDisconnect` was still
+reading the plaintext column, which would have silently skipped the Google
+revoke and left mailbox access alive after a user disconnected. Swept all three
+plaintext reads.
+
+**The plaintext column still exists** and should be dropped only after the
+encrypted path has run once against a real token.
+
+### W2 — Group recommendations got a screen (`7596534`)
+
+`group-recs` was deployed with `lib/group-recs.ts` beside it and **nothing
+calling either** — dead code with a deployment. Now `/group`, reachable from
+the Feed tab header.
+
+Every pick shows its per-person scores. The headline chip is labelled "worst
+case" because that is literally what minimax maximises, and the veto count is
+surfaced ("ruled out 12 places at least one of you wouldn't have wanted")
+rather than hidden. A group pick people can audit is a group pick people
+accept; that is the whole reason to be the neutral party.
+
+### W3 — The visit moment says what it changed (`a845dd9`)
+
+The Swarm lesson. `visitPayoff()` is pure, picks the most **specific** true
+fact rather than the most flattering, and returns null rather than reaching for
+filler.
+
+Two things the tests pinned that I had wrong first:
+
+- "Became the top spot" is `visitsHere === runnerUp + 1`, the visit that broke
+  the tie. `>` stays true for every later visit to a long-standing favourite
+  and would announce the same change over and over.
+- The Wrapped nudge reads `visitsToWrapped()` rather than carrying a threshold
+  of its own, so it cannot nudge toward something already unlocked. My first
+  version invented a per-week threshold; the real gate is lifetime, and is 3.
+
+### W4 — The ranked list moved to the profile (`a845dd9`, `c7da6e8`)
+
+Top five inline on your own profile and on other people's, same component both
+places, plus a 9:16 share card.
+
+`place_ratings` is RLS'd to own-rows, correctly — Elo ratings derive from
+private comparison history. `top_ranked_places` (0069) shares the **order**
+without the history: names and position only, never ratings or comparison
+counts. Someone else's empty list and someone else's private list render
+identically, on purpose.
+
+The share is gated on three earned positions and confidence above "low", for
+the same reason the screen states its own confidence: posting a list built from
+one coin-flip would be the app inviting somebody to vouch publicly for a claim
+it has not earned.
+
+### W5 — The first ten minutes teach one thing (`c87a2e8`)
+
+What a new account actually saw: a recommendation rail with nothing to
+recommend from, a stretch pick built on no history, an empty saves rail — and
+then, **below all of it**, a getting-started block offering three CTAs of equal
+weight. Three equal choices is a menu, and a menu asks somebody to diagnose
+their own account.
+
+`nextStep()` picks one from real state, ordered by what actually unblocks
+things: a connected-but-never-reviewed mailbox first (hard permission already
+granted, nothing to show for it), then background location, then email import,
+then logging one by hand, then friends. Hand-entering history is the Beli
+labour our whole approach exists to avoid, so it is the fallback and never the
+opener. Friends are never suggested for an empty account.
+
+The card renders above the decision engine and disappears once the account is
+healthy — an onboarding card that never leaves becomes furniture.
+
+Home never calls `previewGmailImport`. Knowing a live receipt count would mean
+scanning somebody's mailbox on every render of the home screen, so the step is
+derived from `gmail_connection_status`, which is free.
+
+### W6 — Activation funnel on the debug screen (`07d9648`)
+
+Five stages, not six: confirming **is** the write, so a separate "logged" row
+would always equal "confirmed". Suppressions broken out by reason, because a
+suppressed detection is indistinguishable from one that never happened if you
+only read stage totals — which is exactly how the confirm-multi bug stayed
+invisible while it ate four prompts in an afternoon.
+
+An unrecognized suppression reason still renders, so the funnel cannot silently
+under-report precisely when the pipeline changes.
+
+---
+
+## Still needs Kenton — nothing below this line can be done without a device or a decision
+
+1. **`npx supabase login`, then dry-run and apply 0068 + 0069.** Neither has
+   been parse-checked. See above.
+2. **Publish the OTA** once build 30 clears Beta App Review. Everything from
+   sessions 4 and 5 is staged for runtime 0.1.7.
+3. **Three device checks**, unchanged from last session: lock-screen confirm
+   actions, Dynamic Type at the largest setting, Gmail connect.
+4. **Run `preview` once on a real inbox** and record the actual
+   `gmail_place_lookup` count here, so the import's cost is known before it is
+   paid at scale.
+5. **Flip `server_push` and `discovery_pings`** after device verification.
+6. **Drop the plaintext `refresh_token` column** after the encrypted path has
+   run once against a real token.
+
 ## Session 4 — TONIGHT.md, complete (2026-09-02, overnight)
 
 `tsc` clean, **187 tests** (up from 168). Migrations applied through **0065**.
