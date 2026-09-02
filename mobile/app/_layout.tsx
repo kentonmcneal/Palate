@@ -273,6 +273,10 @@ export default function RootLayout() {
         return;
       }
 
+      if (data?.kind === "passive_digest") {
+        router.push("/digest" as never);
+        return;
+      }
       if (data?.kind !== "passive_confirm") return;
 
       const placeId = String(data.place_id ?? "");
@@ -394,6 +398,7 @@ export default function RootLayout() {
           <Stack.Screen name="confirm-multi" options={{ presentation: "modal" }} />
           <Stack.Screen name="passive-capture-intro" options={{ presentation: "modal" }} />
           <Stack.Screen name="passive-inbox" options={{ presentation: "modal" }} />
+          <Stack.Screen name="digest" options={{ presentation: "modal" }} />
           <Stack.Screen name="year-in-review" options={{ presentation: "modal" }} />
           <Stack.Screen name="insights" options={{ presentation: "modal" }} />
           <Stack.Screen name="friends" options={{ presentation: "modal" }} />
