@@ -7,6 +7,7 @@ import {
   drainConfirmQueue,
 } from "../lib/passive-confirm";
 import { refreshDiscoveryPings } from "../lib/notification-schedule";
+import { recordHeartbeat } from "../lib/heartbeat";
 import { ScreenshotFeedbackSheet } from "../components/ScreenshotFeedbackSheet";
 import {
   shouldPromptNow,
@@ -239,9 +240,13 @@ export default function RootLayout() {
   }, [session?.user]);
   useEffect(() => {
     if (!session?.user) return;
+    void recordHeartbeat(true).catch(() => {});
     void drainConfirmQueue().catch(() => {});
     const sub = AppState.addEventListener("change", (st) => {
-      if (st === "active") void drainConfirmQueue().catch(() => {});
+      if (st === "active") {
+        void recordHeartbeat().catch(() => {});
+        void drainConfirmQueue().catch(() => {});
+      }
     });
     return () => sub.remove();
   }, [session?.user]);
