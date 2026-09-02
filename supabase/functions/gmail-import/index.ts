@@ -46,7 +46,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const body = await req.json().catch(() => ({}));
-    const action = body.action as "connect" | "scan" | "preview" | "disconnect" | "scan_all" | undefined;
+    const action = body.action as "connect" | "scan" | "preview" | "commit" | "disconnect" | "scan_all" | undefined;
 
     // scan_all is the ONLY action without a user session — a scheduler has no
     // user to be. It is gated on the shared cron secret instead, and fails
@@ -72,6 +72,7 @@ serve(async (req) => {
     if (action === "connect") return await handleConnect(admin, userId, body);
     if (action === "scan")    return await handleScan(admin, userId, body);
     if (action === "preview") return await handlePreview(admin, userId, body);
+    if (action === "commit")  return await handleCommit(admin, userId, body);
     if (action === "disconnect") return await handleDisconnect(admin, userId);
     return json({ error: "unknown action" }, 400);
   } catch (err) {
@@ -131,6 +132,9 @@ async function handlePreview(
   let parsedCount = 0;
   let unparseable = 0;
   const byName = new Map<string, { name: string; count: number }>();
+  const receipts: Array<{
+    message_id: string; name: string; visited_at: string; source: string;
+  }> = [];
 
   for (const id of fresh) {
     let detail;
@@ -148,6 +152,12 @@ async function handlePreview(
     });
     if (!parsed) { unparseable++; continue; }
     parsedCount++;
+    receipts.push({
+      message_id: id,
+      name: parsed.restaurantName,
+      visited_at: parsed.visitedAt.toISOString(),
+      source: parsed.source,
+    });
     const key = nameKey(parsed.restaurantName);
     const seen = byName.get(key);
     if (seen) seen.count++;
@@ -179,7 +189,70 @@ async function handlePreview(
     // The number this whole exercise exists to produce.
     would_cost_lookups: unknown.length,
     unresolved_names: unknown.slice(0, 50),
+    // The parsed receipts themselves, so the app can show them for review
+    // before anything is written or looked up.
+    receipts,
   });
+}
+
+
+// ----------------------------------------------------------------------------
+// commit — write the receipts the user actually confirmed
+// ----------------------------------------------------------------------------
+// The import used to write visits straight out of the scan. It should propose
+// them: a parser bug that reaches the taste graph is invisible to the person it
+// happens to, and every recommendation afterwards is computed from it.
+//
+// Committing only confirmed message ids also makes the COST proportional to
+// what someone accepts rather than to what we parsed. A person who ticks three
+// of twenty receipts pays for three lookups.
+async function handleCommit(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+  body: any,
+) {
+  const ids: string[] = Array.isArray(body.message_ids) ? body.message_ids.slice(0, 200) : [];
+  if (ids.length === 0) return json({ imported: 0, skipped: 0 });
+
+  const accessToken = await getValidAccessToken(admin, userId);
+  if (!accessToken) return json({ error: "not_connected" }, 400);
+
+  // Never re-import something already written, even if the client sends it.
+  const { data: existing } = await admin
+    .from("visits")
+    .select("import_external_id")
+    .eq("user_id", userId)
+    .eq("import_source", "gmail")
+    .in("import_external_id", ids);
+  const already = new Set((existing ?? []).map((r: any) => r.import_external_id));
+
+  let imported = 0;
+  let skipped = 0;
+  for (const id of ids) {
+    if (already.has(id)) { skipped++; continue; }
+    try {
+      const detail = await fetchMessage(accessToken, id);
+      // Re-parsed server-side rather than trusting the name the client sent
+      // back. A client is not a source of truth about what an email said.
+      const parsed = parseReceipt({
+        from: header(detail, "from"),
+        subject: header(detail, "subject"),
+        text: bodyText(detail) + " " + (detail.snippet ?? ""),
+        internalDate: detail.internalDate ? new Date(parseInt(detail.internalDate)) : new Date(),
+      });
+      if (!parsed) { skipped++; continue; }
+      const ok = await createImportedVisit(admin, userId, id, parsed);
+      if (ok) imported++; else skipped++;
+    } catch {
+      skipped++;
+    }
+  }
+
+  await admin.from("gmail_tokens")
+    .update({ last_scanned_at: new Date().toISOString() })
+    .eq("user_id", userId);
+
+  return json({ imported, skipped });
 }
 
 // ----------------------------------------------------------------------------
@@ -246,9 +319,15 @@ async function handleConnect(admin: ReturnType<typeof createClient>, userId: str
     updated_at: new Date().toISOString(),
   });
 
-  // Initial scan — last 90 days
-  const result = await runScan(admin, userId, 90);
-  return json({ connected: true, email, ...result });
+  // Connecting does NOT import. It used to run a 90-day scan right here,
+  // which wrote visits and spent a Google lookup per unknown restaurant before
+  // the user had seen a single thing we found. Two problems with that: a parser
+  // bug reached the taste graph silently, and the cost was incurred on connect
+  // rather than on consent.
+  //
+  // The flow is now connect -> preview (free) -> review -> commit. The client
+  // calls preview next.
+  return json({ connected: true, email });
 }
 
 // ----------------------------------------------------------------------------

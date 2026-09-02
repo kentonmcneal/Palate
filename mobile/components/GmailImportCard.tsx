@@ -3,10 +3,11 @@ import { View, Text, StyleSheet, Pressable, Alert } from "react-native";
 import { colors, spacing, type, card } from "../theme";
 import { Spacer } from "./Button";
 import {
-  getGmailStatus, connectGmail, rescanGmail, disconnectGmail,
+  getGmailStatus, connectGmail, disconnectGmail,
   type GmailStatus,
 } from "../lib/gmail";
 import { triggerHapticSuccess } from "../lib/haptics";
+import { useRouter } from "expo-router";
 
 // ============================================================================
 // GmailImportCard — Settings card for connecting + managing Gmail import.
@@ -15,6 +16,7 @@ import { triggerHapticSuccess } from "../lib/haptics";
 // ============================================================================
 
 export function GmailImportCard() {
+  const router = useRouter();
   const [status, setStatus] = useState<GmailStatus | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -34,10 +36,11 @@ export function GmailImportCard() {
         }
       } else {
         void triggerHapticSuccess();
-        Alert.alert(
-          "Gmail connected",
-          `Imported ${r.imported ?? 0} visit${r.imported === 1 ? "" : "s"} from your inbox.`,
-        );
+        // Connecting no longer imports anything. Straight to the review
+        // screen, which previews for free and writes only what's confirmed.
+        await load();
+        router.push("/import-review");
+        return;
       }
       await load();
     } finally {
@@ -45,23 +48,8 @@ export function GmailImportCard() {
     }
   }
 
-  async function handleRescan() {
-    setBusy(true);
-    try {
-      const r = await rescanGmail(30);
-      if (!r.ok) {
-        Alert.alert("Couldn't refresh", r.error ?? "Try again");
-      } else {
-        void triggerHapticSuccess();
-        Alert.alert(
-          "Refreshed",
-          r.imported && r.imported > 0
-            ? `Found ${r.imported} new visit${r.imported === 1 ? "" : "s"} from the last 30 days.`
-            : "No new visits found.",
-        );
-      }
-      await load();
-    } finally { setBusy(false); }
+  function reviewReceipts() {
+    router.push("/import-review");
   }
 
   function handleDisconnect() {
@@ -118,8 +106,10 @@ export function GmailImportCard() {
           : ""}
       </Text>
       <View style={styles.actions}>
-        <Pressable onPress={handleRescan} disabled={busy} style={[styles.btnPrimary, busy && { opacity: 0.6 }]}>
-          <Text style={styles.btnPrimaryText}>{busy ? "Scanning…" : "Refresh"}</Text>
+        {/* "Refresh" went straight to a scan that wrote visits and spent a
+            lookup each. It now opens the review, which previews for free. */}
+        <Pressable onPress={reviewReceipts} disabled={busy} style={[styles.btnPrimary, busy && { opacity: 0.6 }]}>
+          <Text style={styles.btnPrimaryText}>Review receipts</Text>
         </Pressable>
         <Pressable onPress={handleDisconnect} disabled={busy} style={styles.btnGhost}>
           <Text style={styles.btnGhostText}>Disconnect</Text>

@@ -130,6 +130,13 @@ export async function connectGmail(): Promise<ConnectResult> {
 }
 
 /** Manually trigger a scan (e.g. user pulled to refresh in Settings). */
+/**
+ * DIRECT scan — parses AND writes AND pays for lookups in one step, with no
+ * review. No longer reachable from the UI: the flow is preview -> review ->
+ * commit, so a parser mistake cannot reach the taste graph unseen. Kept only
+ * because the scheduled scan_all path shares the same server handler; do not
+ * wire a button to this.
+ */
 export async function rescanGmail(sinceDays = 30): Promise<ConnectResult> {
   const { data, error } = await supabase.functions.invoke("gmail-import", {
     body: { action: "scan", since_days: sinceDays },
@@ -154,6 +161,13 @@ export async function disconnectGmail(): Promise<{ ok: boolean; error?: string }
 // Gmail query, the same parser, resolved against our own restaurants table, and
 // then it stops. No Google calls, no writes.
 
+export type PreviewReceipt = {
+  message_id: string;
+  name: string;
+  visited_at: string;
+  source: "reservation" | "delivery" | "pos";
+};
+
 export type ImportPreview = {
   since_days: number;
   messages_matched: number;
@@ -165,6 +179,7 @@ export type ImportPreview = {
   /** The number that decides whether an import is worth running. */
   would_cost_lookups: number;
   unresolved_names: string[];
+  receipts: PreviewReceipt[];
 };
 
 export async function previewGmailImport(sinceDays = 90): Promise<ImportPreview> {
@@ -183,4 +198,21 @@ export function describePreview(p: ImportPreview): string {
   }
   const places = p.unique_restaurants === 1 ? "1 restaurant" : `${p.unique_restaurants} restaurants`;
   return `Found ${p.receipts_parsed} receipts across ${places}.`;
+}
+
+/**
+ * Write only the receipts the person confirmed.
+ *
+ * Cost is proportional to what they accept, not to what we parsed — someone who
+ * ticks three of twenty pays for three lookups. The server re-parses each
+ * message rather than trusting the name sent back; a client is not a source of
+ * truth about what an email said.
+ */
+export async function commitGmailImport(messageIds: string[]): Promise<{ imported: number; skipped: number }> {
+  const { data, error } = await supabase.functions.invoke("gmail-import", {
+    body: { action: "commit", message_ids: messageIds },
+  });
+  if (error) throw error;
+  if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+  return data as { imported: number; skipped: number };
 }
