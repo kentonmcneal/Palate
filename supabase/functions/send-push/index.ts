@@ -46,6 +46,8 @@ type OutboxRow = {
   body: string;
   data: Record<string, unknown>;
   attempts: number;
+  /** Broadcast news is perishable; visit confirmations are not (null). */
+  expires_at: string | null;
 };
 
 serve(async (req) => {
@@ -67,7 +69,7 @@ serve(async (req) => {
 
     const { data: due, error: dueErr } = await admin
       .from("push_outbox")
-      .select("id, user_id, title, body, data, attempts")
+      .select("id, user_id, title, body, data, attempts, expires_at")
       .is("sent_at", null)
       .lte("send_after", new Date().toISOString())
       .lt("attempts", MAX_ATTEMPTS)
@@ -77,6 +79,26 @@ serve(async (req) => {
 
     const rows = (due ?? []) as OutboxRow[];
     if (rows.length === 0) return json({ sent: 0, pending: 0 });
+
+    // Drop perishable rows rather than sending stale news. Without this, the
+    // one-per-day cap would defer a rate-limited user's broadcasts and they
+    // would receive "someone joined" a week late, one per day, forever.
+    const now = Date.now();
+    const expiredIds = new Set(
+      rows
+        .filter((r) => r.expires_at !== null && new Date(r.expires_at).getTime() < now)
+        .map((r) => r.id),
+    );
+    if (expiredIds.size) {
+      // Retired by exhausting attempts, NOT by setting sent_at. Marking them
+      // sent would count against the recipient's one-per-day quota for a push
+      // they never received — silently suppressing the next real one.
+      await admin
+        .from("push_outbox")
+        .update({ error: "expired", attempts: MAX_ATTEMPTS })
+        .in("id", [...expiredIds]);
+    }
+    const live = rows.filter((r) => !expiredIds.has(r.id));
 
     // One proactive push per user per day. Enforced here rather than at
     // enqueue time, because what matters is what a person actually receives,
@@ -95,7 +117,7 @@ serve(async (req) => {
     const eligible: OutboxRow[] = [];
     const deferred: string[] = [];
     const seenThisRun = new Set<string>();
-    for (const r of rows) {
+    for (const r of live) {
       const already = (sentToday.get(r.user_id) ?? 0) + (seenThisRun.has(r.user_id) ? 1 : 0);
       if (already >= MAX_PER_USER_PER_DAY) {
         deferred.push(r.id);
@@ -204,6 +226,7 @@ serve(async (req) => {
       sent,
       failed: failed.length,
       deferred: deferred.length,
+      expired: expiredIds.size,
       tokenless: tokenless.length,
       cleared_tokens: staleTokens.length,
     });

@@ -254,6 +254,21 @@ export default function RootLayout() {
     const handle = (response: Notifications.NotificationResponse | null | undefined) => {
       const data = response?.notification.request.content.data as Record<string, unknown> | undefined;
 
+      // Activity push (migration 0057). Each one opens the thing it is about;
+      // a notification that dumps you on Home teaches people to ignore them.
+      if (data?.type === "user_joined") {
+        router.push(`/profile/${String(data.user_id ?? "")}` as never);
+        return;
+      }
+      if (data?.type === "user_wrapped") {
+        router.push(`/profile/${String(data.user_id ?? "")}` as never);
+        return;
+      }
+      if (data?.type === "friend_visit") {
+        router.push(`/profile/${String(data.user_id ?? "")}` as never);
+        return;
+      }
+
       // Weekly discovery nudge — deep-link straight to what it promised.
       if (data?.type === "discovery_ping") {
         const { type: _t, key: _k, pathname, ...rest } = data as Record<string, string>;

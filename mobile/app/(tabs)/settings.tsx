@@ -63,7 +63,7 @@ export default function Settings() {
   const [sundayReminder, setSundayReminder] = useState(false);
   const [screenshotPrompt, setScreenshotPrompt] = useState(true);
   const [discoveryPings, setDiscoveryPings] = useState(true);
-  const [friendPush, setFriendPush] = useState(false);
+  const [friendPush, setFriendPush] = useState(true);
   const [stats, setStats] = useState<AnalyticsSummary | null>(null);
   const [palateProfile, setPalateProfile] = useState<PalateProfile | null>(null);
   const [visibility, setVisibility] = useState<ProfileVisibility>("friends");
@@ -465,7 +465,7 @@ export default function Settings() {
           <Row label="Sunday Wrapped reminder" right={<Switch value={sundayReminder} onValueChange={toggleSundayReminder} thumbColor={sundayReminder ? colors.red : "#fff"} trackColor={{ true: colors.redTintBorder, false: colors.line }} />} />
           <Note>One reminder a week, Sunday at 9 AM. That's it.</Note>
           <Row
-            label="When a friend logs a visit"
+            label="Activity from other people"
             right={
               <Switch
                 value={friendPush}
@@ -475,7 +475,7 @@ export default function Settings() {
               />
             }
           />
-          <Note>Off by default. Turning it on lets friends&apos; visits reach you — and yours reach them.</Note>
+          <Note>New people joining, Wrapped results, and friends&apos; visits. Your own activity is only shared as far as your profile visibility allows.</Note>
           <Row
             label="Weekend picks"
             right={
