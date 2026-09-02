@@ -1,4 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { loadPalateMatch } from "../lib/palate/pairCompatibility";
+import type { PalateMatch } from "../lib/recommendation/palate-match";
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   Pressable, ActivityIndicator, Alert,
@@ -26,6 +28,38 @@ export default function FriendsScreen() {
   const [outgoing, setOutgoing] = useState<FriendListItem[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Palate match per friend. Loaded after the list renders — the list must not
+  // wait on N round trips — then used to sort, so the top of the list IS the
+  // "people you match with" ranking the tester asked for. No separate screen.
+  const [matches, setMatches] = useState<Record<string, PalateMatch>>({});
+  useEffect(() => {
+    if (friends.length === 0) return;
+    let alive = true;
+    void Promise.all(
+      friends.map(async (f) => {
+        try {
+          return [f.friend.id, await loadPalateMatch(f.friend.id)] as const;
+        } catch {
+          return null;
+        }
+      }),
+    ).then((rows) => {
+      if (!alive) return;
+      const next: Record<string, PalateMatch> = {};
+      for (const row of rows) if (row) next[row[0]] = row[1];
+      setMatches(next);
+    });
+    return () => { alive = false; };
+  }, [friends]);
+
+  const sortedFriends = useMemo(() => {
+    const scoreOf = (id: string) => {
+      const m = matches[id];
+      return m?.ready ? m.score : -1; // unscored pairs sink, they aren't "low"
+    };
+    return [...friends].sort((a, b) => scoreOf(b.friend.id) - scoreOf(a.friend.id));
+  }, [friends, matches]);
 
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<FriendProfile[]>([]);
@@ -156,10 +190,11 @@ export default function FriendsScreen() {
               </Text>
             </View>
           ) : (
-            friends.map((item) => (
+            sortedFriends.map((item) => (
               <FriendRow
                 key={item.friendship.id}
                 friend={item.friend}
+                match={matches[item.friend.id]}
                 actions={[{ label: "Remove", style: "ghost", onPress: () => handleUnfriend(item) }]}
               />
             ))
@@ -317,8 +352,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 type Action = { label: string; style: "primary" | "ghost"; onPress: () => void };
 
 function FriendRow({
-  friend, actions = [], sublabel,
-}: { friend: FriendProfile; actions?: Action[]; sublabel?: string }) {
+  friend, actions = [], sublabel, match,
+}: { friend: FriendProfile; actions?: Action[]; sublabel?: string; match?: PalateMatch }) {
   const router = useRouter();
   const name = friend.display_name || (friend.email ? friend.email.split("@")[0] : "Unknown");
   const subtext = sublabel ?? friend.email ?? "";
@@ -330,7 +365,25 @@ function FriendRow({
     >
       <Avatar uri={friend.avatar_url} name={friend.display_name} email={friend.email} size={44} />
       <View style={{ flex: 1 }}>
-        <Text style={styles.friendName} numberOfLines={1}>{name}</Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.friendName} numberOfLines={1}>{name}</Text>
+          {/* One number, Spotify-Blend style — see SOCIAL_DESIGN.md. A pair
+              without enough history shows what it needs rather than hiding:
+              a locked thing you can see is a reason to log. */}
+          {match && (
+            match.ready ? (
+              <View style={styles.matchChip}>
+                <Text style={styles.matchChipText}>{match.score}%</Text>
+              </View>
+            ) : (
+              <View style={styles.matchChipLocked}>
+                <Text style={styles.matchChipLockedText}>
+                  {Math.max(match.threshold - match.yourVisits, match.threshold - match.theirVisits)} to go
+                </Text>
+              </View>
+            )
+          )}
+        </View>
         {subtext ? (
           <Text style={[type.small, { marginTop: 2 }]} numberOfLines={1}>
             {subtext}
@@ -401,6 +454,17 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   friendAvatarText: { color: "#fff", fontSize: 18, fontWeight: "800" },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  matchChip: {
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
+    backgroundColor: colors.redTint, borderWidth: 1, borderColor: colors.redTintBorder,
+  },
+  matchChipText: { fontSize: 12, fontWeight: "800", color: colors.redText },
+  matchChipLocked: {
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
+    backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line,
+  },
+  matchChipLockedText: { fontSize: 11, fontWeight: "700", color: colors.mute },
   friendName: { fontSize: 15, fontWeight: "700", color: colors.ink },
 
   btnPrimary: {

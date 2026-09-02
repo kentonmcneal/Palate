@@ -1,11 +1,13 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Spacer } from "../../components/Button";
 import { Avatar } from "../../components/Avatar";
-import { colors, spacing, type } from "../../theme";
+import { colors, spacing, type, shadow, card } from "../../theme";
 import { getFriendProfileSnapshot, type FriendProfileSnapshot } from "../../lib/profile";
+import { loadPalateMatch } from "../../lib/palate/pairCompatibility";
+import { matchHeadline, type PalateMatch } from "../../lib/recommendation/palate-match";
 import { requestFriendship, unfriend } from "../../lib/friends";
 import { reportContent, blockUser, unblockUser, isBlocked, REPORT_REASONS } from "../../lib/moderation";
 
@@ -17,6 +19,15 @@ export default function FriendProfileScreen() {
   const [snapshot, setSnapshot] = useState<FriendProfileSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
+  const [match, setMatch] = useState<PalateMatch | null>(null);
+  useEffect(() => {
+    if (!snapshot?.is_friend || snapshot?.is_self) return;
+    let alive = true;
+    loadPalateMatch(targetId)
+      .then((m) => alive && setMatch(m))
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [snapshot?.is_friend, snapshot?.is_self, targetId]);
   const [blocked, setBlocked] = useState(false);
 
   const load = useCallback(async () => {
@@ -209,12 +220,39 @@ export default function FriendProfileScreen() {
             )}
 
             {snapshot.is_friend && !snapshot.is_self && (
-              <Pressable
-                onPress={() => router.push(`/compatibility/${targetId}` as never)}
-                style={styles.compatBtn}
-              >
-                <Text style={styles.compatBtnText}>See your palate compatibility  →</Text>
-              </Pressable>
+              <>
+                {/* The number IS the object — one figure, reasons underneath.
+                    A link labelled "see your compatibility" asks the user to
+                    go find out; showing it asks nothing. See SOCIAL_DESIGN.md. */}
+                {match && (
+                  <View style={styles.matchHero}>
+                    {match.ready ? (
+                      <>
+                        <Text style={styles.matchNumber}>{match.score}%</Text>
+                        <Text style={styles.matchLabel}>
+                          {matchHeadline(match, snapshot.display_name || "they")}
+                        </Text>
+                        {match.reasons.slice(0, 3).map((r) => (
+                          <Text key={r.kind} style={styles.matchReason}>· {r.label}</Text>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        <Text style={styles.matchLocked}>Palate match locked</Text>
+                        <Text style={styles.matchReason}>
+                          {matchHeadline(match, snapshot.display_name || "they")}
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                )}
+                <Pressable
+                  onPress={() => router.push(`/compatibility/${targetId}` as never)}
+                  style={styles.compatBtn}
+                >
+                  <Text style={styles.compatBtnText}>See the full breakdown  →</Text>
+                </Pressable>
+              </>
             )}
 
             {/* Actions */}
@@ -366,6 +404,18 @@ const styles = StyleSheet.create({
   },
   btnGhostText: { color: colors.mute, fontSize: 16, fontWeight: "700" },
 
+  matchHero: {
+    marginTop: spacing.lg,
+    alignItems: "center",
+    paddingVertical: spacing.lg,
+    borderRadius: card.radius,
+    backgroundColor: colors.faint,
+    ...shadow.card,
+  },
+  matchNumber: { ...type.display, fontSize: 44, lineHeight: 50, color: colors.redText },
+  matchLabel: { ...type.subtitle, marginTop: 2, marginBottom: 8, color: colors.ink },
+  matchLocked: { ...type.subtitle, color: colors.ink },
+  matchReason: { ...type.small, marginTop: 2 },
   compatBtn: {
     marginTop: spacing.xl,
     paddingVertical: 16,
