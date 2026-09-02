@@ -13,6 +13,7 @@ import {
 import { rateVisit } from "../lib/visits";
 import { triggerHapticSelection, triggerHapticSuccess } from "../lib/haptics";
 import { PhotoPrompt } from "../components/PhotoPrompt";
+import { ComparisonPrompt } from "../components/ComparisonPrompt";
 
 // ============================================================================
 // Rate Items — the "What did you get?" sheet that follows a logged visit.
@@ -136,6 +137,12 @@ export default function RateItemsScreen() {
             placeId={params.place_id ?? null}
             placeName={params.name ?? null}
           />
+        )}
+
+        {/* One pairwise question, and only when there is a useful one to ask.
+            Renders nothing for a first rated place. */}
+        {!!params.restaurant_id && (
+          <ComparisonPrompt restaurantId={params.restaurant_id} />
         )}
 
         {loading ? (
