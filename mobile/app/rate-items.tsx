@@ -12,6 +12,7 @@ import {
 } from "../lib/menu-items";
 import { rateVisit } from "../lib/visits";
 import { triggerHapticSelection, triggerHapticSuccess } from "../lib/haptics";
+import { PhotoPrompt } from "../components/PhotoPrompt";
 
 // ============================================================================
 // Rate Items — the "What did you get?" sheet that follows a logged visit.
@@ -32,6 +33,7 @@ export default function RateItemsScreen() {
   const params = useLocalSearchParams<{
     restaurant_id: string;
     visit_id?: string;
+    place_id?: string;
     name?: string;
   }>();
 
@@ -126,6 +128,16 @@ export default function RateItemsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
+        {/* The photo ask, at the one moment the food is in front of them.
+            Only when we know which visit to attach it to. */}
+        {!!params.visit_id && (
+          <PhotoPrompt
+            visitId={params.visit_id}
+            placeId={params.place_id ?? null}
+            placeName={params.name ?? null}
+          />
+        )}
+
         {loading ? (
           <View style={styles.center}><ActivityIndicator color={colors.red} /></View>
         ) : (

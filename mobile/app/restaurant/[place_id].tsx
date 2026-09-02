@@ -24,6 +24,7 @@ import {
 import { loadEditorialBlurb } from "../../lib/restaurant-blurb";
 import { ineligibilityReason, type EligibilityInput } from "../../lib/recommendation/eligibility";
 import { PlaceArt } from "../../components/PlaceArt";
+import { loadPlacePhotos } from "../../lib/place-photos";
 
 // ============================================================================
 // Restaurant detail — your full history at one place + match score + actions.
@@ -80,6 +81,17 @@ export default function RestaurantDetailScreen() {
   const router = useRouter();
   const { place_id } = useLocalSearchParams<{ place_id: string }>();
   const [restaurant, setRestaurant] = useState<RestaurantRow | null>(null);
+  // A photo someone actually took here, if there is one. Falls back to the
+  // generated gradient — see lib/place-photos.ts.
+  const [placePhoto, setPlacePhoto] = useState<string | null>(null);
+  useEffect(() => {
+    if (!place_id) return;
+    let alive = true;
+    void loadPlacePhotos([String(place_id)])
+      .then((m) => alive && setPlacePhoto(m.get(String(place_id)) ?? null))
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [place_id]);
   const [visits, setVisits] = useState<VisitRow[]>([]);
   const [matchScore, setMatchScore] = useState<number | null>(null);
   const [matchReasons, setMatchReasons] = useState<string[]>([]);
@@ -353,6 +365,7 @@ export default function RestaurantDetailScreen() {
             seed={r.google_place_id}
             name={r.name}
             cuisine={r.cuisine_type}
+            photoUrl={placePhoto}
             height={168}
           />
           <View style={styles.heroBody}>

@@ -19,6 +19,7 @@ import { distanceKm, formatDistance } from "../../lib/match-score";
 import { trackImpressions } from "../../lib/recommendation-events";
 import { filterRecommendable } from "../../lib/recommendation/eligibility";
 import { dedupeVenues } from "../../lib/recommendation/dedupe";
+import { loadPlacePhotos } from "../../lib/place-photos";
 import { RestaurantCompatibilityCard } from "../../components/RestaurantCompatibilityCard";
 import { CardSkeleton, Shimmer } from "../../components/Shimmer";
 import { FeaturedLists } from "../../components/FeaturedLists";
@@ -73,6 +74,8 @@ const SORT_LABEL: Record<SortKey, string> = {
 
 export default function DiscoverTab() {
   const router = useRouter();
+  // Bumped when photo lookups land, to re-render cards with their images.
+  const [, setPhotoTick] = useState(0);
   // A weekly discovery ping deep-links here with ?list=date-night. Hand it
   // straight to the list it promised rather than dropping the user on a
   // generic feed and making them hunt for it.
@@ -155,6 +158,12 @@ export default function DiscoverTab() {
 
       setPersonal(sig);
       setAllNearby(candidates.map(toInput));
+
+      // Resolve real photos for the feed in ONE query. Fire-and-forget: the
+      // cards render immediately on the gradient and upgrade when this lands.
+      void loadPlacePhotos(candidates.slice(0, 40).map((p) => p.google_place_id))
+        .then(() => setPhotoTick((t) => t + 1))
+        .catch(() => {});
       setFeedLoading(false);
 
       // Fire impressions for the visible top

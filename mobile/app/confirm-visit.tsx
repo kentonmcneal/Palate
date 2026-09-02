@@ -91,6 +91,7 @@ export default function ConfirmVisit() {
               restaurant_id: result.restaurant_id,
               visit_id: result.id,
               name: params.name as string,
+              place_id: params.place_id as string,
             },
           });
         }, 1100);
@@ -141,6 +142,7 @@ export default function ConfirmVisit() {
               restaurant_id: result.restaurant_id,
               visit_id: result.id,
               name: p.name,
+              place_id: p.google_place_id,
             },
           });
         }, 1100);

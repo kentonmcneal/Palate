@@ -13,6 +13,7 @@ import { AnimatedNumber } from "./AnimatedNumber";
 import { SaveBurst } from "./SaveBurst";
 import { TapCard } from "./TapCard";
 import { PlaceArt } from "./PlaceArt";
+import { cachedPlacePhoto } from "../lib/place-photos";
 
 // ============================================================================
 // RestaurantCompatibilityCard — single card UI used everywhere a restaurant
@@ -123,6 +124,7 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
         seed={restaurant.google_place_id}
         name={restaurant.name}
         cuisine={restaurant.cuisine_type}
+        photoUrl={cachedPlacePhoto(restaurant.google_place_id)}
       />
       <View style={styles.body}>
       <View style={styles.head}>

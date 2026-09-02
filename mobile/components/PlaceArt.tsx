@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Image } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { categoryColors, radius } from "../theme";
 
@@ -115,6 +115,7 @@ export function PlaceArt({
   seed,
   name,
   cuisine,
+  photoUrl,
   height = 132,
   rounded = true,
 }: {
@@ -122,6 +123,9 @@ export function PlaceArt({
   seed: string;
   name: string;
   cuisine?: string | null;
+  /** A real photo someone took here. Takes precedence over the gradient —
+   *  see lib/place-photos.ts for how one is chosen. */
+  photoUrl?: string | null;
   height?: number;
   rounded?: boolean;
 }) {
@@ -142,15 +146,22 @@ export function PlaceArt({
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
+      {/* The gradient always renders underneath: it is the placeholder while
+          the photo loads, and the fallback if it fails. A card must never be
+          a blank rectangle. */}
       <LinearGradient
         colors={[base, shade(base, 0.45)]}
         start={flip ? { x: 0, y: 0 } : { x: 1, y: 0 }}
         end={flip ? { x: 1, y: 1 } : { x: 0, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
-      <Text style={styles.initials} allowFontScaling={false}>
-        {initialsOf(name)}
-      </Text>
+      {photoUrl ? (
+        <Image source={{ uri: photoUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      ) : (
+        <Text style={styles.initials} allowFontScaling={false}>
+          {initialsOf(name)}
+        </Text>
+      )}
     </View>
   );
 }
