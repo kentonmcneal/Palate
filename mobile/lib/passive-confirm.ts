@@ -160,7 +160,25 @@ export async function getInbox(): Promise<InboxEntry[]> {
     const all = raw ? (JSON.parse(raw) as InboxEntry[]) : [];
     const cutoff = Date.now() - INBOX_EXPIRY_HOURS * 3_600_000;
     const live = all.filter((e) => e.detectedAt >= cutoff);
-    if (live.length !== all.length) await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(live));
+    if (live.length !== all.length) {
+      await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(live));
+      // An entry that expires unanswered is an IGNORE, and ignores are almost
+      // certainly the most common outcome. Dropping them silently would bias
+      // calibration upward: "of entries scored High, what fraction get
+      // confirmed?" would only count the ones people bothered to answer, so a
+      // stream of bad High prompts that everyone ignores would score as
+      // excellent. The denominator has to include everything we claimed.
+      for (const e of all.filter((x) => x.detectedAt < cutoff)) {
+        void track("visit_ignored", {
+          place_id: e.place_id,
+          confidence: e.confidence == null ? null : Number(e.confidence.toFixed(3)),
+          confidence_band: e.confidenceBand ?? null,
+          dwell_min: Math.round(e.dwellMin),
+          source: e.source ?? null,
+          candidate_count: e.candidateCount ?? null,
+        });
+      }
+    }
     return live.sort((a, b) => b.detectedAt - a.detectedAt);
   } catch {
     return [];

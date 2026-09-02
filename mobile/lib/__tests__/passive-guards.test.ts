@@ -46,3 +46,43 @@ describe("daily notification cap", () => {
     expect(await notifCountToday()).toBe(2);
   });
 });
+
+describe("ignored entries", () => {
+  const INBOX_KEY = "palate.passive.inbox";
+
+  function entry(id: string, ageHours: number, band = "high") {
+    return {
+      id, place_id: `pid-${id}`, name: id, address: "", alternates: [],
+      detectedAt: Date.now() - ageHours * 3_600_000,
+      dwellMin: 30, confidence: 0.9, confidenceBand: band, candidateCount: 1,
+    };
+  }
+
+  it("records an ignore when an entry expires unanswered", async () => {
+    // Silent expiry would bias calibration upward: a stream of bad High
+    // prompts that everyone ignores would score as excellent, because only the
+    // answered ones would count.
+    const { track } = require("../analytics");
+    (track as jest.Mock).mockClear();
+    const { getInbox } = require("../passive-confirm");
+
+    await AsyncStorage.setItem(INBOX_KEY, JSON.stringify([entry("old", 30), entry("fresh", 1)]));
+    const live = await getInbox();
+
+    expect(live.map((e: any) => e.id)).toEqual(["fresh"]);
+    const ignores = (track as jest.Mock).mock.calls.filter((c) => c[0] === "visit_ignored");
+    expect(ignores).toHaveLength(1);
+    expect(ignores[0][1]).toMatchObject({ place_id: "pid-old", confidence_band: "high" });
+  });
+
+  it("does not emit anything when nothing expired", async () => {
+    const { track } = require("../analytics");
+    (track as jest.Mock).mockClear();
+    const { getInbox } = require("../passive-confirm");
+
+    await AsyncStorage.setItem(INBOX_KEY, JSON.stringify([entry("fresh", 1)]));
+    await getInbox();
+
+    expect((track as jest.Mock).mock.calls.filter((c) => c[0] === "visit_ignored")).toHaveLength(0);
+  });
+});
