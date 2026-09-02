@@ -18,6 +18,7 @@ import { loadPersonalSignal } from "../lib/personal-signal";
 import { nearbyRestaurants } from "../lib/places";
 import { getOrFetchNearby } from "../lib/nearby-cache";
 import { assembleGraph, getCompatibility } from "../lib/recommendation";
+import { filterRecommendable } from "../lib/recommendation/eligibility";
 import { triggerHapticSuccess } from "../lib/haptics";
 import { pickSaveCopy } from "../lib/save-copy";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
@@ -73,12 +74,11 @@ export function RecommendationsCard() {
         if (n >= 3) visitedHeavy.add(placeId);
       }
 
-      const enriched: RestaurantRecommendation[] = nearby
-        // Exclude national chains / non-recommendable places (eligibility 0),
-        // mirroring Discover (discover.tsx). Without this, chains flagged
-        // ineligible leaked into the post-onboarding "Places you'll probably
-        // like" list — the reported fast-food-in-recs bug.
-        .filter((p) => (p.recommendation_eligibility ?? 1) > 0 && !visitedHeavy.has(p.google_place_id))
+      // One gate for every surface (lib/recommendation/eligibility.ts) — the
+      // old `eligibility > 0` check only caught venues the classifier had
+      // already labeled, so unclassified chains still reached this list.
+      const enriched: RestaurantRecommendation[] = filterRecommendable(nearby)
+        .filter((p) => !visitedHeavy.has(p.google_place_id))
         .map((p) => {
           const compat = getCompatibility(graph, {
             google_place_id: p.google_place_id,

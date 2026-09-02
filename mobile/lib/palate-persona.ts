@@ -16,6 +16,7 @@ import { supabase } from "./supabase";
 import { nearbyRestaurants, type Restaurant } from "./places";
 import { deriveRestaurantProfile, flavorSimilarity, type RestaurantProfile } from "./restaurant-profile";
 import type { RestaurantRecommendation } from "./palate-insights";
+import { filterRecommendable } from "./recommendation/eligibility";
 
 // ============================================================================
 // Types
@@ -365,7 +366,11 @@ export async function getPersonaRecommendations(
     persona.recommendationStrategy === "explore" ? 1500 :
     persona.recommendationStrategy === "convenience" ? 600 : 900;
 
-  const candidates = await nearbyRestaurants(anchor.lat, anchor.lng, radius);
+  // Gate BEFORE ranking. This path had no eligibility check at all, which is
+  // how national chains reached "Places you'll probably like" on Home.
+  const candidates = filterRecommendable(
+    await nearbyRestaurants(anchor.lat, anchor.lng, radius),
+  );
   const visitedNames = new Set(visits.map((v) => v.profile?.name.toLowerCase() ?? "").filter(Boolean));
 
   const enriched = candidates

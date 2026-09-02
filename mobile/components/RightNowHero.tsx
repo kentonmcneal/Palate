@@ -12,6 +12,7 @@ import { matchScoreColor } from "../lib/match-score";
 import { triggerHapticSelection } from "../lib/haptics";
 import { assembleGraph, computeRightNow, type RightNowPick, type RightNowStrategy } from "../lib/recommendation";
 import { toInput as toCandidateInput } from "../lib/recommendation/candidates";
+import { filterRecommendable } from "../lib/recommendation/eligibility";
 import { AnimatedNumber } from "./AnimatedNumber";
 
 // ============================================================================
@@ -84,8 +85,8 @@ export function RightNowHero({ onTakeMeThere }: Props) {
       // Add the new exclusion (if any) to the running dismissed set
       if (extraExcludeId) dismissedRef.current.add(extraExcludeId);
 
-      const filtered = nearby.filter(
-        (r) => (r.recommendation_eligibility ?? 1) > 0 && !dismissedRef.current.has(r.google_place_id),
+      const filtered = filterRecommendable(nearby).filter(
+        (r) => !dismissedRef.current.has(r.google_place_id),
       );
 
       // Canonical pipeline: build graph once, then computeRightNow.

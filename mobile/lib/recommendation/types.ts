@@ -46,6 +46,10 @@ export type RestaurantInput = {
   // classifier downrank (chains/fast food/hotels). chain_name: set for chains.
   recommendation_eligibility?: number | null;
   chain_name?: string | null;
+  // Set by migration 0052: the same normalized brand name appears at >=3
+  // distinct google_place_ids, i.e. it behaves like a chain even when the
+  // classifier never labeled it one.
+  is_chain_brand?: boolean | null;
   // Raw Google Places types — available even before LLM classification, so the
   // gems gate can catch fast food / cafés on an unclassified venue.
   primary_type?: string | null;

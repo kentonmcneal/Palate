@@ -5,6 +5,7 @@
 // score + signals); restaurant columns can evolve without touching the SQL.
 
 import { supabase } from "./supabase";
+import { isRecommendable, type EligibilityInput } from "./recommendation/eligibility";
 
 export interface SimilarSignals {
   same_subregion: boolean;
@@ -54,7 +55,7 @@ export async function loadSimilarRestaurants(
   const { data: restaurants, error: hydrateErr } = await supabase
     .from("restaurants_resolved")
     .select(
-      "id, google_place_id, name, cuisine_type:resolved_cuisine_type, cuisine_subregion:resolved_cuisine_subregion, neighborhood, address, price_level, rating, user_rating_count, latitude, longitude",
+      "id, google_place_id, name, cuisine_type:resolved_cuisine_type, cuisine_subregion:resolved_cuisine_subregion, neighborhood, address, price_level, rating, user_rating_count, latitude, longitude, chain_name, primary_type, types, format_class:resolved_format_class, recommendation_eligibility",
     )
     .in("id", ids);
   // A transient hydrate failure should surface, not masquerade as "no similar".
@@ -72,7 +73,10 @@ export async function loadSimilarRestaurants(
         why: describeSimilarity(m.signals),
       };
     })
-    .filter((r): r is SimilarRestaurant => r !== null);
+    .filter((r): r is SimilarRestaurant => r !== null)
+    // "Find more like X" is a recommendation surface — same gate as the rest
+    // (chains, fast food, non-gem cafés never proposed).
+    .filter((r) => isRecommendable(r as unknown as EligibilityInput));
 }
 
 function describeSimilarity(s: SimilarSignals): string {

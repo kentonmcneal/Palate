@@ -17,6 +17,7 @@ import { LocationPill } from "../../components/LocationPill";
 import { computeTasteVector, type TasteVector } from "../../lib/taste-vector";
 import { distanceKm, formatDistance } from "../../lib/match-score";
 import { trackImpressions } from "../../lib/recommendation-events";
+import { filterRecommendable } from "../../lib/recommendation/eligibility";
 import { RestaurantCompatibilityCard } from "../../components/RestaurantCompatibilityCard";
 import { CardSkeleton, Shimmer } from "../../components/Shimmer";
 import { FeaturedLists } from "../../components/FeaturedLists";
@@ -130,12 +131,12 @@ export default function DiscoverTab() {
       ]);
 
       // Hybrid discovery policy:
-      //   - Drop places with recommendation_eligibility === 0 (chains, airports,
-      //     hotels, lounges — see classifier inferRecommendationEligibility)
+      //   - Drop anything the shared eligibility gate rejects (chains, fast
+      //     food, airports, hotels — recommendation/eligibility.ts)
       //   - Drop places the user has already visited (saved-shelf and
       //     wishlist-rail live on Home now)
-      const candidates = nearby.filter(
-        (p) => (p.recommendation_eligibility ?? 1) > 0 && !visitedIds.has(p.google_place_id),
+      const candidates = filterRecommendable(nearby).filter(
+        (p) => !visitedIds.has(p.google_place_id),
       );
 
       setPersonal(sig);

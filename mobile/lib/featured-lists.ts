@@ -145,12 +145,15 @@ export async function buildFeaturedLists(opts: {
   for (const row of rows as any[]) {
     const meta = META_BY_SLUG.get(row.category_slug);
     if (!meta) continue;
-    // Safety-net filter: hide ineligible places (chains, airports, hotels)
-    // even if the nightly cron hasn't rebuilt this cache row yet. Rows
-    // without the field default to eligible — older cache entries pass
-    // through until the cron refreshes them.
-    const restaurants = ((row.restaurants ?? []) as RestaurantInput[])
-      .filter((r) => ((r as { recommendation_eligibility?: number | null }).recommendation_eligibility ?? 1) > 0);
+    // Safety-net filter: hide ineligible places (chains, fast food, airports)
+    // even if the nightly cron hasn't rebuilt this cache row yet. One shared
+    // gate — see lib/recommendation/eligibility.ts. Café-shaped lists opt out
+    // of the café rule, otherwise "Top 10 Cafés" would filter itself empty.
+    const cafeList = row.category_slug === "cafes" || row.category_slug === "brunch";
+    const restaurants = filterRecommendable(
+      (row.restaurants ?? []) as RestaurantInput[],
+      { cafes: cafeList ? "allow" : "gems-only" },
+    );
     const visited = restaurants.filter((r) => visitedIds.has(r.google_place_id)).length;
     lists.push({
       slug: row.category_slug,
@@ -213,6 +216,7 @@ async function loadUserVisitedIds(): Promise<Set<string>> {
 
 // Bust the cache when the user logs a new visit / item rating.
 import { onPersonalSignalInvalidate } from "./personal-signal";
+import { filterRecommendable } from "./recommendation/eligibility";
 onPersonalSignalInvalidate(() => {
   visitedIdsCache = null;
 });

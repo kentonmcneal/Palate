@@ -13,6 +13,7 @@
 // ============================================================================
 
 import type { RestaurantInput } from "./types";
+import { isNationalChainName } from "./chains";
 
 // NOTE: intentionally NOT keying off the classifier's "quick_service"
 // format_class — the classifier assigns that to ANY price_level<=1 venue as a
@@ -69,6 +70,11 @@ export function isRecIneligible(r: RestaurantInput): boolean {
   if (FAST_FORMATS.has(fmt)) return true;
   if (googleTypes(r).some((t) => GOOGLE_FAST_TYPES.has(t))) return true;
   if (r.chain_name) return true;
+  // chain_name is only set once the classifier has run. A freshly-seen venue
+  // has it null, which is how Domino's reached a tester's Home tab — so match
+  // known national brands by name, and trust the DB's chain-shape heuristic.
+  if (isNationalChainName(r.name)) return true;
+  if (r.is_chain_brand === true) return true;
   if (r.recommendation_eligibility != null && r.recommendation_eligibility < 0.5) return true;
   return false;
 }

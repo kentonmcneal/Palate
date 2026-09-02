@@ -22,6 +22,7 @@ import {
   type MyItemRating, type MenuItemSummary,
 } from "../../lib/menu-items";
 import { loadEditorialBlurb } from "../../lib/restaurant-blurb";
+import { ineligibilityReason, type EligibilityInput } from "../../lib/recommendation/eligibility";
 
 // ============================================================================
 // Restaurant detail — your full history at one place + match score + actions.
@@ -534,8 +535,17 @@ function humanizeSupabaseError(err: { message?: string; code?: string } | null |
 // Maps the classifier's machine reason codes to a single-line user-facing
 // note. Returns null when the place IS eligible for discovery — caller
 // hides the slot in that case.
-function ineligibilityHint(r: { recommendation_eligibility?: number | null; ineligibility_reason?: string | null }): string | null {
-  if (r.recommendation_eligibility == null || r.recommendation_eligibility > 0) return null;
+function ineligibilityHint(
+  r: EligibilityInput & { ineligibility_reason?: string | null },
+): string | null {
+  if (r.recommendation_eligibility == null || r.recommendation_eligibility > 0) {
+    // Classifier says eligible — or hasn't run. The shared gate may still
+    // exclude this venue (name-matched national chain, DB chain flag, non-gem
+    // café), and this screen must agree with what discovery actually does.
+    // Disagreeing is the bug a tester hit: Home recommended Domino's while
+    // this screen called it a national chain.
+    return ineligibilityReason(r);
+  }
   switch (r.ineligibility_reason) {
     case "airport":         return "Inside an airport — not surfaced in discovery.";
     case "lounge_gated":    return "Members-only / airport lounge — not surfaced in discovery.";
