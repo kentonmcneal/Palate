@@ -4,7 +4,7 @@ import {
   TextInput, ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { nearbyRestaurants, searchRestaurants, type Restaurant } from "../../lib/places";
@@ -73,6 +73,16 @@ const SORT_LABEL: Record<SortKey, string> = {
 
 export default function DiscoverTab() {
   const router = useRouter();
+  // A weekly discovery ping deep-links here with ?list=date-night. Hand it
+  // straight to the list it promised rather than dropping the user on a
+  // generic feed and making them hunt for it.
+  const { list: deepLinkList } = useLocalSearchParams<{ list?: string }>();
+  useEffect(() => {
+    if (!deepLinkList) return;
+    router.push({ pathname: "/featured-list/[slug]", params: { slug: String(deepLinkList) } });
+    // Clear the param so a tab switch back doesn't reopen it.
+    router.setParams({ list: undefined } as never);
+  }, [deepLinkList, router]);
   const [tab, setTab] = useState<SubTab>("most_compatible");
   const [sort, setSort] = useState<SortKey>("compat_high");
   const [formatFilter, setFormatFilter] = useState<FormatFilter>("all");

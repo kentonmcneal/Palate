@@ -24,6 +24,7 @@ import { isFlagEnabled } from "../lib/flags";
 import { processPendingVisits, RESOLVE_FLAG, CONFIRM_FLAG, type VisitOutcome } from "../lib/passive-runner";
 import { currentPermissionState, requestAlways } from "../lib/passive-permissions";
 import { getCacheHitRate } from "../lib/passive-pipeline";
+import { listMisses, clearMisses, describeMiss, type PassiveMiss } from "../lib/passive-misses";
 
 // Downtown Atlanta — Places returns real food venues here, so an injected visit
 // exercises the whole qualify → resolve → confirm path end to end.
@@ -45,6 +46,7 @@ export default function DebugVisitsScreen() {
   const [cache, setCache] = useState<{ hits: number; total: number; rate: number }>({ hits: 0, total: 0, rate: 0 });
   const [outcomes, setOutcomes] = useState<VisitOutcome[]>([]);
   const [note, setNote] = useState("");
+  const [misses, setMisses] = useState<PassiveMiss[]>([]);
 
   const refresh = useCallback(async () => {
     setAuth(authorizationStatus());
@@ -64,6 +66,7 @@ export default function DebugVisitsScreen() {
     setCache(await getCacheHitRate());
     setStopState(getStopState());
     setVisits(await drainNativeVisits());
+    setMisses(await listMisses());
   }, []);
 
   useEffect(() => {
@@ -206,6 +209,34 @@ export default function DebugVisitsScreen() {
                 {new Date(e.at).toLocaleTimeString()}  {e.kind}
                 {e.detail ? `  ${e.detail}` : ""}
               </Text>
+            ))
+          )}
+        </View>
+
+        {/* Silent misses — detections that produced no prompt. "It never fires
+            at this place" was unfalsifiable until these were recorded. */}
+        <View style={styles.card}>
+          <View style={styles.listHead}>
+            <Text style={type.subtitle}>Silent misses ({misses.length})</Text>
+            <Pressable onPress={() => { void clearMisses().then(refresh); }} hitSlop={8}>
+              <Text style={[styles.link, { color: colors.red }]}>Clear</Text>
+            </Pressable>
+          </View>
+          {misses.length === 0 ? (
+            <Text style={type.small}>No misses recorded — every detection produced a prompt.</Text>
+          ) : (
+            misses.map((m, i) => (
+              <View key={`${m.at}-${i}`} style={{ marginBottom: 8 }}>
+                <Text style={styles.mono}>
+                  {new Date(m.at).toLocaleTimeString()}  {m.reason}
+                </Text>
+                <Text style={styles.sub}>{describeMiss(m)}</Text>
+                {m.rejectedSample.length > 0 && (
+                  <Text style={styles.sub} numberOfLines={2}>
+                    rejected: {m.rejectedSample.join(", ")}
+                  </Text>
+                )}
+              </View>
             ))
           )}
         </View>

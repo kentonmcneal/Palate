@@ -16,6 +16,7 @@ import type { Restaurant } from "./places";
 import { supabase } from "./supabase";
 import { nearbyRestaurants } from "./places";
 import { getCachedNearby, setCachedNearby } from "./nearby-cache";
+import { recordMiss } from "./passive-misses";
 
 // Qualifying thresholds (spec Phase 3).
 // Five minutes. A sit-down meal and a Shake Shack counter order are both real
@@ -375,6 +376,31 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
     visitedPlaceIds: await visitedPlaceIdsAmong(eligible.map((p) => p.google_place_id)),
   });
 
-  if (!ranked.length) return null;
+  if (!ranked.length) {
+    // Record WHY, not just that. "It never fires here" was unfalsifiable
+    // before this: the detection resolved to nothing and left no trace.
+    const reason = places.length === 0
+      ? "no_places_returned"
+      : eligible.length === 0
+        ? "all_filtered_out"
+        : "ranked_empty";
+    void recordMiss({
+      at: Date.now(),
+      reason,
+      placesFound: places.length,
+      loggableCount: eligible.length,
+      radiusM: radius,
+      accuracyM: raw.horizontalAccuracy ?? null,
+      dwellMin: raw.departureAt && raw.capturedAt
+        ? Math.round((raw.departureAt - raw.capturedAt) / 60_000)
+        : null,
+      source: raw.source ?? null,
+      rejectedSample: places
+        .filter((p) => !isLoggableVenue(p))
+        .slice(0, 5)
+        .map((p) => p.name),
+    });
+    return null;
+  }
   return { raw, candidates: ranked, cacheHit };
 }

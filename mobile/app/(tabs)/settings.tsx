@@ -19,6 +19,10 @@ import {
   isScreenshotPromptEnabled,
   setScreenshotPromptEnabled,
 } from "../../lib/screenshot-feedback";
+import {
+  areDiscoveryPingsEnabled,
+  setDiscoveryPingsEnabled,
+} from "../../lib/notification-schedule";
 import { loadAnalytics, type AnalyticsSummary } from "../../lib/analytics-stats";
 import { computeTasteVector } from "../../lib/taste-vector";
 import { getProfileFromVector, IDENTITY_BLURB, type PalateProfile } from "../../lib/palate";
@@ -57,6 +61,7 @@ export default function Settings() {
   const [email, setEmail] = useState<string | null>(null);
   const [sundayReminder, setSundayReminder] = useState(false);
   const [screenshotPrompt, setScreenshotPrompt] = useState(true);
+  const [discoveryPings, setDiscoveryPings] = useState(true);
   const [stats, setStats] = useState<AnalyticsSummary | null>(null);
   const [palateProfile, setPalateProfile] = useState<PalateProfile | null>(null);
   const [visibility, setVisibility] = useState<ProfileVisibility>("friends");
@@ -77,6 +82,7 @@ export default function Settings() {
     supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
     isReminderEnabled().then(setSundayReminder);
     isScreenshotPromptEnabled().then(setScreenshotPrompt);
+    areDiscoveryPingsEnabled().then(setDiscoveryPings);
     loadAnalytics("all").then(setStats).catch(() => {});
     // Compute the user's overall (all-time) Palate profile for the Profile
     // header. Uses the new identity system (Curator/Forager/Steward/Anchor).
@@ -455,6 +461,18 @@ export default function Settings() {
         <CollapsibleSection title="Wrapped & reminders">
           <Row label="Sunday Wrapped reminder" right={<Switch value={sundayReminder} onValueChange={toggleSundayReminder} thumbColor={sundayReminder ? colors.red : "#fff"} trackColor={{ true: colors.redTintBorder, false: colors.line }} />} />
           <Note>One reminder a week, Sunday at 9 AM. That's it.</Note>
+          <Row
+            label="Weekend picks"
+            right={
+              <Switch
+                value={discoveryPings}
+                onValueChange={(v) => { setDiscoveryPings(v); void setDiscoveryPingsEnabled(v); }}
+                thumbColor={discoveryPings ? colors.red : "#fff"}
+                trackColor={{ true: colors.redTintBorder, false: colors.line }}
+              />
+            }
+          />
+          <Note>Friday date night, Saturday brunch, and one Thursday left turn. Three a week, none after 6 PM.</Note>
           <Row
             label="Ask for feedback after a screenshot"
             right={

@@ -1,5 +1,12 @@
 import { Stack, useRouter, useSegments, type ErrorBoundaryProps } from "expo-router";
 import * as ScreenCapture from "expo-screen-capture";
+import {
+  registerConfirmCategory,
+  confirmVisitById,
+  declineVisitById,
+  drainConfirmQueue,
+} from "../lib/passive-confirm";
+import { refreshDiscoveryPings } from "../lib/notification-schedule";
 import { ScreenshotFeedbackSheet } from "../components/ScreenshotFeedbackSheet";
 import {
   shouldPromptNow,
@@ -223,16 +230,85 @@ export default function RootLayout() {
     return () => sub?.remove();
   }, [session?.user]);
 
-  // Route a tapped passive-capture confirmation notification to /confirm-visit —
-  // both live taps and a cold-start tap (app was terminated).
+  // Register the Yes/No lock-screen actions, and replay any action whose write
+  // failed while the app was backgrounded.
   useEffect(() => {
-    const route = (data: Record<string, unknown> | undefined) => {
+    void registerConfirmCategory();
+  }, []);
+  // Reconcile the weekly discovery nudges on every launch. Idempotent: it
+  // cancels what it previously scheduled before re-adding.
+  useEffect(() => {
+    if (!session?.user) return;
+    void refreshDiscoveryPings().catch(() => {});
+  }, [session?.user]);
+  useEffect(() => {
+    if (!session?.user) return;
+    void drainConfirmQueue().catch(() => {});
+    const sub = AppState.addEventListener("change", (st) => {
+      if (st === "active") void drainConfirmQueue().catch(() => {});
+    });
+    return () => sub.remove();
+  }, [session?.user]);
+
+  // Handle a passive-capture confirmation notification. Three outcomes:
+  //   confirm_yes / confirm_no — answered from the lock screen, app stays shut
+  //   plain tap                — open /confirm-visit as before
+  // Covers live responses and a cold-start tap (app was terminated).
+  useEffect(() => {
+    const handle = (response: Notifications.NotificationResponse | null | undefined) => {
+      const data = response?.notification.request.content.data as Record<string, unknown> | undefined;
+
+      // Weekly discovery nudge — deep-link straight to what it promised.
+      if (data?.type === "discovery_ping") {
+        const { type: _t, key: _k, pathname, ...rest } = data as Record<string, string>;
+        router.push({
+          pathname: (pathname as string) || "/(tabs)/discover",
+          params: rest,
+        } as never);
+        return;
+      }
+
       if (data?.kind !== "passive_confirm") return;
+
+      const placeId = String(data.place_id ?? "");
+      const name = String(data.name ?? "");
+      const inboxId = String(data.inbox_id ?? "") || undefined;
+
+      // An action button answers in place — no navigation, no foregrounding.
+      // The write path is headless for exactly this reason (see
+      // lib/passive-confirm.ts).
+      if (response?.actionIdentifier === "confirm_yes") {
+        void confirmVisitById({ placeId, name, inboxId });
+        return;
+      }
+      if (response?.actionIdentifier === "confirm_no") {
+        void declineVisitById({ placeId, name, inboxId });
+        return;
+      }
+
+      const common = {
+        place_id: placeId,
+        name,
+        address: String(data.address ?? ""),
+        alternates: String(data.alternates ?? "[]"),
+        inbox_id: String(data.inbox_id ?? ""),
+        dwell_min: String(data.dwell_min ?? ""),
+        accuracy_m: String(data.accuracy_m ?? ""),
+        detect_source: String(data.detect_source ?? ""),
+        candidate_count: String(data.candidate_count ?? ""),
+      };
+
+      // A cluster of venues is one decision with several answers.
+      if (data.multi === "1") {
+        router.push({ pathname: "/confirm-multi", params: common });
+        return;
+      }
+
       router.push({
         pathname: "/confirm-visit",
         params: {
-          place_id: String(data.place_id ?? ""),
-          name: String(data.name ?? ""),
+          place_id: placeId,
+          name,
           address: String(data.address ?? ""),
           alternates: String(data.alternates ?? "[]"),
           confidence: "high",
@@ -240,13 +316,11 @@ export default function RootLayout() {
         },
       });
     };
-    // Cold-start: the tap that launched the app fires before this listener mounts.
+    // Cold-start: the response that launched the app fires before this mounts.
     void Notifications.getLastNotificationResponseAsync()
-      .then((r) => route(r?.notification.request.content.data as Record<string, unknown> | undefined))
+      .then(handle)
       .catch(() => {});
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      route(response.notification.request.content.data as Record<string, unknown>);
-    });
+    const sub = Notifications.addNotificationResponseReceivedListener(handle);
     return () => sub.remove();
   }, [router]);
 
@@ -312,6 +386,7 @@ export default function RootLayout() {
           <Stack.Screen name="onboarding" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="confirm-visit" options={{ presentation: "modal" }} />
+          <Stack.Screen name="confirm-multi" options={{ presentation: "modal" }} />
           <Stack.Screen name="passive-capture-intro" options={{ presentation: "modal" }} />
           <Stack.Screen name="passive-inbox" options={{ presentation: "modal" }} />
           <Stack.Screen name="year-in-review" options={{ presentation: "modal" }} />

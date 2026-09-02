@@ -20,7 +20,12 @@ export default function PassiveInbox() {
   }, [load]);
 
   function openEntry(entry: InboxEntry) {
-    router.push({ pathname: "/confirm-visit", params: confirmParamsFor(entry) });
+    // Cluster entries were captured as one decision with several answers —
+    // open the same multi-select the notification would have.
+    router.push({
+      pathname: entry.cluster ? "/confirm-multi" : "/confirm-visit",
+      params: confirmParamsFor(entry),
+    });
   }
 
   return (
