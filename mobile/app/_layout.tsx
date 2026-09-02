@@ -30,13 +30,16 @@ import { colors } from "../theme";
 import * as WebBrowser from "expo-web-browser";
 import { initObservability, captureError } from "../lib/observability";
 import { registerPushToken } from "../lib/notifications";
+import { track } from "../lib/analytics";
 import { checkForAutoVisitOnForeground } from "../lib/auto-detect";
 import { installGlobalErrorHandlers } from "../lib/global-error-handler";
 import * as Notifications from "expo-notifications";
 import { processPendingVisits } from "../lib/passive-runner";
-import { resumePassiveCaptureIfOptedIn, isPassiveOptedIn } from "../lib/passive-capture";
+import {
+  resumePassiveCaptureIfOptedIn, isPassiveOptedIn, reportDay7PermissionState,
+} from "../lib/passive-capture";
 import { addVisitListener } from "../modules/palate-visit-monitor";
-import { checkPermissionDowngrade } from "../lib/passive-permissions";
+import { checkPermissionDowngrade, hasAlways } from "../lib/passive-permissions";
 import { PermissionRepairBanner } from "../components/PermissionRepairBanner";
 
 // Install app-wide catch-alls for uncaught errors / unhandled rejections BEFORE
@@ -177,6 +180,12 @@ export default function RootLayout() {
       // permission re-granted in iOS Settings, or a kill switch flipped on
       // after they opted in. Never prompts; no-ops for everyone else.
       void resumePassiveCaptureIfOptedIn().catch((e) => captureError(e, { at: "passive:resume" }));
+      // Fires once, a week after opt-in. This is the honest read of the
+      // location-grant metric: onboarding reports ~100% under provisional
+      // Always, because iOS asks the user days later without telling us.
+      void reportDay7PermissionState(hasAlways, (granted, days) => {
+        void track("perm_always_day7", { granted, days_since_opt_in: days });
+      }).catch((e) => captureError(e, { at: "passive:day7" }));
       // Detect a silent Always downgrade and surface the repair banner — but
       // only nag someone who actually opted in. Anyone else revoking location
       // is doing exactly what they meant to.

@@ -24,6 +24,8 @@ import { isFlagEnabled } from "./flags";
 export const PASSIVE_CAPTURE_FLAG = "passive_capture_detection";
 const QUEUE_KEY = "palate.passiveCapture.queue";
 const OPT_IN_KEY = "palate.passive.optIn";
+const OPT_IN_AT_KEY = "palate.passive.optInAt";
+const DAY7_REPORTED_KEY = "palate.passive.day7Reported";
 
 export type RawVisit = NativeRawVisit;
 
@@ -80,6 +82,63 @@ export async function isPassiveOptedIn(): Promise<boolean> {
 
 export async function setPassiveOptIn(value: boolean): Promise<void> {
   await AsyncStorage.setItem(OPT_IN_KEY, value ? "1" : "0");
+  // Stamp the first opt-in so the day-7 permission check has an origin. Not
+  // overwritten on a re-opt-in: the question is how long the grant has survived.
+  if (value && !(await AsyncStorage.getItem(OPT_IN_AT_KEY))) {
+    await AsyncStorage.setItem(OPT_IN_AT_KEY, String(Date.now()));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Day-7 permission state
+// ---------------------------------------------------------------------------
+//
+// "% granting Always at onboarding" measures nothing under this funnel. iOS
+// grants Always PROVISIONALLY with no dialog, then prompts the user itself days
+// later at a moment it chooses. Measured at onboarding the number is ~100% and
+// the real attrition — people answering "Keep Only While Using" to a prompt we
+// never see — appears nowhere.
+//
+// Day 7 is after iOS has almost always asked, so it reflects what people
+// actually kept rather than what they were silently given.
+
+export const DAY7_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Pure for testability: has the day-7 mark passed, and is this the first time? */
+export function shouldReportDay7(
+  optInAt: number | null,
+  now: number,
+  alreadyReported: boolean,
+): boolean {
+  if (alreadyReported || optInAt == null) return false;
+  return now - optInAt >= DAY7_MS;
+}
+
+/**
+ * Emit the day-7 Always state exactly once per install. Safe to call on every
+ * foreground; it no-ops until the mark passes and never fires twice.
+ */
+export async function reportDay7PermissionState(
+  hasAlwaysNow: () => Promise<boolean>,
+  emit: (granted: boolean, daysSinceOptIn: number) => void,
+): Promise<boolean> {
+  try {
+    const raw = await AsyncStorage.getItem(OPT_IN_AT_KEY);
+    const optInAt = raw ? parseInt(raw, 10) : null;
+    const reported = (await AsyncStorage.getItem(DAY7_REPORTED_KEY)) === "1";
+    const now = Date.now();
+    if (!shouldReportDay7(Number.isFinite(optInAt as number) ? optInAt : null, now, reported)) {
+      return false;
+    }
+    const granted = await hasAlwaysNow();
+    emit(granted, Math.floor((now - (optInAt as number)) / 86_400_000));
+    // Marked AFTER emitting, so a crash mid-report retries rather than losing
+    // the only measurement this install will ever produce.
+    await AsyncStorage.setItem(DAY7_REPORTED_KEY, "1");
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Turn passive capture off for real: forget the opt-in and disarm the native monitor. */
