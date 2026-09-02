@@ -5,6 +5,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { LAST_SEEN_WRAPPED_KEY } from "./_layout";
 import { Button, Spacer } from "../../components/Button";
+import { wrappedPromise } from "../../lib/next-step";
+import { visitsToWrapped } from "../../lib/visits";
 import { colors, spacing, type } from "../../theme";
 import { generateForCurrentWeek, latestWrapped, isoWeekStart, type Wrapped } from "../../lib/wrapped";
 // Inline the constant to avoid eagerly evaluating wrapped-story.tsx on every
@@ -45,6 +47,10 @@ import { generateInviteLink, inviteShareMessage } from "../../lib/referrals";
 // tab re-mounts every time the story screen pops back via router.replace,
 // which would reset a useRef and re-trigger the story → infinite loop.
 let storyShownThisSession = false;
+
+// The gate lives in lib/visits.ts; derive it rather than restating it, so the
+// promise on this screen can never drift from the rule that unlocks it.
+const VISITS_FOR_WRAPPED = visitsToWrapped(0);
 
 export default function WrappedTab() {
   const [data, setData] = useState<Wrapped | null>(null);
@@ -376,8 +382,11 @@ export default function WrappedTab() {
             <Spacer />
             <View style={styles.empty}>
               <Text style={type.subtitle}>No Wrapped yet</Text>
-              <Text style={[type.body, { color: colors.mute, marginTop: 6 }]}>
-                Log your first visit and we'll start reading your pattern.
+              {/* Say what it will be and exactly what it needs. "Log your
+                  first visit and we'll start reading your pattern" promises
+                  nothing a person can picture, and gives them no number. */}
+              <Text style={[type.body, { color: colors.mute, marginTop: 6, lineHeight: 21 }]}>
+                {wrappedPromise(vector?.visitCount ?? 0, VISITS_FOR_WRAPPED)}
               </Text>
               <Spacer />
               <Button title={loading ? "Generating…" : "Generate now"} onPress={generate} loading={loading} />

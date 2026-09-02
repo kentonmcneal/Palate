@@ -1,5 +1,4 @@
-import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
-import { useRouter } from "expo-router";
+import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { colors, spacing, type, card } from "../theme";
 
 const STARTER_PERSONAS = [
@@ -15,42 +14,17 @@ const STARTER_PERSONAS = [
 ];
 
 export function GettingStarted() {
-  const router = useRouter();
   return (
     <View style={styles.wrap}>
       <View style={styles.heroCard}>
         <Text style={styles.heroEyebrow}>YOUR PALATE STARTS HERE</Text>
         <Text style={styles.heroTitle}>
-          Three things to do before your first Wrapped.
+          This is what you&apos;re building toward.
         </Text>
         <Text style={styles.heroBody}>
           Palate gets sharper the more you log. By Sunday you'll see what
           your week actually says about you.
         </Text>
-      </View>
-
-      <View style={styles.steps}>
-        <Step
-          number="1"
-          title="Log your first visit"
-          body="Tap the + tab — pick a place you went today. Takes 5 seconds."
-          cta="Add a visit"
-          onPress={() => router.push("/(tabs)/add")}
-        />
-        <Step
-          number="2"
-          title="Preview a Wrapped"
-          body="See what Sunday's reveal will feel like with sample data."
-          cta="Open Wrapped"
-          onPress={() => router.push("/(tabs)/wrapped")}
-        />
-        <Step
-          number="3"
-          title="Find a friend"
-          body="The feed comes alive when one friend's on Palate too."
-          cta="Find friends"
-          onPress={() => router.push("/friends")}
-        />
       </View>
 
       <View style={styles.personasCard}>
@@ -72,29 +46,6 @@ export function GettingStarted() {
   );
 }
 
-function Step({
-  number, title, body, cta, onPress,
-}: {
-  number: string;
-  title: string;
-  body: string;
-  cta: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable onPress={onPress} style={styles.step}>
-      <View style={styles.stepNumber}>
-        <Text style={styles.stepNumberText}>{number}</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.stepTitle}>{title}</Text>
-        <Text style={styles.stepBody}>{body}</Text>
-        <Text style={styles.stepCta}>{cta} →</Text>
-      </View>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   wrap: { gap: 14 },
   heroCard: {
@@ -106,25 +57,6 @@ const styles = StyleSheet.create({
   heroTitle: { color: "#fff", fontSize: 24, fontWeight: "800", letterSpacing: -0.5, marginTop: 10, lineHeight: 30 },
   heroBody: { color: "rgba(255,255,255,0.85)", fontSize: 14, lineHeight: 21, marginTop: 10 },
 
-  steps: { gap: 10 },
-  step: {
-    flexDirection: "row",
-    gap: 14,
-    padding: spacing.md,
-    borderRadius: card.radius,
-    backgroundColor: colors.paper,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  stepNumber: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: colors.red,
-    alignItems: "center", justifyContent: "center",
-  },
-  stepNumberText: { color: "#fff", fontSize: 14, fontWeight: "800" },
-  stepTitle: { fontSize: 15, fontWeight: "700", color: colors.ink },
-  stepBody: { fontSize: 13, color: colors.mute, marginTop: 4, lineHeight: 18 },
-  stepCta: { fontSize: 12, fontWeight: "700", color: colors.red, marginTop: 8, letterSpacing: 0.3 },
 
   personasCard: {
     padding: spacing.md,

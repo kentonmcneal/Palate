@@ -31,6 +31,8 @@ import { RightNowHero } from "../../components/RightNowHero";
 import { StretchPick } from "../../components/StretchPick";
 import { WishlistRail } from "../../components/WishlistRail";
 import { BasedOnSaves, BasedOnSavesEmpty } from "../../components/BasedOnSaves";
+import { NextStepCard } from "../../components/NextStepCard";
+import { listFriends } from "../../lib/friends";
 import { listWishlist, type WishlistEntry } from "../../lib/palate-insights";
 import { loadRecsFromSaves, type SaveAnchoredRec } from "../../lib/recs-from-saves";
 import { getEffectiveLocation } from "../../lib/browsing-location";
@@ -67,6 +69,9 @@ export default function Home() {
   const router = useRouter();
   const [checking, setChecking] = useState(false);
   const [visits, setVisits] = useState<Visit[]>([]);
+  // Only feeds NextStepCard — an account with no friends is a different
+  // problem from an account with no visits, and the two need different advice.
+  const [friendCount, setFriendCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [streak, setStreak] = useState<StreakInfo | null>(null);
   const [weekInsight, setWeekInsight] = useState<PalateInsight | null>(null);
@@ -88,6 +93,14 @@ export default function Home() {
   useEffect(() => {
     if (moodParam === "surprise") setMood(SURPRISE);
   }, [moodParam]);
+
+  useEffect(() => {
+    let alive = true;
+    void listFriends()
+      .then((f) => { if (alive) setFriendCount(f.length); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -283,6 +296,11 @@ export default function Home() {
         <View style={{ marginBottom: spacing.md }}>
           <LocationPill />
         </View>
+
+        {/* Before any of the decision engine: if this account cannot yet make
+            a decision, say the one thing that would fix it. Renders nothing
+            once the account is healthy, so it never becomes furniture. */}
+        <NextStepCard visitCount={visits.length} friendCount={friendCount} />
 
         {/* HOME = DECISION ENGINE. Strict order per spec:
             1. What should I eat right now (DOMINANT)
