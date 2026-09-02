@@ -97,6 +97,9 @@ export default function FeedTab() {
             <Pressable onPress={() => router.push({ pathname: "/friends", params: { tab: "leaderboard" } })} style={styles.friendsBtn}>
               <Text style={styles.friendsBtnText}>Board</Text>
             </Pressable>
+            <Pressable onPress={() => router.push("/people")} style={styles.friendsBtn}>
+              <Text style={styles.friendsBtnText}>People</Text>
+            </Pressable>
             <Pressable onPress={() => router.push("/friends")} style={styles.friendsBtn}>
               <Text style={styles.friendsBtnText}>
                 Friends{pendingCount > 0 ? ` · ${pendingCount}` : ""}
