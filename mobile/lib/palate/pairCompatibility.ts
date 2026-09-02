@@ -29,6 +29,12 @@ import { generateCandidates } from "../recommendation/candidates";
 import { getUserPalateProfile, vectorToWeeklyData } from "./palateScoring";
 import { compareProfiles } from "./palateCompatibility";
 import type { CompatibilityResult } from "./palateTypes";
+import { loadPersonalSignal } from "../personal-signal";
+import {
+  computePalateMatch,
+  MATCH_MIN_VISITS,
+  type PalateMatch,
+} from "../recommendation/palate-match";
 
 /** Both people need at least this many visits for a meaningful taste profile. */
 export const PAIR_READY_MIN_VISITS = 5;
@@ -65,19 +71,27 @@ type FriendTasteResponse = {
 
 async function loadFriendVector(
   targetId: string,
-): Promise<{ authorized: boolean; vector: TasteVector | null; visitCount: number }> {
+): Promise<{ authorized: boolean; vector: TasteVector | null; visitCount: number; placeIds: Set<string> }> {
   const { data, error } = await supabase.rpc("friend_taste_features", {
     target_id: targetId,
   });
   if (error) throw error;
   const res = (data ?? { authorized: false }) as FriendTasteResponse;
-  if (!res.authorized) return { authorized: false, vector: null, visitCount: 0 };
+  if (!res.authorized) return { authorized: false, vector: null, visitCount: 0, placeIds: new Set() };
   // The RPC returns rows in exactly the shape aggregate() consumes.
   const vector = aggregate((res.visits ?? []) as never, []);
+  // Which restaurants they have been to — the shared-place overlap in the
+  // palate match is computed from this, never from a broader read.
+  const placeIds = new Set<string>();
+  for (const v of res.visits ?? []) {
+    const gid = (v.restaurant as { google_place_id?: string } | null)?.google_place_id;
+    if (gid) placeIds.add(gid);
+  }
   return {
     authorized: true,
     vector,
     visitCount: res.visit_count ?? vector.visitCount,
+    placeIds,
   };
 }
 
@@ -149,3 +163,48 @@ export async function computePairCompatibility(
 
   return { ready: true, compat, picks };
 }
+
+// ----------------------------------------------------------------------------
+// Palate Match — the shareable number
+// ----------------------------------------------------------------------------
+// compareProfiles() above returns a qualitative verdict, which is the honest
+// shape of the data and completely unshareable. A tester asked for the Spotify
+// Blend treatment: one number, with the reasons underneath. See
+// SOCIAL_DESIGN.md — both models are kept, deliberately.
+
+/**
+ * Load one friend's palate match. Reads the friend's vector through
+ * friend_taste_features, which enforces the friendship check server-side —
+ * this never widens access.
+ */
+export async function loadPalateMatch(targetId: string): Promise<PalateMatch> {
+  const [mine, friend, myPlaces] = await Promise.all([
+    computeTasteVector(),
+    loadFriendVector(targetId),
+    loadPersonalSignal().catch(() => null),
+  ]);
+
+  if (!friend.authorized || !friend.vector) {
+    return {
+      ready: false,
+      yourVisits: mine.visitCount,
+      theirVisits: 0,
+      threshold: MATCH_MIN_VISITS,
+    };
+  }
+
+  // Shared-place overlap. The friend RPC returns their visited restaurants, so
+  // this is computed from data we are already authorized to read.
+  const mineIds = new Set(myPlaces?.visitsByPlaceId.keys() ?? []);
+  const theirIds = friend.placeIds;
+  let shared = 0;
+  for (const id of theirIds) if (mineIds.has(id)) shared++;
+  const union = new Set([...mineIds, ...theirIds]).size;
+
+  return computePalateMatch(mine, friend.vector, {
+    sharedPlaceCount: shared,
+    unionPlaceCount: union,
+  });
+}
+
+

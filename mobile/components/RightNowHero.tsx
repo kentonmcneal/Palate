@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Animated, Easing } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { colors, spacing, type } from "../theme";
+import { colors, spacing, type, card } from "../theme";
 import { computeTasteVector } from "../lib/taste-vector";
 import { nearbyRestaurants } from "../lib/places";
 import { getCachedNearby, setCachedNearby } from "../lib/nearby-cache";
@@ -12,6 +12,7 @@ import { matchScoreColor } from "../lib/match-score";
 import { triggerHapticSelection } from "../lib/haptics";
 import { assembleGraph, computeRightNow, type RightNowPick, type RightNowStrategy } from "../lib/recommendation";
 import { toInput as toCandidateInput } from "../lib/recommendation/candidates";
+import { filterRecommendable } from "../lib/recommendation/eligibility";
 import { AnimatedNumber } from "./AnimatedNumber";
 
 // ============================================================================
@@ -84,8 +85,8 @@ export function RightNowHero({ onTakeMeThere }: Props) {
       // Add the new exclusion (if any) to the running dismissed set
       if (extraExcludeId) dismissedRef.current.add(extraExcludeId);
 
-      const filtered = nearby.filter(
-        (r) => (r.recommendation_eligibility ?? 1) > 0 && !dismissedRef.current.has(r.google_place_id),
+      const filtered = filterRecommendable(nearby).filter(
+        (r) => !dismissedRef.current.has(r.google_place_id),
       );
 
       // Canonical pipeline: build graph once, then computeRightNow.
@@ -247,7 +248,7 @@ function cap(s: string): string {
 const styles = StyleSheet.create({
   card: {
     padding: spacing.lg,
-    borderRadius: 24,
+    borderRadius: card.radius,
     backgroundColor: colors.faint,
     borderWidth: 1,
     borderColor: colors.line,
@@ -330,7 +331,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     flex: 1,
-    height: 48, borderRadius: 14,
+    minHeight: 48, paddingVertical: 12, borderRadius: 14,
     alignItems: "center", justifyContent: "center",
     backgroundColor: colors.red,
     // Muted: a plain soft drop shadow, no red glow. (Was red glow 0.32 / 14.)
@@ -342,7 +343,7 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: { color: "#fff", fontWeight: "800", fontSize: 14, letterSpacing: 0.2 },
   ghostBtn: {
-    paddingHorizontal: 16, height: 48,
+    paddingHorizontal: 16, minHeight: 48, paddingVertical: 12,
     alignItems: "center", justifyContent: "center",
     borderRadius: 14,
     backgroundColor: colors.paper,

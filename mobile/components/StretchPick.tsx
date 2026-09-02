@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
-import { colors, spacing, type } from "../theme";
+import { colors, spacing, type, card, shadow } from "../theme";
 import { computeTasteVector } from "../lib/taste-vector";
 import { nearbyRestaurants } from "../lib/places";
 import { getCachedNearby, setCachedNearby } from "../lib/nearby-cache";
@@ -10,6 +10,7 @@ import { loadPersonalSignal } from "../lib/personal-signal";
 import { matchScoreColor, matchScoreTint } from "../lib/match-score";
 import { assembleGraph, computeRightNow, type RightNowPick as StretchPickType } from "../lib/recommendation";
 import { toInput as toCandidateInput } from "../lib/recommendation/candidates";
+import { filterRecommendable } from "../lib/recommendation/eligibility";
 
 // ============================================================================
 // StretchPick — one recommendation slightly outside the user's pattern.
@@ -44,7 +45,10 @@ export function StretchPick() {
       const result = await computeRightNow({
         graph,
         here,
-        preFetched: nearby.filter((r) => (r.recommendation_eligibility ?? 1) > 0).map(toCandidateInput),
+        // One gate for every surface (lib/recommendation/eligibility.ts). The
+        // old `eligibility > 0` check let unclassified chains through — this
+        // slot is where Domino's Pizza surfaced at 31% match.
+        preFetched: filterRecommendable(nearby.map(toCandidateInput)),
       });
       setPick(result.stretch);
     } catch {
@@ -88,10 +92,9 @@ function cap(s: string): string {
 const styles = StyleSheet.create({
   card: {
     padding: spacing.md,
-    borderRadius: 20,
-    backgroundColor: colors.paper,
-    borderWidth: 1,
-    borderColor: colors.line,
+    borderRadius: card.radius,
+    backgroundColor: colors.faint,
+    ...shadow.card,
   },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   eyebrow: { ...type.micro, color: colors.mute },

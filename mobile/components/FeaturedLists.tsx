@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { colors, spacing, type } from "../theme";
+import { colors, spacing, type, card } from "../theme";
 import { buildFeaturedLists, type FeaturedList } from "../lib/featured-lists";
 import type { TasteVector } from "../lib/taste-vector";
 import type { PersonalSignal } from "../lib/personal-signal";
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
   card: {
     width: CARD_W,
     height: CARD_H,
-    borderRadius: 18,
+    borderRadius: card.radius,
     overflow: "hidden",
     justifyContent: "flex-end",
     padding: 14,

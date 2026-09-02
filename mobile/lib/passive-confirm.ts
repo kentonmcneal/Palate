@@ -35,6 +35,17 @@ const INBOX_EXPIRY_HOURS = 24;
 
 const INBOX_KEY = "palate.passive.inbox";
 const RATE_KEY = "palate.passive.notifRate"; // { day: "YYYY-MM-DD", count: n }
+const LAST_NOTIF_KEY = "palate.passive.lastNotifAt";
+
+/** Minimum gap between two confirm notifications, whatever the venue.
+ *  A tester's lock screen showed Kobe twice and Nashmi three times in nine
+ *  minutes: the inbox deduped those, but the notification path never consulted
+ *  the inbox, so every detection still buzzed. The per-place check below stops
+ *  repeats of ONE venue; this stops a burst across several. */
+export const MIN_NOTIF_GAP_MIN = 15;
+
+/** Notification category carrying the Yes/No lock-screen actions. */
+export const CONFIRM_CATEGORY = "passive_confirm";
 
 export type InboxEntry = {
   id: string;
@@ -51,7 +62,49 @@ export type InboxEntry = {
   source?: string;
   /** How many venues were in range — the honest measure of attribution difficulty. */
   candidateCount?: number;
+  /** Several venues within CLUSTER_RADIUS_M — ask as a multi-select rather
+   *  than picking a winner and asking about it alone. */
+  cluster?: boolean;
 };
+
+/** Radius within which several venues are one decision, not several. Food
+ *  halls, strip malls and dense blocks all land here: the phone genuinely
+ *  cannot tell which counter you ate at, and asking N separate times is the
+ *  storm a tester reported from the other direction. */
+export const CLUSTER_RADIUS_M = 75;
+
+function metersBetween(
+  a: { latitude?: number | null; longitude?: number | null },
+  b: { latitude?: number | null; longitude?: number | null },
+): number | null {
+  if (a.latitude == null || a.longitude == null) return null;
+  if (b.latitude == null || b.longitude == null) return null;
+  const R = 6_371_000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLng = toRad(b.longitude - a.longitude);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/**
+ * Candidates that sit on top of each other — ask once, as a multi-select,
+ * instead of guessing a winner and asking about it alone.
+ * Exported for tests.
+ */
+export function clusteredCandidates<T extends { latitude?: number | null; longitude?: number | null }>(
+  candidates: T[],
+): T[] {
+  if (candidates.length < 2) return [];
+  const [top, ...rest] = candidates;
+  const near = rest.filter((c) => {
+    const d = metersBetween(top, c);
+    return d != null && d <= CLUSTER_RADIUS_M;
+  });
+  return near.length >= 1 ? [top, ...near] : [];
+}
 
 export function isQuietHours(date = new Date()): boolean {
   const h = date.getHours();
@@ -76,7 +129,17 @@ export async function notifCountToday(): Promise<number> {
   }
 }
 
+/** Exported for tests. */
+export async function minutesSinceLastNotif(now = Date.now()): Promise<number | null> {
+  const raw = await AsyncStorage.getItem(LAST_NOTIF_KEY);
+  if (!raw) return null;
+  const t = Number(raw);
+  if (!Number.isFinite(t)) return null;
+  return (now - t) / 60_000;
+}
+
 export async function bumpNotifCount(): Promise<void> {
+  await AsyncStorage.setItem(LAST_NOTIF_KEY, String(Date.now()));
   const day = todayKey();
   const current = await notifCountToday();
   await AsyncStorage.setItem(RATE_KEY, JSON.stringify({ day, count: current + 1 }));
@@ -99,12 +162,15 @@ export async function getInbox(): Promise<InboxEntry[]> {
   }
 }
 
-async function addToInbox(entry: InboxEntry): Promise<void> {
+/** Returns false when this was a duplicate of an entry we already hold. The
+ *  caller needs that answer: a duplicate must not produce a second buzz. */
+async function addToInbox(entry: InboxEntry): Promise<boolean> {
   const existing = await getInbox();
   if (existing.some((e) => e.place_id === entry.place_id && Math.abs(e.detectedAt - entry.detectedAt) < 3_600_000)) {
-    return; // dedupe same place within an hour
+    return false; // dedupe same place within an hour
   }
   await AsyncStorage.setItem(INBOX_KEY, JSON.stringify([entry, ...existing]));
+  return true;
 }
 
 export async function removeFromInbox(id: string): Promise<void> {
@@ -127,6 +193,7 @@ export function confirmParamsFor(entry: InboxEntry) {
     accuracy_m: entry.accuracyM == null ? "" : String(Math.round(entry.accuracyM)),
     detect_source: entry.source ?? "",
     candidate_count: String(entry.candidateCount ?? 0),
+    cluster: entry.cluster ? "1" : "",
   };
 }
 
@@ -134,13 +201,48 @@ export function confirmParamsFor(entry: InboxEntry) {
 // Notify-or-inbox
 // ----------------------------------------------------------------------------
 
+/**
+ * Register the Yes/No actions once per launch. opensAppToForeground:false is
+ * the whole point — the tester asked to answer "without opening the app".
+ */
+export async function registerConfirmCategory(): Promise<void> {
+  try {
+    await Notifications.setNotificationCategoryAsync(CONFIRM_CATEGORY, [
+      {
+        identifier: "confirm_yes",
+        buttonTitle: "Yes, I ate here",
+        options: { opensAppToForeground: false },
+      },
+      {
+        identifier: "confirm_no",
+        buttonTitle: "No",
+        options: { opensAppToForeground: false, isDestructive: true },
+      },
+    ]);
+  } catch {
+    // Categories are a native capability; never let this break launch.
+  }
+}
+
 async function scheduleConfirmNotification(entry: InboxEntry): Promise<void> {
+  // A cluster has no single right answer, so it gets no Yes/No buttons —
+  // tapping opens the multi-select instead. Attaching Yes/No here would make
+  // "Yes" mean "the one we guessed", which is the wrong guess by definition.
+  const isCluster = entry.cluster === true;
+  const count = 1 + entry.alternates.length;
   await Notifications.scheduleNotificationAsync({
-    content: {
-      title: `Did you eat at ${entry.name}?`,
-      body: "Tap to confirm your visit.",
-      data: { kind: "passive_confirm", ...confirmParamsFor(entry) },
-    },
+    content: isCluster
+      ? {
+          title: `Where'd you eat near ${entry.name}?`,
+          body: `${count} spots in range — tap to check off the ones you ate at.`,
+          data: { kind: "passive_confirm", multi: "1", ...confirmParamsFor(entry) },
+        }
+      : {
+          title: `Did you eat at ${entry.name}?`,
+          body: "Yes or No — no need to open the app.",
+          categoryIdentifier: CONFIRM_CATEGORY,
+          data: { kind: "passive_confirm", ...confirmParamsFor(entry) },
+        },
     trigger: null, // deliver now (called on departure)
   });
 }
@@ -149,7 +251,8 @@ export type NotifyResult =
   | "notified"
   | "inboxed-quiet"
   | "inboxed-rate-limited"
-  | "suppressed-recent";
+  | "suppressed-recent"
+  | "suppressed-duplicate";
 
 /** Fire a confirmation for a resolved visit, or route it to the inbox. */
 export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): Promise<NotifyResult> {
@@ -165,6 +268,7 @@ export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): 
     accuracyM: resolved.raw.horizontalAccuracy,
     source: resolved.raw.source ?? "visit",
     candidateCount: resolved.candidates.length,
+    cluster: clusteredCandidates(resolved.candidates).length >= 2,
   };
 
   // A venue the user just dismissed does NOT go to the inbox. The
@@ -178,7 +282,7 @@ export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): 
   }
 
   // Always land in the inbox so a prompt we couldn't deliver is never lost.
-  await addToInbox(entry);
+  const isNew = await addToInbox(entry);
   void track("visit_resolved", {
     place_id: entry.place_id,
     dwell_min: Math.round(dwellMin),
@@ -188,9 +292,22 @@ export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): 
     candidate_count: resolved.candidates.length,
   });
 
+  // Already holding this venue from a recent detection: the inbox collapsed
+  // it, and the notification must collapse with it. This is the duplicate
+  // storm a tester screenshotted.
+  if (!isNew) {
+    void track("confirm_notif_suppressed", { reason: "duplicate_recent", place_id: entry.place_id });
+    return "suppressed-duplicate";
+  }
+
   if (isQuietHours()) {
     void track("confirm_notif_suppressed", { reason: "quiet_hours", place_id: entry.place_id });
     return "inboxed-quiet";
+  }
+  const sinceLast = await minutesSinceLastNotif();
+  if (sinceLast != null && sinceLast < MIN_NOTIF_GAP_MIN) {
+    void track("confirm_notif_suppressed", { reason: "min_gap", place_id: entry.place_id });
+    return "inboxed-rate-limited";
   }
   if ((await notifCountToday()) >= MAX_NOTIFS_PER_DAY) {
     void track("confirm_notif_suppressed", { reason: "rate_limit", place_id: entry.place_id });
@@ -209,4 +326,120 @@ export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): 
   await bumpNotifCount();
   void track("confirm_notif_sent", { place_id: entry.place_id });
   return "notified";
+}
+
+// ----------------------------------------------------------------------------
+// Headless confirm — the lock-screen action path
+// ----------------------------------------------------------------------------
+// A tester asked to confirm or deny a visit without opening the app: "as least
+// friction as possible". The notification now carries Yes/No actions, and an
+// action with opensAppToForeground:false gives us a short background window
+// with NO UI mounted. So the write path can't live in app/confirm-visit.tsx —
+// it lives here, callable from the notification response handler.
+//
+// Two things follow from having no UI:
+//   • Failures are invisible. A dropped write would silently lose the visit,
+//     so anything that fails is queued and drained on next foreground.
+//   • Success is invisible too. saveVisit() is already idempotent inside its
+//     dedup window, so a replayed queue item can't double-log.
+
+const CONFIRM_QUEUE_KEY = "palate.passive.confirmQueue";
+
+export type QueuedAction = {
+  kind: "confirm" | "decline";
+  placeId: string;
+  name: string;
+  inboxId?: string;
+  queuedAt: number;
+};
+
+async function readQueue(): Promise<QueuedAction[]> {
+  try {
+    const raw = await AsyncStorage.getItem(CONFIRM_QUEUE_KEY);
+    return raw ? (JSON.parse(raw) as QueuedAction[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function enqueue(action: QueuedAction): Promise<void> {
+  const q = await readQueue();
+  // Drop anything older than a day — a stale "I ate here" is worse than none.
+  const fresh = q.filter((a) => Date.now() - a.queuedAt < 24 * 3_600_000);
+  fresh.push(action);
+  await AsyncStorage.setItem(CONFIRM_QUEUE_KEY, JSON.stringify(fresh));
+}
+
+/**
+ * Log a visit from a notification action, with no screen mounted.
+ * Returns true when the write landed, false when it was queued for retry.
+ */
+export async function confirmVisitById(input: {
+  placeId: string;
+  name?: string;
+  inboxId?: string;
+}): Promise<boolean> {
+  const { saveVisit, recordPromptDecision } = await import("./visits");
+  try {
+    await saveVisit({ googlePlaceId: input.placeId, source: "auto" });
+    await recordPromptDecision(input.placeId, "confirmed").catch(() => {});
+    if (input.inboxId) await removeFromInbox(input.inboxId).catch(() => {});
+    void track("confirm_yes", { place_id: input.placeId, source: "notification_action" });
+    return true;
+  } catch {
+    await enqueue({
+      kind: "confirm",
+      placeId: input.placeId,
+      name: input.name ?? "",
+      inboxId: input.inboxId,
+      queuedAt: Date.now(),
+    });
+    void track("confirm_action_queued", { place_id: input.placeId, kind: "confirm" });
+    return false;
+  }
+}
+
+/** Record a "No" from a notification action. Queued on failure too: losing a
+ *  dismissal means we re-prompt for a place the user already rejected. */
+export async function declineVisitById(input: {
+  placeId: string;
+  name?: string;
+  inboxId?: string;
+}): Promise<boolean> {
+  const { recordPromptDecision } = await import("./visits");
+  try {
+    await recordPromptDecision(input.placeId, "dismissed");
+    if (input.inboxId) await removeFromInbox(input.inboxId).catch(() => {});
+    void track("confirm_no", { place_id: input.placeId, source: "notification_action" });
+    return true;
+  } catch {
+    await enqueue({
+      kind: "decline",
+      placeId: input.placeId,
+      name: input.name ?? "",
+      inboxId: input.inboxId,
+      queuedAt: Date.now(),
+    });
+    void track("confirm_action_queued", { place_id: input.placeId, kind: "decline" });
+    return false;
+  }
+}
+
+/** Replay queued actions. Safe to call on every foreground: saveVisit dedups
+ *  server-side, so a double-drain cannot double-log. */
+export async function drainConfirmQueue(): Promise<number> {
+  const q = await readQueue();
+  if (q.length === 0) return 0;
+  await AsyncStorage.removeItem(CONFIRM_QUEUE_KEY);
+
+  let done = 0;
+  for (const a of q) {
+    const ok = a.kind === "confirm"
+      ? await confirmVisitById({ placeId: a.placeId, name: a.name, inboxId: a.inboxId })
+      : await declineVisitById({ placeId: a.placeId, name: a.name, inboxId: a.inboxId });
+    if (ok) done++;
+    // A failed replay re-queues itself inside confirm/declineVisitById.
+  }
+  if (done > 0) void track("confirm_queue_drained", { count: done });
+  return done;
 }

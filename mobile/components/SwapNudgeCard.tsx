@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Alert } from "react-native";
-import { colors, spacing, type } from "../theme";
+import { colors, spacing, type, card } from "../theme";
 import { listWishlist } from "../lib/palate-insights";
 import { supabase } from "../lib/supabase";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: spacing.xl,
     padding: spacing.md,
-    borderRadius: 18,
+    borderRadius: card.radius,
     backgroundColor: colors.faint,
     borderWidth: 1,
     borderColor: colors.line,

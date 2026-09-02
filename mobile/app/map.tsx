@@ -9,6 +9,7 @@ import { getEffectiveLocation, useBrowsingCity } from "../lib/browsing-location"
 import { computeTasteVector, type TasteVector } from "../lib/taste-vector";
 import { loadPersonalSignal } from "../lib/personal-signal";
 import { assembleGraph, getCompatibility } from "../lib/recommendation";
+import { isRecommendable } from "../lib/recommendation/eligibility";
 import { MatchMarker, TopMatchMarker } from "../components/MatchMarker";
 import { getCachedNearby, setCachedNearby } from "../lib/nearby-cache";
 import { LocationPill } from "../components/LocationPill";
@@ -71,9 +72,10 @@ export default function FullscreenMap() {
         for (const p of nearby!) {
           if (p.latitude == null || p.longitude == null) continue;
           if (next.has(p.google_place_id)) continue;
-          // Skip ineligible places on the discovery map (McDonald's, airports,
-          // hotels, lounges). Visit-logging surfaces don't apply this filter.
-          if ((p.recommendation_eligibility ?? 1) === 0) continue;
+          // Skip ineligible places on the discovery map (chains, fast food,
+          // airports, hotels). One shared gate — see recommendation/eligibility.
+          // Visit-logging surfaces deliberately do NOT apply this filter.
+          if (!isRecommendable(p)) continue;
           const compat = getCompatibility(graph, {
             google_place_id: p.google_place_id,
             name: p.name,

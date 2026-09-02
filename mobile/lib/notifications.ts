@@ -140,18 +140,34 @@ export async function registerPushToken(): Promise<void> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Only update if the token actually changed.
+    // The recipient's timezone, without which server-side quiet hours are
+    // meaningless — the server has no other way to know when someone's night
+    // is. Migration 0055 fails closed on a null here (no proactive push at
+    // all), so this is worth writing even when the token hasn't changed.
+    let tz: string | null = null;
+    try {
+      tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
+    } catch {
+      tz = null;
+    }
+
     const { data: prof } = await supabase
       .from("profiles")
-      .select("push_token")
+      .select("push_token, timezone")
       .eq("id", user.id)
       .maybeSingle();
-    if (prof?.push_token === token) return;
 
-    await supabase.from("profiles").update({
+    const tokenUnchanged = prof?.push_token === token;
+    const tzUnchanged = !tz || prof?.timezone === tz;
+    if (tokenUnchanged && tzUnchanged) return;
+
+    const patch: Record<string, unknown> = {
       push_token: token,
       push_platform: Platform.OS === "ios" ? "ios" : "android",
-    }).eq("id", user.id);
+    };
+    if (tz) patch.timezone = tz;
+
+    await supabase.from("profiles").update(patch).eq("id", user.id);
   } catch (err) {
     console.warn("[notifications] push token register failed", err);
   }

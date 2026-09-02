@@ -7,6 +7,7 @@
 // the user expects to see). Then a single batch hydrate.
 
 import { supabase } from "./supabase";
+import { isRecommendable, type EligibilityInput } from "./recommendation/eligibility";
 
 export interface SaveAnchoredRec {
   id: string;
@@ -78,7 +79,7 @@ export async function loadRecsFromSaves(
   const { data: restaurants, error: hydrateErr } = await supabase
     .from("restaurants_resolved")
     .select(
-      "id, google_place_id, name, cuisine_type:resolved_cuisine_type, cuisine_subregion:resolved_cuisine_subregion, neighborhood, address, price_level, rating, user_rating_count",
+      "id, google_place_id, name, cuisine_type:resolved_cuisine_type, cuisine_subregion:resolved_cuisine_subregion, neighborhood, address, price_level, rating, user_rating_count, chain_name, primary_type, types, format_class:resolved_format_class, recommendation_eligibility",
     )
     .in("id", ids);
   // Propagate a transient hydrate failure instead of silently returning [] —
@@ -90,6 +91,8 @@ export async function loadRecsFromSaves(
   for (const m of matchRows) {
     const r = byId.get(m.restaurant_id);
     if (!r) continue;
+    // Save-anchored recs are recommendations — same shared gate.
+    if (!isRecommendable(r as EligibilityInput)) continue;
     recs.push({
       ...r,
       totalScore: Number(m.total_score),

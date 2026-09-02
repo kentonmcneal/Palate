@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, Alert, ScrollView, RefreshControl, Pressable, Image, Animated, Easing, Share } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { Button, Spacer } from "../../components/Button";
 import { Wordmark } from "../../components/Logo";
 import { colors, spacing, type } from "../../theme";
@@ -35,6 +35,9 @@ import { listWishlist, type WishlistEntry } from "../../lib/palate-insights";
 import { loadRecsFromSaves, type SaveAnchoredRec } from "../../lib/recs-from-saves";
 import { getEffectiveLocation } from "../../lib/browsing-location";
 import { distanceKm } from "../../lib/match-score";
+import { MoodRow } from "../../components/MoodRow";
+import { buildMoodChips, palateRead, SURPRISE, type Mood, type MoodChip } from "../../lib/mood";
+import { loadAnalytics } from "../../lib/analytics-stats";
 
 const STREAK_MILESTONES = [7, 14, 30, 50, 100, 200, 365];
 
@@ -72,6 +75,34 @@ export default function Home() {
   // Saves-anchored shelves migrated from Discover. Both surface on Home so the
   // decision engine has personal-intent context one tap away.
   const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Mood: a temporary cuisine override for tonight. Deliberately not
+  // persisted — it is about this meal, not a preference.
+  const { mood: moodParam } = useLocalSearchParams<{ mood?: string }>();
+  const [mood, setMood] = useState<Mood>(null);
+  const [moodChips, setMoodChips] = useState<MoodChip[]>([]);
+  const [palateLine, setPalateLine] = useState<string | null>(null);
+  const [habitualCuisines, setHabitualCuisines] = useState<string[]>([]);
+
+  // The Thursday nudge deep-links in with ?mood=surprise.
+  useEffect(() => {
+    if (moodParam === "surprise") setMood(SURPRISE);
+  }, [moodParam]);
+
+  useEffect(() => {
+    let alive = true;
+    loadAnalytics("month")
+      .then((a) => {
+        if (!alive) return;
+        setMoodChips(buildMoodChips(a.cuisineBreakdown));
+        setPalateLine(palateRead(a.cuisineBreakdown));
+        setHabitualCuisines(
+          a.cuisineBreakdown.filter((c) => c.count >= 2).slice(0, 3).map((c) => c.cuisine),
+        );
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
   const [wishlistRail, setWishlistRail] = useState<WishlistEntry[]>([]);
   const [hasAnySaves, setHasAnySaves] = useState<boolean | null>(null);
   const [savesAnchors, setSavesAnchors] = useState<Array<{ id: string; name: string }>>([]);
@@ -285,9 +316,22 @@ export default function Home() {
           onTap={(gpid) => router.push(`/restaurant/${gpid}` as any)}
         />
 
-        {/* Places you'll probably like — 3 picks. */}
+        {/* Places you'll probably like — 3 picks, with a mood override.
+            Home's recs describe the PAST (the taste graph is built from logged
+            visits). The mood row lets tonight differ from the pattern without
+            throwing the pattern away: picking Mexican still ranks by YOUR fit,
+            it just narrows what's eligible. */}
         <Text style={styles.sectionHead}>Places you'll probably like</Text>
-        <RecommendationsCard />
+        {!!palateLine && (
+          <View style={styles.palateReadRow}>
+            <Text style={styles.palateRead}>{palateLine}</Text>
+            {mood === null && (
+              <Text style={styles.palateReadCta}>In the mood for something else?</Text>
+            )}
+          </View>
+        )}
+        <MoodRow chips={moodChips} value={mood} onChange={setMood} />
+        <RecommendationsCard mood={mood} habitualCuisines={habitualCuisines} />
 
         {/* One stretch pick — explicitly its own block AFTER the recs. */}
         <Text style={styles.sectionHead}>Stretch your palate</Text>
@@ -498,6 +542,9 @@ function prettyType(t: string) {
 }
 
 const styles = StyleSheet.create({
+  palateReadRow: { marginTop: 6, marginBottom: 2 },
+  palateRead: { fontSize: 14, color: colors.ink, fontWeight: "600" },
+  palateReadCta: { fontSize: 13, color: colors.redText, fontWeight: "700", marginTop: 2 },
   safe: { flex: 1, backgroundColor: colors.paper },
   container: { padding: spacing.lg, paddingBottom: 100 },
   header: {

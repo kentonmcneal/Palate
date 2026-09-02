@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
-import { colors, spacing, type } from "../theme";
+import { colors, spacing, type, card } from "../theme";
 
 const STARTER_PERSONAS = [
   { label: "The Convenience Loyalist", emoji: "⚡" },
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
   wrap: { gap: 14 },
   heroCard: {
     padding: spacing.lg,
-    borderRadius: 24,
+    borderRadius: card.radius,
     backgroundColor: colors.ink,
   },
   heroEyebrow: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 14,
     padding: spacing.md,
-    borderRadius: 18,
+    borderRadius: card.radius,
     backgroundColor: colors.paper,
     borderWidth: 1,
     borderColor: colors.line,
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
 
   personasCard: {
     padding: spacing.md,
-    borderRadius: 18,
+    borderRadius: card.radius,
     backgroundColor: colors.faint,
     borderWidth: 1,
     borderColor: colors.line,

@@ -53,11 +53,9 @@ type Category = {
 const CATEGORIES: Category[] = [
   { slug: "date-night",    title: "Top 10 Date Night",   query: "best date night restaurants in {city}" },
   { slug: "late-night",    title: "Top 10 Late Night",   query: "late night food in {city}" },
-  { slug: "early-morning", title: "Top 10 Early Morning", query: "best breakfast in {city}" },
   { slug: "brunch",        title: "Top 10 Brunch",       query: "best brunch in {city}" },
   { slug: "burgers",       title: "Top 10 Burgers",      query: "best burgers in {city}" },
   { slug: "wings",         title: "Top 10 Wings",        query: "best wings in {city}" },
-  { slug: "fries",         title: "Top 10 Fries",        query: "best french fries in {city}" },
   { slug: "hummus",        title: "Top 10 Hummus",       query: "best hummus in {city}" },
   { slug: "steaks",        title: "Top 10 Steaks",       query: "best steakhouse in {city}" },
   { slug: "pizza",         title: "Top 10 Pizza",        query: "best pizza in {city}" },
@@ -326,19 +324,6 @@ function isOpenLate(p: GooglePlace): boolean {
   return false;
 }
 
-/** True iff the place is open at or before 8:00 on at least one weekday. */
-function isOpenEarly(p: GooglePlace): boolean {
-  const periods = getPeriods(p);
-  if (periods.length === 0) return true;
-  for (const period of periods) {
-    const openDay = period.open?.day;
-    if (openDay == null || openDay === 0 || openDay === 6) continue; // weekdays only
-    const openHour = period.open?.hour ?? 23;
-    if (openHour <= 8) return true;
-  }
-  return false;
-}
-
 /** True iff the place opens between 9:00-13:00 on Sat or Sun. */
 function isOpenForBrunch(p: GooglePlace): boolean {
   const periods = getPeriods(p);
@@ -356,7 +341,7 @@ function isOpenForBrunch(p: GooglePlace): boolean {
 // headline these just because Google's text search matched the keyword. (Broad
 // slugs like date-night / late-night / american intentionally allow bars.)
 const SPECIFIC_FOOD_SLUGS = new Set([
-  "steaks", "pizza", "sushi", "burgers", "wings", "fries", "hummus", "bbq", "tacos",
+  "steaks", "pizza", "sushi", "burgers", "wings", "hummus", "bbq", "tacos",
 ]);
 const CATEGORY_PREFERRED_TYPES: Record<string, string[]> = {
   steaks: ["steak_house"],
@@ -392,7 +377,6 @@ function filterByCategorySlug(places: GooglePlace[], slug: string): GooglePlace[
   let out = places;
   switch (slug) {
     case "late-night":    out = out.filter(isOpenLate); break;
-    case "early-morning": out = out.filter(isOpenEarly); break;
     case "brunch":        out = out.filter(isOpenForBrunch); break;
   }
   return out.filter((p) => matchesCategoryCuisine(p, slug));

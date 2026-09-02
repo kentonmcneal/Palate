@@ -1,0 +1,96 @@
+import {
+  buildMoodChips,
+  palateRead,
+  applyMood,
+  cuisineLabel,
+  SURPRISE,
+} from "../mood";
+
+const breakdown = [
+  { cuisine: "american", count: 12, pct: 40 },
+  { cuisine: "mexican", count: 6, pct: 20 },
+  { cuisine: "italian", count: 4, pct: 13 },
+  { cuisine: "other", count: 4, pct: 13 },
+  { cuisine: "thai", count: 1, pct: 3 },
+];
+
+describe("mood chips", () => {
+  it("offers Anything, the user's real habits, then Surprise me", () => {
+    const chips = buildMoodChips(breakdown);
+    expect(chips.map((c) => c.label)).toEqual([
+      "Anything", "American", "Mexican", "Italian", "Surprise me",
+    ]);
+  });
+
+  it("drops the classifier's 'other' bucket — nobody is in the mood for other", () => {
+    expect(buildMoodChips(breakdown).some((c) => c.key === "other")).toBe(false);
+  });
+
+  it("drops one-off cuisines: one visit is not a habit", () => {
+    expect(buildMoodChips(breakdown).some((c) => c.key === "thai")).toBe(false);
+  });
+
+  it("renders just Anything + Surprise on a brand-new account (row hides itself)", () => {
+    expect(buildMoodChips([])).toHaveLength(2);
+  });
+});
+
+describe("palate read", () => {
+  it("names the dominant cuisine", () => {
+    expect(palateRead(breakdown)).toBe("Your palate's been American lately.");
+  });
+
+  it("says nothing when there isn't enough history to be true", () => {
+    expect(palateRead([{ cuisine: "thai", count: 1, pct: 100 }])).toBeNull();
+    expect(palateRead([])).toBeNull();
+  });
+});
+
+describe("applyMood", () => {
+  const recs = [
+    { google_place_id: "a", cuisine: "american", matchScore: 90 },
+    { google_place_id: "b", cuisine: "mexican", matchScore: 80 },
+    { google_place_id: "c", cuisine: "mexican", matchScore: 70 },
+    { google_place_id: "d", cuisine: "korean", matchScore: 60 },
+  ];
+
+  it("leaves the list alone for Anything", () => {
+    expect(applyMood(recs, null, []).items).toHaveLength(4);
+  });
+
+  it("narrows to one cuisine but keeps personal ranking — best Mexican FOR YOU", () => {
+    const { items, matched } = applyMood(recs, "mexican", ["american"]);
+    expect(matched).toBe(true);
+    expect(items.map((r) => r.google_place_id)).toEqual(["b", "c"]);
+    // Order preserved: b outranks c because the taste graph says so, not
+    // because it is more Mexican.
+    expect(items[0].matchScore).toBeGreaterThan(items[1].matchScore);
+  });
+
+  it("Surprise me excludes what the user always eats", () => {
+    const { items } = applyMood(recs, SURPRISE, ["american", "mexican"]);
+    expect(items.map((r) => r.google_place_id)).toEqual(["d"]);
+  });
+
+  it("never returns an empty Home — falls back and flags it", () => {
+    const { items, matched } = applyMood(recs, "ethiopian", ["american"]);
+    expect(matched).toBe(false);
+    expect(items).toHaveLength(4);
+  });
+
+  it("is case-insensitive about cuisine strings", () => {
+    const { items } = applyMood(
+      [{ google_place_id: "a", cuisine: "Mexican" }],
+      "mexican",
+      [],
+    );
+    expect(items).toHaveLength(1);
+  });
+});
+
+describe("cuisineLabel", () => {
+  it("humanizes classifier slugs", () => {
+    expect(cuisineLabel("fast_casual")).toBe("Fast Casual");
+    expect(cuisineLabel("mexican")).toBe("Mexican");
+  });
+});

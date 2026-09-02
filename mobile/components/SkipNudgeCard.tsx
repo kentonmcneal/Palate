@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Linking, Platform, Alert } from "react-native";
-import { colors, spacing, type } from "../theme";
+import { colors, spacing, type, card } from "../theme";
 import { supabase } from "../lib/supabase";
 
 // ============================================================================
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: spacing.xl,
     padding: spacing.md,
-    borderRadius: 18,
+    borderRadius: card.radius,
     backgroundColor: colors.redTint,
     borderWidth: 1,
     borderColor: colors.redTintBorder,

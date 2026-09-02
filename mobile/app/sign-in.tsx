@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   sub: { ...type.body, color: colors.mute, marginTop: 6 },
   label: { ...type.micro, marginBottom: 8 },
   input: {
-    height: 54,
+    minHeight: 54, paddingVertical: 12,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.line,

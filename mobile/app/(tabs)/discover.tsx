@@ -4,7 +4,7 @@ import {
   TextInput, ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { nearbyRestaurants, searchRestaurants, type Restaurant } from "../../lib/places";
@@ -17,6 +17,8 @@ import { LocationPill } from "../../components/LocationPill";
 import { computeTasteVector, type TasteVector } from "../../lib/taste-vector";
 import { distanceKm, formatDistance } from "../../lib/match-score";
 import { trackImpressions } from "../../lib/recommendation-events";
+import { filterRecommendable } from "../../lib/recommendation/eligibility";
+import { dedupeVenues } from "../../lib/recommendation/dedupe";
 import { RestaurantCompatibilityCard } from "../../components/RestaurantCompatibilityCard";
 import { CardSkeleton, Shimmer } from "../../components/Shimmer";
 import { FeaturedLists } from "../../components/FeaturedLists";
@@ -71,6 +73,16 @@ const SORT_LABEL: Record<SortKey, string> = {
 
 export default function DiscoverTab() {
   const router = useRouter();
+  // A weekly discovery ping deep-links here with ?list=date-night. Hand it
+  // straight to the list it promised rather than dropping the user on a
+  // generic feed and making them hunt for it.
+  const { list: deepLinkList } = useLocalSearchParams<{ list?: string }>();
+  useEffect(() => {
+    if (!deepLinkList) return;
+    router.push({ pathname: "/featured-list/[slug]", params: { slug: String(deepLinkList) } });
+    // Clear the param so a tab switch back doesn't reopen it.
+    router.setParams({ list: undefined } as never);
+  }, [deepLinkList, router]);
   const [tab, setTab] = useState<SubTab>("most_compatible");
   const [sort, setSort] = useState<SortKey>("compat_high");
   const [formatFilter, setFormatFilter] = useState<FormatFilter>("all");
@@ -130,12 +142,15 @@ export default function DiscoverTab() {
       ]);
 
       // Hybrid discovery policy:
-      //   - Drop places with recommendation_eligibility === 0 (chains, airports,
-      //     hotels, lounges — see classifier inferRecommendationEligibility)
+      //   - Drop anything the shared eligibility gate rejects (chains, fast
+      //     food, airports, hotels — recommendation/eligibility.ts)
       //   - Drop places the user has already visited (saved-shelf and
       //     wishlist-rail live on Home now)
-      const candidates = nearby.filter(
-        (p) => (p.recommendation_eligibility ?? 1) > 0 && !visitedIds.has(p.google_place_id),
+      // dedupeVenues collapses one venue listed twice by Google under
+      // different place ids ("Hong Kong Restaurant" + "Hong Kong Restaurant |
+      // Chinese") — the duplicate rows a tester saw in this feed.
+      const candidates = dedupeVenues(filterRecommendable(nearby)).filter(
+        (p) => !visitedIds.has(p.google_place_id),
       );
 
       setPersonal(sig);
@@ -892,7 +907,7 @@ const styles = StyleSheet.create({
   },
   mapPill: {
     paddingHorizontal: 16,
-    height: 44, borderRadius: 14,
+    minHeight: 44, paddingVertical: 8, borderRadius: 14,
     backgroundColor: colors.ink,
     alignItems: "center", justifyContent: "center",
   },

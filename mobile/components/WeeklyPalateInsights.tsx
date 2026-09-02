@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from "react-native";
-import { colors, spacing, type } from "../theme";
+import { colors, spacing, type, card, shadow } from "../theme";
 import { addToWishlist, type RestaurantRecommendation } from "../lib/palate-insights";
 import {
   generateWeeklyPalatePersona,
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
   section: {
     marginTop: spacing.xl,
     padding: spacing.lg,
-    borderRadius: 24,
+    borderRadius: card.radius,
     backgroundColor: colors.faint,
   },
   eyebrow: { ...type.micro },
@@ -239,12 +239,11 @@ const styles = StyleSheet.create({
     color: colors.mute,
   },
   card: {
-    backgroundColor: colors.paper,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.line,
-    padding: spacing.md,
+    backgroundColor: colors.faint,
+    borderRadius: card.radius,
+    padding: card.padding,
     marginBottom: 10,
+    ...shadow.card,
   },
   cardStretch: {
     borderColor: colors.red,
@@ -266,7 +265,7 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     paddingHorizontal: 14,
-    height: 32,
+    minHeight: 32, paddingVertical: 6,
     borderRadius: 16,
     backgroundColor: colors.red,
     alignItems: "center",

@@ -1,7 +1,8 @@
-import { View, Text, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, radius } from "../theme";
 import type { Wrapped } from "../lib/wrapped";
+import { CanvasText } from "./CanvasText";
 
 export function WrappedCard({
   data,
@@ -37,17 +38,17 @@ export function WrappedCard({
 
       <View style={styles.row}>
         <View style={styles.logoBox}>
-          <Text style={styles.logoP}>p</Text>
+          <CanvasText style={styles.logoP}>p</CanvasText>
         </View>
-        <Text style={styles.weekText}>
+        <CanvasText style={styles.weekText}>
           {formatRange(data.week_start, data.week_end)}
-        </Text>
+        </CanvasText>
       </View>
 
-      <Text style={styles.youAre}>YOUR PALATE THIS WEEK</Text>
-      <Text style={styles.persona}>{personaLabel}</Text>
+      <CanvasText style={styles.youAre}>YOUR PALATE THIS WEEK</CanvasText>
+      <CanvasText style={styles.persona}>{personaLabel}</CanvasText>
       {personaDescription ? (
-        <Text style={styles.personaDescription}>{personaDescription}</Text>
+        <CanvasText style={styles.personaDescription}>{personaDescription}</CanvasText>
       ) : null}
 
       <View style={styles.stats}>
@@ -59,34 +60,34 @@ export function WrappedCard({
         />
       </View>
 
-      <Text style={styles.topLabel}>Top spots</Text>
+      <CanvasText style={styles.topLabel}>Top spots</CanvasText>
       <View style={{ marginTop: 8 }}>
         {top3.map((row, i) => (
           <View key={`${row.name}-${i}`} style={styles.topRow}>
-            <Text style={styles.topName}>
-              <Text style={styles.topRank}>{i + 1}  </Text>
+            <CanvasText style={styles.topName}>
+              <CanvasText style={styles.topRank}>{i + 1}  </CanvasText>
               {row.name}
-            </Text>
-            <Text style={styles.topCount}>×{row.count}</Text>
+            </CanvasText>
+            <CanvasText style={styles.topCount}>×{row.count}</CanvasText>
           </View>
         ))}
       </View>
 
       {topCuisines && topCuisines.length > 0 && (
         <>
-          <Text style={[styles.topLabel, { marginTop: 18 }]}>Top cuisines</Text>
+          <CanvasText style={[styles.topLabel, { marginTop: 18 }]}>Top cuisines</CanvasText>
           <View style={styles.cuisineRow}>
             {topCuisines.slice(0, 3).map((c) => (
               <View key={c.name} style={styles.cuisineChip}>
-                <Text style={styles.cuisineChipText}>{c.name}</Text>
-                <Text style={styles.cuisineChipPct}>{Math.round(c.share * 100)}%</Text>
+                <CanvasText style={styles.cuisineChipText}>{c.name}</CanvasText>
+                <CanvasText style={styles.cuisineChipPct}>{Math.round(c.share * 100)}%</CanvasText>
               </View>
             ))}
           </View>
         </>
       )}
 
-      <Text style={styles.brand}>palate.app</Text>
+      <CanvasText style={styles.brand}>palate.app</CanvasText>
     </View>
   );
 }
@@ -94,8 +95,8 @@ export function WrappedCard({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      <CanvasText style={styles.statValue}>{value}</CanvasText>
+      <CanvasText style={styles.statLabel}>{label}</CanvasText>
     </View>
   );
 }
@@ -139,7 +140,7 @@ const styles = StyleSheet.create({
   },
   logoBox: {
     width: 32,
-    height: 32,
+    minHeight: 32, paddingVertical: 6,
     borderRadius: 10,
     backgroundColor: colors.red,
     alignItems: "center",

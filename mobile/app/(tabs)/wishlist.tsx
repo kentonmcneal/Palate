@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
+import { triggerHapticSelection } from "../../lib/haptics";
 import { Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import {
@@ -274,6 +275,7 @@ function WishlistRow({
   onRemove: () => void;
   onTag: () => void;
 }) {
+  const router = useRouter();
   const r = entry.restaurant;
   if (!r) return null;
   const subline = [
@@ -286,14 +288,24 @@ function WishlistRow({
   return (
     <View style={styles.card}>
       <View style={styles.cardHead}>
-        <View style={{ flex: 1 }}>
+        {/* Name block opens the place page — same rule everywhere in the app.
+            The action row below keeps its own buttons. */}
+        <Pressable
+          style={{ flex: 1 }}
+          onPress={() => {
+            void triggerHapticSelection();
+            router.push(`/restaurant/${r.google_place_id}` as any);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`${r.name}. Open place details.`}
+        >
           <Text style={styles.cardName}>{r.name}</Text>
           <Text style={styles.cardSub}>{subline || "Nearby"}</Text>
           <Text style={styles.cardDate}>
             Saved {added.toLocaleDateString([], { month: "short", day: "numeric" })}
             {r.rating ? `  ·  ★ ${r.rating.toFixed(1)}${r.user_rating_count ? ` (${formatCount(r.user_rating_count)})` : ""}` : ""}
           </Text>
-        </View>
+        </Pressable>
       </View>
       {tags.length > 0 && (
         <View style={styles.tagRow}>
@@ -392,7 +404,7 @@ const styles = StyleSheet.create({
   actions: { marginTop: 12, flexDirection: "row", gap: 10 },
   btnPrimary: {
     paddingHorizontal: 14,
-    height: 36,
+    minHeight: 36, paddingVertical: 8,
     borderRadius: 18,
     backgroundColor: colors.red,
     alignItems: "center",
@@ -401,7 +413,7 @@ const styles = StyleSheet.create({
   btnPrimaryText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   btnGhost: {
     paddingHorizontal: 14,
-    height: 36,
+    minHeight: 36, paddingVertical: 8,
     borderRadius: 18,
     backgroundColor: colors.faint,
     borderWidth: 1,

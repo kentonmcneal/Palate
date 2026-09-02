@@ -16,6 +16,7 @@ import { palateGradients, palateColors } from "../lib/theme/palateTheme";
 import { myTopLovedItems, type LovedItem } from "../lib/menu-items";
 import { generateCohortInsightAsync, type CohortInsight } from "../lib/population-stats";
 import { generateIdentitySet } from "../lib/palate-labels";
+import { useFontScale } from "../lib/a11y";
 
 // ============================================================================
 // Wrapped Story — Spotify-Wrapped-style identity reveal in up to 5 cards.
@@ -57,6 +58,7 @@ type StoryCard = {
 };
 
 export default function WrappedStoryScreen() {
+  const { stack } = useFontScale();
   const router = useRouter();
   const [index, setIndex] = useState(0);
   const [cards, setCards] = useState<StoryCard[]>([]);
@@ -173,7 +175,7 @@ export default function WrappedStoryScreen() {
           <Text style={styles.eyebrow}>{card.eyebrow}</Text>
           <Text
             style={[styles.headline, card.hero && styles.headlineHero]}
-            numberOfLines={card.hero ? 2 : 4}
+            numberOfLines={stack ? (card.hero ? 3 : 6) : card.hero ? 2 : 4}
             adjustsFontSizeToFit
             minimumFontScale={0.55}
           >

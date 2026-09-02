@@ -4,6 +4,7 @@ import Svg, { Defs, Marker, Path } from "react-native-svg";
 import { colors, spacing } from "../theme";
 import { palateColors, palateMotion } from "../lib/theme/palateTheme";
 import type { PalateProfile } from "../lib/palate";
+import { FONT_CAP } from "../lib/a11y";
 
 // ============================================================================
 // PalateAxisGraph — premium 2x2 axis graph.
@@ -80,16 +81,16 @@ export function PalateAxisGraph({ profile }: { profile: PalateProfile }) {
   return (
     <View style={styles.wrap}>
       {/* Top axis label (outside square) */}
-      <Text style={[styles.axisLabel, styles.axisTop]}>Premium</Text>
+      <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.axisLabel, styles.axisTop]}>Premium</Text>
 
       {/* Left axis label (outside, vertically centered) */}
-      <Text style={[styles.axisLabel, styles.axisLeft]}>Consistency</Text>
+      <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.axisLabel, styles.axisLeft]}>Consistency</Text>
 
       {/* Right axis label (outside, vertically centered) */}
-      <Text style={[styles.axisLabel, styles.axisRight]}>Novelty</Text>
+      <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.axisLabel, styles.axisRight]}>Novelty</Text>
 
       {/* Bottom axis label (outside square) */}
-      <Text style={[styles.axisLabel, styles.axisBottom]}>Casual</Text>
+      <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.axisLabel, styles.axisBottom]}>Casual</Text>
 
       <View style={styles.plot}>
         {/* Quadrant background — only the user's quadrant is tinted red. */}
@@ -103,10 +104,10 @@ export function PalateAxisGraph({ profile }: { profile: PalateProfile }) {
         <View style={[styles.axisLine, styles.axisHorizontal]} />
 
         {/* Quadrant labels — current is red, others muted gray. */}
-        <Text style={[styles.qLabel, styles.qLabelTopLeft,  isActive("Steward") && styles.qLabelActive]}>Steward</Text>
-        <Text style={[styles.qLabel, styles.qLabelTopRight, isActive("Curator") && styles.qLabelActive]}>Curator</Text>
-        <Text style={[styles.qLabel, styles.qLabelBotLeft,  isActive("Anchor")  && styles.qLabelActive]}>Anchor</Text>
-        <Text style={[styles.qLabel, styles.qLabelBotRight, isActive("Forager") && styles.qLabelActive]}>Forager</Text>
+        <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.qLabel, styles.qLabelTopLeft,  isActive("Steward") && styles.qLabelActive]}>Steward</Text>
+        <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.qLabel, styles.qLabelTopRight, isActive("Curator") && styles.qLabelActive]}>Curator</Text>
+        <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.qLabel, styles.qLabelBotLeft,  isActive("Anchor")  && styles.qLabelActive]}>Anchor</Text>
+        <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.qLabel, styles.qLabelBotRight, isActive("Forager") && styles.qLabelActive]}>Forager</Text>
 
         {/* Movement arrow (prior week → now). Drawn on top of the quadrants
             but UNDER the user dot so the dot reads as the destination. */}

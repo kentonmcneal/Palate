@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from "react-native";
-import { colors, spacing, type } from "../theme";
+import { colors, spacing, type, card, shadow } from "../theme";
 import { isoWeekStart } from "../lib/wrapped";
 import {
   generateWeeklyPalatePersona,
@@ -18,12 +18,17 @@ import { loadPersonalSignal } from "../lib/personal-signal";
 import { nearbyRestaurants } from "../lib/places";
 import { getOrFetchNearby } from "../lib/nearby-cache";
 import { assembleGraph, getCompatibility } from "../lib/recommendation";
-import { triggerHapticSuccess } from "../lib/haptics";
+import { filterRecommendable } from "../lib/recommendation/eligibility";
+import { triggerHapticSuccess, triggerHapticSelection } from "../lib/haptics";
 import { pickSaveCopy } from "../lib/save-copy";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
 import { matchScoreColor, matchScoreTint } from "../lib/match-score";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { SaveBurst } from "./SaveBurst";
+import { applyMood, moodFallbackNote, type Mood } from "../lib/mood";
+import { FONT_CAP, useFontScale } from "../lib/a11y";
+import { useRouter } from "expo-router";
+import { TapCard } from "./TapCard";
 
 // ============================================================================
 // RecommendationsCard — always-visible spot suggestions on the Home tab.
@@ -37,11 +42,20 @@ import { SaveBurst } from "./SaveBurst";
 // No time-of-day blurbs, no explanatory subtitles — the title and the rows
 // are the whole story.
 
-export function RecommendationsCard() {
+export function RecommendationsCard({
+  mood = null,
+  habitualCuisines = [],
+}: {
+  /** Temporary cuisine override from the mood row. null = Anything. */
+  mood?: Mood;
+  /** The user's usual cuisines — what "Surprise me" must avoid. */
+  habitualCuisines?: string[];
+} = {}) {
   const [recs, setRecs] = useState<RestaurantRecommendation[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [earlyEstimate, setEarlyEstimate] = useState(false);
+  const [allRecs, setAllRecs] = useState<RestaurantRecommendation[] | null>(null);
   const [browsingCity] = useBrowsingCity();
 
   const load = useCallback(async () => {
@@ -73,12 +87,11 @@ export function RecommendationsCard() {
         if (n >= 3) visitedHeavy.add(placeId);
       }
 
-      const enriched: RestaurantRecommendation[] = nearby
-        // Exclude national chains / non-recommendable places (eligibility 0),
-        // mirroring Discover (discover.tsx). Without this, chains flagged
-        // ineligible leaked into the post-onboarding "Places you'll probably
-        // like" list — the reported fast-food-in-recs bug.
-        .filter((p) => (p.recommendation_eligibility ?? 1) > 0 && !visitedHeavy.has(p.google_place_id))
+      // One gate for every surface (lib/recommendation/eligibility.ts) — the
+      // old `eligibility > 0` check only caught venues the classifier had
+      // already labeled, so unclassified chains still reached this list.
+      const enriched: RestaurantRecommendation[] = filterRecommendable(nearby)
+        .filter((p) => !visitedHeavy.has(p.google_place_id))
         .map((p) => {
           const compat = getCompatibility(graph, {
             google_place_id: p.google_place_id,
@@ -115,8 +128,11 @@ export function RecommendationsCard() {
           } as RestaurantRecommendation;
         });
 
-      // Sort by canonical compatibility (high → low) and take top 3.
+      // Sort by canonical compatibility (high → low). Keep the full ranked
+      // list so a mood can re-slice it without another network round trip —
+      // switching mood should feel instant.
       enriched.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+      setAllRecs(enriched);
       setRecs(enriched.slice(0, 3));
     } catch {
       setError(true);
@@ -126,6 +142,17 @@ export function RecommendationsCard() {
   }, []);
 
   useEffect(() => { load(); }, [load, browsingCity?.id]);
+
+  // A mood filters the SAME personally-ranked list. The compat score still
+  // comes from the user's own history — we only restrict which venues are
+  // eligible for the three slots.
+  const [moodNote, setMoodNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!allRecs) return;
+    const { items, matched } = applyMood(allRecs, mood, habitualCuisines);
+    setRecs(items.slice(0, 3));
+    setMoodNote(mood && !matched ? moodFallbackNote(mood) : null);
+  }, [allRecs, mood, habitualCuisines]);
 
   // Hide the card entirely until we know if we have anything to show — keeps
   // the Home tab from flashing a useless block on first load.
@@ -137,9 +164,10 @@ export function RecommendationsCard() {
     return (
       <View style={[styles.card, styles.emptyCard]}>
         <Text style={styles.eyebrow}>MOST COMPATIBLE</Text>
-        <Text style={styles.emptyText}>
-          No nearby spots loaded yet. Step outside or pick a city above to browse.
-        </Text>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyGlyph}>◎</Text>
+          <Text style={styles.emptyText}>No spots nearby yet.</Text>
+        </View>
       </View>
     );
   }
@@ -148,14 +176,16 @@ export function RecommendationsCard() {
     <View style={styles.card}>
       <View style={styles.head}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>MOST COMPATIBLE</Text>
-          {earlyEstimate && (
-            <View style={styles.earlyBadge}>
-              <Text style={styles.earlyBadgeText}>EARLY ESTIMATE · sharper after a few more visits</Text>
-            </View>
-          )}
+          {/* Was: an "EARLY ESTIMATE · sharper after a few more visits" badge.
+              A disclaimer stapled to a recommendation is the app apologizing
+              for its own output. The eyebrow carries the confidence instead —
+              it says what the list IS, and stops promising to improve. */}
+          <Text style={styles.eyebrow} maxFontSizeMultiplier={FONT_CAP.eyebrow}>
+            {earlyEstimate ? "A FIRST READ ON YOUR PALATE" : "MOST COMPATIBLE"}
+          </Text>
         </View>
       </View>
+      {!!moodNote && <Text style={styles.moodNote}>{moodNote}</Text>}
       <View style={{ marginTop: 16 }}>
         {recs.map((rec) => (
           <RecRow key={rec.google_place_id} rec={rec} />
@@ -166,6 +196,11 @@ export function RecommendationsCard() {
 }
 
 function RecRow({ rec }: { rec: RestaurantRecommendation }) {
+  const router = useRouter();
+  // At large accessibility sizes [name | match | Save] compresses the name to
+  // an ellipsis and the buttons to slivers. Past the threshold the row becomes
+  // a column: same information, in an order that still reads.
+  const { stack } = useFontScale();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [burstKey, setBurstKey] = useState(0);
@@ -193,11 +228,25 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
   function openApple() { openInAppleMaps(rec.name, { lat: rec.latitude, lng: rec.longitude }); }
   function openGoogle() { openInGoogleMaps(rec.name, { lat: rec.latitude, lng: rec.longitude, placeId: rec.google_place_id }); }
 
+  function openDetail() {
+    void triggerHapticSelection();
+    router.push(`/restaurant/${rec.google_place_id}` as any);
+  }
+
   return (
-    <View style={styles.row}>
-      <View style={{ flex: 1 }}>
-        <View style={styles.nameRow}>
-          <Text style={styles.name} numberOfLines={2}>{rec.name}</Text>
+    <View style={[styles.row, stack && styles.rowStacked]}>
+      {/* The row body is the tap target — StretchPick has always opened place
+          detail on tap and this card did not, which read as a dead card. */}
+      <TapCard
+        style={{ flex: 1 }}
+        onPress={openDetail}
+        accessibilityRole="button"
+        accessibilityLabel={`${rec.name}. Open place details.`}
+      >
+        <View style={[styles.nameRow, stack && styles.nameRowStacked]}>
+          {/* numberOfLines lifts with scale — two lines at 100% is generous,
+              at 235% it is a truncated word. */}
+          <Text style={styles.name} numberOfLines={stack ? 4 : 2}>{rec.name}</Text>
           {rec.matchScore != null && (
             <View style={[
               styles.matchBadge,
@@ -211,6 +260,7 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
                 suffix="% match"
                 duration={650}
                 style={[styles.matchBadgeText, { color: matchScoreColor(rec.matchScore) }]}
+                maxFontSizeMultiplier={FONT_CAP.badge}
               />
             </View>
           )}
@@ -222,21 +272,30 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
           ].filter(Boolean).join(" · ") || "Nearby"}
         </Text>
         <View style={styles.mapsRow}>
-          <Pressable onPress={openApple} style={styles.mapsBtn} accessibilityRole="button">
-            <Text style={styles.mapsBtnText}>Apple Maps</Text>
+          {/* Nested pressables stop propagation so Maps never opens detail. */}
+          <Pressable
+            onPress={(e) => { e.stopPropagation(); openApple(); }}
+            style={styles.mapsBtn}
+            accessibilityRole="button"
+          >
+            <Text style={styles.mapsBtnText} maxFontSizeMultiplier={FONT_CAP.chrome}>Apple Maps</Text>
           </Pressable>
-          <Pressable onPress={openGoogle} style={styles.mapsBtn} accessibilityRole="button">
-            <Text style={styles.mapsBtnText}>Google Maps</Text>
+          <Pressable
+            onPress={(e) => { e.stopPropagation(); openGoogle(); }}
+            style={styles.mapsBtn}
+            accessibilityRole="button"
+          >
+            <Text style={styles.mapsBtnText} maxFontSizeMultiplier={FONT_CAP.chrome}>Google Maps</Text>
           </Pressable>
         </View>
-      </View>
+      </TapCard>
       <View>
         <Pressable
-          onPress={save}
+          onPress={(e) => { e.stopPropagation(); save(); }}
           style={[styles.saveBtn, saved && styles.saveBtnDone]}
           accessibilityRole="button"
         >
-          <Text style={[styles.saveText, saved && styles.saveTextDone]}>
+          <Text style={[styles.saveText, saved && styles.saveTextDone]} maxFontSizeMultiplier={FONT_CAP.chrome}>
             {saving ? "…" : saved ? "Saved" : "Save"}
           </Text>
         </Pressable>
@@ -274,13 +333,15 @@ function capitalize(s: string): string {
 }
 
 const styles = StyleSheet.create({
+  rowStacked: { flexDirection: "column", alignItems: "stretch", gap: 10 },
+  nameRowStacked: { flexDirection: "column", alignItems: "flex-start", gap: 6 },
+  moodNote: { fontSize: 12, color: colors.mute, marginTop: 10, lineHeight: 17 },
   card: {
     // No top margin — the parent section header controls spacing now.
-    padding: spacing.md,
-    borderRadius: 22,
-    backgroundColor: colors.paper,
-    borderWidth: 1,
-    borderColor: colors.line,
+    padding: card.padding,
+    borderRadius: card.radius,
+    backgroundColor: colors.faint,
+    ...shadow.card,
   },
   head: { flexDirection: "row" },
   eyebrow: { ...type.micro },
@@ -295,7 +356,9 @@ const styles = StyleSheet.create({
   },
   earlyBadgeText: { fontSize: 10, fontWeight: "700", color: colors.mute, letterSpacing: 0.5 },
   emptyCard: { backgroundColor: colors.faint, borderColor: colors.line },
-  emptyText: { ...type.small, marginTop: 10, lineHeight: 20 },
+  emptyText: { ...type.small },
+  emptyState: { alignItems: "center", paddingVertical: spacing.lg, gap: 6 },
+  emptyGlyph: { fontSize: 22, color: colors.line },
 
   row: {
     flexDirection: "row",
