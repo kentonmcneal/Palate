@@ -20,6 +20,7 @@ import { shareOf } from "./taste-graph";
 import { nearbyRestaurants } from "../places";
 import { isGem } from "./gems";
 import { filterRecommendable } from "./eligibility";
+import { dedupeVenues } from "./dedupe";
 
 export type Candidate = {
   restaurant: RestaurantInput;
@@ -56,7 +57,9 @@ export async function generateCandidates(opts: GenerateOptions): Promise<Candida
   // a genuine gem bar. This only affects what we RECOMMEND — storage and
   // classification still keep every restaurant. Ordinary sit-down places survive
   // the gate and act as the fallback (ranked below gems by gemAdjustment).
-  const eligible = filterRecommendable(nearby);
+  // Dedupe before pooling: a venue Google lists twice would otherwise be
+  // scored twice and could take two of the three Home slots.
+  const eligible = dedupeVenues(filterRecommendable(nearby));
   if (eligible.length === 0) return [];
 
   // Pool A — taste_similar: cuisine subregion or region overlaps with user pattern.

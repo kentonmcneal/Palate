@@ -38,14 +38,16 @@ type CategoryMeta = {
   iconGlyph: string;
 };
 
+// "Top 10 Fries" and "Top 10 Early Morning" were dropped on tester feedback:
+// a fries list is a dish list masquerading as a restaurant list, and early
+// morning duplicates brunch in practice. A slug missing here is simply not
+// rendered, so stale cache rows for them fall out on their own.
 const CATEGORY_META: CategoryMeta[] = [
   { slug: "date-night",    gradient: ["#7E1538", "#280008"], iconGlyph: "D" },
   { slug: "late-night",    gradient: ["#0F1A2E", "#000408"], iconGlyph: "L" },
-  { slug: "early-morning", gradient: ["#FFB347", "#7A4400"], iconGlyph: "M" },
   { slug: "brunch",        gradient: ["#F4A26A", "#7B2D00"], iconGlyph: "U" },
   { slug: "burgers",       gradient: ["#E5391C", "#7A0B00"], iconGlyph: "B" },
   { slug: "wings",         gradient: ["#FF8C00", "#5A1E00"], iconGlyph: "W" },
-  { slug: "fries",         gradient: ["#FFC04D", "#6B4500"], iconGlyph: "F" },
   { slug: "hummus",        gradient: ["#A89052", "#3D2F0E"], iconGlyph: "H" },
   { slug: "steaks",        gradient: ["#2B0A0A", "#000000"], iconGlyph: "K" },
   { slug: "pizza",         gradient: ["#FF6B45", "#9C2200"], iconGlyph: "P" },

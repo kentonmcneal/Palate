@@ -24,6 +24,10 @@ export const colors = {
   line: "#EBEBEB",    // hairline border, used sparingly (rely on shadow + space)
   inkDim: "#3A3A3A",
   faint: "#FFFFFF",   // white CARD surface — pops off the grey page
+  // Live-status green. Used ONLY for "we have a real GPS fix" on the location
+  // pill — a status light, never a brand accent. Muted enough to sit beside
+  // the ember red without competing with it.
+  live: "#2E7D5B",
 };
 
 // Secondary palette — warm, on-brand category hues for cuisine tags, trending

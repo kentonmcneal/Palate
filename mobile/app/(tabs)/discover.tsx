@@ -18,6 +18,7 @@ import { computeTasteVector, type TasteVector } from "../../lib/taste-vector";
 import { distanceKm, formatDistance } from "../../lib/match-score";
 import { trackImpressions } from "../../lib/recommendation-events";
 import { filterRecommendable } from "../../lib/recommendation/eligibility";
+import { dedupeVenues } from "../../lib/recommendation/dedupe";
 import { RestaurantCompatibilityCard } from "../../components/RestaurantCompatibilityCard";
 import { CardSkeleton, Shimmer } from "../../components/Shimmer";
 import { FeaturedLists } from "../../components/FeaturedLists";
@@ -135,7 +136,10 @@ export default function DiscoverTab() {
       //     food, airports, hotels — recommendation/eligibility.ts)
       //   - Drop places the user has already visited (saved-shelf and
       //     wishlist-rail live on Home now)
-      const candidates = filterRecommendable(nearby).filter(
+      // dedupeVenues collapses one venue listed twice by Google under
+      // different place ids ("Hong Kong Restaurant" + "Hong Kong Restaurant |
+      // Chinese") — the duplicate rows a tester saw in this feed.
+      const candidates = dedupeVenues(filterRecommendable(nearby)).filter(
         (p) => !visitedIds.has(p.google_place_id),
       );
 
