@@ -76,9 +76,23 @@ export async function connectGmail(): Promise<ConnectResult> {
     return { ok: false, error: "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID not configured" };
   }
 
+  // Google's iOS OAuth clients accept exactly two redirect shapes: the
+  // REVERSED client ID as a custom scheme, or a localhost loopback. A normal
+  // app scheme is not registered against the client, and Google rejects the
+  // request before the user can even consent:
+  //
+  //   Access blocked: Authorization Error — Error 400: invalid_request
+  //
+  // That is what "palate://auth/google" was producing. The reversed id is
+  // derived from the client id rather than hardcoded, so rotating the client
+  // can't leave a stale scheme behind.
+  const reversedClientId = GOOGLE_IOS_CLIENT_ID.replace(
+    /^(.+)\.apps\.googleusercontent\.com$/,
+    "com.googleusercontent.apps.$1",
+  );
   const redirectUri = AuthSession.makeRedirectUri({
-    scheme: "palate",
-    path: "auth/google",
+    scheme: reversedClientId,
+    path: "oauth2redirect",
   });
 
   const request = new AuthSession.AuthRequest({
