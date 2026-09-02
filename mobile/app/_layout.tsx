@@ -391,6 +391,7 @@ export default function RootLayout() {
           <Stack.Screen name="people" options={{ presentation: "modal" }} />
           <Stack.Screen name="rankings" options={{ presentation: "modal" }} />
           <Stack.Screen name="import-review" options={{ presentation: "modal" }} />
+          <Stack.Screen name="group" options={{ presentation: "modal" }} />
           <Stack.Screen name="profile/[id]" options={{ presentation: "modal" }} />
           <Stack.Screen name="visit/[id]" options={{ presentation: "modal" }} />
           <Stack.Screen name="all-visits" options={{ presentation: "modal" }} />
