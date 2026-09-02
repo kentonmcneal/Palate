@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Alert, Animated, Easing } from "react-native";
 import { useRouter } from "expo-router";
-import { colors, spacing, type } from "../theme";
+import { colors, spacing, type, card, shadow } from "../theme";
 import type { RankedRestaurant } from "../lib/recommendation/types";
 import { addToWishlist } from "../lib/palate-insights";
 import { triggerHapticSuccess, triggerHapticSelection } from "../lib/haptics";
@@ -12,6 +12,7 @@ import { formatDistance, matchScoreColor } from "../lib/match-score";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { SaveBurst } from "./SaveBurst";
 import { TapCard } from "./TapCard";
+import { PlaceArt } from "./PlaceArt";
 
 // ============================================================================
 // RestaurantCompatibilityCard — single card UI used everywhere a restaurant
@@ -117,6 +118,13 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
   return (
     <Animated.View style={enterStyle}>
     <TapCard onPress={openDetail} onLongPress={showLessLikeThis} style={styles.card}>
+      {/* Generated art in the slot a photo would occupy — see PlaceArt. */}
+      <PlaceArt
+        seed={restaurant.google_place_id}
+        name={restaurant.name}
+        cuisine={restaurant.cuisine_type}
+      />
+      <View style={styles.body}>
       <View style={styles.head}>
         <View style={{ flex: 1 }}>
           <Text style={styles.name} numberOfLines={2}>{restaurant.name}</Text>
@@ -176,6 +184,7 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
             that's already showing a high match score. Negative signal still
             captured implicitly via skips when the user scrolls past. */}
       </View>
+      </View>
     </TapCard>
     </Animated.View>
   );
@@ -229,13 +238,14 @@ function formatCount(n: number): string {
 }
 
 const styles = StyleSheet.create({
+  body: { padding: card.padding },
   card: {
-    padding: spacing.md,
-    borderRadius: 18,
-    backgroundColor: colors.paper,
-    borderWidth: 1,
-    borderColor: colors.line,
+    // No padding: the art runs edge to edge, and the body below sets its own.
+    borderRadius: card.radius,
+    backgroundColor: colors.faint,
     marginBottom: 10,
+    overflow: "hidden",
+    ...shadow.card,
   },
   head: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   // Name is the primary visual element on the card.

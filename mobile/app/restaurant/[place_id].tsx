@@ -23,6 +23,7 @@ import {
 } from "../../lib/menu-items";
 import { loadEditorialBlurb } from "../../lib/restaurant-blurb";
 import { ineligibilityReason, type EligibilityInput } from "../../lib/recommendation/eligibility";
+import { PlaceArt } from "../../components/PlaceArt";
 
 // ============================================================================
 // Restaurant detail — your full history at one place + match score + actions.
@@ -346,6 +347,15 @@ export default function RestaurantDetailScreen() {
 
       <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.heroCard}>
+          {/* Generated art, same seed as everywhere else so this place looks
+              identical here and in the feed. See components/PlaceArt.tsx. */}
+          <PlaceArt
+            seed={r.google_place_id}
+            name={r.name}
+            cuisine={r.cuisine_type}
+            height={168}
+          />
+          <View style={styles.heroBody}>
           <View style={styles.heroTopRow}>
             <Text style={styles.heroName}>{r.name}</Text>
             {matchScore != null && (
@@ -405,6 +415,7 @@ export default function RestaurantDetailScreen() {
               ))}
             </View>
           )}
+          </View>
         </View>
 
         {/* Action row */}
@@ -604,12 +615,15 @@ const styles = StyleSheet.create({
   // thing in the app. The hero is now the same white card as everything
   // else; ink fills are reserved for the tab bar and one primary CTA.
   heroCard: {
-    padding: card.padding,
+    // No padding — the art is full-bleed; the blocks below carry their own.
+    paddingBottom: card.padding,
     borderRadius: card.radius,
+    overflow: "hidden",
     backgroundColor: colors.faint,
     ...shadow.card,
   },
   heroTopRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  heroBody: { paddingHorizontal: card.padding, paddingTop: card.padding },
   heroName: {
     flex: 1, ...type.display, color: colors.ink,
   },
