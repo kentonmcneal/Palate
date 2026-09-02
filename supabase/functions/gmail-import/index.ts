@@ -300,8 +300,11 @@ async function handleConnect(admin: ReturnType<typeof createClient>, userId: str
   // user already had us connected — pull the existing one.
   let refreshToken = tokens.refresh_token;
   if (!refreshToken) {
-    const { data: existing } = await admin.from("gmail_tokens").select("refresh_token").eq("user_id", userId).maybeSingle();
-    refreshToken = (existing as any)?.refresh_token;
+    // Google omits refresh_token on a re-consent it considers redundant. Fall
+    // back to the stored one — decrypted via RPC, since the column is null by
+    // design after migration 0066.
+    const { data: stored } = await admin.rpc("read_gmail_refresh", { p_user: userId });
+    refreshToken = (stored as string | null) ?? undefined;
   }
   if (!refreshToken) {
     return json({
@@ -310,14 +313,16 @@ async function handleConnect(admin: ReturnType<typeof createClient>, userId: str
     }, 400);
   }
 
-  await admin.from("gmail_tokens").upsert({
-    user_id: userId,
-    refresh_token: refreshToken,
-    access_token: tokens.access_token,
-    expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-    email,
-    updated_at: new Date().toISOString(),
+  // Encrypted by the database, keyed from Vault. The plaintext refresh token
+  // exists only in this request's memory and is never written to a column.
+  const { error: storeErr } = await admin.rpc("store_gmail_token", {
+    p_user: userId,
+    p_refresh: refreshToken,
+    p_access: tokens.access_token,
+    p_expires: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+    p_email: email,
   });
+  if (storeErr) return json({ error: "token_store_failed", detail: storeErr.message }, 500);
 
   // Connecting does NOT import. It used to run a 90-day scan right here,
   // which wrote visits and spent a Google lookup per unknown restaurant before
@@ -473,7 +478,7 @@ async function runScan(admin: ReturnType<typeof createClient>, userId: string, s
 async function getValidAccessToken(admin: ReturnType<typeof createClient>, userId: string): Promise<string | null> {
   const { data: row } = await admin
     .from("gmail_tokens")
-    .select("refresh_token, access_token, expires_at")
+    .select("access_token, expires_at")
     .eq("user_id", userId)
     .maybeSingle();
   if (!row) return null;
@@ -483,12 +488,18 @@ async function getValidAccessToken(admin: ReturnType<typeof createClient>, userI
     return (row as any).access_token;
   }
 
+  // The refresh token is encrypted at rest (migration 0066) and the key lives
+  // in Vault. It is decrypted inside Postgres and never selected as a column,
+  // so a stray select * cannot leak somebody's mailbox access.
+  const { data: refreshToken } = await admin.rpc("read_gmail_refresh", { p_user: userId });
+  if (!refreshToken) return null;
+
   // Refresh — native client + PKCE, no client_secret.
   const r = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      refresh_token: (row as any).refresh_token,
+      refresh_token: refreshToken as string,
       client_id: GOOGLE_CLIENT_ID,
       grant_type: "refresh_token",
     }).toString(),
@@ -507,13 +518,15 @@ async function getValidAccessToken(admin: ReturnType<typeof createClient>, userI
 // disconnect — revoke + clear
 // ----------------------------------------------------------------------------
 async function handleDisconnect(admin: ReturnType<typeof createClient>, userId: string) {
-  const { data: row } = await admin
-    .from("gmail_tokens").select("refresh_token").eq("user_id", userId).maybeSingle();
-  if (row && (row as any).refresh_token) {
-    // Best-effort revoke; ignore failure
+  // Decrypted via RPC — the column is null by design after 0066, and reading it
+  // directly would silently skip the revoke, leaving Google-side access alive
+  // after the user asked us to disconnect. That is the worst possible way for
+  // this to fail: quietly, and in the direction of keeping access.
+  const { data: refreshToken } = await admin.rpc("read_gmail_refresh", { p_user: userId });
+  if (refreshToken) {
     try {
-      await fetch(`https://oauth2.googleapis.com/revoke?token=${(row as any).refresh_token}`, { method: "POST" });
-    } catch { /* ignore */ }
+      await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(refreshToken as string)}`, { method: "POST" });
+    } catch { /* best effort — the row is deleted either way */ }
   }
   await admin.from("gmail_tokens").delete().eq("user_id", userId);
   return json({ disconnected: true });
