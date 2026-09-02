@@ -361,13 +361,16 @@ export default function RestaurantDetailScreen() {
         <View style={styles.heroCard}>
           {/* Generated art, same seed as everywhere else so this place looks
               identical here and in the feed. See components/PlaceArt.tsx. */}
-          <PlaceArt
-            seed={r.google_place_id}
-            name={r.name}
-            cuisine={r.cuisine_type}
-            photoUrl={placePhoto}
-            height={168}
-          />
+          {/* Same rule as the feed: a picture earns the space, initials don't. */}
+          {!!placePhoto && (
+            <PlaceArt
+              seed={r.google_place_id}
+              name={r.name}
+              cuisine={r.cuisine_type}
+              photoUrl={placePhoto}
+              height={168}
+            />
+          )}
           <View style={styles.heroBody}>
           <View style={styles.heroTopRow}>
             <Text style={styles.heroName}>{r.name}</Text>

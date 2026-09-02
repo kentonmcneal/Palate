@@ -10,11 +10,17 @@ import { categoryColors, radius } from "../theme";
 // Real photos mean the Google Places Photo API, which bills per request and so
 // scales with impressions — the wrong cost shape for a feed.
 //
-// This is the honest substitute: a cuisine-derived gradient with the place's
-// initials set large. It is not a photo and does not pretend to be one. What it
-// buys is that a scrolling feed becomes visual and, more usefully, that a
-// cuisine becomes RECOGNISABLE — Thai is always the same green, Italian always
-// the same terracotta — so the feed is scannable by colour before it is read.
+// The first attempt was a cuisine-derived gradient with the place's initials,
+// shown whether or not a photo existed. That was wrong, and the founder called
+// it immediately: a 132pt block containing two letters is not visual, it is a
+// loading skeleton that never loads, and it pushed the name, the match score
+// and the reason below the fold. A photo is information; initials are not.
+//
+// So callers now render this ONLY when a real photo exists. The gradient
+// survives as what it was always actually good for — the backdrop a photo
+// loads onto, and the fallback if it fails, so a card is never a blank
+// rectangle. Cuisine still drives the hue, which means that backdrop is at
+// least the right colour for the place.
 //
 // DETERMINISTIC, which is the whole trick. Art is derived from the place id, so
 // the same restaurant looks identical on Home, in Discover, and on its own

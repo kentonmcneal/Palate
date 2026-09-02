@@ -35,6 +35,7 @@ type Props = {
 
 export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDismissed, reasonOverride }: Props) {
   const router = useRouter();
+  const photo = cachedPlacePhoto(restaurant.google_place_id);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -119,13 +120,19 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
   return (
     <Animated.View style={enterStyle}>
     <TapCard onPress={openDetail} onLongPress={showLessLikeThis} style={styles.card}>
-      {/* Generated art in the slot a photo would occupy — see PlaceArt. */}
-      <PlaceArt
-        seed={restaurant.google_place_id}
-        name={restaurant.name}
-        cuisine={restaurant.cuisine_type}
-        photoUrl={cachedPlacePhoto(restaurant.google_place_id)}
-      />
+      {/* Art ONLY when there is a real photo. A gradient with two initials
+          is not visual — it is a 132pt loading skeleton that never loads, and
+          it pushes the name, the match and the reason below the fold. The
+          moment someone photographs this place, the card becomes a picture
+          card; until then the dense list is the better answer. */}
+      {!!photo && (
+        <PlaceArt
+          seed={restaurant.google_place_id}
+          name={restaurant.name}
+          cuisine={restaurant.cuisine_type}
+          photoUrl={photo}
+        />
+      )}
       <View style={styles.body}>
       <View style={styles.head}>
         <View style={{ flex: 1 }}>
