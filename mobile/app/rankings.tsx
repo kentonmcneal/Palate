@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl,
+  Share, Alert,
 } from "react-native";
+import { captureRef } from "react-native-view-shot";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { colors, spacing, type, card, shadow } from "../theme";
 import { loadRankedPlaces, type RankedPlace } from "../lib/rankings-store";
 import { rankingConfidence } from "../lib/ranking";
 import { triggerHapticSelection } from "../lib/haptics";
+import { TopFiveShareCard } from "../components/TopFiveShareCard";
+import { getMyProfile } from "../lib/profile";
 import { captureError } from "../lib/observability";
 
 // ============================================================================
@@ -26,6 +30,12 @@ export default function RankingsScreen() {
   const router = useRouter();
   const [places, setPlaces] = useState<RankedPlace[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [myName, setMyName] = useState<string | null>(null);
+  const cardRef = useRef<View>(null);
+
+  useEffect(() => {
+    void getMyProfile().then((p) => setMyName(p?.display_name ?? null)).catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -39,6 +49,30 @@ export default function RankingsScreen() {
   useEffect(() => { void load(); }, [load]);
 
   const confidence = places ? rankingConfidence(places) : "none";
+
+  // Only offer the share once the order means something. Posting a list built
+  // from one coin-flip would be the app inviting someone to vouch publicly for
+  // a claim it hasn't earned.
+  const earned = (places ?? []).filter((p) => p.comparisons > 0);
+  const shareable = earned.length >= 3 && confidence !== "low" && confidence !== "none";
+  const top5 = earned.slice(0, 5).map((p, i) => ({
+    googlePlaceId: p.googlePlaceId,
+    name: p.name,
+    cuisine: p.cuisine,
+    position: i + 1,
+  }));
+
+  async function shareTopFive() {
+    if (!cardRef.current) return;
+    try {
+      void triggerHapticSelection();
+      const uri = await captureRef(cardRef, { format: "png", quality: 1 });
+      await Share.share({ url: uri });
+    } catch (e: unknown) {
+      void captureError(e, { at: "rankings:share" });
+      Alert.alert("Couldn't share", "Try again in a moment.");
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -97,7 +131,23 @@ export default function RankingsScreen() {
             ))}
           </>
         )}
+        {shareable && (
+          <Pressable onPress={shareTopFive} style={styles.shareBtn} accessibilityRole="button">
+            <Text style={styles.shareBtnText}>Share your top five</Text>
+          </Pressable>
+        )}
       </ScrollView>
+
+      {/* Off-screen render target for the capture. Positioned far off the left
+          edge rather than hidden — a display:none subtree has no layout, so
+          ViewShot would capture nothing. */}
+      {shareable && (
+        <View style={styles.offscreen} pointerEvents="none">
+          <View ref={cardRef} collapsable={false}>
+            <TopFiveShareCard places={top5} name={myName} />
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -146,4 +196,11 @@ const styles = StyleSheet.create({
   rank: { ...type.title, color: colors.mute, minWidth: 28, textAlign: "center" },
   name: { fontSize: 16, fontWeight: "700", color: colors.ink },
   meta: { ...type.small, marginTop: 2 },
+  shareBtn: {
+    alignSelf: "center", marginTop: spacing.lg,
+    paddingHorizontal: 20, minHeight: 44, paddingVertical: 12,
+    borderRadius: 999, backgroundColor: colors.ink, justifyContent: "center",
+  },
+  shareBtnText: { fontSize: 15, fontWeight: "800", color: "#fff" },
+  offscreen: { position: "absolute", left: -9999, top: 0 },
 });
