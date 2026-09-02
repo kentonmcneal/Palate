@@ -25,6 +25,7 @@ import { processPendingVisits, RESOLVE_FLAG, CONFIRM_FLAG, type VisitOutcome } f
 import { currentPermissionState, requestAlways } from "../lib/passive-permissions";
 import { getCacheHitRate } from "../lib/passive-pipeline";
 import { listMisses, clearMisses, describeMiss, type PassiveMiss } from "../lib/passive-misses";
+import { loadFunnel, type Funnel } from "../lib/activation-funnel";
 
 // Downtown Atlanta — Places returns real food venues here, so an injected visit
 // exercises the whole qualify → resolve → confirm path end to end.
@@ -42,6 +43,10 @@ export default function DebugVisitsScreen() {
   const [perm, setPerm] = useState<{ whenInUse: boolean; always: boolean }>({ whenInUse: false, always: false });
   const [expoAlways, setExpoAlways] = useState("…");
   const [stopState, setStopState] = useState<NativeStopState | null>(null);
+  const [funnel, setFunnel] = useState<Funnel | null>(null);
+  // Distinct from `funnel === null`, which means "still loading". A failed
+  // read that renders as a spinner forever is the debug screen lying to you.
+  const [funnelError, setFunnelError] = useState(false);
   const [flags, setFlags] = useState<{ detect: boolean; resolve: boolean; confirm: boolean } | null>(null);
   const [cache, setCache] = useState<{ hits: number; total: number; rate: number }>({ hits: 0, total: 0, rate: 0 });
   const [outcomes, setOutcomes] = useState<VisitOutcome[]>([]);
@@ -72,6 +77,14 @@ export default function DebugVisitsScreen() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // One query, on mount only. It reads up to 2000 of your own analytics rows,
+  // so it stays off the 3s poll below.
+  useEffect(() => {
+    void loadFunnel()
+      .then((f) => { setFunnel(f); setFunnelError(false); })
+      .catch(() => setFunnelError(true));
+  }, []);
 
   // Live-poll only the cheap native read. drainNativeVisits() hits disk and
   // AsyncStorage, so it stays on the manual Refresh.
@@ -128,6 +141,64 @@ export default function DebugVisitsScreen() {
             </Text>
           </View>
         )}
+
+        {/* THE question this screen exists to answer: where does the pipeline
+            actually stop? Reconstructing it took four hand-written SQL queries,
+            which is why nobody had looked at it in weeks. */}
+        <View style={styles.card}>
+          <View style={styles.listHead}>
+            <Text style={styles.mono}>Activation funnel · 30 days</Text>
+            <Pressable onPress={() => {
+              setFunnel(null);
+              setFunnelError(false);
+              void loadFunnel()
+                .then(setFunnel)
+                .catch(() => setFunnelError(true));
+            }}>
+              <Text style={styles.link}>Refresh</Text>
+            </Pressable>
+          </View>
+
+          {funnelError ? (
+            <Text style={styles.sub}>Couldn&apos;t read your events. Tap Refresh.</Text>
+          ) : funnel === null ? (
+            <Text style={styles.sub}>Loading…</Text>
+          ) : funnel.stages[0].count === 0 ? (
+            <Text style={styles.sub}>
+              No detections in 30 days. Either passive capture is off, or the
+              native module is not in this binary.
+            </Text>
+          ) : (
+            <>
+              {funnel.stages.map((st) => (
+                <Row
+                  key={st.key}
+                  label={st.label}
+                  value={st.keptPct === null ? `${st.count}` : `${st.count}  (${st.keptPct}% kept)`}
+                />
+              ))}
+              {!!funnel.worstDrop && (
+                <Text style={[styles.sub, { marginTop: 8 }]}>
+                  Biggest drop: {funnel.worstDrop.from} → {funnel.worstDrop.to},
+                  losing {funnel.worstDrop.lostPct}%.
+                </Text>
+              )}
+            </>
+          )}
+
+          {/* Suppressions, always broken out. A suppressed detection is
+              indistinguishable from one that never happened if you only read
+              the stage totals — which is exactly how the confirm-multi bug
+              stayed invisible while it ate four prompts in one afternoon. */}
+          {!!funnel?.suppressions.length && (
+            <>
+              <Text style={[styles.mono, { marginTop: 14, marginBottom: 6 }]}>Suppressed, by reason</Text>
+              {funnel.suppressions.map((sup) => (
+                <Row key={sup.reason} label={sup.label} value={`${sup.count}`} />
+              ))}
+            </>
+          )}
+        </View>
 
         <View style={styles.card}>
           <Row label="Native module" value={isVisitMonitorAvailable ? "available" : "unavailable"} />
