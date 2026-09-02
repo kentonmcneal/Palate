@@ -2,6 +2,17 @@
 
 ## Session 3 — social, generated art, activity push (2026-09-02, overnight)
 
+> **SHIPPED: build 30** (`6809803`, 0.1.7, runtime 0.1.7) built and **submitted
+> to App Store Connect**. It is the first build carrying ANY of the eleven
+> tester items — 26 through 29 were never installed by anyone. Internal
+> TestFlight gets it once Apple finishes processing; the external "Public Beta"
+> group still needs Beta App Review.
+>
+> Both feature flags remain OFF (`server_push`, `discovery_pings`). Both edge
+> functions are deployed. Three things in this build have never run on a
+> physical device: lock-screen confirm actions, Dynamic Type at large text, and
+> the Gmail OAuth fix.
+
 `tsc` clean, **167 tests**. Migrations applied through **0059**. Build **29**
 (`5e7e066`, runtime 0.1.7) finished. Both edge functions deployed. Both feature
 flags still OFF.
