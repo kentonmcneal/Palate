@@ -23,6 +23,7 @@ import {
   areDiscoveryPingsEnabled,
   setDiscoveryPingsEnabled,
 } from "../../lib/notification-schedule";
+import { isFriendActivityPushEnabled, setFriendActivityPushEnabled } from "../../lib/friend-push";
 import { loadAnalytics, type AnalyticsSummary } from "../../lib/analytics-stats";
 import { computeTasteVector } from "../../lib/taste-vector";
 import { getProfileFromVector, IDENTITY_BLURB, type PalateProfile } from "../../lib/palate";
@@ -62,6 +63,7 @@ export default function Settings() {
   const [sundayReminder, setSundayReminder] = useState(false);
   const [screenshotPrompt, setScreenshotPrompt] = useState(true);
   const [discoveryPings, setDiscoveryPings] = useState(true);
+  const [friendPush, setFriendPush] = useState(false);
   const [stats, setStats] = useState<AnalyticsSummary | null>(null);
   const [palateProfile, setPalateProfile] = useState<PalateProfile | null>(null);
   const [visibility, setVisibility] = useState<ProfileVisibility>("friends");
@@ -83,6 +85,7 @@ export default function Settings() {
     isReminderEnabled().then(setSundayReminder);
     isScreenshotPromptEnabled().then(setScreenshotPrompt);
     areDiscoveryPingsEnabled().then(setDiscoveryPings);
+    isFriendActivityPushEnabled().then(setFriendPush);
     loadAnalytics("all").then(setStats).catch(() => {});
     // Compute the user's overall (all-time) Palate profile for the Profile
     // header. Uses the new identity system (Curator/Forager/Steward/Anchor).
@@ -461,6 +464,18 @@ export default function Settings() {
         <CollapsibleSection title="Wrapped & reminders">
           <Row label="Sunday Wrapped reminder" right={<Switch value={sundayReminder} onValueChange={toggleSundayReminder} thumbColor={sundayReminder ? colors.red : "#fff"} trackColor={{ true: colors.redTintBorder, false: colors.line }} />} />
           <Note>One reminder a week, Sunday at 9 AM. That's it.</Note>
+          <Row
+            label="When a friend logs a visit"
+            right={
+              <Switch
+                value={friendPush}
+                onValueChange={(v) => { setFriendPush(v); void setFriendActivityPushEnabled(v); }}
+                thumbColor={friendPush ? colors.red : "#fff"}
+                trackColor={{ true: colors.redTintBorder, false: colors.line }}
+              />
+            }
+          />
+          <Note>Off by default. Turning it on lets friends&apos; visits reach you — and yours reach them.</Note>
           <Row
             label="Weekend picks"
             right={
