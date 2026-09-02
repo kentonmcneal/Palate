@@ -1,4 +1,11 @@
 import { Stack, useRouter, useSegments, type ErrorBoundaryProps } from "expo-router";
+import * as ScreenCapture from "expo-screen-capture";
+import { ScreenshotFeedbackSheet } from "../components/ScreenshotFeedbackSheet";
+import {
+  shouldPromptNow,
+  recordPromptShown,
+  recordPromptDismissed,
+} from "../lib/screenshot-feedback";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, AppState, View, Text, Pressable } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -243,6 +250,27 @@ export default function RootLayout() {
     return () => sub.remove();
   }, [router]);
 
+  // A screenshot is the cheapest signal we get that something on screen was
+  // worth capturing. Offer the feedback form — throttled hard, because most
+  // screenshots are users sharing a restaurant, not reporting a bug.
+  const [screenshotPrompt, setScreenshotPrompt] = useState(false);
+  useEffect(() => {
+    if (!session) return; // feedback requires an account
+    let sub: { remove: () => void } | null = null;
+    try {
+      sub = ScreenCapture.addScreenshotListener(() => {
+        void shouldPromptNow().then((ok) => {
+          if (!ok) return;
+          void recordPromptShown();
+          setScreenshotPrompt(true);
+        });
+      });
+    } catch {
+      // Listener is iOS/Android-native; never let its absence break launch.
+    }
+    return () => sub?.remove();
+  }, [session]);
+
   // Route guard: kick to /sign-in if not authed; bounce away from /sign-in
   // once authed. Signed-in users are allowed to be in /onboarding so brand-new
   // accounts can finish setup before landing in the tabs.
@@ -302,6 +330,20 @@ export default function RootLayout() {
           <Stack.Screen name="location-picker" options={{ presentation: "modal" }} />
           <Stack.Screen name="wrapped-story" options={{ presentation: "modal" }} />
         </Stack>
+        <ScreenshotFeedbackSheet
+          visible={screenshotPrompt}
+          onSend={() => {
+            setScreenshotPrompt(false);
+            router.push({
+              pathname: "/feedback",
+              params: { from: "/" + segments.join("/") },
+            });
+          }}
+          onDismiss={() => {
+            setScreenshotPrompt(false);
+            void recordPromptDismissed();
+          }}
+        />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

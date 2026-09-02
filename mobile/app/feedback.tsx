@@ -12,7 +12,7 @@ import { submitFeedback, FEEDBACK_CATEGORIES, type FeedbackCategory } from "../l
 
 export default function Feedback() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ category?: string }>();
+  const params = useLocalSearchParams<{ category?: string; from?: string }>();
   const initial = FEEDBACK_CATEGORIES.find((c) => c.key === params.category)?.key ?? "bug";
 
   const [category, setCategory] = useState<FeedbackCategory>(initial);
@@ -36,7 +36,12 @@ export default function Feedback() {
     }
     setSubmitting(true);
     try {
-      await submitFeedback({ category, message, screenshotUri, route: "settings" });
+      // `from` is set when the form was opened from the screenshot prompt, so
+      // a report lands with the screen it was actually about.
+      await submitFeedback({
+        category, message, screenshotUri,
+        route: params.from ?? "settings",
+      });
       setDone(true);
     } catch (e: any) {
       Alert.alert("Couldn't send", e?.message ?? "Please try again in a moment.");

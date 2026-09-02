@@ -15,6 +15,10 @@ import {
   enableSundayWrappedReminder,
   disableSundayWrappedReminder,
 } from "../../lib/notifications";
+import {
+  isScreenshotPromptEnabled,
+  setScreenshotPromptEnabled,
+} from "../../lib/screenshot-feedback";
 import { loadAnalytics, type AnalyticsSummary } from "../../lib/analytics-stats";
 import { computeTasteVector } from "../../lib/taste-vector";
 import { getProfileFromVector, IDENTITY_BLURB, type PalateProfile } from "../../lib/palate";
@@ -52,6 +56,7 @@ export default function Settings() {
   const [tracking, setTracking] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
   const [sundayReminder, setSundayReminder] = useState(false);
+  const [screenshotPrompt, setScreenshotPrompt] = useState(true);
   const [stats, setStats] = useState<AnalyticsSummary | null>(null);
   const [palateProfile, setPalateProfile] = useState<PalateProfile | null>(null);
   const [visibility, setVisibility] = useState<ProfileVisibility>("friends");
@@ -71,6 +76,7 @@ export default function Settings() {
     AsyncStorage.getItem(PAUSE_KEY).then((v) => setTracking(v !== "1"));
     supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
     isReminderEnabled().then(setSundayReminder);
+    isScreenshotPromptEnabled().then(setScreenshotPrompt);
     loadAnalytics("all").then(setStats).catch(() => {});
     // Compute the user's overall (all-time) Palate profile for the Profile
     // header. Uses the new identity system (Curator/Forager/Steward/Anchor).
@@ -449,6 +455,18 @@ export default function Settings() {
         <CollapsibleSection title="Wrapped & reminders">
           <Row label="Sunday Wrapped reminder" right={<Switch value={sundayReminder} onValueChange={toggleSundayReminder} thumbColor={sundayReminder ? colors.red : "#fff"} trackColor={{ true: colors.redTintBorder, false: colors.line }} />} />
           <Note>One reminder a week, Sunday at 9 AM. That's it.</Note>
+          <Row
+            label="Ask for feedback after a screenshot"
+            right={
+              <Switch
+                value={screenshotPrompt}
+                onValueChange={(v) => { setScreenshotPrompt(v); void setScreenshotPromptEnabled(v); }}
+                thumbColor={screenshotPrompt ? colors.red : "#fff"}
+                trackColor={{ true: colors.redTintBorder, false: colors.line }}
+              />
+            }
+          />
+          <Note>At most once a day. We never see the screenshot itself.</Note>
           <Spacer />
           <Button title="Open this week's Wrapped" onPress={() => router.push("/(tabs)/wrapped")} />
           <Spacer />
