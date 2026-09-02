@@ -75,6 +75,19 @@ const NEARBY_RATE_LIMIT_MAX = 40;       // was effectively 5 — far too low for
 // calling Google and serves cached/DB results until the next UTC day. Default
 // ~1500/day (~$48/day worst case at Pro pricing); raise via env as you scale.
 const GOOGLE_DAILY_CALL_CAP = Number(Deno.env.get("GOOGLE_DAILY_CALL_CAP") ?? "1500");
+
+// ----- Read-through nearby cache ----------------------------------------
+// We already store every restaurant we have ever seen. These bound when it is
+// honest to answer from that store instead of paying Google again.
+//   • cells are 0.01 degrees (~1.1km) so neighbours share coverage
+//   • a cell goes stale after a week — restaurants open and close, but not daily
+//   • a cell must have returned real density to count as covered, otherwise a
+//     genuinely empty result would look like a cache hit forever
+const CACHE_CELL_DEGREES = 0.01;
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const CACHE_MIN_RESULTS = 15;
+
+const cellOf = (v: number) => Math.round(v / CACHE_CELL_DEGREES);
 // Founder's own Expo push token (ExponentPushToken[...]). Receives the 80%
 // warning and the kill-switch-tripped alert. When unset, alerts are skipped
 // silently (the kill-switch itself still works).
@@ -158,6 +171,39 @@ async function handleNearby(
     await recordUsage(admin, "nearby", "cache");
     return json({ places, degraded: true });
   }
+
+  // Read-through cache. If we have already asked Google about this cell at this
+  // radius recently, and it came back dense, answer from our own rows. This is
+  // the difference between paying per request and paying per region per week.
+  //
+  // Deliberately fails OPEN: any doubt — no coverage row, stale, thin, or a
+  // sparse re-read — falls through to the live call. A cheap wrong answer is
+  // worse than an expensive right one.
+  const latCell = cellOf(lat);
+  const lngCell = cellOf(lng);
+  const { data: region } = await admin
+    .from("nearby_cache_regions")
+    .select("fetched_at, result_count")
+    .eq("lat_bucket", latCell)
+    .eq("lng_bucket", lngCell)
+    .eq("radius_m", radius)
+    .maybeSingle();
+
+  const fresh =
+    region &&
+    Date.now() - new Date(region.fetched_at as string).getTime() < CACHE_TTL_MS &&
+    (region.result_count as number) >= CACHE_MIN_RESULTS;
+
+  if (fresh) {
+    const places = await degradedNearby(admin, lat, lng, radius);
+    if (places.length >= CACHE_MIN_RESULTS) {
+      await recordUsage(admin, "nearby", "cache");
+      return json({ places, cached: true });
+    }
+    // Coverage claimed density we can no longer reproduce (rows deleted, or the
+    // eligibility gate tightened). Don't trust it; fall through and re-fetch.
+  }
+
   await reserveGoogleCall(admin);
 
   // call Google Places API (New) — searchNearby
@@ -201,6 +247,19 @@ async function handleNearby(
   if (rows.length) {
     await admin.from("restaurants").upsert(rows, { onConflict: "google_place_id" });
   }
+
+  // Record coverage so the next request for this cell can be served from our
+  // own rows. Written after the upsert, so the rows it promises actually exist.
+  await admin.from("nearby_cache_regions").upsert(
+    {
+      lat_bucket: latCell,
+      lng_bucket: lngCell,
+      radius_m: radius,
+      fetched_at: new Date().toISOString(),
+      result_count: rows.length,
+    },
+    { onConflict: "lat_bucket,lng_bucket,radius_m" },
+  );
 
   await recordUsage(admin, "nearby", "google");
   return json({ places: rows });
