@@ -15,6 +15,12 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import {
+  RECEIPT_SENDERS as SHARED_SENDERS,
+  parseReceipt,
+  nameKey,
+  type ParsedReceipt as SharedReceipt,
+} from "../_shared/receipt-parser.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -35,26 +41,12 @@ const corsHeaders = {
 
 // Senders we know how to parse. The query in scanInbox restricts Gmail to
 // these so we only fetch what we can use.
-const RECEIPT_SENDERS = [
-  "no-reply@opentable.com",
-  "noreply@opentable.com",
-  "info@resy.com",
-  "no-reply@resy.com",
-  "no-reply@doordash.com",
-  "no-reply@order.uber.com",
-  "noreply@grubhub.com",
-  "no-reply@trycaviar.com",
-  "noreply@yelp.com",
-  "no-reply@exploretock.com",
-  "noreply@sevenrooms.com",
-  "messenger@squareup.com",
-];
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const body = await req.json().catch(() => ({}));
-    const action = body.action as "connect" | "scan" | "disconnect" | "scan_all" | undefined;
+    const action = body.action as "connect" | "scan" | "preview" | "disconnect" | "scan_all" | undefined;
 
     // scan_all is the ONLY action without a user session — a scheduler has no
     // user to be. It is gated on the shared cron secret instead, and fails
@@ -79,12 +71,116 @@ serve(async (req) => {
 
     if (action === "connect") return await handleConnect(admin, userId, body);
     if (action === "scan")    return await handleScan(admin, userId, body);
+    if (action === "preview") return await handlePreview(admin, userId, body);
     if (action === "disconnect") return await handleDisconnect(admin, userId);
     return json({ error: "unknown action" }, 400);
   } catch (err) {
     return json({ error: String(err) }, 500);
   }
 });
+
+
+// ----------------------------------------------------------------------------
+// preview — what an import WOULD do, without doing any of it
+// ----------------------------------------------------------------------------
+// The whole point: email import is the only path in the product with a real
+// per-user marginal cost, and the honest way to price it is to count the
+// lookups an import would make WITHOUT making them.
+//
+// Runs the identical Gmail query and the identical parser, then resolves names
+// against the local restaurants table exactly as placeIdForName() does — and
+// stops there. Zero Google calls. Zero writes. The unresolved names come back
+// so the parser's blind spots are visible rather than inferred.
+async function handlePreview(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+  body: any,
+) {
+  const sinceDays = Math.min(Number(body.since_days) || 90, 90);
+  const accessToken = await getValidAccessToken(admin, userId);
+  if (!accessToken) return json({ error: "not_connected" }, 400);
+
+  const fromClause = SHARED_SENDERS.map((s) => `from:${s}`).join(" OR ");
+  const query = `(${fromClause}) newer_than:${sinceDays}d`;
+
+  const messageIds: string[] = [];
+  let pageToken: string | undefined;
+  do {
+    const url = new URL("https://gmail.googleapis.com/gmail/v1/users/me/messages");
+    url.searchParams.set("q", query);
+    url.searchParams.set("maxResults", "100");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!r.ok) return json({ error: "gmail_list_failed", detail: await r.text() }, 502);
+    const j = await r.json() as { messages?: Array<{ id: string }>; nextPageToken?: string };
+    for (const m of (j.messages ?? [])) messageIds.push(m.id);
+    pageToken = j.nextPageToken;
+    if (messageIds.length >= 500) break;
+  } while (pageToken);
+
+  // Already-imported messages cost nothing and should not inflate the estimate.
+  const { data: existing } = await admin
+    .from("visits")
+    .select("import_external_id")
+    .eq("user_id", userId)
+    .eq("import_source", "gmail")
+    .in("import_external_id", messageIds);
+  const already = new Set((existing ?? []).map((r: any) => r.import_external_id));
+  const fresh = messageIds.filter((id) => !already.has(id));
+
+  let parsedCount = 0;
+  let unparseable = 0;
+  const byName = new Map<string, { name: string; count: number }>();
+
+  for (const id of fresh) {
+    let detail;
+    try {
+      detail = await fetchMessage(accessToken, id);
+    } catch {
+      unparseable++;
+      continue;
+    }
+    const parsed = parseReceipt({
+      from: header(detail, "from"),
+      subject: header(detail, "subject"),
+      text: bodyText(detail) + " " + (detail.snippet ?? ""),
+      internalDate: detail.internalDate ? new Date(parseInt(detail.internalDate)) : new Date(),
+    });
+    if (!parsed) { unparseable++; continue; }
+    parsedCount++;
+    const key = nameKey(parsed.restaurantName);
+    const seen = byName.get(key);
+    if (seen) seen.count++;
+    else byName.set(key, { name: parsed.restaurantName, count: 1 });
+  }
+
+  // Resolve against the local table the same way the real import would.
+  const known: string[] = [];
+  const unknown: string[] = [];
+  for (const { name } of byName.values()) {
+    const { data: hit } = await admin
+      .from("restaurants")
+      .select("google_place_id")
+      .ilike("name", name)
+      .limit(1)
+      .maybeSingle();
+    if ((hit as any)?.google_place_id) known.push(name);
+    else unknown.push(name);
+  }
+
+  return json({
+    since_days: sinceDays,
+    messages_matched: messageIds.length,
+    already_imported: messageIds.length - fresh.length,
+    receipts_parsed: parsedCount,
+    unparseable,
+    unique_restaurants: byName.size,
+    resolved_locally: known.length,
+    // The number this whole exercise exists to produce.
+    would_cost_lookups: unknown.length,
+    unresolved_names: unknown.slice(0, 50),
+  });
+}
 
 // ----------------------------------------------------------------------------
 // connect — exchange OAuth code for tokens and run initial scan
@@ -233,7 +329,7 @@ async function runScan(admin: ReturnType<typeof createClient>, userId: string, s
   if (!accessToken) return { error: "not_connected", imported: 0, skipped: 0 };
 
   // Build the Gmail search query
-  const fromClause = RECEIPT_SENDERS.map((s) => `from:${s}`).join(" OR ");
+  const fromClause = SHARED_SENDERS.map((s) => `from:${s}`).join(" OR ");
   const sinceClause = `newer_than:${sinceDays}d`;
   const query = `(${fromClause}) ${sinceClause}`;
 
@@ -270,7 +366,12 @@ async function runScan(admin: ReturnType<typeof createClient>, userId: string, s
   for (const id of newIds) {
     try {
       const detail = await fetchMessage(accessToken, id);
-      const parsed = parseMessage(detail);
+      const parsed = parseReceipt({
+        from: header(detail, "from"),
+        subject: header(detail, "subject"),
+        text: bodyText(detail) + " " + (detail.snippet ?? ""),
+        internalDate: detail.internalDate ? new Date(parseInt(detail.internalDate)) : new Date(),
+      });
       if (!parsed) { skipped++; continue; }
       const ok = await createImportedVisit(admin, userId, id, parsed);
       if (ok) imported++; else skipped++;
@@ -383,100 +484,10 @@ function bodyText(msg: GmailMessage): string {
 }
 
 // ----------------------------------------------------------------------------
-// Receipt parsing
-// ----------------------------------------------------------------------------
-type ParsedReceipt = {
-  restaurantName: string;
-  visitedAt: Date;
-  source: "reservation" | "delivery" | "pos";
-};
-
-function parseMessage(msg: GmailMessage): ParsedReceipt | null {
-  const from = header(msg, "from").toLowerCase();
-  const subject = header(msg, "subject");
-  const text = bodyText(msg) + " " + (msg.snippet ?? "");
-  const internalDate = msg.internalDate ? new Date(parseInt(msg.internalDate)) : new Date();
-
-  // Each parser is best-effort. First successful match wins.
-  if (from.includes("opentable.com")) return parseOpenTable(subject, text, internalDate);
-  if (from.includes("resy.com"))      return parseResy(subject, text, internalDate);
-  if (from.includes("doordash.com"))  return parseDoorDash(subject, text, internalDate);
-  if (from.includes("uber.com"))      return parseUberEats(subject, text, internalDate);
-  if (from.includes("grubhub.com"))   return parseGrubhub(subject, text, internalDate);
-  if (from.includes("trycaviar.com")) return parseCaviar(subject, text, internalDate);
-  if (from.includes("yelp.com"))      return parseYelp(subject, text, internalDate);
-  if (from.includes("exploretock.com")) return parseTock(subject, text, internalDate);
-  if (from.includes("sevenrooms.com")) return parseSevenRooms(subject, text, internalDate);
-  if (from.includes("squareup.com"))  return parseSquare(subject, text, internalDate);
-  return null;
-}
-
-// Parsers — each pulls the restaurant name from the subject or first body line.
-// Real-world variation is high; these are starting points that we'll tune
-// with logged failures from real users.
-
-function parseOpenTable(subject: string, _text: string, dt: Date): ParsedReceipt | null {
-  // "Your reservation at Lilia is confirmed"
-  const m = subject.match(/(?:reservation at|reminder:|you're going to)\s+(.+?)(?:\s+is\s+|$)/i);
-  if (!m) return null;
-  return { restaurantName: m[1].trim(), visitedAt: dt, source: "reservation" };
-}
-function parseResy(subject: string, _text: string, dt: Date): ParsedReceipt | null {
-  // "Your reservation is confirmed at Atomix"
-  const m = subject.match(/(?:reservation.*?at|booking.*?at)\s+(.+)/i);
-  if (!m) return null;
-  return { restaurantName: m[1].trim(), visitedAt: dt, source: "reservation" };
-}
-function parseDoorDash(subject: string, text: string, dt: Date): ParsedReceipt | null {
-  // "Your DoorDash order from Sweetgreen"
-  const m = subject.match(/order from\s+(.+?)(?:\s+\(|$)/i) || text.match(/Order from\s+(.+?)\n/i);
-  if (!m) return null;
-  return { restaurantName: m[1].trim(), visitedAt: dt, source: "delivery" };
-}
-function parseUberEats(subject: string, _text: string, dt: Date): ParsedReceipt | null {
-  // "Your Tuesday lunch with Joe's Pizza" or "Receipt from Joe's Pizza"
-  const m = subject.match(/(?:with|from)\s+(.+?)(?:\s*\||\s*-|$)/i);
-  if (!m) return null;
-  return { restaurantName: m[1].trim(), visitedAt: dt, source: "delivery" };
-}
-function parseGrubhub(subject: string, text: string, dt: Date): ParsedReceipt | null {
-  const m = subject.match(/(?:order from|receipt from)\s+(.+)/i) || text.match(/Order from\s+(.+?)\n/i);
-  if (!m) return null;
-  return { restaurantName: m[1].trim(), visitedAt: dt, source: "delivery" };
-}
-function parseCaviar(subject: string, _text: string, dt: Date): ParsedReceipt | null {
-  const m = subject.match(/(?:from|receipt:)\s+(.+)/i);
-  if (!m) return null;
-  return { restaurantName: m[1].trim(), visitedAt: dt, source: "delivery" };
-}
-function parseYelp(subject: string, _text: string, dt: Date): ParsedReceipt | null {
-  // "Reservation confirmed at Cote"
-  const m = subject.match(/(?:reservation.*?at|booking.*?at)\s+(.+)/i);
-  if (!m) return null;
-  return { restaurantName: m[1].trim(), visitedAt: dt, source: "reservation" };
-}
-function parseTock(subject: string, _text: string, dt: Date): ParsedReceipt | null {
-  const m = subject.match(/(?:reservation at|booking at)\s+(.+)/i);
-  if (!m) return null;
-  return { restaurantName: m[1].trim(), visitedAt: dt, source: "reservation" };
-}
-function parseSevenRooms(subject: string, _text: string, dt: Date): ParsedReceipt | null {
-  const m = subject.match(/(?:at|reservation:)\s+(.+)/i);
-  if (!m) return null;
-  return { restaurantName: m[1].trim(), visitedAt: dt, source: "reservation" };
-}
-function parseSquare(subject: string, text: string, dt: Date): ParsedReceipt | null {
-  // "Receipt from Joe's Pizza" / body usually leads with the merchant name
-  const m = subject.match(/receipt from\s+(.+)/i) || text.match(/^([A-Z][^\n]{2,40})\n/m);
-  if (!m) return null;
-  return { restaurantName: m[1].trim(), visitedAt: dt, source: "pos" };
-}
-
-// ----------------------------------------------------------------------------
 // Visit creation — Google Places lookup + insert
 // ----------------------------------------------------------------------------
 async function createImportedVisit(
-  admin: ReturnType<typeof createClient>, userId: string, messageId: string, parsed: ParsedReceipt,
+  admin: ReturnType<typeof createClient>, userId: string, messageId: string, parsed: SharedReceipt,
 ): Promise<boolean> {
   // Resolve restaurant via Google Places text search
   const placeId = await placeIdForName(admin, parsed.restaurantName);

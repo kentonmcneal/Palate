@@ -145,3 +145,42 @@ export async function disconnectGmail(): Promise<{ ok: boolean; error?: string }
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
+
+// ----------------------------------------------------------------------------
+// Preview — what an import WOULD do
+// ----------------------------------------------------------------------------
+// Email import is the only path in the product with a real per-user marginal
+// cost. This is how that cost gets priced without being incurred: the same
+// Gmail query, the same parser, resolved against our own restaurants table, and
+// then it stops. No Google calls, no writes.
+
+export type ImportPreview = {
+  since_days: number;
+  messages_matched: number;
+  already_imported: number;
+  receipts_parsed: number;
+  unparseable: number;
+  unique_restaurants: number;
+  resolved_locally: number;
+  /** The number that decides whether an import is worth running. */
+  would_cost_lookups: number;
+  unresolved_names: string[];
+};
+
+export async function previewGmailImport(sinceDays = 90): Promise<ImportPreview> {
+  const { data, error } = await supabase.functions.invoke("gmail-import", {
+    body: { action: "preview", since_days: sinceDays },
+  });
+  if (error) throw error;
+  if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+  return data as ImportPreview;
+}
+
+/** One line a person can act on, from the preview numbers. */
+export function describePreview(p: ImportPreview): string {
+  if (p.receipts_parsed === 0) {
+    return `No readable receipts in the last ${p.since_days} days.`;
+  }
+  const places = p.unique_restaurants === 1 ? "1 restaurant" : `${p.unique_restaurants} restaurants`;
+  return `Found ${p.receipts_parsed} receipts across ${places}.`;
+}
