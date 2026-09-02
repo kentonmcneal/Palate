@@ -80,17 +80,17 @@ export const card = {
 } as const;
 
 // Font families come from @expo-google-fonts — loaded in app/_layout.tsx.
-// Inter carries UI/body; Fraunces (an editorial high-contrast serif) carries
-// display + titles so headlines read "premium editorial" instead of generic
-// system-sans. Mapped per weight because RN doesn't synth weights well.
+// Inter only, mapped per weight because RN doesn't synthesize weights well.
+// An editorial serif (Fraunces) used to carry display + titles; the
+// OpenTable/Airbnb direction dropped it, and it stayed in the font loader for
+// a while afterwards — downloaded and blocking the splash, rendered nowhere.
 export const fonts = {
   regular: "Inter_400Regular",
   medium: "Inter_500Medium",
   semibold: "Inter_600SemiBold",
   bold: "Inter_700Bold",
   heavy: "Inter_800ExtraBold",
-  // Full clean-sans (OpenTable/Airbnb direction): display roles use Inter's
-  // heavy weights instead of the Fraunces serif, for a clean, modern UI feel.
+  // Full clean-sans: display roles use Inter's heavy weights.
   display: "Inter_800ExtraBold",
   displaySemi: "Inter_700Bold",
 };
