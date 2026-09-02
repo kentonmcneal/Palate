@@ -110,6 +110,13 @@ export type FriendProfileSnapshot = {
   total_visits: number | null;
   is_friend: boolean;
   is_self: boolean;
+  // Profile content, not identity: null for a private profile, and for a
+  // friends-only profile viewed by a non-friend (enforced in the RPC).
+  bio: string | null;
+  school: string | null;
+  current_city: string | null;
+  instagram_handle: string | null;
+  tiktok_handle: string | null;
 };
 
 export async function getFriendProfileSnapshot(targetId: string): Promise<FriendProfileSnapshot | null> {

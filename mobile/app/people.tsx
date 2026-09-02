@@ -6,7 +6,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Avatar } from "../components/Avatar";
 import { colors, spacing, type, card, shadow } from "../theme";
-import { browseProfiles, instagramUrl, tiktokUrl, type PublicProfile } from "../lib/social";
+import {
+  browseProfiles, instagramUrl, tiktokUrl,
+  needsDiscoveryPrompt, markDiscoveryPrompted,
+  type PublicProfile,
+} from "../lib/social";
+import { setProfileVisibility } from "../lib/profile";
 import { loadPalateMatch } from "../lib/palate/pairCompatibility";
 import type { PalateMatch } from "../lib/recommendation/palate-match";
 import { triggerHapticSelection } from "../lib/haptics";
@@ -30,6 +35,10 @@ export default function PeopleScreen() {
   const [matches, setMatches] = useState<Record<string, PalateMatch>>({});
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Accounts created before the directory existed signed up under 'friends'.
+  // They are asked once rather than switched for them — a default governs
+  // people who haven't decided, not people who have.
+  const [askDiscovery, setAskDiscovery] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -61,6 +70,9 @@ export default function PeopleScreen() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void needsDiscoveryPrompt().then(setAskDiscovery).catch(() => {});
+  }, []);
 
   const sorted = people
     ? [...people].sort((a, b) => {
@@ -96,6 +108,40 @@ export default function PeopleScreen() {
         <Text style={styles.lead}>
           Sorted by how much your palate overlaps with theirs.
         </Text>
+
+        {askDiscovery && (
+          <View style={styles.askCard}>
+            <Text style={styles.askTitle}>Be findable here?</Text>
+            <Text style={styles.askBody}>
+              Your profile is currently visible to friends only, so you don&apos;t
+              appear in this list. Making it public lets people find you by
+              palate match. You can change it any time in Settings.
+            </Text>
+            <View style={styles.askRow}>
+              <Pressable
+                style={styles.askPrimary}
+                onPress={async () => {
+                  setAskDiscovery(false);
+                  await setProfileVisibility("public").catch(() => {});
+                  await markDiscoveryPrompted().catch(() => {});
+                  void load();
+                }}
+              >
+                <Text style={styles.askPrimaryText}>Make me findable</Text>
+              </Pressable>
+              <Pressable
+                style={styles.askGhost}
+                onPress={async () => {
+                  setAskDiscovery(false);
+                  // Asked and declined — recorded so we never ask again.
+                  await markDiscoveryPrompted().catch(() => {});
+                }}
+              >
+                <Text style={styles.askGhostText}>Not now</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
 
         {people === null && (
           <View style={styles.center}><ActivityIndicator color={colors.red} /></View>
@@ -185,6 +231,24 @@ const styles = StyleSheet.create({
   closeText: { fontSize: 20, color: colors.ink },
   body: { padding: spacing.lg, paddingTop: 0 },
   lead: { ...type.small, marginBottom: spacing.md },
+  askCard: {
+    padding: card.padding, borderRadius: card.radius,
+    backgroundColor: colors.faint, marginBottom: spacing.md, ...shadow.card,
+  },
+  askTitle: { fontSize: 16, fontWeight: "800", color: colors.ink },
+  askBody: { ...type.small, marginTop: 6, lineHeight: 19 },
+  askRow: { flexDirection: "row", gap: 8, marginTop: 12, flexWrap: "wrap" },
+  askPrimary: {
+    paddingHorizontal: 14, minHeight: 40, paddingVertical: 10,
+    borderRadius: 999, backgroundColor: colors.red, justifyContent: "center",
+  },
+  askPrimaryText: { color: "#fff", fontSize: 13, fontWeight: "800" },
+  askGhost: {
+    paddingHorizontal: 14, minHeight: 40, paddingVertical: 10,
+    borderRadius: 999, backgroundColor: colors.paper,
+    borderWidth: 1, borderColor: colors.line, justifyContent: "center",
+  },
+  askGhostText: { color: colors.ink, fontSize: 13, fontWeight: "700" },
   center: { paddingVertical: spacing.xxl, alignItems: "center" },
   error: { ...type.small, color: colors.redText },
   empty: { alignItems: "center", paddingVertical: spacing.xxl, gap: 6 },

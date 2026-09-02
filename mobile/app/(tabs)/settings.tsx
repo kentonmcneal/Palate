@@ -15,6 +15,7 @@ import {
   enableSundayWrappedReminder,
   disableSundayWrappedReminder,
 } from "../../lib/notifications";
+import { saveSocialFields, normalizeHandle, BIO_MAX, SCHOOL_MAX } from "../../lib/social";
 import {
   isScreenshotPromptEnabled,
   setScreenshotPromptEnabled,
@@ -68,6 +69,14 @@ export default function Settings() {
   const [palateProfile, setPalateProfile] = useState<PalateProfile | null>(null);
   const [visibility, setVisibility] = useState<ProfileVisibility>("friends");
   const [displayName, setDisplayNameState] = useState<string | null>(null);
+  // Social profile fields. Without an edit surface the People directory lists
+  // everyone with a blank bio forever — schema without a way in is not shipped.
+  const [bio, setBio] = useState("");
+  const [school, setSchool] = useState("");
+  const [ig, setIg] = useState("");
+  const [tt, setTt] = useState("");
+  const [savingSocial, setSavingSocial] = useState(false);
+  const [socialSaved, setSocialSaved] = useState(false);
   const [username, setUsernameState] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -99,6 +108,10 @@ export default function Settings() {
       if (!p) return;
       setVisibility(p.profile_visibility);
       setDisplayNameState(p.display_name);
+      setBio((p as { bio?: string | null }).bio ?? "");
+      setSchool((p as { school?: string | null }).school ?? "");
+      setIg((p as { instagram_handle?: string | null }).instagram_handle ?? "");
+      setTt((p as { tiktok_handle?: string | null }).tiktok_handle ?? "");
       setUsernameState(p.username);
       setAvatarUrl(p.avatar_url);
     }).catch(() => {});
@@ -429,6 +442,74 @@ export default function Settings() {
             Optional. Powers "Top Palates in your demographic" — never sold,
             never shown publicly.
           </Note>
+        </Section>
+
+        <Section title="Your profile">
+          <Note>Shown to anyone who can see your profile.</Note>
+          <Spacer size={10} />
+          <Text style={styles.fieldLabel}>Bio</Text>
+          <TextInput
+            value={bio}
+            onChangeText={(v) => { setBio(v.slice(0, BIO_MAX)); setSocialSaved(false); }}
+            placeholder="One line about how you eat"
+            placeholderTextColor={colors.mute}
+            style={[styles.input, styles.inputMultiline]}
+            multiline
+            maxLength={BIO_MAX}
+          />
+          <Text style={styles.counter}>{bio.length}/{BIO_MAX}</Text>
+
+          <Text style={styles.fieldLabel}>School</Text>
+          <TextInput
+            value={school}
+            onChangeText={(v) => { setSchool(v.slice(0, SCHOOL_MAX)); setSocialSaved(false); }}
+            placeholder="Optional"
+            placeholderTextColor={colors.mute}
+            style={styles.input}
+            maxLength={SCHOOL_MAX}
+          />
+
+          <Text style={styles.fieldLabel}>Instagram</Text>
+          <TextInput
+            value={ig}
+            onChangeText={(v) => { setIg(v); setSocialSaved(false); }}
+            placeholder="@handle or link"
+            placeholderTextColor={colors.mute}
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={styles.input}
+          />
+
+          <Text style={styles.fieldLabel}>TikTok</Text>
+          <TextInput
+            value={tt}
+            onChangeText={(v) => { setTt(v); setSocialSaved(false); }}
+            placeholder="@handle or link"
+            placeholderTextColor={colors.mute}
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={styles.input}
+          />
+          <Spacer size={12} />
+          <Button
+            title={savingSocial ? "Saving…" : socialSaved ? "Saved ✓" : "Save profile"}
+            onPress={async () => {
+              setSavingSocial(true);
+              try {
+                await saveSocialFields({ bio, school, instagram: ig, tiktok: tt });
+                // Echo back what was actually stored: a pasted URL becomes a
+                // bare handle, and anything unusable becomes empty, so the
+                // field should stop showing text that was not saved.
+                setIg(normalizeHandle(ig) ?? "");
+                setTt(normalizeHandle(tt) ?? "");
+                setSocialSaved(true);
+              } catch (e: any) {
+                Alert.alert("Couldn't save", e?.message ?? "Try again.");
+              } finally {
+                setSavingSocial(false);
+              }
+            }}
+          />
         </Section>
 
         <Section title="Profile visibility">
@@ -774,6 +855,14 @@ function Note({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  fieldLabel: { ...type.micro, marginTop: 14, marginBottom: 6 },
+  input: {
+    minHeight: 46, paddingVertical: 10, paddingHorizontal: 14,
+    borderRadius: 12, borderWidth: 1, borderColor: colors.line,
+    backgroundColor: colors.faint, color: colors.ink, fontSize: 15,
+  },
+  inputMultiline: { minHeight: 68, textAlignVertical: "top" },
+  counter: { ...type.small, textAlign: "right", marginTop: 4 },
   safe: { flex: 1, backgroundColor: colors.paper },
   container: { padding: spacing.lg, paddingBottom: 100 },
 

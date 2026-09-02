@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Spacer } from "../../components/Button";
@@ -7,6 +7,7 @@ import { Avatar } from "../../components/Avatar";
 import { colors, spacing, type, shadow, card } from "../../theme";
 import { getFriendProfileSnapshot, type FriendProfileSnapshot } from "../../lib/profile";
 import { loadPalateMatch } from "../../lib/palate/pairCompatibility";
+import { instagramUrl, tiktokUrl } from "../../lib/social";
 import { matchHeadline, type PalateMatch } from "../../lib/recommendation/palate-match";
 import { requestFriendship, unfriend } from "../../lib/friends";
 import { reportContent, blockUser, unblockUser, isBlocked, REPORT_REASONS } from "../../lib/moderation";
@@ -163,6 +164,38 @@ export default function FriendProfileScreen() {
               {snapshot.is_friend && (
                 <View style={styles.friendBadge}>
                   <Text style={styles.friendBadgeText}>✓ Friends</Text>
+                </View>
+              )}
+
+              {/* Profile content. The RPC returns these as null for a private
+                  profile and for a friends-only profile seen by a non-friend,
+                  so there is nothing to gate here — absent means not allowed. */}
+              {!!snapshot.bio && <Text style={styles.bio}>{snapshot.bio}</Text>}
+              {!!(snapshot.school || snapshot.current_city) && (
+                <Text style={styles.meta}>
+                  {[snapshot.school, snapshot.current_city].filter(Boolean).join(" · ")}
+                </Text>
+              )}
+              {!!(snapshot.instagram_handle || snapshot.tiktok_handle) && (
+                <View style={styles.socialRow}>
+                  {!!snapshot.instagram_handle && (
+                    <Pressable
+                      onPress={() => void Linking.openURL(instagramUrl(snapshot.instagram_handle!))}
+                      style={styles.socialChip}
+                      accessibilityRole="link"
+                    >
+                      <Text style={styles.socialChipText}>Instagram</Text>
+                    </Pressable>
+                  )}
+                  {!!snapshot.tiktok_handle && (
+                    <Pressable
+                      onPress={() => void Linking.openURL(tiktokUrl(snapshot.tiktok_handle!))}
+                      style={styles.socialChip}
+                      accessibilityRole="link"
+                    >
+                      <Text style={styles.socialChipText}>TikTok</Text>
+                    </Pressable>
+                  )}
                 </View>
               )}
             </View>
@@ -404,6 +437,14 @@ const styles = StyleSheet.create({
   },
   btnGhostText: { color: colors.mute, fontSize: 16, fontWeight: "700" },
 
+  bio: { ...type.body, color: colors.inkDim, textAlign: "center", marginTop: 10, lineHeight: 21 },
+  meta: { ...type.small, marginTop: 6 },
+  socialRow: { flexDirection: "row", gap: 8, marginTop: 12 },
+  socialChip: {
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
+    backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line,
+  },
+  socialChipText: { fontSize: 13, fontWeight: "700", color: colors.ink },
   matchHero: {
     marginTop: spacing.lg,
     alignItems: "center",
