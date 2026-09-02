@@ -111,14 +111,47 @@ export async function saveSocialFields(input: {
   if (error) throw error;
 }
 
-/** One page of the directory. Server decides who is in it. */
-export async function browseProfiles(limit = 50, offset = 0): Promise<PublicProfile[]> {
+/** One page of the directory. Server decides who is in it; the filters only
+ *  narrow that set, they never widen it. */
+export async function browseProfiles(
+  limit = 50,
+  offset = 0,
+  filters: { school?: string | null; city?: string | null } = {},
+): Promise<PublicProfile[]> {
   const { data, error } = await supabase.rpc("browse_profiles", {
     p_limit: limit,
     p_offset: offset,
+    p_school: filters.school?.trim() || null,
+    p_city: filters.city?.trim() || null,
   });
   if (error) throw error;
   return (data ?? []) as PublicProfile[];
+}
+
+export type SharedPlace = {
+  google_place_id: string;
+  name: string;
+  cuisine_type: string | null;
+  my_visits: number;
+  their_visits: number;
+};
+
+/**
+ * Restaurants you and someone else have both been to — the Strava-segment
+ * equivalent, and the strongest compatibility signal we have. A cuisine
+ * histogram says two people like similar categories; a shared restaurant says
+ * they have stood in the same room and liked it.
+ *
+ * The friendship/visibility check is server-side (migration 0064) because this
+ * reads another person's visit history.
+ */
+export async function loadSharedPlaces(targetId: string, limit = 10): Promise<SharedPlace[]> {
+  const { data, error } = await supabase.rpc("shared_places", {
+    target_id: targetId,
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return (data ?? []) as SharedPlace[];
 }
 
 /**

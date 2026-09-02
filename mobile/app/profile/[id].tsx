@@ -8,6 +8,7 @@ import { colors, spacing, type, shadow, card } from "../../theme";
 import { getFriendProfileSnapshot, getMyProfile, type FriendProfileSnapshot } from "../../lib/profile";
 import { captureRef } from "react-native-view-shot";
 import { MatchShareCard } from "../../components/MatchShareCard";
+import { loadSharedPlaces, type SharedPlace } from "../../lib/social";
 import { loadPalateMatch } from "../../lib/palate/pairCompatibility";
 import { instagramUrl, tiktokUrl } from "../../lib/social";
 import { matchHeadline, type PalateMatch } from "../../lib/recommendation/palate-match";
@@ -24,6 +25,15 @@ export default function FriendProfileScreen() {
   const [acting, setActing] = useState(false);
   const [match, setMatch] = useState<PalateMatch | null>(null);
   const [me, setMe] = useState<{ name: string | null; avatarUrl: string | null } | null>(null);
+  const [sharedPlaces, setSharedPlaces] = useState<SharedPlace[]>([]);
+  useEffect(() => {
+    if (!targetId) return;
+    let alive = true;
+    void loadSharedPlaces(targetId)
+      .then((rows) => alive && setSharedPlaces(rows))
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [targetId]);
   const matchCardRef = useRef<View>(null);
 
   useEffect(() => {
@@ -299,6 +309,27 @@ export default function FriendProfileScreen() {
                     )}
                   </View>
                 )}
+                {sharedPlaces.length > 0 && (
+                  <View style={styles.sharedBox}>
+                    <Text style={styles.sharedTitle}>
+                      You&apos;ve both been to {sharedPlaces.length} of the same place{sharedPlaces.length === 1 ? "" : "s"}
+                    </Text>
+                    {sharedPlaces.slice(0, 5).map((sp) => (
+                      <Pressable
+                        key={sp.google_place_id}
+                        onPress={() => router.push(`/restaurant/${sp.google_place_id}` as never)}
+                        style={styles.sharedRow}
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.sharedName} numberOfLines={1}>{sp.name}</Text>
+                        <Text style={styles.sharedCount}>
+                          {sp.my_visits}&nbsp;·&nbsp;{sp.their_visits}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+
                 {match?.ready && (
                   <Pressable onPress={shareMatch} style={styles.shareBtn} accessibilityRole="button">
                     <Text style={styles.shareBtnText}>Share this match</Text>
@@ -485,6 +516,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line,
   },
   socialChipText: { fontSize: 13, fontWeight: "700", color: colors.ink },
+  sharedBox: { marginTop: spacing.lg, width: "100%" },
+  sharedTitle: { fontSize: 15, fontWeight: "800", color: colors.ink, marginBottom: 8 },
+  sharedRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.line, gap: 12,
+  },
+  sharedName: { flex: 1, fontSize: 15, color: colors.ink, fontWeight: "600" },
+  sharedCount: { ...type.small, fontVariant: ["tabular-nums"] },
   offscreen: { position: "absolute", left: -9999, top: 0 },
   shareBtn: {
     marginTop: 10, paddingVertical: 12, borderRadius: 999,
