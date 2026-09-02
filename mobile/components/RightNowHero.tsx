@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Animated, Easing } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { colors, spacing, type } from "../theme";
+import { colors, spacing, type, card } from "../theme";
 import { computeTasteVector } from "../lib/taste-vector";
 import { nearbyRestaurants } from "../lib/places";
 import { getCachedNearby, setCachedNearby } from "../lib/nearby-cache";
@@ -248,7 +248,7 @@ function cap(s: string): string {
 const styles = StyleSheet.create({
   card: {
     padding: spacing.lg,
-    borderRadius: 24,
+    borderRadius: card.radius,
     backgroundColor: colors.faint,
     borderWidth: 1,
     borderColor: colors.line,

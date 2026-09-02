@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Alert } from "react-native";
-import { colors, spacing, type } from "../theme";
+import { colors, spacing, type, card } from "../theme";
 import { Spacer } from "./Button";
 import {
   getGmailStatus, connectGmail, rescanGmail, disconnectGmail,
@@ -132,7 +132,7 @@ export function GmailImportCard() {
 const styles = StyleSheet.create({
   card: {
     padding: spacing.md,
-    borderRadius: 18,
+    borderRadius: card.radius,
     backgroundColor: colors.paper,
     borderWidth: 1,
     borderColor: colors.line,

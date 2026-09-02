@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Spacer } from "../../components/Button";
-import { colors, spacing, type } from "../../theme";
+import { colors, spacing, type, shadow, card } from "../../theme";
 import { supabase } from "../../lib/supabase";
 import { computeTasteVector } from "../../lib/taste-vector";
 import { assembleGraph, getCompatibility } from "../../lib/recommendation";
@@ -349,11 +349,15 @@ export default function RestaurantDetailScreen() {
           <View style={styles.heroTopRow}>
             <Text style={styles.heroName}>{r.name}</Text>
             {matchScore != null && (
-              <View style={styles.matchBadge}>
-                <Text style={styles.matchBadgeText}>
-                  {matchConfidence === "low" ? "New to you" : `${matchScore}% match`}
-                </Text>
-              </View>
+              matchConfidence === "low" ? (
+                <View style={styles.newBadge}>
+                  <Text style={styles.newBadgeText}>New to you</Text>
+                </View>
+              ) : (
+                <View style={styles.matchBadge}>
+                  <Text style={styles.matchBadgeText}>{matchScore}% match</Text>
+                </View>
+              )
             )}
           </View>
           <Text style={styles.heroSub}>
@@ -476,9 +480,10 @@ export default function RestaurantDetailScreen() {
         <Text style={type.micro}>YOUR HISTORY HERE</Text>
         <Spacer size={8} />
         {visits.length === 0 ? (
-          <Text style={[type.body, { color: colors.mute, lineHeight: 22 }]}>
-            You haven't been here yet. {showSaved ? "We'll surface it when you're nearby." : "Save it and we'll resurface."}
-          </Text>
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyGlyph}>◎</Text>
+            <Text style={styles.emptyLine}>No visits here yet.</Text>
+          </View>
         ) : (
           <>
             <Text style={styles.visitCount}>
@@ -595,21 +600,25 @@ const styles = StyleSheet.create({
   body: { padding: spacing.lg, paddingBottom: 80 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.lg },
 
+  // A near-black slab on a light page is the single most template-looking
+  // thing in the app. The hero is now the same white card as everything
+  // else; ink fills are reserved for the tab bar and one primary CTA.
   heroCard: {
-    padding: spacing.lg,
-    borderRadius: 22,
-    backgroundColor: colors.ink,
+    padding: card.padding,
+    borderRadius: card.radius,
+    backgroundColor: colors.faint,
+    ...shadow.card,
   },
   heroTopRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   heroName: {
-    flex: 1, color: "#fff", fontSize: 28, fontWeight: "800", letterSpacing: -0.6, lineHeight: 32,
+    flex: 1, ...type.display, color: colors.ink,
   },
-  heroSub: { color: "rgba(255,255,255,0.78)", fontSize: 14, marginTop: 8, lineHeight: 20 },
+  heroSub: { ...type.small, marginTop: 8 },
   heroCuisineMuted: {
-    color: "rgba(255,255,255,0.5)", fontStyle: "italic",
+    color: colors.mute, fontStyle: "italic",
   },
   cuisineCorrect: {
-    color: "rgba(255,255,255,0.55)", fontSize: 12, marginTop: 6,
+    ...type.small, marginTop: 6,
     textDecorationLine: "underline",
   },
   correctedRow: {
@@ -617,29 +626,34 @@ const styles = StyleSheet.create({
   },
   correctedBadge: {
     paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
-    backgroundColor: "rgba(255,255,255,0.18)",
+    backgroundColor: colors.paper,
   },
-  correctedBadgeText: { color: "#fff", fontSize: 11, fontWeight: "700" },
-  heroRating: { color: "rgba(255,255,255,0.6)", fontSize: 12, marginTop: 6, fontWeight: "600" },
+  correctedBadgeText: { color: colors.ink, fontSize: 11, fontWeight: "700" },
+  heroRating: { ...type.small, marginTop: 6 },
   heroBlurb: {
-    color: "rgba(255,255,255,0.92)", fontSize: 14, marginTop: 12,
-    lineHeight: 20, fontStyle: "italic",
+    ...type.body, color: colors.inkDim, marginTop: 12, fontStyle: "italic",
   },
   heroBlurbLoading: {
-    color: "rgba(255,255,255,0.4)", fontSize: 13, marginTop: 12,
-    fontStyle: "italic",
+    ...type.small, marginTop: 12, fontStyle: "italic",
   },
   ineligibleHint: {
-    color: "rgba(255,255,255,0.5)", fontSize: 11, marginTop: 10,
-    fontWeight: "500",
+    ...type.small, marginTop: 10,
   },
+  // Red earns attention here (the match number) and on the primary CTA.
+  // Nowhere else on this screen.
   matchBadge: {
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.redTint, borderWidth: 1, borderColor: colors.redTintBorder,
   },
-  matchBadgeText: { color: "#fff", fontSize: 12, fontWeight: "800" },
+  matchBadgeText: { color: colors.redText, fontSize: 12, fontWeight: "800" },
+  // "New to you" is a fact, not a call to action — neutral outline.
+  newBadge: {
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
+    backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line,
+  },
+  newBadgeText: { color: colors.mute, fontSize: 12, fontWeight: "700" },
   reasonRow: { marginTop: 12, gap: 4 },
-  reasonText: { color: "rgba(255,255,255,0.85)", fontSize: 13 },
+  reasonText: { ...type.small, color: colors.inkDim },
 
   actions: { flexDirection: "row", gap: 8, marginTop: 14 },
   actionBtn: {
@@ -664,16 +678,18 @@ const styles = StyleSheet.create({
   },
   similarBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
 
+  // Admin-only maintenance. It was a red bordered pill, which put it at the
+  // same visual weight as Save — a plain text link is the correct altitude.
   blacklistBtn: {
     marginTop: 12,
-    borderRadius: 999,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.line,
   },
-  blacklistBtnText: { color: colors.red, fontSize: 13, fontWeight: "700" },
+  blacklistBtnText: { color: colors.mute, fontSize: 13, fontWeight: "600", textDecorationLine: "underline" },
 
+  emptyState: { alignItems: "center", paddingVertical: spacing.lg, gap: 6 },
+  emptyGlyph: { fontSize: 22, color: colors.line },
+  emptyLine: { ...type.small },
   visitCount: { ...type.subtitle, marginBottom: 10 },
   visitRow: {
     flexDirection: "row", alignItems: "center", gap: 12,

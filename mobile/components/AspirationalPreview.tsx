@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
-import { colors, spacing, type } from "../theme";
+import { colors, spacing, type, card } from "../theme";
 import { computeAspirationalPalate, type AspirationalPalate } from "../lib/aspirational-palate";
 
 // ============================================================================
@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
   card: {
     marginTop: spacing.xl,
     padding: spacing.md,
-    borderRadius: 22,
+    borderRadius: card.radius,
     backgroundColor: colors.ink,
   },
   eyebrow: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },

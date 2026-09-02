@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
-import { colors, spacing, type } from "../theme";
+import { colors, spacing, type, card } from "../theme";
 import { getAreaPalates, type AreaPalateSummary } from "../lib/area-palates";
 
 // ============================================================================
@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
 
   essayCard: {
     padding: spacing.md,
-    borderRadius: 22,
+    borderRadius: card.radius,
     backgroundColor: colors.faint,
     borderWidth: 1,
     borderColor: colors.line,
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
 
   areaCard: {
     padding: spacing.md,
-    borderRadius: 18,
+    borderRadius: card.radius,
     backgroundColor: colors.paper,
     borderWidth: 1,
     borderColor: colors.line,

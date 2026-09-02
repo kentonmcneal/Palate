@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from "react-native";
-import { colors, spacing, type } from "../theme";
+import { colors, spacing, type, card, shadow } from "../theme";
 import { isoWeekStart } from "../lib/wrapped";
 import {
   generateWeeklyPalatePersona,
@@ -163,9 +163,10 @@ export function RecommendationsCard({
     return (
       <View style={[styles.card, styles.emptyCard]}>
         <Text style={styles.eyebrow}>MOST COMPATIBLE</Text>
-        <Text style={styles.emptyText}>
-          No nearby spots loaded yet. Step outside or pick a city above to browse.
-        </Text>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyGlyph}>◎</Text>
+          <Text style={styles.emptyText}>No spots nearby yet.</Text>
+        </View>
       </View>
     );
   }
@@ -174,12 +175,13 @@ export function RecommendationsCard({
     <View style={styles.card}>
       <View style={styles.head}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>MOST COMPATIBLE</Text>
-          {earlyEstimate && (
-            <View style={styles.earlyBadge}>
-              <Text style={styles.earlyBadgeText}>EARLY ESTIMATE · sharper after a few more visits</Text>
-            </View>
-          )}
+          {/* Was: an "EARLY ESTIMATE · sharper after a few more visits" badge.
+              A disclaimer stapled to a recommendation is the app apologizing
+              for its own output. The eyebrow carries the confidence instead —
+              it says what the list IS, and stops promising to improve. */}
+          <Text style={styles.eyebrow}>
+            {earlyEstimate ? "A FIRST READ ON YOUR PALATE" : "MOST COMPATIBLE"}
+          </Text>
         </View>
       </View>
       {!!moodNote && <Text style={styles.moodNote}>{moodNote}</Text>}
@@ -326,11 +328,10 @@ const styles = StyleSheet.create({
   moodNote: { fontSize: 12, color: colors.mute, marginTop: 10, lineHeight: 17 },
   card: {
     // No top margin — the parent section header controls spacing now.
-    padding: spacing.md,
-    borderRadius: 22,
-    backgroundColor: colors.paper,
-    borderWidth: 1,
-    borderColor: colors.line,
+    padding: card.padding,
+    borderRadius: card.radius,
+    backgroundColor: colors.faint,
+    ...shadow.card,
   },
   head: { flexDirection: "row" },
   eyebrow: { ...type.micro },
@@ -345,7 +346,9 @@ const styles = StyleSheet.create({
   },
   earlyBadgeText: { fontSize: 10, fontWeight: "700", color: colors.mute, letterSpacing: 0.5 },
   emptyCard: { backgroundColor: colors.faint, borderColor: colors.line },
-  emptyText: { ...type.small, marginTop: 10, lineHeight: 20 },
+  emptyText: { ...type.small },
+  emptyState: { alignItems: "center", paddingVertical: spacing.lg, gap: 6 },
+  emptyGlyph: { fontSize: 22, color: colors.line },
 
   row: {
     flexDirection: "row",

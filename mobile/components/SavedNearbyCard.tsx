@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Linking, Platform, Alert } from "react-native";
 import { useRouter } from "expo-router";
-import { colors, spacing, type } from "../theme";
+import { colors, spacing, type, card, shadow } from "../theme";
 import { listWishlist, type WishlistEntry } from "../lib/palate-insights";
 import { getEffectiveLocation, useBrowsingCity } from "../lib/browsing-location";
 import { distanceKm, formatDistance } from "../lib/match-score";
@@ -122,11 +122,10 @@ function SavedRow({ pick }: { pick: Pick }) {
 const styles = StyleSheet.create({
   card: {
     marginTop: spacing.xl,
-    padding: spacing.md,
-    borderRadius: 22,
-    backgroundColor: colors.paper,
-    borderWidth: 1,
-    borderColor: colors.line,
+    padding: card.padding,
+    borderRadius: card.radius,
+    backgroundColor: colors.faint,
+    ...shadow.card,
   },
   head: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",

@@ -83,7 +83,11 @@ export function explainCompatibility(
   // 7. Last-resort — never empty, never vague, never a bare category.
   if (out.length === 0) {
     if (g.totalVisits === 0) {
-      out.push("A solid baseline pick — log a few visits and we'll get more specific.");
+      // Was: "A solid baseline pick — log a few visits and we'll get more
+      // specific." A recommendation that apologizes for itself reads as a
+      // model hedging, which is exactly the "looks AI-made" complaint. Say
+      // the one true concrete thing instead, or say nothing.
+      out.push("Well reviewed nearby.");
     } else if (parts.quality.matched) {
       out.push("A familiar pick with strong reviews.");
     } else {

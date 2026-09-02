@@ -53,10 +53,31 @@ export const spacing = {
 
 export const radius = {
   sm: 8,
-  md: 12,
+  md: 16,   // the standard card radius — one value, used everywhere
   lg: 20,
   full: 999,
 };
+
+// One card shadow for the whole app. Cards were previously distinguished by a
+// mix of borders, four different radii and no shadow at all, which is a large
+// part of why the UI read as assembled rather than designed. A card is: white,
+// radius.md, 16 padding, this shadow, no border.
+export const shadow = {
+  card: {
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+} as const;
+
+// Card geometry, so "a card" means one thing.
+export const card = {
+  padding: 16,
+  gap: 12,
+  radius: radius.md,
+} as const;
 
 // Font families come from @expo-google-fonts — loaded in app/_layout.tsx.
 // Inter carries UI/body; Fraunces (an editorial high-contrast serif) carries
@@ -74,11 +95,16 @@ export const fonts = {
   displaySemi: "Inter_700Bold",
 };
 
+// FOUR sizes, plus an eyebrow. The old scale ran 36/24/18/16/14/12 and every
+// screen also set its own fontSize, so nothing lined up between surfaces.
+// Weight comes from the font family only — never a numeric fontWeight
+// alongside it, which is what made headings render inconsistently across
+// iOS versions.
 export const type = {
-  display: { fontFamily: fonts.display, fontSize: 36, letterSpacing: -1.2 },
-  title: { fontFamily: fonts.display, fontSize: 24, letterSpacing: -0.5 },
-  subtitle: { fontFamily: fonts.semibold, fontSize: 18, letterSpacing: -0.3 },
-  body: { fontFamily: fonts.regular, fontSize: 16 },
-  small: { fontFamily: fonts.regular, fontSize: 14, color: colors.mute },
-  micro: { fontFamily: fonts.medium, fontSize: 12, letterSpacing: 1, textTransform: "uppercase" as const, color: colors.mute },
+  display: { fontFamily: fonts.display, fontSize: 32, letterSpacing: -0.9, lineHeight: 37 },
+  title: { fontFamily: fonts.displaySemi, fontSize: 20, letterSpacing: -0.4, lineHeight: 25 },
+  subtitle: { fontFamily: fonts.semibold, fontSize: 16, letterSpacing: -0.2, lineHeight: 21 },
+  body: { fontFamily: fonts.regular, fontSize: 16, lineHeight: 23 },
+  small: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, color: colors.mute },
+  micro: { fontFamily: fonts.medium, fontSize: 11, letterSpacing: 0.9, textTransform: "uppercase" as const, color: colors.mute },
 };

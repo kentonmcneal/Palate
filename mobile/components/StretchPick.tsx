@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
-import { colors, spacing, type } from "../theme";
+import { colors, spacing, type, card, shadow } from "../theme";
 import { computeTasteVector } from "../lib/taste-vector";
 import { nearbyRestaurants } from "../lib/places";
 import { getCachedNearby, setCachedNearby } from "../lib/nearby-cache";
@@ -92,10 +92,9 @@ function cap(s: string): string {
 const styles = StyleSheet.create({
   card: {
     padding: spacing.md,
-    borderRadius: 20,
-    backgroundColor: colors.paper,
-    borderWidth: 1,
-    borderColor: colors.line,
+    borderRadius: card.radius,
+    backgroundColor: colors.faint,
+    ...shadow.card,
   },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   eyebrow: { ...type.micro, color: colors.mute },
