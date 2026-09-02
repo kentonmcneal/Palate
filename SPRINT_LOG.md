@@ -1,5 +1,67 @@
 # Sprint log
 
+## Session 3 — social, generated art, activity push (2026-09-02, overnight)
+
+`tsc` clean, **167 tests**. Migrations applied through **0059**. Build **29**
+(`5e7e066`, runtime 0.1.7) finished. Both edge functions deployed. Both feature
+flags still OFF.
+
+### Shipped
+- **Wrapped share card contrast** — the card paints a dark gradient but its text
+  used light-surface tokens: `colors.ink` (#222222) on #141414, i.e. invisible.
+  Added an ON_DARK palette local to the component. The dark card is kept
+  deliberately; it is the share artifact.
+- **PlaceArt** — generated card art from the `categoryColors` that had been
+  unused since the re-skin. Cuisine maps to a fixed hue, so the feed is
+  scannable by colour. Deterministic from `google_place_id`. On Discover cards
+  and the place-detail hero. Its tests caught three real bugs immediately.
+- **Social layer** (0056, 0059) — bio, school, Instagram, TikTok; a People
+  directory sorted by palate match; profile display; a Settings editor; and a
+  one-time discoverability prompt for pre-existing accounts.
+- **Activity push** (0057, 0058) — joins to everyone, friend visits to friends.
+  Wrapped broadcast was built then **withdrawn** on request.
+- **Gmail OAuth fix** — `Error 400: invalid_request` was a redirect mismatch;
+  Google's iOS clients only accept the reversed client ID. JS-only fix.
+- **Font cleanup** — Fraunces was loaded and rendered nowhere.
+
+### Decisions worth remembering
+- **Existing users were not flipped to public.** New accounts default to
+  discoverable, as decided. The 13 pre-existing profiles keep `friends` and are
+  asked once. A default governs people who haven't decided; it is not a licence
+  to decide for people who have.
+- **Receiving and broadcasting are separate controls.** One notification toggle
+  (default ON) governs what reaches your phone; `profile_visibility` governs
+  what you emit. That separation is what lets the toggle default on without
+  deciding anyone's privacy.
+- **The actor now has a say.** The 0055 visit trigger notified friends
+  regardless of whether the person who ate wanted it announced. All events now
+  respect the actor's visibility.
+- **Broadcast rows expire (3 days) and are dropped, not deferred**, and are
+  retired via `attempts` rather than `sent_at` so they don't consume the
+  recipient's daily quota for a push they never got.
+
+### Still unverified — needs a device
+1. **Lock-screen confirm actions.** Install build 29, trigger a confirm
+   notification, tap "Yes, I ate here" with the app fully closed, reopen,
+   confirm the visit landed. Fails silently by design if the background write
+   drops.
+2. **Dynamic Type**, at a large system text size: Home, sign-in, Wrapped.
+3. **Gmail connect** — should now reach the consent screen instead of the 400.
+
+Only after 1 passes: flip `server_push` and `discovery_pings`.
+
+### Notes
+- `broadcast_recipients` currently reaches 1 user, not 13 — it requires a
+  timezone, which only populates once people install a build carrying the code
+  that writes it. Fails closed by design.
+- Feedback table holds **one** row, from 2026-07-21 on v0.1.0. Testers have not
+  been using the form; the screenshot prompt that should fix that is in build 29
+  and has never been in anyone's hands. Worth re-checking a week after rollout.
+- Batching the People directory's per-person match RPC is still deferred.
+
+---
+
+
 ## Session 2 — accessibility + the zero-cost sprint (2026-09-02, later)
 
 Baseline at start: `tsc` clean, 154 tests. After: `tsc` clean, **155 tests**.
