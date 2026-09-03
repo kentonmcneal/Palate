@@ -196,3 +196,74 @@ describe("Square — the real sender is a subdomain", () => {
     expect(square("Your order from Brezerk")?.restaurantName).toBe("Brezerk");
   });
 });
+
+function doordash(subject: string, text = "") {
+  return parseReceipt({ from: "no-reply@doordash.com", subject, text, internalDate: D });
+}
+function sevenrooms(subject: string, text = "") {
+  return parseReceipt({ from: "VelvetRail@email.sevenrooms.com", subject, text, internalDate: D });
+}
+function opentable(subject: string, text = "") {
+  return parseReceipt({ from: "OpenTable@em.opentable.com", subject, text, internalDate: D });
+}
+
+describe("DoorDash — real subjects never say 'order from'", () => {
+  it("reads the two phrasings actually sent", () => {
+    expect(doordash("Order Confirmation for Kenton from Addiction smash burger")?.restaurantName)
+      .toBe("Addiction smash burger");
+    expect(doordash("Details of your no-contact delivery from Krispy Kreme")?.restaurantName)
+      .toBe("Krispy Kreme");
+  });
+
+  it("drops the parenthetical alias", () => {
+    expect(doordash("Order Confirmation for Kenton from D'bo's Daiquiris, Wings, & Seafood (D’bo’s Wings)")?.restaurantName)
+      .toBe("D'bo's Daiquiris, Wings, & Seafood");
+  });
+
+  it("ignores the daily marketing that arrives from the same address", () => {
+    // These outnumber real receipts in a live inbox. Matching any of them
+    // would write a visit to a restaurant the user never went to.
+    for (const subject of [
+      "​This week’s shopping deals are here",
+      "Fill backpacks fast",
+      "Kenton, your weekly deals are here",
+      "PSA: You now get in-store prices at Dollar General",
+      "Digital games are now on DoorDash",
+      "Ends soon: 50% off back-to-school",
+      "Style’s in session",
+      "Save up to $25 on groceries and more each month",
+    ]) {
+      expect(doordash(subject)).toBeNull();
+    }
+  });
+});
+
+describe("SevenRooms — the domain carries restaurant marketing", () => {
+  it("ignores a venue's promotional blasts", () => {
+    // Real mail from VelvetRail@email.sevenrooms.com. A loose parser would log
+    // "Velvet Rail" as a visit every time they advertised.
+    for (const subject of [
+      "Thursday Night at Velvet Rail: Verzuz watch party",
+      "We've added something you might like...",
+      "Sundays Make me happy",
+      "Crafted for the few: Velvet Rail's Nostalgia Fridays Tonight",
+    ]) {
+      expect(sevenrooms(subject)).toBeNull();
+    }
+  });
+});
+
+describe("OpenTable — marketing from the reservation domain", () => {
+  it("ignores editorial and promo mail", () => {
+    for (const subject of [
+      "Gold diners: first access to Petit Omakase",
+      "New: OpenTable just added more restaurants",
+      "ICYMI: the James Beard winners 🏆",
+      "Put these Center City restaurants in the rotation",
+      "Dine well in Center City",
+      "Set your budget then set the date",
+    ]) {
+      expect(opentable(subject)).toBeNull();
+    }
+  });
+});

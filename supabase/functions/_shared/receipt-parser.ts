@@ -35,25 +35,33 @@ export type ParseInput = {
 /** Senders we know how to read. The Gmail query is built from this, so adding
  *  one here is the only place it needs to be declared. */
 export const RECEIPT_SENDERS = [
-  "no-reply@opentable.com",
-  "noreply@opentable.com",
-  "info@resy.com",
-  "no-reply@resy.com",
-  "no-reply@doordash.com",
-  "no-reply@order.uber.com",
-  "noreply@grubhub.com",
-  "no-reply@trycaviar.com",
-  "noreply@yelp.com",
-  "no-reply@exploretock.com",
-  "noreply@sevenrooms.com",
+  // Domains, not exact addresses. Verified against a live inbox: OpenTable
+  // sends from OpenTable@em.opentable.com and OpenTable@mgs.opentable.com,
+  // SevenRooms from <Venue>@email.sevenrooms.com, Square from
+  // messenger@messaging.squareup.com. A `from:` on the exact no-reply@ address
+  // this list used to hold matches none of them, so the Gmail query was
+  // fetching nothing from those platforms at all.
+  //
+  // The cost of matching domains is that platform MARKETING is fetched too —
+  // DoorDash alone sends near-daily promos. Every parser is therefore
+  // whitelist-style: it requires explicit order or reservation phrasing and
+  // ignores anything else.
+  "opentable.com",
+  "resy.com",
+  "doordash.com",
+  "order.uber.com",
+  "grubhub.com",
+  "trycaviar.com",
+  "yelp.com",
+  "exploretock.com",
+  "sevenrooms.com",
   "squareup.com",
-  "no-reply@toasttab.com",
-  "receipts@toasttab.com",
-  "no-reply@seamless.com",
-  "no-reply@postmates.com",
-  "orders@chownow.com",
-  "no-reply@slicelife.com",
-  "noreply@olo.com",
+  "toasttab.com",
+  "seamless.com",
+  "postmates.com",
+  "chownow.com",
+  "slicelife.com",
+  "olo.com",
 ];
 
 // ----------------------------------------------------------------------------
@@ -132,10 +140,24 @@ const parseResy: Parser = (subject, _t, dt) => {
   return m ? ok(m[1], dt, "reservation") : null;
 };
 
-const parseDoorDash: Parser = (subject, text, dt) => {
-  const m = subject.match(/order from\s+(.+?)(?:\s+\(|$)/i)
-    || text.match(/Order from\s+(.+?)[\n\r]/i);
-  return m ? ok(m[1], dt, "delivery") : null;
+/**
+ * DoorDash. Written against real subjects, which never use the bare phrase
+ * "order from" the previous pattern required:
+ *   "Order Confirmation for Kenton from Addiction smash burger"
+ *   "Details of your no-contact delivery from Krispy Kreme"
+ *
+ * DoorDash also sends daily marketing from the SAME address — "This week's
+ * shopping deals are here", "Ends soon: 50% off back-to-school". Matching is
+ * therefore whitelist-style: a subject must carry one of these order phrasings
+ * or it is ignored. The old body fallback was removed for the same reason —
+ * "Order from" appears in promotional bodies too.
+ */
+const parseDoorDash: Parser = (subject, _text, dt) => {
+  const m = subject.match(/order confirmation for .+?\s+from\s+(.+)/i)
+    || subject.match(/delivery from\s+(.+)/i)
+    || subject.match(/order from\s+(.+)/i);
+  // "D'bo's Daiquiris, Wings, & Seafood (D'bo's Wings)" — drop the alias.
+  return m ? ok(m[1].split(" (")[0], dt, "delivery") : null;
 };
 
 const parseUberEats: Parser = (subject, _t, dt) => {
