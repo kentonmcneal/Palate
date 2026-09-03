@@ -862,7 +862,14 @@ function isNonFoodPrimaryType(primaryType: string | undefined): boolean {
 
 export function inferRecommendationEligibility(
   place: GooglePlace,
-  derived: { chain_type: string; cuisine_type: string | null; format_class: string },
+  derived: {
+    chain_type: string;
+    cuisine_type: string | null;
+    format_class: string;
+    /** Mined from review text. The eligibility haystack is only name+address,
+     *  so this is the sole window into how a place actually behaves. */
+    occasion_tags?: string[];
+  },
 ): EligibilityResult {
   const types = place.types ?? [];
   const name = (place.displayName?.text ?? "").toLowerCase();
@@ -948,7 +955,34 @@ export function inferRecommendationEligibility(
     if (nightlife) return { eligibility: 0, reason: "lounge_nightlife" };
     // otherwise fall through — treat as a normal restaurant named "...Lounge"
   }
-  if ((types.includes("night_club") || /\b(hookah|shisha) (lounge|bar|spot)\b/.test(haystack)) && !hasRestaurantType(types)) {
+  // Nightlife venues that happen to serve food.
+  //
+  // The previous rule required `!hasRestaurantType(types)`, and RESTAURANT_TYPES
+  // contains `bar` — so any club Google tags night_club + bar escaped entirely.
+  // It caught only clubs with no food or drink type at all: exactly the ones
+  // that would never have surfaced anyway.
+  //
+  // A `night_club` PRIMARY type is already excluded upstream as event_venue, so
+  // the real gap is a venue whose primary type is `bar` (or which carries
+  // night_club as a secondary tag) and which is in practice a club. The
+  // eligibility haystack is only name + address, so the discriminator is the
+  // "party" occasion tag — bottle service, DJ, dance floor, packed and loud —
+  // mined from real review text.
+  //
+  // This is a CATEGORY judgement, not a quality one. A club with excellent food
+  // is still nowhere anyone wants to be sent for dinner, which is the same
+  // reasoning that already excludes hotels and airports. Passive capture still
+  // LOGS these (isLoggableVenue keeps "nightlife"): "don't recommend it" and
+  // "it didn't happen" are different claims.
+  const partyVenue = (derived.occasion_tags ?? []).includes("party");
+  const nightlifeName = /\b(night ?club|hookah|shisha|bottle service|gentlemen'?s)\b/.test(haystack);
+  const drinkLedType = place.primaryType === "bar" || types.includes("night_club");
+  if (drinkLedType && (partyVenue || nightlifeName)) {
+    // A real gastropub carries `restaurant` AND reads as a restaurant in
+    // reviews; it will not carry the party tag, so it survives this.
+    return { eligibility: 0, reason: "nightlife" };
+  }
+  if (/\b(hookah|shisha) (lounge|bar|spot)\b/.test(haystack) && !hasRestaurantType(types)) {
     return { eligibility: 0, reason: "nightlife" };
   }
 
@@ -1047,6 +1081,7 @@ export function deriveClassification(p: GooglePlace): DerivedClassification {
     chain_type: chainType,
     cuisine_type: cuisine,
     format_class: formatClass,
+    occasion_tags: occasionTags,
   });
 
   return {

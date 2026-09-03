@@ -26,6 +26,10 @@
     ],
     "testMatch": [
       "<rootDir>/lib/**/__tests__/**/*.test.(ts|tsx|js|jsx)"
+    ],
+    "moduleDirectories": [
+      "node_modules",
+      "<rootDir>/node_modules"
     ]
   },
   "dependencies": {
