@@ -100,7 +100,7 @@ stops where eating is not the plausible reason: `not_a_food_venue`,
 
 ---
 
-## Confidence scoring ⬜
+## Confidence scoring ✅
 
 Every candidate carries a score 0–1 driving ordering, pre-check state, and
 whether a real-time prompt is permitted.
@@ -141,7 +141,7 @@ decimal points.
 
 ---
 
-## Confirmation UX ⬜
+## Confirmation UX ✅
 
 **Default: a nightly digest, 8–9pm local.** Pre-filled and declarative —
 "Chipotle, 12:40pm", not "Did you eat at Chipotle?". One tap confirms all, with
@@ -195,11 +195,11 @@ too late.
 
 ---
 
-## Notification budget
+## Notification budget ✅
 
-The scarcest resource. **1 digest per day**, plus at most 2–3 real-time prompts
-per week. The current per-visit cap of 6/day is a stopgap that becomes obsolete
-once the digest ships.
+**1 digest per day. Real-time prompts are OFF** —
+`REALTIME_PROMPTS_ENABLED = false` in `passive-confirm.ts`. Flipping that one
+constant restores them, additionally gated to the High band.
 
 ---
 
@@ -256,8 +256,14 @@ Already emitted ✅: `visit_detected` (source, accuracy), `visit_qualified`,
 Every confirm/dismiss already carries dwell, accuracy, source and
 candidate_count — the learning-loop training data.
 
-Still needed ⬜: confidence band on prompt and outcome (calibration),
-`digest_sent` / `_opened` / `_confirmed` with counts, day-7 Always state.
+Added ✅: `confidence` + `confidence_band` on every prompt and outcome
+(calibration), `visit_ignored` when an inbox entry expires unanswered (without
+it the denominator counted only answered prompts, so ignored bad prompts scored
+as excellent), `digest_scheduled` / `_opened` / `_confirmed`, and
+`perm_always_day7`.
+
+Still needed ⬜: nothing for the capture loop. The open instrumentation gap is
+capture-rate ground truth, which no event can supply — see below.
 
 ---
 
