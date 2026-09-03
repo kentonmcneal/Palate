@@ -90,10 +90,20 @@ export async function connectGmail(): Promise<ConnectResult> {
     /^(.+)\.apps\.googleusercontent\.com$/,
     "com.googleusercontent.apps.$1",
   );
-  const redirectUri = AuthSession.makeRedirectUri({
-    scheme: reversedClientId,
-    path: "oauth2redirect",
-  });
+  // Built by hand, NOT via makeRedirectUri. Tracing expo-linking's createURL:
+  // in a standalone build hostUri is empty and isTripleSlashed defaults to
+  // false, so ensureLeadingSlash('', true) yields '/', and the final template
+  //   `${scheme}:${''}/${hostUri}${path}`
+  // produces TWO slashes:
+  //   com.googleusercontent.apps.XXX://oauth2redirect
+  // That makes "oauth2redirect" the URI authority rather than a path. Google's
+  // iOS clients register the single-slash PATH form, so the two-slash version
+  // is a different URI and is rejected before consent:
+  //   Access blocked: Authorization Error — Error 400: invalid_request
+  //
+  // The earlier fix corrected the scheme but not the shape, which is why it
+  // read as correct and still failed.
+  const redirectUri = `${reversedClientId}:/oauth2redirect`;
 
   const request = new AuthSession.AuthRequest({
     clientId: GOOGLE_IOS_CLIENT_ID,
