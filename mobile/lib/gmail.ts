@@ -13,14 +13,13 @@
 // the user-facing import status (count + last scanned timestamp).
 // ============================================================================
 
-import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import { supabase } from "./supabase";
 
 WebBrowser.maybeCompleteAuthSession();
 
 // Read-only Gmail scope — minimum needed to scan for receipts.
-const GMAIL_SCOPES = [
+export const GMAIL_SCOPES = [
   "openid",
   "email",
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -71,68 +70,31 @@ export type ConnectResult = {
  * browser, captures the redirect, exchanges the code server-side, and
  * triggers an initial 90-day scan.
  */
-export async function connectGmail(): Promise<ConnectResult> {
-  if (!GOOGLE_IOS_CLIENT_ID) {
-    return { ok: false, error: "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID not configured" };
-  }
-
-  // Google's iOS OAuth clients accept exactly two redirect shapes: the
-  // REVERSED client ID as a custom scheme, or a localhost loopback. A normal
-  // app scheme is not registered against the client, and Google rejects the
-  // request before the user can even consent:
-  //
-  //   Access blocked: Authorization Error — Error 400: invalid_request
-  //
-  // That is what "palate://auth/google" was producing. The reversed id is
-  // derived from the client id rather than hardcoded, so rotating the client
-  // can't leave a stale scheme behind.
-  const reversedClientId = GOOGLE_IOS_CLIENT_ID.replace(
-    /^(.+)\.apps\.googleusercontent\.com$/,
-    "com.googleusercontent.apps.$1",
-  );
-  // Built by hand, NOT via makeRedirectUri. Tracing expo-linking's createURL:
-  // in a standalone build hostUri is empty and isTripleSlashed defaults to
-  // false, so ensureLeadingSlash('', true) yields '/', and the final template
-  //   `${scheme}:${''}/${hostUri}${path}`
-  // produces TWO slashes:
-  //   com.googleusercontent.apps.XXX://oauth2redirect
-  // That makes "oauth2redirect" the URI authority rather than a path. Google's
-  // iOS clients register the single-slash PATH form, so the two-slash version
-  // is a different URI and is rejected before consent:
-  //   Access blocked: Authorization Error — Error 400: invalid_request
-  //
-  // The earlier fix corrected the scheme but not the shape, which is why it
-  // read as correct and still failed.
-  const redirectUri = `${reversedClientId}:/oauth2redirect`;
-
-  const request = new AuthSession.AuthRequest({
-    clientId: GOOGLE_IOS_CLIENT_ID,
-    scopes: GMAIL_SCOPES,
-    redirectUri,
-    responseType: AuthSession.ResponseType.Code,
-    usePKCE: true,
-    extraParams: {
-      access_type: "offline",   // required to get refresh_token
-      prompt: "consent",        // force consent screen so we always get refresh_token
-    },
-  });
-
-  await request.makeAuthUrlAsync(GOOGLE_DISCOVERY);
-  const result = await request.promptAsync(GOOGLE_DISCOVERY);
-
-  if (result.type !== "success") {
-    return { ok: false, error: result.type === "cancel" ? "cancelled" : "auth_failed" };
-  }
-
-  const code = result.params.code;
-  if (!code) return { ok: false, error: "no_code" };
-
+/**
+ * Exchange an authorization code for tokens, server-side.
+ *
+ * The AUTHORIZATION half deliberately does not live here any more. Two
+ * hand-built redirect URIs were rejected by Google with
+ * "Error 400: invalid_request" — first a plain app scheme, then the reversed
+ * client id with the wrong number of slashes. Meanwhile Google sign-in has
+ * worked all along using expo's Google provider, which knows Google's iOS
+ * redirect convention and never exposes it.
+ *
+ * So the prompt is now raised by that same provider (see GmailImportCard) and
+ * this function only handles the exchange. Whatever redirect the provider used
+ * is passed through, because the token endpoint requires the identical value.
+ */
+export async function exchangeGmailCode(
+  code: string,
+  codeVerifier: string | undefined,
+  redirectUri: string,
+): Promise<ConnectResult> {
   const { data, error } = await supabase.functions.invoke("gmail-import", {
     body: {
       action: "connect",
       code,
       redirect_uri: redirectUri,
-      code_verifier: request.codeVerifier,
+      code_verifier: codeVerifier,
     },
   });
   if (error) return { ok: false, error: error.message };
