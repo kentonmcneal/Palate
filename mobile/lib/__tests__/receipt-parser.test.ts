@@ -115,3 +115,84 @@ describe("nameKey", () => {
     expect(nameKey("Lilia")).not.toBe(nameKey("Lilia Cafe"));
   });
 });
+
+// ---------------------------------------------------------------------------
+// Fixtures below are REAL subject lines from a live inbox, not invented ones.
+// The previous Toast pattern looked for "receipt from X" and Toast never says
+// "from", so every genuine receipt was missed — which is exactly the failure
+// invented fixtures cannot catch.
+// ---------------------------------------------------------------------------
+
+const D = new Date("2026-08-22T18:45:21Z");
+
+function toast(subject: string, text = "") {
+  return parseReceipt({ from: "no-reply@toasttab.com", subject, text, internalDate: D });
+}
+function olo(subject: string, text = "") {
+  return parseReceipt({ from: "noreply@olo.com", subject, text, internalDate: D });
+}
+function square(subject: string, text = "") {
+  return parseReceipt({ from: "messenger@messaging.squareup.com", subject, text, internalDate: D });
+}
+
+describe("Toast — real subjects", () => {
+  it('reads "<Name> - Order Received"', () => {
+    expect(toast("Almyra - Order Received")?.restaurantName).toBe("Almyra");
+    expect(toast("K'Far Philadelphia - Order Received")?.restaurantName).toBe("K'Far Philadelphia");
+  });
+
+  it("strips the location Toast appends after a separator", () => {
+    // The address suffix makes the Places lookup worse, not better.
+    expect(toast("Dough Head Pizza | 833 Wharton St - Order Received")?.restaurantName)
+      .toBe("Dough Head Pizza");
+    expect(toast("Order & Pay Receipt for $93.89 at La’Mode BK - 1401 Bedford Avenue")?.restaurantName)
+      .toBe("La’Mode BK");
+  });
+
+  it("reads all three receipt-for-amount-at phrasings", () => {
+    expect(toast("Order & Pay Receipt for $29.52 at Kick Axe Throwing - Philly")?.restaurantName)
+      .toBe("Kick Axe Throwing");
+    expect(toast("Email Receipt for $17.28 at Puttshack Philadelphia - Philadelphia")?.restaurantName)
+      .toBe("Puttshack Philadelphia");
+    expect(toast("Online Order Receipt for $42.48 at Pietro's Pizza (Philadelphia) - 1714 Walnut Street")?.restaurantName)
+      .toBe("Pietro's Pizza (Philadelphia)");
+  });
+
+  it("ignores Toast marketing and policy mail", () => {
+    // These arrive from the same sender and name no venue.
+    expect(toast("Your Birthday treat is waiting")).toBeNull();
+    expect(toast("We’ve updated our Guest Terms of Service")).toBeNull();
+  });
+
+  it("ignores the post-order survey, which would double-count a visit", () => {
+    // "How was your order from X?" follows a receipt we already parsed.
+    expect(toast("How was your order from Pietro's Pizza (Philadelphia)?")).toBeNull();
+  });
+});
+
+describe("Olo — subject names the operator, not the restaurant", () => {
+  it("takes the venue from the body when the subject names a hospitality group", () => {
+    // Real message: subject said "Wolf River Hospitality Group", but the meal
+    // was at PYRO'S – Cordova.
+    const r = olo(
+      "Wolf River Hospitality Group - Order Received",
+      "PYRO'S – CORDOVA 2286 N. Germantown Parkway, Cordova, TN 38016\n(901) 207-1198",
+    );
+    expect(r?.restaurantName).toBe("PYRO'S – CORDOVA");
+  });
+
+  it("ignores account and adjustment mail", () => {
+    expect(olo("Thanks for creating an Olo account!", "Hello from Olo!")).toBeNull();
+    expect(olo("Order Adjustment", "This email confirms a payment adjustment")).toBeNull();
+  });
+});
+
+describe("Square — the real sender is a subdomain", () => {
+  it("parses mail from messaging.squareup.com", () => {
+    // The sender list previously held messenger@squareup.com, so a from: on
+    // that exact address could miss every real receipt.
+    expect(square("Receipt from Love Is The Currency #BUAB")?.restaurantName)
+      .toContain("Love Is The Currency");
+    expect(square("Your order from Brezerk")?.restaurantName).toBe("Brezerk");
+  });
+});
