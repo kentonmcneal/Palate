@@ -113,26 +113,60 @@ const SLOT_TO_OCCASIONS: Record<string, string[]> = {
 // (their own café share cancels the penalty), and soften at breakfast/brunch
 // when a café is a legitimate pick.
 const CAFE_FORMATS = new Set(["café", "cafe", "bakery", "dessert"]);
-function cafeFormatAdjustment(graph: TasteGraph, r: RestaurantInput, ctx: ScoreContext): number {
+
+type CafeKind = "coffee" | "bakery" | "dessert";
+
+/**
+ * How much of the café penalty applies in each part of the day, per format.
+ * The demotion exists because these places flood a nearby search and win on
+ * proximity — not because they are bad answers. WHEN decides which it is.
+ *
+ * A coffee shop at 8am is not a compromise, it is the right answer, so the
+ * penalty vanishes entirely. The same place at 8pm almost never is. Dessert
+ * runs the opposite way: nobody wants a dessert bar for breakfast, and it is a
+ * genuinely good call after dinner or late at night.
+ *
+ * 0 = no penalty · 1 = full penalty · >1 = worse than the baseline.
+ */
+const CAFE_SLOT_WEIGHT: Record<CafeKind, Record<keyof typeof SLOT_TO_OCCASIONS, number>> = {
+  coffee:  { breakfast: 0,   brunch: 0.2, lunch: 0.6, dinner: 1,   late_night: 1.2 },
+  bakery:  { breakfast: 0,   brunch: 0.2, lunch: 0.7, dinner: 1,   late_night: 1 },
+  // Dessert inverts: bad in the morning, one of the better answers after a meal.
+  dessert: { breakfast: 1,   brunch: 0.8, lunch: 0.8, dinner: 0.5, late_night: 0.2 },
+};
+
+function cafeKind(formatClass: string): CafeKind {
+  if (formatClass === "dessert") return "dessert";
+  if (formatClass === "bakery") return "bakery";
+  return "coffee";
+}
+
+export function cafeFormatAdjustment(
+  graph: TasteGraph,
+  r: RestaurantInput,
+  ctx: ScoreContext,
+): number {
   const fc = (r.format_class ?? "").toLowerCase();
   if (!CAFE_FORMATS.has(fc)) return 0;
 
-  const isCoffee = fc === "café" || fc === "cafe";
-  let penalty = isCoffee ? -20 : -12; // bakery/dessert are a milder demotion
+  const kind = cafeKind(fc);
+  const base = kind === "coffee" ? -20 : -12; // bakery/dessert start milder
 
-  // A café at 9am is fine; a café for dinner usually isn't.
-  if (ctx.now) {
-    const slot = currentSlot(ctx.now);
-    if (slot === "breakfast" || slot === "brunch") penalty *= 0.4;
-  }
+  // Without a clock, fall back to the neutral middle of the day rather than
+  // assuming the worst — an unknown time should not silently penalise.
+  const slot = ctx.now ? currentSlot(ctx.now) : "lunch";
+  const penalty = base * CAFE_SLOT_WEIGHT[kind][slot];
 
-  // Users who genuinely favor cafés keep seeing them — their café share of
+  // Users who genuinely favour cafés keep seeing them — their café share of
   // visits (×3, capped) scales the penalty back toward zero.
   const affinity = Math.min(1, shareOf(graph.formats, r.format_class ?? "") * 3);
-  return penalty * (1 - affinity);
+  // `|| 0` normalises -0 (from multiplying by a zero weight) and any NaN from a
+  // malformed graph. A negative zero in a score is harmless arithmetically and
+  // confusing everywhere else.
+  return (penalty * (1 - affinity)) || 0;
 }
 
-function currentSlot(d: Date): keyof typeof SLOT_TO_OCCASIONS {
+export function currentSlot(d: Date): keyof typeof SLOT_TO_OCCASIONS {
   const h = d.getHours();
   const isWeekend = d.getDay() === 0 || d.getDay() === 6;
   if (h < 10) return "breakfast";
