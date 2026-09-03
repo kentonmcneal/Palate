@@ -17,6 +17,7 @@ import { supabase } from "./supabase";
 import { nearbyRestaurants } from "./places";
 import { getCachedNearby, setCachedNearby } from "./nearby-cache";
 import { confidenceScore, confidenceBand, type ConfidenceBand } from "./passive-confidence";
+import { venueOpenAt } from "./opening-hours";
 import { recordMiss } from "./passive-misses";
 
 // Qualifying thresholds (spec Phase 3).
@@ -221,6 +222,8 @@ export const RANK_WEIGHTS = {
   popularityMax: 25,
   /** Type suits the time of day. */
   mealFit: 20,
+  /** Pushed down, not removed — see the comment at the call site. */
+  closed: 120,
 };
 
 function popularityBoost(count: number | null | undefined): number {
@@ -327,6 +330,8 @@ export function isLoggableVenue(p: Restaurant): boolean {
 
 export type RankContext = {
   hour: number;
+  /** When the stop happened, for the opening-hours check. */
+  at?: Date;
   /** google_place_ids the user has already logged a visit to. */
   visitedPlaceIds?: Set<string>;
 };
@@ -351,7 +356,13 @@ export function rankCandidates(
           ? distanceMeters(raw.lat, raw.lng, p.latitude, p.longitude)
           : RESOLVE_RADIUS_M;
       const visited = ctx.visitedPlaceIds?.has(p.google_place_id) ? RANK_WEIGHTS.visited : 0;
-      const score = dist - visited - popularityBoost(p.user_rating_count) - mealFitBoost(p, window);
+      // A closed venue is pushed down rather than removed: hours data is
+      // imperfect, and dropping the only candidate on a bad record would turn a
+      // resolvable stop into no-venue-found.
+      const closedPenalty =
+        ctx.at && venueOpenAt(p.regular_opening_hours, ctx.at) === false ? RANK_WEIGHTS.closed : 0;
+      const score =
+        dist - visited - popularityBoost(p.user_rating_count) - mealFitBoost(p, window) + closedPenalty;
       return { p, score };
     })
     .sort((a, b) => a.score - b.score)
@@ -379,6 +390,7 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
   const eligible = places.filter(isLoggableVenue);
   const ranked = rankCandidates(raw, eligible, {
     hour,
+    at: new Date(raw.departureAt ?? raw.capturedAt),
     visitedPlaceIds: await visitedPlaceIdsAmong(eligible.map((p) => p.google_place_id)),
   });
 
@@ -418,6 +430,9 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
     hour,
     place: ranked[0],
     visitedBefore: visited.has(ranked[0].google_place_id),
+    // The strongest cheap veto in the table. Null when we have no hours, which
+    // the scorer treats as unknown rather than closed.
+    venueOpen: venueOpenAt(ranked[0].regular_opening_hours, new Date(raw.departureAt ?? raw.capturedAt)),
   });
 
   return { raw, candidates: ranked, cacheHit, confidence, confidenceBand: confidenceBand(confidence) };

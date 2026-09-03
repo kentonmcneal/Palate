@@ -16,6 +16,8 @@ export type Restaurant = {
   tags?: string[] | null;
   rating?: number | null;
   user_rating_count?: number | null;
+  /** Google regularOpeningHours.periods, verbatim. Null means UNKNOWN. */
+  regular_opening_hours?: unknown;
   price_level?: number | null;
   /** 0 = never recommend (chains/airports/hotels), 1 = full discovery. */
   recommendation_eligibility?: number | null;

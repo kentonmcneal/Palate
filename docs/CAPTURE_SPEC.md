@@ -113,11 +113,21 @@ whether a real-time prompt is permitted.
 | Meal-window fit | Inside window = higher | ✅ |
 | Prior confirmed visits to this venue | Repeat = higher | ✅ |
 | Venue category | Restaurant/bar > mixed retail | ✅ `primary_type` |
-| **Venue open at visit time** | Closed = near-zero, strong veto | ❌ **not stored** |
+| **Venue open at visit time** | Closed = near-zero, strong veto | ✅ migration 0070 |
 
-Opening hours are probably the single best cheap veto available and we have
-none. Adding them is real work: request the Places field, add a schema column,
-backfill. Tracked, not assumed.
+Opening hours landed in migration 0070. `regularOpeningHours` sits in the same
+Places "Enterprise" SKU tier as `rating`, `userRatingCount` and `priceLevel` —
+all already requested — and Google bills the highest tier in the field mask, so
+this cost nothing extra.
+
+Hours are used twice: as the closed-venue veto in scoring, and as a demotion in
+candidate ranking. Closed venues are pushed down, never removed — hours data is
+imperfect and dropping the sole candidate on a bad record would turn a
+resolvable stop into `no-venue-found`. Missing hours mean UNKNOWN and are never
+penalised: that would punish exactly the small independent places this product
+exists to surface.
+
+Existing rows have no hours until they are refreshed by the classifier.
 
 **Bands:** High ≥ 0.75 (pre-checked) · Medium 0.4–0.75 (shown, unchecked) ·
 Low < 0.4 (collapsed).

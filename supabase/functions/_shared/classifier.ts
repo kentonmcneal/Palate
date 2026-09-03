@@ -40,6 +40,13 @@ export interface GooglePlace {
   priceLevel?: string;
   rating?: number;
   userRatingCount?: number;
+  regularOpeningHours?: {
+    periods?: Array<{
+      open?: { day?: number; hour?: number; minute?: number };
+      /** Absent for a venue open 24 hours on that day. */
+      close?: { day?: number; hour?: number; minute?: number };
+    }>;
+  };
   editorialSummary?: { text?: string };
   reviews?: GoogleReview[];
   // Google "atmosphere" attributes — booleans Google already computes. Present
@@ -1116,6 +1123,9 @@ export function googleToRestaurantRow(
     price_level: price,
     rating: p.rating ?? null,
     user_rating_count: p.userRatingCount ?? null,
+    // Verbatim from Google. Null means "unknown", never "closed" — the scorer
+    // must not penalise a venue for missing data.
+    regular_opening_hours: p.regularOpeningHours?.periods ?? null,
     refreshed_at: new Date().toISOString(),
     classifier_version: CLASSIFIER_VERSION,
     classification_confidence: d.confidence,

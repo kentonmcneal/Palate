@@ -101,3 +101,59 @@ describe("rankCandidates", () => {
     expect(out[0].google_place_id).toBe("known");
   });
 });
+
+describe("opening hours in ranking", () => {
+  const MON = 1;
+  const open = [{ open: { day: MON, hour: 11, minute: 0 }, close: { day: MON, hour: 22, minute: 0 } }];
+  const closedByThen = [{ open: { day: MON, hour: 6, minute: 0 }, close: { day: MON, hour: 10, minute: 0 } }];
+  // 2026-08-31 is a Monday.
+  const lunchtime = new Date(2026, 7, 31, 12, 30);
+
+  it("prefers an open venue over a nearer closed one", () => {
+    const out = rankCandidates(
+      HERE,
+      [
+        at(10, { google_place_id: "shut", regular_opening_hours: closedByThen }),
+        at(60, { google_place_id: "open", regular_opening_hours: open }),
+      ],
+      { hour: 12, at: lunchtime },
+    );
+    expect(out[0].google_place_id).toBe("open");
+  });
+
+  it("still returns a closed venue when it is the only candidate", () => {
+    // Demoted, never removed: hours data is imperfect, and dropping the sole
+    // candidate would turn a resolvable stop into no-venue-found.
+    const out = rankCandidates(
+      HERE,
+      [at(10, { google_place_id: "shut", regular_opening_hours: closedByThen })],
+      { hour: 12, at: lunchtime },
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].google_place_id).toBe("shut");
+  });
+
+  it("does not penalise a venue with unknown hours", () => {
+    const out = rankCandidates(
+      HERE,
+      [
+        at(10, { google_place_id: "unknown-hours" }),
+        at(60, { google_place_id: "known-open", regular_opening_hours: open }),
+      ],
+      { hour: 12, at: lunchtime },
+    );
+    expect(out[0].google_place_id).toBe("unknown-hours");
+  });
+
+  it("ignores hours entirely when no time is supplied", () => {
+    const out = rankCandidates(
+      HERE,
+      [
+        at(10, { google_place_id: "shut", regular_opening_hours: closedByThen }),
+        at(60, { google_place_id: "open", regular_opening_hours: open }),
+      ],
+      { hour: 12 },
+    );
+    expect(out[0].google_place_id).toBe("shut");
+  });
+});
