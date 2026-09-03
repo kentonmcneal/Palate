@@ -84,6 +84,8 @@ export default function Home() {
   // Mood: a temporary cuisine override for tonight. Deliberately not
   // persisted — it is about this meal, not a preference.
   const { mood: moodParam } = useLocalSearchParams<{ mood?: string }>();
+  // What the hero chose, so the list below never repeats it.
+  const [heroPlaceId, setHeroPlaceId] = useState<string | null>(null);
   const [mood, setMood] = useState<Mood>(null);
   const [moodChips, setMoodChips] = useState<MoodChip[]>([]);
   const [palateLine, setPalateLine] = useState<string | null>(null);
@@ -311,7 +313,7 @@ export default function Home() {
             Analysis lives on Profile → Insights. Reflection lives on Wrapped. */}
 
         {/* 1. The dominant decision card. */}
-        <RightNowHero />
+        <RightNowHero onPicked={setHeroPlaceId} />
 
         {/* 2. Visible "Are you eating somewhere?" entry — auto-detect path is
             the primary way to log a visit. Demoting it to a tiny ghost link
@@ -349,7 +351,11 @@ export default function Home() {
           </View>
         )}
         <MoodRow chips={moodChips} value={mood} onChange={setMood} />
-        <RecommendationsCard mood={mood} habitualCuisines={habitualCuisines} />
+        <RecommendationsCard
+          mood={mood}
+          habitualCuisines={habitualCuisines}
+          excludePlaceIds={heroPlaceId ? [heroPlaceId] : []}
+        />
 
         {/* One stretch pick — explicitly its own block AFTER the recs. */}
         <Text style={styles.sectionHead}>Stretch your palate</Text>

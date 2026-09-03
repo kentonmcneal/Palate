@@ -45,11 +45,16 @@ import { TapCard } from "./TapCard";
 export function RecommendationsCard({
   mood = null,
   habitualCuisines = [],
+  excludePlaceIds = [],
 }: {
   /** Temporary cuisine override from the mood row. null = Anything. */
   mood?: Mood;
   /** The user's usual cuisines — what "Surprise me" must avoid. */
   habitualCuisines?: string[];
+  /** Venues already shown above — currently the Right Now hero. Both surfaces
+   *  rank the same nearby pool on the same taste graph, so the top pick landed
+   *  in both by default rather than by accident. */
+  excludePlaceIds?: string[];
 } = {}) {
   const [recs, setRecs] = useState<RestaurantRecommendation[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,6 +97,7 @@ export function RecommendationsCard({
       // already labeled, so unclassified chains still reached this list.
       const enriched: RestaurantRecommendation[] = filterRecommendable(nearby)
         .filter((p) => !visitedHeavy.has(p.google_place_id))
+        .filter((p) => !excludePlaceIds.includes(p.google_place_id))
         .map((p) => {
           const compat = getCompatibility(graph, {
             google_place_id: p.google_place_id,

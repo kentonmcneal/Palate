@@ -43,13 +43,22 @@ const STRATEGY_BADGE: Record<RightNowStrategy, string | null> = {
 };
 
 type Props = {
+  /** Reports the chosen venue so surfaces below can avoid repeating it. The
+   *  hero already gives this place the most prominent treatment on the screen;
+   *  showing it again immediately underneath is wasted space. */
+  onPicked?: (googlePlaceId: string | null) => void;
   onTakeMeThere?: (placeId: string) => void;
 };
 
-export function RightNowHero({ onTakeMeThere }: Props) {
+export function RightNowHero({ onTakeMeThere, onPicked }: Props) {
   const router = useRouter();
   const [browsingCity] = useBrowsingCity();
   const [pick, setPick] = useState<RightNowPick | null>(null);
+
+  // Report upward whenever the pick changes, including when it clears.
+  useEffect(() => {
+    onPicked?.(pick?.restaurant?.google_place_id ?? null);
+  }, [pick?.restaurant?.google_place_id, onPicked]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [empty, setEmpty] = useState(false);
