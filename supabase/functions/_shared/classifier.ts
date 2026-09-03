@@ -401,6 +401,7 @@ export const CHAIN_BRANDS: string[] = [
   // Burgers / fast food
   "McDonald's", "Burger King", "Wendy's", "In-N-Out", "Five Guys",
   "Shake Shack", "Whataburger", "Culver's", "Carl's Jr", "Hardee's",
+  "Cook Out", "Cookout",
   "Jack in the Box", "White Castle", "Sonic Drive-In", "Checkers", "Rally's",
   "Smashburger", "Steak 'n Shake", "Fatburger", "The Habit Burger",
   // Chicken
@@ -423,7 +424,8 @@ export const CHAIN_BRANDS: string[] = [
   "Starbucks", "Dunkin", "Tim Hortons", "Peet's Coffee", "Caribou Coffee",
   "Pret A Manger", "Le Pain Quotidien", "Corner Bakery", "Panera Bread",
   "Auntie Anne's", "Cinnabon", "Krispy Kreme", "Einstein Bros",
-  "The Coffee Bean", "Dutch Bros", "Philz Coffee",
+  "The Coffee Bean", "Dutch Bros", "Philz Coffee", "Scooter's Coffee",
+  "Scooters Coffee",
   // Pizza chains
   "Domino's", "Pizza Hut", "Papa John's", "Little Caesars", "Papa Murphy's",
   "Round Table Pizza", "Marco's Pizza", "California Pizza Kitchen",
@@ -942,6 +944,18 @@ export function inferRecommendationEligibility(
   }
   if (types.includes("lodging") && !hasRestaurantType(types)) {
     return { eligibility: 0, reason: "hotel_generic" };
+  }
+
+  // Entertainment venues that happen to serve food. Topgolf, Dave & Buster's,
+  // Main Event and their peers all have kitchens, and some of the food is
+  // genuinely fine — but nobody choosing where to EAT wants to be sent to a
+  // driving range. Same category judgement as nightclubs, hotels and airports:
+  // it is about why you go, not how good the food is.
+  //
+  // Matched by name because Google frequently gives these a `restaurant`
+  // primaryType, which slips past the entertainment primaryType gate above.
+  if (/\b(top ?golf|dave ?& ?busters?|dave and busters?|main event|chuck e\.? ?cheese|bowlero|lucky strike|punch bowl social|pinstripes|urban air|sky ?zone|round ?1)\b/.test(haystack)) {
+    return { eligibility: 0, reason: "entertainment_venue" };
   }
 
   // Nightlife lounges — hookah/cigar/bottle-service/members lounges are not the

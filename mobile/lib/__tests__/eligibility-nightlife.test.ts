@@ -1,4 +1,6 @@
-import { inferRecommendationEligibility } from "../../../supabase/functions/_shared/classifier";
+import {
+  inferRecommendationEligibility, detectChain,
+} from "../../../supabase/functions/_shared/classifier";
 
 function derived(occasion_tags: string[] = []) {
   return { chain_type: "independent", cuisine_type: "american", format_class: "casual", occasion_tags };
@@ -81,5 +83,45 @@ describe("nightclub exclusion", () => {
   it("keeps a normal restaurant with 'Lounge' in the name", () => {
     const r = eligibility({ name: "The Garden Lounge", primaryType: "restaurant", types: ["restaurant"] });
     expect(r.eligibility).toBeGreaterThan(0);
+  });
+});
+
+describe("chains and entertainment venues", () => {
+  it("recognises Cook Out and Scooter's Coffee as known chains", () => {
+    // Eligibility keys off the DERIVED chain_type, which the caller computes
+    // from detectChain — so brand recognition is what actually has to work.
+    expect(detectChain("Cook Out")).toBeTruthy();
+    expect(detectChain("Cookout")).toBeTruthy();
+    expect(detectChain("Scooter's Coffee")).toBeTruthy();
+    expect(detectChain("Scooters Coffee")).toBeTruthy();
+  });
+
+  it("excludes a recognised national chain", () => {
+    const r = inferRecommendationEligibility(
+      place({ name: "Cook Out", primaryType: "restaurant", types: ["restaurant"] }),
+      { chain_type: "national_chain", cuisine_type: "american", format_class: "fast_food", occasion_tags: [] },
+    );
+    expect(r.eligibility).toBe(0);
+  });
+
+  it("excludes Topgolf even though Google types it as a restaurant", () => {
+    // Nobody choosing where to EAT wants to be sent to a driving range. The
+    // entertainment primaryType gate misses these because Google often gives
+    // them a restaurant primary type.
+    const r = eligibility({ name: "Topgolf", primaryType: "restaurant", types: ["restaurant", "bar"] });
+    expect(r.eligibility).toBe(0);
+    expect(r.reason).toBe("entertainment_venue");
+  });
+
+  it("excludes Topgolf's peers by category, not one brand at a time", () => {
+    for (const name of ["Dave & Buster's", "Main Event Entertainment", "Bowlero Lanes", "Pinstripes"]) {
+      expect(eligibility({ name, primaryType: "restaurant", types: ["restaurant"] }).eligibility).toBe(0);
+    }
+  });
+
+  it("does not catch a restaurant that merely mentions a venue word", () => {
+    // "The Golf Club Grill" is a restaurant; "top golf" is the brand.
+    expect(eligibility({ name: "The Golf Club Grill", primaryType: "restaurant", types: ["restaurant"] }).eligibility)
+      .toBeGreaterThan(0);
   });
 });

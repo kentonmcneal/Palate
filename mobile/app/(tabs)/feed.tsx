@@ -86,13 +86,21 @@ export default function FeedTab() {
           />
         }
       >
+        {/* Title and chips are stacked, not side by side. Four fixed-width
+            chips claim their full intrinsic width in a row, which starved the
+            flex:1 text column down to a single character per line — the title
+            rendered vertically as "F e e d". */}
         <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={type.title}>Feed</Text>
-            <Text style={[type.body, { color: colors.mute, marginTop: 4 }]}>
-              How your friends actually eat.
-            </Text>
-          </View>
+          <Text style={type.title}>Feed</Text>
+          <Text style={[type.body, { color: colors.mute, marginTop: 4 }]}>
+            How your friends actually eat.
+          </Text>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipRow}
+        >
           <View style={{ flexDirection: "row", gap: 6 }}>
             <Pressable onPress={() => router.push({ pathname: "/friends", params: { tab: "leaderboard" } })} style={styles.friendsBtn}>
               <Text style={styles.friendsBtnText}>Board</Text>
@@ -109,7 +117,7 @@ export default function FeedTab() {
               </Text>
             </Pressable>
           </View>
-        </View>
+        </ScrollView>
         <Spacer size={20} />
 
         {loading && events.length === 0 && (
@@ -323,7 +331,10 @@ function relativeTime(iso: string): string {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.paper },
   container: { padding: spacing.lg, paddingBottom: 100 },
-  header: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  header: { marginBottom: 12 },
+  // Horizontal scroll rather than wrapping: the four chips exceed the width of
+  // a small phone, and wrapping them pushed the feed itself below the fold.
+  chipRow: { paddingBottom: 12, paddingRight: 4 },
   friendsBtn: {
     paddingHorizontal: 14, paddingVertical: 8,
     borderRadius: 999,
