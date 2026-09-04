@@ -6,6 +6,7 @@ import { Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
 import { nearbyRestaurants, searchRestaurants, type Restaurant } from "../../lib/places";
 import { getOrFetchNearby } from "../../lib/nearby-cache";
+import { StretchPick } from "../../components/StretchPick";
 import { supabase } from "../../lib/supabase";
 import { listWishlist, type WishlistEntry } from "../../lib/palate-insights";
 import { getCurrentLocation, classifyAccuracy } from "../../lib/location";
@@ -434,7 +435,15 @@ export default function DiscoverTab() {
               <>
                 {tab === "most_compatible" && (
                   <>
+                    {/* One place slightly outside the pattern. It lived on Home
+                        until the mood row took that screen over; Discover is
+                        where you go to be shown something, so it belongs here.
+                        Under the ranked list on purpose — a stretch is what you
+                        read after the safe answers, not instead of them. */}
                     <List items={mostCompatibleList} surface="discover_for_you" emptyMsg="Log a few visits — once Palate sees a pattern, we'll personalize this list. In the meantime, the Trending tab shows what's hot in your area." />
+                    <Spacer size={20} />
+                    <Text style={styles.stretchHead}>Stretch your palate</Text>
+                    <StretchPick />
                   </>
                 )}
                 {tab === "trending" && <TrendingGroups groups={trending.groups} fallbackNote={trending.fallbackNote} />}
@@ -981,6 +990,10 @@ function fallbackScore(r: RankedRestaurant): number {
 }
 
 const styles = StyleSheet.create({
+  stretchHead: {
+    fontSize: 17, fontWeight: "800", color: colors.ink,
+    letterSpacing: -0.3, marginBottom: 10,
+  },
   filterBar: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12,
   },
