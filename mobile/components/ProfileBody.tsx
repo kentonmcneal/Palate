@@ -174,6 +174,10 @@ export function ProfileBody({ targetId }: { targetId: string }) {
   // answer is no, so asking the data beats re-deriving the rule here and
   // getting a different answer than the server did.
   const canSee = mine || (snapshot != null && snapshot.total_visits !== null);
+  // Twelve of fourteen accounts have logged nothing. Those profiles rendered
+  // "No persona yet" stacked above a stats card reading 0 and 0 — two cards
+  // agreeing that there is nothing, which is worse than one saying so.
+  const noHistory = canSee && (snapshot?.total_visits ?? 0) === 0;
 
   return (
     <>
@@ -268,7 +272,7 @@ export function ProfileBody({ targetId }: { targetId: string }) {
                 different things — DON'T show "private" to an accepted friend
                 who simply hasn't been classified yet (in week 1 nobody has a
                 persona, so every friend would otherwise read as private). */}
-            {snapshot.persona_label === null && !mine && (
+            {snapshot.persona_label === null && !mine && !noHistory && (
               canSee ? (
                 <View style={styles.privateCard}>
                   <Text style={type.subtitle}>No persona yet.</Text>
@@ -288,7 +292,20 @@ export function ProfileBody({ targetId }: { targetId: string }) {
               )
             )}
 
-            {snapshot.persona_label && (
+            {noHistory && (
+              <View style={styles.privateCard}>
+                <Text style={type.subtitle}>
+                  {mine ? "No visits yet." : "They haven't logged anything yet."}
+                </Text>
+                <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
+                  {mine
+                    ? "Turn on tracking and your visits collect themselves. Your palate, top spots and Wrapped all build from them."
+                    : "Their palate and top spots will show up here once they start eating out."}
+                </Text>
+              </View>
+            )}
+
+            {!noHistory && snapshot.persona_label && (
               <View style={styles.personaCard}>
                 <Text style={styles.personaEyebrow}>LATEST PERSONA</Text>
                 <Text style={styles.personaLabel}>{snapshot.persona_label}</Text>
@@ -298,7 +315,7 @@ export function ProfileBody({ targetId }: { targetId: string }) {
               </View>
             )}
 
-            {snapshot.total_visits !== null && (
+            {!noHistory && snapshot.total_visits !== null && (
               <View style={styles.statsCard}>
                 <Text style={[type.micro, { marginBottom: 12 }]}>BY THE NUMBERS</Text>
                 <View style={styles.statsRow}>
@@ -334,7 +351,7 @@ export function ProfileBody({ targetId }: { targetId: string }) {
 
             {/* The ranked list is an identity object, so it belongs on the
                 profile for everyone — including you. */}
-            {canSee && (
+            {canSee && !noHistory && (
               <TopFive userId={targetId} mine={mine} displayName={snapshot.display_name} />
             )}
 
@@ -346,6 +363,17 @@ export function ProfileBody({ targetId }: { targetId: string }) {
             {mine && (
               <>
                 <SavedNearbyCard />
+                {/* Wrapped gave up its tab to Visits. It is episodic — worth
+                    opening when it is new, which the dot on this tab says —
+                    so it lives here rather than holding a fifth of the bar. */}
+                <Pressable
+                  onPress={() => router.push("/(tabs)/wrapped" as never)}
+                  style={styles.wrappedBtn}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.wrappedTitle}>Your Wrapped</Text>
+                  <Text style={styles.wrappedSub}>What this week said about how you eat →</Text>
+                </Pressable>
                 <Pressable
                   onPress={() => router.push("/insights" as never)}
                   style={styles.insightsBtn}
@@ -562,6 +590,12 @@ const styles = StyleSheet.create({
     borderTopColor: colors.line, borderTopWidth: 1,
   },
   hiddenNoteText: { ...type.small, lineHeight: 19 },
+  wrappedBtn: {
+    marginTop: spacing.xl, padding: spacing.lg, borderRadius: 22,
+    backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
+  },
+  wrappedTitle: { fontSize: 18, fontWeight: "800", color: colors.ink, letterSpacing: -0.3 },
+  wrappedSub: { ...type.small, marginTop: 4 },
   insightsBtn: { marginTop: spacing.lg, paddingVertical: 12, alignItems: "center" },
   insightsText: { fontSize: 14, fontWeight: "700", color: colors.red },
 

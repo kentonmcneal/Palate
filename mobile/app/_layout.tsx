@@ -409,7 +409,6 @@ export default function RootLayout() {
           <Stack.Screen name="group" options={{ presentation: "modal" }} />
           <Stack.Screen name="profile/[id]" options={{ presentation: "modal" }} />
           <Stack.Screen name="visit/[id]" options={{ presentation: "modal" }} />
-          <Stack.Screen name="all-visits" options={{ presentation: "modal" }} />
           <Stack.Screen name="restaurant/[place_id]" options={{ presentation: "modal" }} />
           <Stack.Screen name="photos" options={{ presentation: "modal" }} />
           <Stack.Screen name="demographics" options={{ presentation: "modal" }} />

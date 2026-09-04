@@ -8,7 +8,7 @@ import { triggerHapticSuccess, triggerHapticSelection } from "../lib/haptics";
 import { pickSaveCopy } from "../lib/save-copy";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
 import { trackRecEvent, type RecEventContext } from "../lib/recommendation-events";
-import { formatDistance, matchScoreColor } from "../lib/match-score";
+import { formatDistance, matchScoreColor, matchBand } from "../lib/match-score";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { SaveBurst } from "./SaveBurst";
 import { TapCard } from "./TapCard";
@@ -150,12 +150,16 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
             </>
           ) : (
             <>
-              <AnimatedNumber
-                value={m.score}
-                duration={750}
-                style={[styles.scoreNum, { color: matchScoreColor(m.score) }]}
-              />
-              <Text style={styles.scoreLabel}>match</Text>
+              {/* Was a large glowing number in brand red — the loudest thing on
+                  the card, above the restaurant's own name, asserting that 93
+                  and 88 are meaningfully different when they are not. A banded
+                  word carries the same information at the precision the model
+                  actually has, and the figure stays underneath for anyone who
+                  wants it. */}
+              <Text style={[styles.scoreBand, { color: matchScoreColor(m.score) }]}>
+                {matchBand(m.score)}
+              </Text>
+              <Text style={styles.scoreLabel}>{m.score}% match</Text>
             </>
           )}
         </View>
@@ -262,15 +266,12 @@ const styles = StyleSheet.create({
   sub: { ...type.small, marginTop: 4 },
   // Score is highlighted but smaller than the name so it never out-competes
   // the restaurant identity itself.
-  scoreCol: { alignItems: "center", minWidth: 50 },
-  scoreNum: {
-    fontSize: 20, fontWeight: "800", color: colors.red, letterSpacing: -0.4,
-    // Subtle brand glow on the score number — was 0.45 / 8.
-    textShadowColor: "rgba(255,48,8,0.22)",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 6,
+  scoreCol: { alignItems: "flex-end", minWidth: 72 },
+  scoreBand: { fontSize: 13, fontWeight: "800", letterSpacing: -0.1, textAlign: "right" },
+  scoreLabel: {
+    fontSize: 10, fontWeight: "700", color: colors.mute, letterSpacing: 0.3,
+    marginTop: 2, textAlign: "right",
   },
-  scoreLabel: { fontSize: 10, fontWeight: "700", color: colors.mute, letterSpacing: 1 },
   confLow: { fontSize: 9, fontWeight: "700", color: colors.mute, marginTop: 4 },
   newBadge: { fontSize: 15, fontWeight: "800", color: colors.mute, letterSpacing: 1 },
 

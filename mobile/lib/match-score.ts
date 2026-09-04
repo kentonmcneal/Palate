@@ -172,6 +172,23 @@ const LIGHTER_RED = "#FF8266";
 const LIGHT_GRAY  = "#B5B5B5";
 const GRAY        = "#8E8E8E";
 
+/**
+ * The score as a word, at the precision the model actually has.
+ *
+ * The card used to lead with a large glowing figure — "93 match" — which
+ * asserts that 93 and 88 are meaningfully different. They are not: the score is
+ * a weighted sum of attribute overlaps with a neutral 50 floor and a hand-tuned
+ * personal adjustment, so a few points is noise. Four bands is the real
+ * resolution, and it is the same resolution matchScoreColor has always used.
+ */
+export function matchBand(score: number | null | undefined): string {
+  if (score == null) return "Worth a look";
+  if (score >= 80) return "Strong match";
+  if (score >= 60) return "Good match";
+  if (score >= 40) return "Worth a look";
+  return "A stretch";
+}
+
 export function matchScoreColor(score: number | null | undefined): string {
   if (score == null) return GRAY;
   if (score >= 80) return STRONG_RED;

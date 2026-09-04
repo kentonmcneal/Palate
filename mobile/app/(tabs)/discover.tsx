@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  View, Text, StyleSheet, ScrollView, Pressable, RefreshControl,
-  TextInput, ActivityIndicator,
-} from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, TextInput, ActivityIndicator, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { Spacer } from "../../components/Button";
@@ -43,13 +40,18 @@ const TOP_PER_CATEGORY = 10;
 const MIN_PER_CATEGORY = 3;
 
 type SubTab = "most_compatible" | "trending" | "nearby";
-type SortKey = "compat_high" | "compat_low" | "distance" | "stretch";
+// "compat_low" is gone. A control that asks for the restaurants you will like
+// LEAST is not a sort anybody wants; it read as a debug affordance that escaped
+// into the product.
+type SortKey = "compat_high" | "distance" | "stretch";
 type FormatFilter = "all" | "casual" | "boutique";
 
 const FILTER_LABEL: Record<FormatFilter, string> = {
-  all: "All",
+  all: "Anything",
   casual: "Casual",
-  boutique: "Boutique",
+  // Was "Boutique", which is a menu word rather than a filter word — nobody
+  // browsing for dinner thinks "I want boutique tonight".
+  boutique: "Upscale",
 };
 
 // Casual = fast/quick-service or cheap; Boutique = upscale/fine-dining or
@@ -66,10 +68,11 @@ function matchesFormatFilter(r: RankedRestaurant, filter: FormatFilter): boolean
 }
 
 const SORT_LABEL: Record<SortKey, string> = {
-  compat_high: "Highest match",
-  compat_low: "Lowest match",
+  compat_high: "Best match",
   distance: "Closest",
-  stretch: "Stretch",
+  // Was "Stretch", which never said what it stretched. It means deliberately
+  // outside your usual pattern, so it should say that.
+  stretch: "Something different",
 };
 
 export default function DiscoverTab() {
@@ -88,6 +91,7 @@ export default function DiscoverTab() {
   }, [deepLinkList, router]);
   const [tab, setTab] = useState<SubTab>("most_compatible");
   const [sort, setSort] = useState<SortKey>("compat_high");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [formatFilter, setFormatFilter] = useState<FormatFilter>("all");
   // When true, the taste vector is rebuilt from saved (wishlist) restaurants
   // only — recommendations reflect what you've saved, not where you've been.
@@ -292,8 +296,6 @@ export default function DiscoverTab() {
     const arr = visibleRanked.map((r) => ({ item: r, sortKey: keyFor(r) }));
     if (sort === "compat_high") {
       arr.sort((a, b) => b.sortKey - a.sortKey);
-    } else if (sort === "compat_low") {
-      arr.sort((a, b) => a.sortKey - b.sortKey);
     } else if (sort === "distance") {
       arr.sort((a, b) => (a.item.distanceKm ?? 999) - (b.item.distanceKm ?? 999));
     } else if (sort === "stretch") {
@@ -398,11 +400,18 @@ export default function DiscoverTab() {
             </View>
 
             <Spacer size={12} />
-            <FilterRow
+            {/* Discover used to stack THREE rows of pills: sub-tabs, then
+                All/Casual/Boutique/Saves only, then Highest/Lowest match/
+                Closest/Stretch. Twelve controls competing above the first
+                restaurant, several of them words nobody would say out loud.
+                The sub-tabs are the one contextual row worth keeping visible;
+                everything else is behind a single Filters button that says how
+                many are on. */}
+            <FilterBar
               filter={formatFilter}
-              onFilter={setFormatFilter}
+              sort={sort}
               savesOnly={savesOnly}
-              onSavesOnly={setSavesOnly}
+              onOpen={() => setFiltersOpen(true)}
             />
 
             <Spacer size={16} />
@@ -425,8 +434,6 @@ export default function DiscoverTab() {
               <>
                 {tab === "most_compatible" && (
                   <>
-                    <SortRow value={sort} onChange={setSort} />
-                    <Spacer size={10} />
                     <List items={mostCompatibleList} surface="discover_for_you" emptyMsg="Log a few visits — once Palate sees a pattern, we'll personalize this list. In the meantime, the Trending tab shows what's hot in your area." />
                   </>
                 )}
@@ -437,6 +444,17 @@ export default function DiscoverTab() {
           </>
         )}
       </ScrollView>
+
+      <FiltersSheet
+        visible={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        filter={formatFilter}
+        onFilter={setFormatFilter}
+        sort={sort}
+        onSort={setSort}
+        savesOnly={savesOnly}
+        onSavesOnly={setSavesOnly}
+      />
     </SafeAreaView>
   );
 }
@@ -620,52 +638,111 @@ function SubTabBtn({ label, active, onPress }: { label: string; active: boolean;
   );
 }
 
-// Casual/Boutique format filter + "Saves only" toggle. Filter chips switch
-// the visible list between fast/casual and upscale/boutique; the trailing
-// chip rebuilds recommendations from saved restaurants only.
-function FilterRow({
-  filter, onFilter, savesOnly, onSavesOnly,
+// One control instead of two rows of chips. It states how many filters are on,
+// because a filter you have forgotten about is how a browse surface quietly
+// stops showing you things and you conclude the app has nothing.
+function FilterBar({
+  filter, sort, savesOnly, onOpen,
 }: {
   filter: FormatFilter;
-  onFilter: (f: FormatFilter) => void;
+  sort: SortKey;
   savesOnly: boolean;
-  onSavesOnly: (v: boolean) => void;
+  onOpen: () => void;
 }) {
-  const order: FormatFilter[] = ["all", "casual", "boutique"];
+  const active =
+    (filter !== "all" ? 1 : 0) + (savesOnly ? 1 : 0) + (sort !== "compat_high" ? 1 : 0);
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow}>
-      {order.map((k) => {
-        const active = k === filter;
-        return (
-          <Pressable key={k} onPress={() => onFilter(k)} style={[styles.sortChip, active && styles.sortChipActive]}>
-            <Text style={[styles.sortChipText, active && styles.sortChipTextActive]}>{FILTER_LABEL[k]}</Text>
-          </Pressable>
-        );
-      })}
-      <View style={styles.filterDivider} />
-      <Pressable
-        onPress={() => onSavesOnly(!savesOnly)}
-        style={[styles.sortChip, savesOnly && styles.sortChipActive]}
-      >
-        <Text style={[styles.sortChipText, savesOnly && styles.sortChipTextActive]}>Saves only</Text>
+    <View style={styles.filterBar}>
+      <Text style={styles.filterSummary} numberOfLines={1}>
+        {SORT_LABEL[sort]}
+        {filter !== "all" ? ` · ${FILTER_LABEL[filter]}` : ""}
+        {savesOnly ? " · Saved" : ""}
+      </Text>
+      <Pressable onPress={onOpen} style={styles.filterBtn} accessibilityRole="button">
+        <Text style={styles.filterBtnText}>
+          {active > 0 ? `Filters · ${active}` : "Filters"}
+        </Text>
       </Pressable>
-    </ScrollView>
+    </View>
   );
 }
 
-function SortRow({ value, onChange }: { value: SortKey; onChange: (k: SortKey) => void }) {
-  const order: SortKey[] = ["compat_high", "compat_low", "distance", "stretch"];
+function FiltersSheet({
+  visible, onClose, filter, onFilter, sort, onSort, savesOnly, onSavesOnly,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  filter: FormatFilter;
+  onFilter: (f: FormatFilter) => void;
+  sort: SortKey;
+  onSort: (s: SortKey) => void;
+  savesOnly: boolean;
+  onSavesOnly: (v: boolean) => void;
+}) {
+  const formats: FormatFilter[] = ["all", "casual", "boutique"];
+  const sorts: SortKey[] = ["compat_high", "distance", "stretch"];
+  const anyOn = filter !== "all" || savesOnly || sort !== "compat_high";
+
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow}>
-      {order.map((k) => {
-        const active = k === value;
-        return (
-          <Pressable key={k} onPress={() => onChange(k)} style={[styles.sortChip, active && styles.sortChipActive]}>
-            <Text style={[styles.sortChipText, active && styles.sortChipTextActive]}>{SORT_LABEL[k]}</Text>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.sheetScrim} onPress={onClose} accessibilityLabel="Close filters" />
+      <View style={styles.sheet}>
+        <View style={styles.sheetHead}>
+          <Text style={type.title}>Filters</Text>
+          <Pressable onPress={onClose} hitSlop={10}>
+            <Text style={styles.sheetDone}>Done</Text>
           </Pressable>
-        );
-      })}
-    </ScrollView>
+        </View>
+
+        <Text style={styles.sheetLabel}>SORT BY</Text>
+        <View style={styles.sheetRow}>
+          {sorts.map((k) => (
+            <Pressable
+              key={k}
+              onPress={() => onSort(k)}
+              style={[styles.sheetChip, k === sort && styles.sheetChipActive]}
+            >
+              <Text style={[styles.sheetChipText, k === sort && styles.sheetChipTextActive]}>
+                {SORT_LABEL[k]}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={styles.sheetLabel}>KIND OF PLACE</Text>
+        <View style={styles.sheetRow}>
+          {formats.map((k) => (
+            <Pressable
+              key={k}
+              onPress={() => onFilter(k)}
+              style={[styles.sheetChip, k === filter && styles.sheetChipActive]}
+            >
+              <Text style={[styles.sheetChipText, k === filter && styles.sheetChipTextActive]}>
+                {FILTER_LABEL[k]}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Pressable
+          onPress={() => onSavesOnly(!savesOnly)}
+          style={[styles.sheetToggle, savesOnly && styles.sheetChipActive]}
+        >
+          <Text style={[styles.sheetChipText, savesOnly && styles.sheetChipTextActive]}>
+            Only places I've saved
+          </Text>
+        </Pressable>
+
+        {anyOn && (
+          <Pressable
+            onPress={() => { onFilter("all"); onSort("compat_high"); onSavesOnly(false); }}
+            style={styles.sheetClear}
+          >
+            <Text style={styles.sheetClearText}>Clear filters</Text>
+          </Pressable>
+        )}
+      </View>
+    </Modal>
   );
 }
 
@@ -904,6 +981,43 @@ function fallbackScore(r: RankedRestaurant): number {
 }
 
 const styles = StyleSheet.create({
+  filterBar: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12,
+  },
+  filterSummary: { ...type.small, flex: 1 },
+  filterBtn: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
+    backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
+  },
+  filterBtnText: { fontSize: 13, fontWeight: "800", color: colors.ink },
+
+  sheetScrim: { flex: 1, backgroundColor: "rgba(15,15,15,0.4)" },
+  sheet: {
+    backgroundColor: colors.paper,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: spacing.lg, paddingBottom: 40,
+  },
+  sheetHead: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    marginBottom: spacing.md,
+  },
+  sheetDone: { fontSize: 15, fontWeight: "800", color: colors.red },
+  sheetLabel: { ...type.micro, marginTop: spacing.md, marginBottom: 8 },
+  sheetRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  sheetChip: {
+    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999,
+    backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
+  },
+  sheetChipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  sheetChipText: { fontSize: 13, fontWeight: "700", color: colors.mute },
+  sheetChipTextActive: { color: "#fff" },
+  sheetToggle: {
+    marginTop: spacing.lg, paddingHorizontal: 14, paddingVertical: 12,
+    borderRadius: 14, backgroundColor: colors.faint,
+    borderWidth: 1, borderColor: colors.line, alignItems: "center",
+  },
+  sheetClear: { marginTop: spacing.md, paddingVertical: 10, alignItems: "center" },
+  sheetClearText: { fontSize: 14, fontWeight: "700", color: colors.mute },
   safe: { flex: 1, backgroundColor: colors.paper },
   body: { padding: spacing.lg, paddingBottom: 100 },
 

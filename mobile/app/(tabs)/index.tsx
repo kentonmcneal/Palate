@@ -386,7 +386,7 @@ export default function Home() {
           <View style={styles.recentHead}>
             <Text style={type.title}>Recent</Text>
             {visits.length > 0 && (
-              <Pressable onPress={() => router.push("/all-visits")}>
+              <Pressable onPress={() => router.push("/(tabs)/visits")}>
                 <Text style={styles.viewAll}>View all →</Text>
               </Pressable>
             )}
