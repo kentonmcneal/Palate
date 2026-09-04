@@ -20,8 +20,11 @@ import { analyzeWeeklyPalate, daysUntilSundayWrap, leaningPersonality, type Pala
 import { isoWeekStart } from "../../lib/wrapped";
 import { Confetti } from "../../components/Confetti";
 import { LocationPill } from "../../components/LocationPill";
-import { RightNowHero } from "../../components/RightNowHero";
 import { HomeHero, TrackingLine } from "../../components/HomeHero";
+import { MoodRow } from "../../components/MoodRow";
+import { RecommendationsCard } from "../../components/RecommendationsCard";
+import { Spacer } from "../../components/Button";
+import { buildMoodChips, palateRead, SURPRISE, type Mood, type MoodChip } from "../../lib/mood";
 import { homeState, type HomeState } from "../../lib/home-state";
 import { getInbox } from "../../lib/passive-confirm";
 import { isPassiveOptedIn } from "../../lib/passive-capture";
@@ -61,7 +64,6 @@ export default function Home() {
   // persisted — it is about this meal, not a preference.
 
   // What the hero chose, so the list below never repeats it.
-  const [heroPlaceId, setHeroPlaceId] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -74,6 +76,11 @@ export default function Home() {
 
   // What Home is about right now. Null until the first load resolves, so the
   // screen never flashes a wrong state before it knows the real one.
+  const { mood: moodParam } = useLocalSearchParams<{ mood?: string }>();
+  const [mood, setMood] = useState<Mood>(null);
+  const [moodChips, setMoodChips] = useState<MoodChip[]>([]);
+  const [palateLine, setPalateLine] = useState<string | null>(null);
+  const [habitualCuisines, setHabitualCuisines] = useState<string[]>([]);
   const [home, setHome] = useState<HomeState | null>(null);
   const [trackingOn, setTrackingOn] = useState(false);
   const [lastCheck, setLastCheck] = useState<string | null>(null);
@@ -81,6 +88,28 @@ export default function Home() {
   // What Home is about right now. Assembled from free reads only — a local
   // permission check, the local inbox, and one RPC. Nothing here touches Gmail
   // or Google Places, because this runs on every foreground.
+  // The cuisine chips are built from a month of the user's own visits, so the
+  // moods offered are things they actually eat rather than a fixed menu.
+  useEffect(() => {
+    let alive = true;
+    loadAnalytics("month")
+      .then((a) => {
+        if (!alive) return;
+        setMoodChips(buildMoodChips(a.cuisineBreakdown));
+        setPalateLine(palateRead(a.cuisineBreakdown));
+        setHabitualCuisines(
+          a.cuisineBreakdown.filter((c) => c.count >= 2).slice(0, 3).map((c) => c.cuisine),
+        );
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  // The Thursday nudge deep-links in with ?mood=surprise.
+  useEffect(() => {
+    if (moodParam === "surprise") setMood(SURPRISE);
+  }, [moodParam]);
+
   const loadHomeState = useCallback(async (visitCount: number, friends: number) => {
     const [inbox, perms, gmail, optedIn] = await Promise.all([
       getInbox().catch(() => []),
@@ -279,29 +308,36 @@ export default function Home() {
           <LocationPill />
         </View>
 
-        {/* HOME ANSWERS ONE QUESTION.
-            It used to open with five blocks of equal weight — a right-now hero,
-            a mood row, three picks, a stretch pick, a saves rail, a recent list
-            — and leave the reader to work out which mattered. At 9pm with two
-            unreviewed visits, nothing else on this screen is worth looking at.
+        {/* HOME = WHAT ARE YOU IN THE MOOD FOR.
+            The hero states the one thing only when there IS one — visits to
+            confirm, or an account that cannot do anything yet. Most of the time
+            there is nothing to finish, and on those days Home is a decision:
+            pick a mood, get the best place for it.
 
-            homeState() picks the one thing, and everything above the fold
-            follows from it. What left Home did not disappear:
-              Recent            -> the Visits tab
-              Places you'll like -> Discover, "For you"
-              Stretch pick      -> Discover, sorted "Something different"
-              Based on saves    -> Discover, "Only places I've saved"
-              Saved rail        -> Discover filter, and Profile
-            Each has one home instead of two, which is how the profile drift
-            got fixed and the same reason applies here. */}
-        {home && <HomeHero state={home} />}
+            The mood row was on this screen before tonight and I removed it in
+            the redesign, which was wrong — it is the only control here that
+            asks what the user wants RIGHT NOW rather than inferring it from
+            what they did last month.
 
-        {/* One recommendation, not six. */}
+            RightNowHero is gone rather than sitting above this: it and the
+            first ranked pick were repeatedly the same restaurant, which was
+            raised as a bug, and a mood-driven list answers the same question
+            with the user's own input attached. */}
+        {home && (home.kind === "review" || home.kind === "activation") && (
+          <HomeHero state={home} />
+        )}
+
         <View style={styles.homeRule} />
-        <Text style={styles.sectionHead}>
-          {new Date().getHours() >= 21 ? "Still open near you" : "If you're deciding now"}
-        </Text>
-        <RightNowHero onPicked={setHeroPlaceId} />
+
+        <Text style={styles.moodHead}>What are you in the mood for?</Text>
+        {!!palateLine && <Text style={styles.palateRead}>{palateLine}</Text>}
+        <MoodRow chips={moodChips} value={mood} onChange={setMood} />
+        <Spacer size={14} />
+        <RecommendationsCard
+          mood={mood}
+          habitualCuisines={habitualCuisines}
+          excludePlaceIds={[]}
+        />
 
         <TrackingLine on={trackingOn} lastCheck={lastCheck} />
 
@@ -429,6 +465,11 @@ function prettyType(t: string) {
 }
 
 const styles = StyleSheet.create({
+  moodHead: {
+    fontFamily: "Georgia", fontSize: 27, lineHeight: 32,
+    color: colors.ink, letterSpacing: -0.3, marginBottom: 6,
+  },
+  palateRead: { ...type.small, marginBottom: 12, lineHeight: 19 },
   homeRule: {
     height: 1, backgroundColor: colors.line,
     marginTop: spacing.lg, marginBottom: spacing.lg,
@@ -493,13 +534,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  sectionHead: {
-    fontSize: 18, fontWeight: "800", color: colors.ink,
-    letterSpacing: -0.3,
-    marginTop: spacing.xl,
-    marginBottom: 12,  // positive margin so descenders don't get clipped by next card
-    paddingBottom: 4,
-  },
   visitCard: {
     flexDirection: "row",
     alignItems: "center",

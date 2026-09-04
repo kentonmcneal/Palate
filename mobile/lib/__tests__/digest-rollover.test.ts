@@ -93,10 +93,11 @@ describe("digestTimeFor", () => {
 describe("weekday schedule", () => {
   const { digestTimeFor, digestHourOn, digestWindowStart } = require("../passive-digest");
 
-  it("fires at 9pm on weekdays and Sunday, 11pm on Saturday", () => {
+  it("fires at 9pm Sunday to Thursday, 11pm Friday and Saturday", () => {
     expect(digestHourOn(new Date("2026-09-06T12:00:00"))).toBe(21); // Sun
     expect(digestHourOn(new Date("2026-09-07T12:00:00"))).toBe(21); // Mon
-    expect(digestHourOn(new Date("2026-09-04T12:00:00"))).toBe(21); // Fri
+    expect(digestHourOn(new Date("2026-09-03T12:00:00"))).toBe(21); // Thu
+    expect(digestHourOn(new Date("2026-09-04T12:00:00"))).toBe(23); // Fri
     expect(digestHourOn(new Date("2026-09-05T12:00:00"))).toBe(23); // Sat
   });
 
@@ -107,18 +108,28 @@ describe("weekday schedule", () => {
   });
 
   it("takes tomorrow's hour when rolling forward into a different night", () => {
-    // 10pm Friday is past Friday's 9pm, so this rolls to Saturday — which is an
-    // 11pm night, not a 9pm one. Carrying today's hour forward would be wrong.
-    const when = digestTimeFor(new Date("2026-09-04T22:00:00"));
-    expect(when.getDate()).toBe(5);
-    expect(when.getHours()).toBe(23);
+    // 11:30pm Saturday is past Saturday's 11pm, so this rolls to Sunday — a
+    // 9pm night. Carrying today's hour forward would schedule Sunday at 11.
+    const when = digestTimeFor(new Date("2026-09-05T23:30:00"));
+    expect(when.getDate()).toBe(6);
+    expect(when.getHours()).toBe(21);
   });
 
   it("spans the real gap when the hour changes overnight", () => {
-    // The window closing Saturday 11pm opened Friday 9pm — 26 hours, not 24.
-    // Subtracting a fixed day would have clipped two hours of Friday night.
-    const start = digestWindowStart(new Date("2026-09-05T23:30:00"));
-    expect(start.getDate()).toBe(4);
+    // Sunday's 9pm digest covers back to Saturday's 11pm — TWENTY-TWO hours,
+    // not 24. Subtracting a fixed day would reach back to Saturday 9pm and
+    // re-ask about two hours of Saturday night that Saturday already covered.
+    const start = digestWindowStart(new Date("2026-09-06T21:30:00"));
+    expect(start.getDate()).toBe(5);
+    expect(start.getHours()).toBe(23);
+  });
+
+  it("spans more than a day when the hour moves the other way", () => {
+    // Friday's 11pm digest reaches back to Thursday's 9pm — 26 hours. The
+    // window stretches and shrinks with the schedule; a fixed offset is wrong
+    // in both directions.
+    const start = digestWindowStart(new Date("2026-09-04T23:30:00"));
+    expect(start.getDate()).toBe(3);
     expect(start.getHours()).toBe(21);
   });
 

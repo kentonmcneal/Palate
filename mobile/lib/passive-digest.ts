@@ -160,7 +160,8 @@ export function allowsRealtimePrompt(entry: InboxEntry): boolean {
 import * as Notifications from "expo-notifications";
 import { track } from "./analytics";
 
-// The digest fires later on the nights people actually eat later. Sunday sits
+// The digest fires later on the nights people actually eat later — Friday and
+// Saturday, the two nights a table is still full at 10pm. Sunday sits
 // with the weekdays: Sunday dinner is an early meal in a way Saturday night is
 // not. One table, so moving a night is a one-line change and every consumer —
 // the scheduler, the window, and the Home copy — moves with it.
@@ -172,7 +173,7 @@ export const DIGEST_HOUR_BY_WEEKDAY: readonly number[] = [
   21, // Tue
   21, // Wed
   21, // Thu
-  21, // Fri
+  23, // Fri
   23, // Sat
 ];
 export const DIGEST_MINUTE = 0;

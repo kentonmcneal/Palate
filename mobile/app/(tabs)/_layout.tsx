@@ -74,16 +74,11 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => <TabIcon glyph="◇" color={color} />,
         }}
       />
-      {/* Visits took Wrapped's slot. The dining history is the product's
-          central object and had no tab at all, while Wrapped is episodic —
-          worth surfacing when it is new, not worth a permanent fifth of the
-          bar. Wrapped keeps its route and is reached from Profile, which now
-          carries the new-Wrapped dot. */}
       <Tabs.Screen
-        name="visits"
+        name="wrapped"
         options={{
-          title: "Visits",
-          tabBarIcon: ({ color }) => <TabIcon glyph="▤" color={color} />,
+          title: "Wrapped",
+          tabBarIcon: ({ color }) => <TabIcon glyph="✦" color={color} dot={wrappedHasNew} />,
         }}
       />
       <Tabs.Screen
@@ -102,11 +97,12 @@ export default function TabsLayout() {
         name="me"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) => <TabIcon glyph="◐" color={color} dot={wrappedHasNew} />,
+          tabBarIcon: ({ color }) => <TabIcon glyph="◐" color={color} />,
         }}
       />
       {/* Hidden from tab bar but routes still exist for direct navigation */}
-      <Tabs.Screen name="wrapped" options={{ href: null }} />
+      {/* Visit history lives on Profile, not the tab bar. */}
+      <Tabs.Screen name="visits" options={{ href: null }} />
       <Tabs.Screen name="add" options={{ href: null }} />
       <Tabs.Screen name="wishlist" options={{ href: null }} />
     </Tabs>

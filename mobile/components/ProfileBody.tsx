@@ -362,18 +362,22 @@ export function ProfileBody({ targetId }: { targetId: string }) {
                 they sit below everything that is. */}
             {mine && (
               <>
-                <SavedNearbyCard />
-                {/* Wrapped gave up its tab to Visits. It is episodic — worth
-                    opening when it is new, which the dot on this tab says —
-                    so it lives here rather than holding a fifth of the bar. */}
+                {/* Visit history lives here rather than on the tab bar. */}
                 <Pressable
-                  onPress={() => router.push("/(tabs)/wrapped" as never)}
-                  style={styles.wrappedBtn}
+                  onPress={() => router.push("/(tabs)/visits" as never)}
+                  style={styles.historyBtn}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.wrappedTitle}>Your Wrapped</Text>
-                  <Text style={styles.wrappedSub}>What this week said about how you eat →</Text>
+                  <Text style={styles.historyTitle}>Your visits</Text>
+                  <Text style={styles.historySub}>
+                    {snapshot.total_visits !== null
+                      ? `Every meal you've logged${
+                          snapshot.hidden_visits ? `, including ${snapshot.hidden_visits} hidden` : ""
+                        } →`
+                      : "Every meal you've logged →"}
+                  </Text>
                 </Pressable>
+                <SavedNearbyCard />
                 <Pressable
                   onPress={() => router.push("/insights" as never)}
                   style={styles.insightsBtn}
@@ -590,6 +594,12 @@ const styles = StyleSheet.create({
     borderTopColor: colors.line, borderTopWidth: 1,
   },
   hiddenNoteText: { ...type.small, lineHeight: 19 },
+  historyBtn: {
+    marginTop: spacing.xl, padding: spacing.lg, borderRadius: 22,
+    backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
+  },
+  historyTitle: { fontSize: 18, fontWeight: "800", color: colors.ink, letterSpacing: -0.3 },
+  historySub: { ...type.small, marginTop: 4 },
   wrappedBtn: {
     marginTop: spacing.xl, padding: spacing.lg, borderRadius: 22,
     backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
