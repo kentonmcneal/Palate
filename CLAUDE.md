@@ -59,3 +59,55 @@ log needs an authenticated browser session to read.
 EAS uses **remote version source** for this project — the `buildNumber` field
 in `app.json` is informational only. EAS auto-increments on the server, so
 local edits to `buildNumber` are for human readability, not Apple submission.
+
+## Evidence labels (required for any claim that something works)
+
+Every statement about whether something works carries one of these:
+
+- `COMMITTED` — verified in the current git commit
+- `WORKING TREE` — present locally, not committed
+- `LIVE` — verified against the deployed system **by invoking it**
+- `DEVICE` — verified on a physical iPhone
+- `INFERENCE` — not verified; name the artifact that would settle it
+
+**A conclusion without a label is incomplete.** GitHub, the working tree, EAS,
+the installed phone and live Supabase are five separate states. Compare them
+explicitly rather than assuming they agree.
+
+This exists because reading the source has repeatedly produced confident,
+wrong answers here:
+
+- `get_friend_profile_snapshot` raised 42702 on its first statement from
+  migration 0008 to 0075. Every profile screen rendered "Profile not found" for
+  65 migrations. The source looked correct and every push was green.
+- `palate_overlap_rank` was revoked from `public` and `authenticated`, was
+  documented as locked, and still answered the anon key with 200 — Supabase
+  grants execute to `anon` by name, and PUBLIC is a separate grantee.
+  `browse_profiles` then failed the same test in the opposite direction.
+- The feed embedded `profiles!feed_events_user_id_fkey`, but that FK targets
+  `auth.users`. PostgREST returned 400 on every request for the feature's
+  entire existence; the client swallowed it into a `console.warn`.
+- A bare `ios` line in `.gitignore` matched `modules/palate-visit-monitor/ios`
+  at any depth, so no build EAS ever produced contained the native detector.
+
+### How to actually verify, by layer
+
+1. **plpgsql parses `return query` only at runtime.** A clean `supabase db push`
+   proves nothing. Invoke the function over PostgREST and read the status code.
+   When RLS blocks the interesting branch, impersonate inside a `do $$` block:
+   `perform set_config('request.jwt.claims', json_build_object('sub', <uuid>)::text, true);`
+   then call it. `supabase/tests/smoke.sql` does this in CI.
+2. **Grants: revoke from `public` AND `anon` AND `authenticated` by name**, then
+   prove denial with a call returning 401/42501. Revoking one grantee tells you
+   nothing about the others.
+3. **A PostgREST embed needs a real foreign key to the embedded table.** Test the
+   literal query string with curl.
+4. **A manual authenticated request does not verify a cron job.** Reproduce the
+   cron-shaped request, headers included, and inspect the scheduled run.
+5. **A successful `functions deploy` does not mean the function boots.** Call it;
+   an unauthenticated call returning the function's own 401 proves the module
+   loaded without spending anything.
+6. **Classifier edits never touch rows already in `restaurants`.** Behaviour for
+   existing places changes only when reclassify runs.
+7. **A green landing-site build is not evidence the mobile app works.** CI builds
+   both; read which job passed.

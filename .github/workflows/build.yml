@@ -30,3 +30,79 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co'
           NEXT_PUBLIC_SUPABASE_ANON_KEY: 'ci-build-stub-key'
         run: npx next build
+
+  # --------------------------------------------------------------------------
+  # Until now this workflow built ONLY the landing site, so a green tick meant
+  # the marketing page compiled and said nothing whatsoever about the app.
+  # --------------------------------------------------------------------------
+  mobile:
+    name: Mobile — types, tests, native module
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci --silent
+
+      - name: TypeScript
+        working-directory: mobile
+        run: npx tsc --noEmit -p .
+
+      - name: Tests
+        working-directory: mobile
+        run: npx jest --ci
+
+      # The passive-capture feature failed on device for months because a bare
+      # `ios` line in .gitignore matched modules/palate-visit-monitor/ios at any
+      # depth. The Swift was on one laptop and in no build EAS ever produced,
+      # and nothing anywhere said so. This asserts the native module is tracked,
+      # which is the check that would have caught it on day one.
+      - name: Native visit-monitor module is tracked by git
+        run: |
+          set -euo pipefail
+          count=$(git ls-files 'mobile/modules/palate-visit-monitor/ios/*.swift' | wc -l | tr -d ' ')
+          echo "tracked swift sources: $count"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No Swift sources tracked under mobile/modules/palate-visit-monitor/ios."
+            echo "::error::A build made from this commit would ship without the native detector."
+            exit 1
+          fi
+          git ls-files 'mobile/modules/palate-visit-monitor/ios/*.swift'
+
+  # --------------------------------------------------------------------------
+  # Proves the committed migrations can rebuild the database from nothing, and
+  # that every security-definer reader actually RUNS.
+  # --------------------------------------------------------------------------
+  supabase:
+    name: Supabase — migrations rebuild + function smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Starts Postgres and applies every migration in order from an empty
+      # database. Migration 0001 is the baseline that used to live in
+      # supabase/01_schema.sql and friends; before it existed, this step was
+      # impossible and the committed history could not reconstruct the schema.
+      - name: Apply all migrations from scratch
+        run: supabase db start
+
+      - name: Install psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+
+      # A clean migration apply does NOT prove a plpgsql function works — its
+      # body is parsed on first execution. This calls each one.
+      - name: Smoke — execute every definer reader
+        run: |
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+            -v ON_ERROR_STOP=1 -f supabase/tests/smoke.sql
