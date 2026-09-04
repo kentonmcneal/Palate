@@ -211,6 +211,44 @@ async function addToInbox(entry: InboxEntry): Promise<boolean> {
   return true;
 }
 
+/**
+ * Debug only: drop a spread of entries into the inbox so the digest can be
+ * exercised without waiting for a real capture and 8:30pm.
+ *
+ * Bands are set explicitly rather than scored, because the point is to verify
+ * the DIGEST — pre-check state, section ordering, the "which one?" picker —
+ * not the scorer, which has its own tests. One ambiguous entry is included
+ * since that path renders differently from the rest.
+ */
+export async function seedDigestFixtures(): Promise<number> {
+  const now = Date.now();
+  const at = (hoursAgo: number) => now - hoursAgo * 3_600_000;
+  const fixtures: InboxEntry[] = [
+    {
+      id: `dbg-high-${now}`, place_id: `dbg-high-${now}`, name: "Test Diner (high)",
+      address: "", alternates: [], detectedAt: at(6), dwellMin: 42,
+      confidence: 0.88, confidenceBand: "high", candidateCount: 1, source: "stop",
+    },
+    {
+      id: `dbg-med-${now}`, place_id: `dbg-med-${now}`, name: "Test Cafe (medium)",
+      address: "", alternates: [], detectedAt: at(3), dwellMin: 9,
+      confidence: 0.55, confidenceBand: "medium", candidateCount: 1, source: "stop",
+    },
+    {
+      id: `dbg-low-${now}`, place_id: `dbg-low-${now}`, name: "Test Food Hall (low, ambiguous)",
+      address: "", alternates: [
+        { google_place_id: `dbg-alt1-${now}`, name: "Stall One" },
+        { google_place_id: `dbg-alt2-${now}`, name: "Stall Two" },
+      ] as InboxEntry["alternates"],
+      detectedAt: at(1), dwellMin: 7,
+      confidence: 0.22, confidenceBand: "low", candidateCount: 4, source: "stop",
+    },
+  ];
+  const existing = await getInbox();
+  await AsyncStorage.setItem(INBOX_KEY, JSON.stringify([...fixtures, ...existing]));
+  return fixtures.length;
+}
+
 export async function removeFromInbox(id: string): Promise<void> {
   const existing = await getInbox();
   await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(existing.filter((e) => e.id !== id)));

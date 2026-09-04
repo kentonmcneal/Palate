@@ -86,3 +86,27 @@ describe("ignored entries", () => {
     expect((track as jest.Mock).mock.calls.filter((c) => c[0] === "visit_ignored")).toHaveLength(0);
   });
 });
+
+describe("digest fixtures", () => {
+  it("seeds one entry per band, including an ambiguous one", async () => {
+    // The digest had never rendered once: it needs a same-day capture AND
+    // 8:30pm. Fixtures make the screen verifiable without either.
+    const { seedDigestFixtures, getInbox } = require("../passive-confirm");
+    const { buildDigest } = require("../passive-digest");
+
+    const n = await seedDigestFixtures();
+    expect(n).toBe(3);
+
+    const d = buildDigest(await getInbox());
+    expect(d.high).toHaveLength(1);
+    expect(d.medium).toHaveLength(1);
+    expect(d.low).toHaveLength(1);
+    // The ambiguous entry renders a "which one?" picker rather than a yes/no,
+    // which is a distinct path worth exercising.
+    expect(d.low[0].ambiguous).toBe(true);
+    expect(d.low[0].alternates.length).toBeGreaterThan(0);
+    // High arrives pre-checked; nothing else does.
+    expect(d.high[0].preChecked).toBe(true);
+    expect(d.medium[0].preChecked).toBe(false);
+  });
+});

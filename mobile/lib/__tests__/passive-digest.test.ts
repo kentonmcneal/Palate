@@ -132,3 +132,4 @@ describe("allowsRealtimePrompt", () => {
     expect(allowsRealtimePrompt(entry({ id: "c", detectedAt: at(12) }))).toBe(false);
   });
 });
+

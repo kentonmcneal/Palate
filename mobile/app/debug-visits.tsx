@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
+import { seedDigestFixtures } from "../lib/passive-confirm";
 import {
   getStopState, clearStopLog, parseStopLog,
   type NativeStopState,
@@ -320,6 +321,25 @@ export default function DebugVisitsScreen() {
           <Button title="Inject simulated visit" variant="secondary" onPress={onSimulate} />
           <Button title="Run pipeline now" onPress={onRun} />
           <Button title="Open inbox" variant="ghost" onPress={() => router.push("/passive-inbox")} />
+          {/* The digest is the only confirmation surface now, and it had never
+              once rendered — it needs a same-day capture AND 8:30pm to appear.
+              These two open it on demand so banding, pre-check state, the
+              which-one picker and confirm-all are verifiable in seconds. The
+              real scheduling path is untouched. */}
+          <Button
+            title="Preview digest"
+            variant="ghost"
+            onPress={() => router.push("/digest")}
+          />
+          <Button
+            title="Seed digest fixtures"
+            variant="ghost"
+            onPress={async () => {
+              const n = await seedDigestFixtures();
+              setNote(`seeded ${n} inbox entries (high/medium/low)`);
+              await refresh();
+            }}
+          />
         </View>
 
         {outcomes.length > 0 && (
