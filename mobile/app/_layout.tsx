@@ -27,6 +27,7 @@ import {
 import { supabase } from "../lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { colors } from "../theme";
+import { getMyProfile } from "../lib/profile";
 import * as WebBrowser from "expo-web-browser";
 import { initObservability, captureError } from "../lib/observability";
 import { registerPushToken } from "../lib/notifications";
@@ -354,6 +355,19 @@ export default function RootLayout() {
     return () => sub?.remove();
   }, [session]);
 
+  // Whether this account still needs a handle. Resolved once per session —
+  // this must not become a lookup on every navigation. Defaults to false so a
+  // failed read never traps somebody on the gate.
+  const [needsUsername, setNeedsUsername] = useState(false);
+  useEffect(() => {
+    if (!session) { setNeedsUsername(false); return; }
+    let alive = true;
+    void getMyProfile()
+      .then((p) => { if (alive && p) setNeedsUsername(!p.username); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [session]);
+
   // Route guard: kick to /sign-in if not authed; bounce away from /sign-in
   // once authed. Signed-in users are allowed to be in /onboarding so brand-new
   // accounts can finish setup before landing in the tabs.
@@ -374,8 +388,17 @@ export default function RootLayout() {
       // than stranded, and the routing no longer waits on an approval lookup
       // before deciding where to send someone.
       if (seg0 === "sign-in" || seg0 === "waitlist") router.replace("/(tabs)");
+
+      // A handle is required as of the signup change, but every account made
+      // before it has none, and those people will never see the onboarding
+      // step that asks. Since the profile stopped showing login emails, an
+      // account with no handle and no display name is anonymous to its own
+      // friends. Onboarding is exempt because it asks for one itself.
+      if (needsUsername && seg0 !== "onboarding" && seg0 !== "claim-username") {
+        router.replace("/claim-username");
+      }
     }
-  }, [session, loaded, segments]);
+  }, [session, loaded, segments, needsUsername]);
 
   if (!loaded || !fontsLoaded) {
     return (
@@ -393,6 +416,8 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.paper } }}>
           <Stack.Screen name="sign-in" />
           <Stack.Screen name="onboarding" />
+          {/* Gate, not a destination: no back, reached only by the guard. */}
+          <Stack.Screen name="claim-username" options={{ gestureEnabled: false }} />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="confirm-visit" options={{ presentation: "modal" }} />
           <Stack.Screen name="confirm-multi" options={{ presentation: "modal" }} />

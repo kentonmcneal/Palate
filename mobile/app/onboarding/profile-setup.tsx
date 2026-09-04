@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, TextInput, Pressable, Alert, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -6,15 +6,30 @@ import * as ImagePicker from "expo-image-picker";
 import { Button, Spacer } from "../../components/Button";
 import { Avatar } from "../../components/Avatar";
 import { colors, spacing, type } from "../../theme";
-import { setDisplayName, uploadAvatar } from "../../lib/profile";
+import { setDisplayName, uploadAvatar, setUsername, getMyProfile } from "../../lib/profile";
+import { UsernameField } from "../../components/UsernameField";
+import { validateUsername, suggestUsername } from "../../lib/username";
 import { track } from "../../lib/analytics";
 
 export default function ProfileSetup() {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [handle, setHandle] = useState("");
+  const [handleError, setHandleError] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Offer a handle rather than an empty box. Most people take a reasonable
+  // suggestion, and anyone who cares about theirs was going to type it anyway.
+  useEffect(() => {
+    void getMyProfile()
+      .then((p) => {
+        if (!p) return;
+        setHandle((h) => h || suggestUsername(p.email, p.display_name));
+      })
+      .catch(() => {});
+  }, []);
 
   async function pickPhoto() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -44,12 +59,36 @@ export default function ProfileSetup() {
   }
 
   async function next() {
+    // Username is the one thing this screen will not let you past. Everything
+    // downstream — the feed, profiles, search — identifies people by it now
+    // that email is no longer shown, and an account without one is a stranger
+    // to everybody including its owner.
+    const check = validateUsername(handle);
+    if (!check.ok) {
+      setHandleError(check.message);
+      return;
+    }
+
     setSaving(true);
+    setHandleError(null);
     try {
+      const claimed = await setUsername(check.value);
+      if (!claimed.ok) {
+        setHandleError(
+          claimed.reason === "taken"
+            ? `@${check.value} is taken. Try another.`
+            : "Couldn't save that handle. Try again.",
+        );
+        return;
+      }
       if (name.trim()) {
         await setDisplayName(name);
       }
-      void track("profile_setup_completed", { had_name: !!name.trim(), had_photo: !!avatarUrl });
+      void track("profile_setup_completed", {
+        had_name: !!name.trim(),
+        had_photo: !!avatarUrl,
+        had_username: true,
+      });
       router.push("/onboarding/quiz");
     } catch (e: any) {
       Alert.alert("Couldn't save", e?.message ?? "Try again");
@@ -58,21 +97,25 @@ export default function ProfileSetup() {
     }
   }
 
-  function skip() {
-    router.push("/onboarding/quiz");
-  }
-
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.body}>
         <Text style={styles.h1}>Make it yours.</Text>
         <Spacer size={8} />
         <Text style={styles.p}>
-          A name and a photo so friends can find you. Both are optional — set
-          them now or later.
+          Pick a handle so friends can find you. A name and a photo are
+          optional — set those now or later.
         </Text>
 
-        <Spacer size={32} />
+        <Spacer size={28} />
+
+        <UsernameField
+          value={handle}
+          onChange={(v) => { setHandle(v); setHandleError(null); }}
+          error={handleError}
+        />
+
+        <Spacer size={24} />
 
         <View style={styles.avatarRow}>
           <Pressable onPress={pickPhoto} accessibilityLabel="Choose photo">
@@ -104,11 +147,9 @@ export default function ProfileSetup() {
       </View>
 
       <View style={styles.cta}>
+        {/* No "Skip for now". The handle is required, so offering a way past
+            it would either be a lie or leave accounts nobody can refer to. */}
         <Button title={saving ? "Saving…" : "See your Starter Palate"} onPress={next} loading={saving} />
-        <Spacer size={8} />
-        <Pressable onPress={skip} style={styles.skipBtn}>
-          <Text style={styles.skipText}>Skip for now</Text>
-        </Pressable>
       </View>
     </SafeAreaView>
   );
