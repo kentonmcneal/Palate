@@ -409,9 +409,12 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
       loggableCount: eligible.length,
       radiusM: radius,
       accuracyM: raw.horizontalAccuracy ?? null,
-      dwellMin: raw.departureAt && raw.capturedAt
-        ? Math.round((raw.departureAt - raw.capturedAt) / 60_000)
-        : null,
+      // Arrival to departure, the same measure qualification uses. This read
+      // departureAt - capturedAt, which is how long we WATCHED rather than how
+      // long the user SAT: capture happens whenever the app next wakes, so a
+      // 40-minute dinner could be logged as a 3-minute miss. Threshold tuning
+      // reads this table, so the wrong number here argues for the wrong fix.
+      dwellMin: dwellMinutes(raw) != null ? Math.round(dwellMinutes(raw)!) : null,
       source: raw.source ?? null,
       rejectedSample: places
         .filter((p) => !isLoggableVenue(p))

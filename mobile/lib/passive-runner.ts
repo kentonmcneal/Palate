@@ -16,6 +16,17 @@ import { track } from "./analytics";
 import { logDetectorNote } from "../modules/palate-visit-monitor";
 
 const PROCESSED_KEY = "palate.passive.processedIds";
+const RETRY_KEY = "palate.passive.retryQueue";
+
+// A raw visit that fails the pipeline is retried on the next foreground, but
+// not forever: three attempts, then it is given up on and reported. Unbounded
+// retries would mean a permanently unresolvable venue re-running the pipeline
+// on every launch for the life of the install.
+export const MAX_PIPELINE_ATTEMPTS = 3;
+// Failures should never accumulate faster than they drain.
+const MAX_RETRY_QUEUE = 50;
+
+type RetryItem = { raw: RawVisit; attempts: number; firstFailedAt: number };
 export const RESOLVE_FLAG = "passive_capture_resolve";
 export const CONFIRM_FLAG = "passive_capture_confirm";
 
@@ -28,6 +39,10 @@ export type VisitOutcome = {
 export type RunSummary = {
   ran: boolean;
   detected: number;
+  /** Raw visits re-attempted from a previous failed run. */
+  retried: number;
+  /** Raw visits given up on after MAX_PIPELINE_ATTEMPTS. */
+  dropped: number;
   outcomes: VisitOutcome[];
 };
 
@@ -44,6 +59,19 @@ async function markProcessed(ids: Set<string>): Promise<void> {
   // Cap to the most recent 1000 ids so this never grows unbounded.
   const arr = Array.from(ids).slice(-1000);
   await AsyncStorage.setItem(PROCESSED_KEY, JSON.stringify(arr));
+}
+
+async function loadRetries(): Promise<RetryItem[]> {
+  try {
+    const raw = await AsyncStorage.getItem(RETRY_KEY);
+    return raw ? (JSON.parse(raw) as RetryItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveRetries(items: RetryItem[]): Promise<void> {
+  await AsyncStorage.setItem(RETRY_KEY, JSON.stringify(items.slice(-MAX_RETRY_QUEUE)));
 }
 
 /** Run the full pipeline for a single raw visit. Exposed for the debug screen. */
@@ -125,9 +153,9 @@ let running = false;
 
 /** Drain + process everything unprocessed. Safe to call on every foreground. */
 export async function processPendingVisits(): Promise<RunSummary> {
-  if (running) return { ran: false, detected: 0, outcomes: [] };
+  if (running) return { ran: false, detected: 0, retried: 0, dropped: 0, outcomes: [] };
   if (!(await isFlagEnabled(PASSIVE_CAPTURE_FLAG))) {
-    return { ran: false, detected: 0, outcomes: [] };
+    return { ran: false, detected: 0, retried: 0, dropped: 0, outcomes: [] };
   }
   running = true;
   try {
@@ -138,19 +166,62 @@ export async function processPendingVisits(): Promise<RunSummary> {
 }
 
 async function runProcess(): Promise<RunSummary> {
-  const queue = await drainNativeVisits();
+  // `drainNativeVisits` EMPTIES the native queue, so anything taken here exists
+  // nowhere else. Marking an id processed after a failure — which is what this
+  // did — destroyed the visit permanently: the native copy was already gone and
+  // the id would never be picked up again. A transient network blip while
+  // resolving the venue was enough to lose a real meal, silently.
+  const drained = await drainNativeVisits();
   const processed = await loadProcessed();
-  const fresh = queue.filter((v) => !processed.has(v.id));
+  const retries = await loadRetries();
+  const retryIds = new Set(retries.map((r) => r.raw.id));
+
+  const fresh = drained.filter((v) => !processed.has(v.id) && !retryIds.has(v.id));
+
+  // Retries first: an old failure must not starve behind a stream of new
+  // detections once the queue is at its cap.
+  const work: RetryItem[] = [
+    ...retries,
+    ...fresh.map((raw) => ({ raw, attempts: 0, firstFailedAt: 0 })),
+  ];
 
   const outcomes: VisitOutcome[] = [];
-  for (const raw of fresh) {
+  const stillFailing: RetryItem[] = [];
+  let dropped = 0;
+
+  for (const item of work) {
     try {
-      outcomes.push(await runPipelineForRaw(raw));
-    } catch {
-      // one bad visit must never break the batch
+      outcomes.push(await runPipelineForRaw(item.raw));
+      // Processed means SUCCEEDED. Nothing else may set it.
+      processed.add(item.raw.id);
+    } catch (e: any) {
+      const attempts = item.attempts + 1;
+      if (attempts >= MAX_PIPELINE_ATTEMPTS) {
+        // Give up — but loudly. A visit disappearing is a real product failure
+        // and it should show up in analytics rather than in nobody's history.
+        processed.add(item.raw.id);
+        dropped++;
+        void track("visit_dropped", {
+          attempts,
+          reason: String(e?.message ?? e).slice(0, 120),
+        });
+      } else {
+        stillFailing.push({
+          raw: item.raw,
+          attempts,
+          firstFailedAt: item.firstFailedAt || Date.now(),
+        });
+      }
     }
-    processed.add(raw.id);
   }
+
+  await saveRetries(stillFailing);
   await markProcessed(processed);
-  return { ran: true, detected: fresh.length, outcomes };
+  return {
+    ran: true,
+    detected: fresh.length,
+    retried: retries.length,
+    dropped,
+    outcomes,
+  };
 }

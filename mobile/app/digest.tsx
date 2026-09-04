@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import { Button, Spacer } from "../components/Button";
 import { track } from "../lib/analytics";
 import { getInbox, removeFromInbox } from "../lib/passive-confirm";
+import { confirmDigest } from "../lib/digest-confirm";
 import { buildDigest, type Digest, type DigestEntry } from "../lib/passive-digest";
 import { saveVisit, recordPromptDecision } from "../lib/visits";
 import { loadVisitPayoff } from "../lib/visit-payoff";
@@ -72,51 +73,34 @@ export default function DigestScreen() {
     const all = [...digest.high, ...digest.medium, ...digest.low];
     const confirmed = all.filter((e) => checked.has(e.id));
     const skipped = all.filter((e) => !checked.has(e.id));
-    let firstVisitId: string | null = null;
 
     try {
-      for (const entry of confirmed) {
-        const chosen = resolvedChoice[entry.id];
-        const placeId = chosen?.google_place_id ?? entry.place_id;
-        try {
-          const saved = await saveVisit({
-            googlePlaceId: placeId,
-            visitedAt: new Date(entry.detectedAt),
-            source: "auto",
-          });
-          if (!firstVisitId && saved?.id) firstVisitId = saved.id;
-          await recordPromptDecision(placeId, chosen ? "wrong_place" : "confirmed");
-          void track(chosen ? "confirm_corrected" : "confirm_yes", {
-            place_id: placeId,
-            surface: "digest",
-            confidence: entry.confidence ?? null,
-            confidence_band: entry.band,
-            dwell_min: Math.round(entry.dwellMin),
-            candidate_count: entry.candidateCount ?? null,
-          });
-        } catch {
-          // One bad save must not lose the rest of the day.
-        }
-        await removeFromInbox(entry.id).catch(() => {});
+      // The ordering that keeps a failed save from silently deleting the entry
+      // lives in lib/digest-confirm.ts, where it can be tested.
+      const { savedIds, failed } = await confirmDigest(
+        confirmed as never,
+        skipped as never,
+        resolvedChoice as never,
+        { saveVisit, removeFromInbox, recordPromptDecision, track },
+      );
+
+      track("digest_confirmed", {
+        confirmed: confirmed.length,
+        skipped: skipped.length,
+        failed: failed.length,
+      });
+
+      if (failed.length) {
+        // Still in the inbox, still actionable. Saying so beats a silent
+        // partial success the user only discovers via a missing visit.
+        Alert.alert(
+          failed.length === 1 ? "One visit didn't save" : `${failed.length} visits didn't save`,
+          `${failed.map((f) => f.name).join(", ")} — still waiting for you. Try again in a moment.`,
+        );
       }
 
-      // Unchecked entries are an answer too, and the calibration denominator
-      // needs them: a High row left unticked is exactly the signal that the
-      // pre-check threshold is too generous.
-      for (const entry of skipped) {
-        void track("confirm_no", {
-          place_id: entry.place_id,
-          surface: "digest",
-          confidence: entry.confidence ?? null,
-          confidence_band: entry.band,
-        });
-        await recordPromptDecision(entry.place_id, "dismissed").catch(() => {});
-        await removeFromInbox(entry.id).catch(() => {});
-      }
-
-      void track("digest_confirmed", { confirmed: confirmed.length, skipped: skipped.length });
-      if (firstVisitId) setPayoff(await loadVisitPayoff(firstVisitId));
-      setDone(true);
+      if (savedIds[0]) setPayoff(await loadVisitPayoff(savedIds[0]));
+      setDone(failed.length === 0);
     } finally {
       setSaving(false);
     }
