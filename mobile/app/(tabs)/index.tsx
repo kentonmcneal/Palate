@@ -1,14 +1,14 @@
+import { distanceKm } from "../../lib/match-score";
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, Alert, ScrollView, RefreshControl, Pressable, Image, Animated, Easing, Share } from "react-native";
+import { View, Text, StyleSheet, Alert, ScrollView, RefreshControl, Pressable, Image, Share } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
-import { Button, Spacer } from "../../components/Button";
 import { Wordmark } from "../../components/Logo";
 import { colors, spacing, type } from "../../theme";
 import { getCurrentLocation, logLocationEvent, requestForegroundPermission, classifyAccuracy } from "../../lib/location";
 import { nearbyRestaurants, type Restaurant } from "../../lib/places";
-import { recentlyPrompted, recentVisits, deleteVisitWithUndo, type Visit } from "../../lib/visits";
+import { recentlyPrompted, recentVisits, type Visit } from "../../lib/visits";
 import { openInAppleMaps } from "../../lib/maps";
 import { AnimatedNumber } from "../../components/AnimatedNumber";
 import { computeStreak, type StreakInfo } from "../../lib/streak";
@@ -16,29 +16,19 @@ import { refreshDailyReminder } from "../../lib/notifications";
 import { captureError } from "../../lib/observability";
 import { postMilestoneAndNotify } from "../../lib/feed";
 import { generateInviteLink } from "../../lib/referrals";
-import {
-  analyzeWeeklyPalate,
-  daysUntilSundayWrap,
-  leaningPersonality,
-  type PalateInsight,
-} from "../../lib/palate-insights";
+import { analyzeWeeklyPalate, daysUntilSundayWrap, leaningPersonality, type PalateInsight } from "../../lib/palate-insights";
 import { isoWeekStart } from "../../lib/wrapped";
-import { RecommendationsCard } from "../../components/RecommendationsCard";
-import { GettingStarted } from "../../components/GettingStarted";
 import { Confetti } from "../../components/Confetti";
 import { LocationPill } from "../../components/LocationPill";
 import { RightNowHero } from "../../components/RightNowHero";
-import { StretchPick } from "../../components/StretchPick";
-import { WishlistRail } from "../../components/WishlistRail";
-import { BasedOnSaves, BasedOnSavesEmpty } from "../../components/BasedOnSaves";
-import { NextStepCard } from "../../components/NextStepCard";
+import { HomeHero, TrackingLine } from "../../components/HomeHero";
+import { homeState, type HomeState } from "../../lib/home-state";
+import { getInbox } from "../../lib/passive-confirm";
+import { isPassiveOptedIn } from "../../lib/passive-capture";
+import { hasAlways, currentPermissionState } from "../../lib/passive-permissions";
+import { getGmailStatus } from "../../lib/gmail";
 import { listFriends } from "../../lib/friends";
-import { listWishlist, type WishlistEntry } from "../../lib/palate-insights";
-import { loadRecsFromSaves, type SaveAnchoredRec } from "../../lib/recs-from-saves";
 import { getEffectiveLocation } from "../../lib/browsing-location";
-import { distanceKm } from "../../lib/match-score";
-import { MoodRow } from "../../components/MoodRow";
-import { buildMoodChips, palateRead, SURPRISE, type Mood, type MoodChip } from "../../lib/mood";
 import { loadAnalytics } from "../../lib/analytics-stats";
 
 const STREAK_MILESTONES = [7, 14, 30, 50, 100, 200, 365];
@@ -50,20 +40,6 @@ function milestoneFor(count: number): number | null {
 // Pick up to 8 wishlist entries within ~15km of the current location. Older
 // saves without coordinates pass through unconditionally. If no location is
 // available, show the most recent saves (capped at 8) so the rail isn't empty.
-function filterWishlistForHere(
-  wish: WishlistEntry[],
-  here: { lat: number; lng: number } | null,
-): WishlistEntry[] {
-  if (!here) return wish.slice(0, 8);
-  return wish
-    .filter((w) => {
-      const r = w.restaurant;
-      if (!r) return false;
-      if (r.latitude == null || r.longitude == null) return true;
-      return distanceKm(here, { lat: r.latitude, lng: r.longitude }) < 15;
-    })
-    .slice(0, 8);
-}
 
 export default function Home() {
   const router = useRouter();
@@ -83,18 +59,10 @@ export default function Home() {
 
   // Mood: a temporary cuisine override for tonight. Deliberately not
   // persisted — it is about this meal, not a preference.
-  const { mood: moodParam } = useLocalSearchParams<{ mood?: string }>();
+
   // What the hero chose, so the list below never repeats it.
   const [heroPlaceId, setHeroPlaceId] = useState<string | null>(null);
-  const [mood, setMood] = useState<Mood>(null);
-  const [moodChips, setMoodChips] = useState<MoodChip[]>([]);
-  const [palateLine, setPalateLine] = useState<string | null>(null);
-  const [habitualCuisines, setHabitualCuisines] = useState<string[]>([]);
 
-  // The Thursday nudge deep-links in with ?mood=surprise.
-  useEffect(() => {
-    if (moodParam === "surprise") setMood(SURPRISE);
-  }, [moodParam]);
 
   useEffect(() => {
     let alive = true;
@@ -104,37 +72,64 @@ export default function Home() {
     return () => { alive = false; };
   }, []);
 
-  useEffect(() => {
-    let alive = true;
-    loadAnalytics("month")
-      .then((a) => {
-        if (!alive) return;
-        setMoodChips(buildMoodChips(a.cuisineBreakdown));
-        setPalateLine(palateRead(a.cuisineBreakdown));
-        setHabitualCuisines(
-          a.cuisineBreakdown.filter((c) => c.count >= 2).slice(0, 3).map((c) => c.cuisine),
-        );
-      })
-      .catch(() => {});
-    return () => { alive = false; };
+  // What Home is about right now. Null until the first load resolves, so the
+  // screen never flashes a wrong state before it knows the real one.
+  const [home, setHome] = useState<HomeState | null>(null);
+  const [trackingOn, setTrackingOn] = useState(false);
+  const [lastCheck, setLastCheck] = useState<string | null>(null);
+
+  // What Home is about right now. Assembled from free reads only — a local
+  // permission check, the local inbox, and one RPC. Nothing here touches Gmail
+  // or Google Places, because this runs on every foreground.
+  const loadHomeState = useCallback(async (visitCount: number, friends: number) => {
+    const [inbox, perms, gmail, optedIn] = await Promise.all([
+      getInbox().catch(() => []),
+      currentPermissionState().catch(() => ({ whenInUse: false, always: false })),
+      getGmailStatus().catch(() => ({
+        connected: false, email: null, last_scanned_at: null, imported_count: 0,
+      })),
+      isPassiveOptedIn().catch(() => false),
+    ]);
+    const always = perms.always || (await hasAlways().catch(() => false));
+    const on = optedIn && always;
+
+    setTrackingOn(on);
+    setLastCheck(
+      on
+        ? new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+        : null,
+    );
+    setHome(homeState({
+      pending: inbox.map((e: { name?: string }) => ({ name: e.name ?? "" })),
+      activation: {
+        locationAlways: perms.always,
+        locationWhenInUse: perms.whenInUse,
+        gmailConnected: gmail.connected,
+        gmailImported: gmail.imported_count,
+        visitCount,
+        friendCount: friends,
+      },
+      trackingOn: on,
+    }));
   }, []);
-  const [wishlistRail, setWishlistRail] = useState<WishlistEntry[]>([]);
-  const [hasAnySaves, setHasAnySaves] = useState<boolean | null>(null);
-  const [savesAnchors, setSavesAnchors] = useState<Array<{ id: string; name: string }>>([]);
-  const [savesRecs, setSavesRecs] = useState<SaveAnchoredRec[]>([]);
 
   const load = useCallback(async () => {
     // Location resolves alongside the independent fetches below; the saves rail
     // then runs WITH it so matches stay local (no out-of-town recs for
     // out-of-town saves).
     const locP = getEffectiveLocation().catch(() => null);
-    const [v, s, w, wish] = await Promise.allSettled([
+    const [v, s, w] = await Promise.allSettled([
       recentVisits(10),
       computeStreak(),
       loadCurrentWeekInsight(),
-      listWishlist(),
     ]);
     if (v.status === "fulfilled") setVisits(v.value);
+    // The hero decides what this whole screen is about, so it must not wait on
+    // the recommendation fetches below it.
+    void loadHomeState(
+      v.status === "fulfilled" ? v.value.length : 0,
+      friendCount,
+    ).catch((e) => captureError(e, { at: "loadHomeState" }));
     if (s.status === "fulfilled") {
       setStreak(s.value);
       // Re-engagement: schedule (or clear) tonight's streak-at-risk nudge.
@@ -154,25 +149,10 @@ export default function Home() {
     const loc = await locP;
     const hereLoc = loc ?? null;
     setHere(hereLoc ? { lat: hereLoc.lat, lng: hereLoc.lng } : null);
-    if (wish.status === "fulfilled") {
-      setHasAnySaves(wish.value.length > 0);
-      setWishlistRail(filterWishlistForHere(wish.value, hereLoc));
-    } else {
-      setHasAnySaves(false);
-      setWishlistRail([]);
-    }
-    // Saves rail — location-aware so matches stay near the user.
-    try {
-      const saves = await loadRecsFromSaves(
-        hereLoc ? { here: { lat: hereLoc.lat, lng: hereLoc.lng } } : {},
-      );
-      setSavesAnchors(saves.anchors);
-      setSavesRecs(saves.recs);
-    } catch {
-      setSavesAnchors([]);
-      setSavesRecs([]);
-    }
-  }, [celebratedStreak]);
+    // The saves rail, the wishlist rail and the mood row moved to Discover, so
+    // their fetches go with them. Leaving them running would cost an RPC, a
+    // hydrate query and a wishlist read on every foreground to render nothing.
+  }, [celebratedStreak, friendCount, loadHomeState]);
 
   useFocusEffect(
     useCallback(() => {
@@ -299,156 +279,39 @@ export default function Home() {
           <LocationPill />
         </View>
 
-        {/* Before any of the decision engine: if this account cannot yet make
-            a decision, say the one thing that would fix it. Renders nothing
-            once the account is healthy, so it never becomes furniture. */}
-        <NextStepCard visitCount={visits.length} friendCount={friendCount} />
+        {/* HOME ANSWERS ONE QUESTION.
+            It used to open with five blocks of equal weight — a right-now hero,
+            a mood row, three picks, a stretch pick, a saves rail, a recent list
+            — and leave the reader to work out which mattered. At 9pm with two
+            unreviewed visits, nothing else on this screen is worth looking at.
 
-        {/* HOME = DECISION ENGINE. Strict order per spec:
-            1. What should I eat right now (DOMINANT)
-            2. Places you'll probably like
-            3. One place to stretch your palate
-            4. Saved restaurants
-            (Recent stays at the bottom as a lightweight diary peek.)
-            Analysis lives on Profile → Insights. Reflection lives on Wrapped. */}
+            homeState() picks the one thing, and everything above the fold
+            follows from it. What left Home did not disappear:
+              Recent            -> the Visits tab
+              Places you'll like -> Discover, "For you"
+              Stretch pick      -> Discover, sorted "Something different"
+              Based on saves    -> Discover, "Only places I've saved"
+              Saved rail        -> Discover filter, and Profile
+            Each has one home instead of two, which is how the profile drift
+            got fixed and the same reason applies here. */}
+        {home && <HomeHero state={home} />}
 
-        {/* 1. The dominant decision card. */}
+        {/* One recommendation, not six. */}
+        <View style={styles.homeRule} />
+        <Text style={styles.sectionHead}>
+          {new Date().getHours() >= 21 ? "Still open near you" : "If you're deciding now"}
+        </Text>
         <RightNowHero onPicked={setHeroPlaceId} />
 
-        {/* 2. Visible "Are you eating somewhere?" entry — auto-detect path is
-            the primary way to log a visit. Demoting it to a tiny ghost link
-            killed visit logging — back to a real button. */}
-        <View style={styles.checkNowCard}>
-          <Text style={styles.checkNowEyebrow}>ARE YOU EATING SOMEWHERE?</Text>
-          <Spacer size={8} />
-          <Button
-            title={checking ? "Checking…" : "Check now"}
-            onPress={handleCheckNow}
-            loading={checking}
-          />
-        </View>
+        <TrackingLine on={trackingOn} lastCheck={lastCheck} />
 
-        {/* Saved places near here (rail). Moved up from Discover so saves
-            stay one tap away from the decision engine. */}
-        <WishlistRail
-          items={wishlistRail}
-          here={here}
-          onTap={(gpid) => router.push(`/restaurant/${gpid}` as any)}
-        />
+        {/* The manual path stays reachable and stops defining the screen. */}
+        <Pressable onPress={handleCheckNow} style={styles.checkNowGhost} accessibilityRole="button">
+          <Text style={styles.checkNowGhostText}>
+            {checking ? "Checking…" : "Eating somewhere right now? Check →"}
+          </Text>
+        </Pressable>
 
-        {/* Places you'll probably like — 3 picks, with a mood override.
-            Home's recs describe the PAST (the taste graph is built from logged
-            visits). The mood row lets tonight differ from the pattern without
-            throwing the pattern away: picking Mexican still ranks by YOUR fit,
-            it just narrows what's eligible. */}
-        <Text style={styles.sectionHead}>Places you'll probably like</Text>
-        {!!palateLine && (
-          <View style={styles.palateReadRow}>
-            <Text style={styles.palateRead}>{palateLine}</Text>
-            {mood === null && (
-              <Text style={styles.palateReadCta}>In the mood for something else?</Text>
-            )}
-          </View>
-        )}
-        <MoodRow chips={moodChips} value={mood} onChange={setMood} />
-        <RecommendationsCard
-          mood={mood}
-          habitualCuisines={habitualCuisines}
-          excludePlaceIds={heroPlaceId ? [heroPlaceId] : []}
-        />
-
-        {/* One stretch pick — explicitly its own block AFTER the recs. */}
-        <Text style={styles.sectionHead}>Stretch your palate</Text>
-        <StretchPick />
-
-        {/* "Because you saved X, Y, Z" — surfaces things similar to the user's
-            HIGH-INTENT signal (saves). Moved BELOW the primary recs per spec.
-            Empty-state nudge when the user has zero saves yet. */}
-        {savesRecs.length > 0 ? (
-          <BasedOnSaves
-            anchors={savesAnchors}
-            recs={savesRecs}
-            onTap={(gpid) => router.push(`/restaurant/${gpid}` as any)}
-          />
-        ) : hasAnySaves === false ? (
-          <BasedOnSavesEmpty />
-        ) : null}
-
-        {/* Saved restaurants moved to Profile per spec — Home stays decision-only. */}
-
-        {visits.length === 0 && (
-          <View style={{ marginTop: spacing.xxl }}>
-            <GettingStarted />
-          </View>
-        )}
-
-        <View style={{ marginTop: spacing.xxl }}>
-          <View style={styles.recentHead}>
-            <Text style={type.title}>Recent</Text>
-            {visits.length > 0 && (
-              <Pressable onPress={() => router.push("/(tabs)/visits")}>
-                <Text style={styles.viewAll}>View all →</Text>
-              </Pressable>
-            )}
-          </View>
-          <Spacer size={12} />
-          {visits.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={[type.small, { lineHeight: 20 }]}>
-                Logged visits show up here. Each one sharpens your weekly Wrapped.
-              </Text>
-            </View>
-          ) : (
-            visits.map((v) => (
-              <VisitRow
-                key={v.id}
-                v={v}
-                onPress={() => router.push(`/visit/${v.id}`)}
-                onLongPress={() => {
-                  Alert.alert(
-                    "Delete this visit?",
-                    `${v.restaurant?.name ?? "Unknown"} on ${new Date(v.visited_at).toLocaleDateString()}`,
-                    [
-                      { text: "Cancel", style: "cancel" },
-                      {
-                        text: "Delete",
-                        style: "destructive",
-                        onPress: async () => {
-                          try {
-                            const removed = v;
-                            const { undo } = await deleteVisitWithUndo(v.id);
-                            setVisits((curr) => curr.filter((x) => x.id !== v.id));
-                            // 6-second undo window via Alert
-                            Alert.alert(
-                              "Visit deleted",
-                              `Removed ${removed.restaurant?.name ?? "visit"}.`,
-                              [
-                                { text: "OK", style: "default" },
-                                {
-                                  text: "Undo",
-                                  onPress: async () => {
-                                    try {
-                                      await undo();
-                                      setVisits((curr) => [removed, ...curr]);
-                                    } catch (e: any) {
-                                      Alert.alert("Couldn't undo", e?.message ?? "Try again");
-                                    }
-                                  },
-                                },
-                              ],
-                            );
-                          } catch (e: any) {
-                            Alert.alert("Couldn't delete", e.message ?? "Try again");
-                          }
-                        },
-                      },
-                    ],
-                  );
-                }}
-              />
-            ))
-          )}
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -566,9 +429,12 @@ function prettyType(t: string) {
 }
 
 const styles = StyleSheet.create({
-  palateReadRow: { marginTop: 6, marginBottom: 2 },
-  palateRead: { fontSize: 14, color: colors.ink, fontWeight: "600" },
-  palateReadCta: { fontSize: 13, color: colors.redText, fontWeight: "700", marginTop: 2 },
+  homeRule: {
+    height: 1, backgroundColor: colors.line,
+    marginTop: spacing.lg, marginBottom: spacing.lg,
+  },
+  checkNowGhost: { paddingVertical: 14, alignItems: "center" },
+  checkNowGhostText: { fontSize: 13, fontWeight: "700", color: colors.redText },
   safe: { flex: 1, backgroundColor: colors.paper },
   container: { padding: spacing.lg, paddingBottom: 100 },
   header: {
@@ -626,16 +492,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.5,
   },
-  heroCard: {
-    backgroundColor: colors.faint,
-    borderRadius: 24,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  heroEyebrow: { ...type.micro },
-  heroTitle: { ...type.title, marginTop: 6 },
-  heroBody: { ...type.body, color: colors.mute, marginTop: 6, lineHeight: 22 },
 
   sectionHead: {
     fontSize: 18, fontWeight: "800", color: colors.ink,
@@ -643,20 +499,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     marginBottom: 12,  // positive margin so descenders don't get clipped by next card
     paddingBottom: 4,
-  },
-  checkNowCard: {
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: 18,
-    backgroundColor: colors.faint,
-    borderWidth: 1, borderColor: colors.line,
-  },
-  checkNowEyebrow: { ...type.micro, color: colors.mute },
-  emptyCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.line,
-    padding: spacing.lg,
   },
   visitCard: {
     flexDirection: "row",
@@ -682,6 +524,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
   },
   visitMapsBtnText: { fontSize: 12, fontWeight: "700", color: colors.ink },
-  recentHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  viewAll: { color: colors.redText, fontSize: 13, fontWeight: "700" },
 });
