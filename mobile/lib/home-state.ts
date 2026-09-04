@@ -15,7 +15,7 @@
 // ============================================================================
 
 import { nextStep, type ActivationState, type NextStep } from "./next-step";
-import { DIGEST_HOUR, DIGEST_MINUTE } from "./passive-digest";
+import { digestMomentOn, digestHourOn, DIGEST_MINUTE } from "./passive-digest";
 
 export type HomeState =
   /** Detected visits are waiting. Nothing else on Home competes with this. */
@@ -35,8 +35,10 @@ export type HomeInputs = {
   trackingOn: boolean;
 };
 
-function digestTimeLabel(): string {
-  const hour: number = DIGEST_HOUR;
+/** Tonight's digest time, in words. Reads the schedule so the copy on Home can
+ *  never drift from when the notification actually fires. */
+function digestTimeLabel(now: Date): string {
+  const hour = digestHourOn(now);
   const minute: number = DIGEST_MINUTE;
   const h = hour % 12 === 0 ? 12 : hour % 12;
   const suffix = hour >= 12 ? "pm" : "am";
@@ -100,15 +102,13 @@ export function homeState(input: HomeInputs, now = new Date()): HomeState {
 
   // 3. Tracking is on and tonight's digest has not fired yet. Say so plainly
   //    and ask for nothing — a screen with no task should not invent one.
-  const digestFired =
-    now.getHours() > DIGEST_HOUR
-    || (now.getHours() === DIGEST_HOUR && now.getMinutes() >= DIGEST_MINUTE);
+  const digestFired = now.getTime() >= digestMomentOn(now).getTime();
 
   if (trackingOn && !digestFired) {
     return {
       kind: "waiting",
       headline: "Nothing to confirm\nyet.",
-      body: `Tonight's visits will be ready at ${digestTimeLabel()}.`,
+      body: `Tonight's visits will be ready at ${digestTimeLabel(now)}.`,
     };
   }
 

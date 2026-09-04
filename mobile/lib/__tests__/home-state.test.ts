@@ -15,7 +15,7 @@ function inputs(over: Partial<HomeInputs> = {}): HomeInputs {
   return { pending: [], activation: healthy, trackingOn: true, ...over };
 }
 
-// 2026-09-03 is a Thursday. The digest fires at 8:30pm.
+// 2026-09-03 is a Thursday, so the digest fires at 9pm (11pm on Saturdays).
 const at = (h: number, m = 0) => new Date(2026, 8, 3, h, m);
 
 describe("homeState priority", () => {
@@ -61,14 +61,14 @@ describe("homeState priority", () => {
   it("reassures before the digest fires, and asks for nothing", () => {
     const s = homeState(inputs(), at(14));
     expect(s.kind).toBe("waiting");
-    if (s.kind === "waiting") expect(s.body).toContain("8:30");
+    if (s.kind === "waiting") expect(s.body).toContain("9pm");
     // No CTA on this state — a screen with no task must not invent one.
     expect("cta" in s).toBe(false);
   });
 
   it("switches out of waiting the minute the digest is due", () => {
-    expect(homeState(inputs(), at(20, 29)).kind).toBe("waiting");
-    expect(homeState(inputs(), at(20, 30)).kind).toBe("steady");
+    expect(homeState(inputs(), at(20, 59)).kind).toBe("waiting");
+    expect(homeState(inputs(), at(21, 0)).kind).toBe("steady");
   });
 
   it("tells someone with tracking off what would fix it", () => {

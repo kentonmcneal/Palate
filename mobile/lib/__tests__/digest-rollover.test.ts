@@ -15,8 +15,8 @@ function entry(id: string, detectedAt: Date): InboxEntry {
 // silently destroyed. These pin the behaviour that replaced it.
 describe("digest rollover", () => {
   it("carries a 9pm visit into the next evening's digest", () => {
-    const lateDinner = entry("late", new Date("2026-09-01T21:00:00"));
-    const nextEvening = new Date("2026-09-02T20:30:00");
+    const lateDinner = entry("late", new Date("2026-09-01T21:30:00"));
+    const nextEvening = new Date("2026-09-02T21:00:00");
 
     expect(entriesForDigest([lateDinner], nextEvening)).toHaveLength(1);
     expect(buildDigest([lateDinner], nextEvening).total).toBe(1);
@@ -24,32 +24,32 @@ describe("digest rollover", () => {
 
   it("still shows it when the digest is opened later that night", () => {
     // Opening at 11pm must not drop items off the top as the clock moves.
-    const lateDinner = entry("late", new Date("2026-09-01T21:00:00"));
+    const lateDinner = entry("late", new Date("2026-09-01T21:30:00"));
     expect(entriesForDigest([lateDinner], new Date("2026-09-02T23:00:00"))).toHaveLength(1);
   });
 
   it("does not resurface something already two days stale", () => {
     const old = entry("old", new Date("2026-08-30T12:00:00"));
-    expect(entriesForDigest([old], new Date("2026-09-02T20:30:00"))).toHaveLength(0);
+    expect(entriesForDigest([old], new Date("2026-09-02T21:00:00"))).toHaveLength(0);
   });
 
   it("excludes a detection dated in the future", () => {
     const future = entry("future", new Date("2026-09-03T12:00:00"));
-    expect(entriesForDigest([future], new Date("2026-09-02T20:30:00"))).toHaveLength(0);
+    expect(entriesForDigest([future], new Date("2026-09-02T21:00:00"))).toHaveLength(0);
   });
 
   it("opens the window at the previous digest hour, whatever time it is asked", () => {
     // Before today's 8:30pm the live window is the one that opened at
     // yesterday's — otherwise a morning check would show nothing at all.
     expect(digestWindowStart(new Date("2026-09-02T10:00:00")).toISOString())
-      .toBe(new Date("2026-08-31T20:30:00").toISOString());
-    expect(digestWindowStart(new Date("2026-09-02T21:00:00")).toISOString())
-      .toBe(new Date("2026-09-01T20:30:00").toISOString());
+      .toBe(new Date("2026-08-31T21:00:00").toISOString());
+    expect(digestWindowStart(new Date("2026-09-02T22:00:00")).toISOString())
+      .toBe(new Date("2026-09-01T21:00:00").toISOString());
   });
 
   it("holds a lunch logged this morning until the evening digest", () => {
     const lunch = entry("lunch", new Date("2026-09-02T12:30:00"));
-    expect(entriesForDigest([lunch], new Date("2026-09-02T20:30:00"))).toHaveLength(1);
+    expect(entriesForDigest([lunch], new Date("2026-09-02T21:00:00"))).toHaveLength(1);
   });
 });
 
@@ -59,19 +59,19 @@ describe("digest rollover", () => {
 // only re-runs when a NEW entry lands. The visit sat in the inbox and nobody
 // was ever asked.
 describe("digestTimeFor", () => {
-  const { digestTimeFor, DIGEST_HOUR, DIGEST_MINUTE } = require("../passive-digest");
+  const { digestTimeFor, digestHourOn, DIGEST_MINUTE } = require("../passive-digest");
 
   it("schedules tonight when the slot is still ahead", () => {
     const when = digestTimeFor(new Date("2026-09-02T14:00:00"));
     expect(when.getDate()).toBe(2);
-    expect(when.getHours()).toBe(DIGEST_HOUR);
+    expect(when.getHours()).toBe(21);
     expect(when.getMinutes()).toBe(DIGEST_MINUTE);
   });
 
-  it("rolls a 9pm capture to tomorrow instead of dropping it", () => {
-    const when = digestTimeFor(new Date("2026-09-02T21:00:00"));
+  it("rolls a post-digest capture to tomorrow instead of dropping it", () => {
+    const when = digestTimeFor(new Date("2026-09-02T21:30:00"));
     expect(when.getDate()).toBe(3);
-    expect(when.getHours()).toBe(DIGEST_HOUR);
+    expect(when.getHours()).toBe(21);
   });
 
   it("rolls across a month boundary", () => {
@@ -84,6 +84,54 @@ describe("digestTimeFor", () => {
     for (let h = 0; h < 24; h++) {
       const now = new Date(2026, 8, 2, h, 31);
       expect(digestTimeFor(now).getTime()).toBeGreaterThan(now.getTime());
+    }
+  });
+});
+
+// Later on the nights people eat later. 2026-09-04 is a Friday, so the 5th is
+// Saturday and the 6th is Sunday.
+describe("weekday schedule", () => {
+  const { digestTimeFor, digestHourOn, digestWindowStart } = require("../passive-digest");
+
+  it("fires at 9pm on weekdays and Sunday, 11pm on Saturday", () => {
+    expect(digestHourOn(new Date("2026-09-06T12:00:00"))).toBe(21); // Sun
+    expect(digestHourOn(new Date("2026-09-07T12:00:00"))).toBe(21); // Mon
+    expect(digestHourOn(new Date("2026-09-04T12:00:00"))).toBe(21); // Fri
+    expect(digestHourOn(new Date("2026-09-05T12:00:00"))).toBe(23); // Sat
+  });
+
+  it("holds a Saturday dinner until 11pm rather than asking at 9", () => {
+    const when = digestTimeFor(new Date("2026-09-05T21:30:00"));
+    expect(when.getDate()).toBe(5);
+    expect(when.getHours()).toBe(23);
+  });
+
+  it("takes tomorrow's hour when rolling forward into a different night", () => {
+    // 10pm Friday is past Friday's 9pm, so this rolls to Saturday — which is an
+    // 11pm night, not a 9pm one. Carrying today's hour forward would be wrong.
+    const when = digestTimeFor(new Date("2026-09-04T22:00:00"));
+    expect(when.getDate()).toBe(5);
+    expect(when.getHours()).toBe(23);
+  });
+
+  it("spans the real gap when the hour changes overnight", () => {
+    // The window closing Saturday 11pm opened Friday 9pm — 26 hours, not 24.
+    // Subtracting a fixed day would have clipped two hours of Friday night.
+    const start = digestWindowStart(new Date("2026-09-05T23:30:00"));
+    expect(start.getDate()).toBe(4);
+    expect(start.getHours()).toBe(21);
+  });
+
+  it("never leaves a gap between one window and the next", () => {
+    // Every digest window must begin exactly where the previous one ended, or
+    // visits fall between two digests and are never shown by either.
+    for (let d = 1; d <= 14; d++) {
+      const fireDay = new Date(2026, 8, d, 12, 0);
+      const { digestMomentOn } = require("../passive-digest");
+      const fire = digestMomentOn(fireDay);
+      const prevDay = new Date(fireDay);
+      prevDay.setDate(prevDay.getDate() - 1);
+      expect(digestWindowStart(fire).getTime()).toBe(digestMomentOn(prevDay).getTime());
     }
   });
 });

@@ -4,7 +4,7 @@ import {
 } from "../passive-digest";
 import type { InboxEntry } from "../passive-confirm";
 
-const DAY = new Date("2026-08-31T20:30:00");
+const DAY = new Date("2026-08-31T21:00:00");
 
 function entry(p: Partial<InboxEntry> & { id: string; detectedAt: number }): InboxEntry {
   return {
@@ -69,8 +69,12 @@ describe("buildDigest", () => {
     expect(d.low[0].ambiguous).toBe(true);
   });
 
-  it("excludes entries from other days", () => {
-    const yesterday = new Date(2026, 7, 30, 12).getTime();
+  it("excludes entries older than the current digest window", () => {
+    // Was "other days". The window is now a full cycle rather than a calendar
+    // day, so the excluded case has to be genuinely stale — two days back —
+    // and yesterday evening is deliberately still included (that is the
+    // late-dinner fix).
+    const yesterday = new Date(2026, 7, 29, 12).getTime();
     const d = buildDigest([
       entry({ id: "today", detectedAt: at(12), confidenceBand: "high" }),
       entry({ id: "yesterday", detectedAt: yesterday, confidenceBand: "high" }),

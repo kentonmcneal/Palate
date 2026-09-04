@@ -78,13 +78,19 @@ const byTime = (a: DigestEntry, b: DigestEntry) => a.detectedAt - b.detectedAt;
  * clock moves.
  */
 export function digestWindowStart(now: Date): Date {
-  const anchor = new Date(now);
-  anchor.setHours(DIGEST_HOUR, DIGEST_MINUTE, 0, 0);
-  // Before today's digest hour, the live window is still the one that opened
-  // at yesterday's.
-  if (anchor.getTime() > now.getTime()) anchor.setDate(anchor.getDate() - 1);
-  anchor.setDate(anchor.getDate() - 1);
-  return anchor;
+  // The most recent digest moment at or before `now` — today's if it has
+  // passed, otherwise yesterday's.
+  let anchorDay = new Date(now);
+  if (digestMomentOn(anchorDay).getTime() > now.getTime()) {
+    anchorDay.setDate(anchorDay.getDate() - 1);
+  }
+  // The window opens at the digest BEFORE that one, so it always spans a full
+  // cycle. Computed from the previous day rather than by subtracting 24 hours,
+  // because the hour differs by weekday: the window that closes Saturday at
+  // 11pm opened Friday at 9pm, and that is 26 hours, not 24.
+  const prevDay = new Date(anchorDay);
+  prevDay.setDate(prevDay.getDate() - 1);
+  return digestMomentOn(prevDay);
 }
 
 /** Entries detected within the current digest window. */
@@ -147,15 +153,40 @@ export function allowsRealtimePrompt(entry: InboxEntry): boolean {
 // blank 8:30pm digest each morning and fill it in later.
 //
 // Instead the digest is (re)scheduled every time a visit lands in the inbox,
-// for tonight at DIGEST_HOUR, with copy reflecting everything captured so far.
+// for tonight at that night's digest hour, with copy reflecting everything so far.
 // The consequence is the behaviour we want: a day with no captures schedules
 // nothing and the user hears nothing.
 
 import * as Notifications from "expo-notifications";
 import { track } from "./analytics";
 
-export const DIGEST_HOUR = 20;
-export const DIGEST_MINUTE = 30;
+// The digest fires later on the nights people actually eat later. Sunday sits
+// with the weekdays: Sunday dinner is an early meal in a way Saturday night is
+// not. One table, so moving a night is a one-line change and every consumer —
+// the scheduler, the window, and the Home copy — moves with it.
+//
+// Index is JS getDay(): 0 = Sunday.
+export const DIGEST_HOUR_BY_WEEKDAY: readonly number[] = [
+  21, // Sun
+  21, // Mon
+  21, // Tue
+  21, // Wed
+  21, // Thu
+  21, // Fri
+  23, // Sat
+];
+export const DIGEST_MINUTE = 0;
+
+export function digestHourOn(day: Date): number {
+  return DIGEST_HOUR_BY_WEEKDAY[day.getDay()];
+}
+
+/** The digest moment on the calendar day `day` falls in. */
+export function digestMomentOn(day: Date): Date {
+  const at = new Date(day);
+  at.setHours(digestHourOn(day), DIGEST_MINUTE, 0, 0);
+  return at;
+}
 export const DIGEST_KIND = "passive_digest";
 
 const DIGEST_NOTIF_ID_KEY = "palate.passive.digestNotifId";
@@ -166,8 +197,7 @@ const DIGEST_NOTIF_ID_KEY = "palate.passive.digestNotifId";
  * better than buzzing someone at midnight about dinner.
  */
 export function digestTimeFor(now: Date): Date {
-  const at = new Date(now);
-  at.setHours(DIGEST_HOUR, DIGEST_MINUTE, 0, 0);
+  const at = digestMomentOn(now);
   // Past tonight's slot, roll to tomorrow's rather than returning null.
   //
   // Returning null meant a visit detected AFTER 8:30 — a late dinner, the
@@ -179,8 +209,12 @@ export function digestTimeFor(now: Date): Date {
   // This is the other half of the calendar-day bug: buildDigest now carries a
   // late visit into the next digest, and this makes sure that digest is
   // actually announced.
-  if (at.getTime() <= now.getTime()) at.setDate(at.getDate() + 1);
-  return at;
+  if (at.getTime() > now.getTime()) return at;
+  // Tomorrow — and tomorrow may be a later night, so take its own hour rather
+  // than carrying today's forward.
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return digestMomentOn(tomorrow);
 }
 
 /**
