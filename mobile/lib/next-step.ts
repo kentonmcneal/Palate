@@ -94,7 +94,7 @@ export function nextStep(s: ActivationState): NextStep | null {
       title: "Start from what you've already eaten",
       body: "Reservation and delivery confirmations in your email become visits. You'll see everything we find before anything is saved.",
       cta: "Scan my email",
-      route: "/(tabs)/settings",
+      route: "/settings",
     };
   }
 

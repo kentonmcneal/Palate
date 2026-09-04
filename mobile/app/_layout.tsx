@@ -419,6 +419,12 @@ export default function RootLayout() {
           <Stack.Screen name="featured-list/[slug]" options={{ presentation: "modal" }} />
           <Stack.Screen name="location-picker" options={{ presentation: "modal" }} />
           <Stack.Screen name="wrapped-story" options={{ presentation: "modal" }} />
+          {/* Settings and profile editing are pushed from the Profile tab, not
+              presented as modals — you go there to change things and come back,
+              and a card that slides over the profile hides the thing you are
+              editing. */}
+          <Stack.Screen name="settings" />
+          <Stack.Screen name="edit-profile" />
         </Stack>
         <ScreenshotFeedbackSheet
           visible={screenshotPrompt}

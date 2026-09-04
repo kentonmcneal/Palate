@@ -88,8 +88,13 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => <TabIcon glyph="◉" color={color} />,
         }}
       />
+      {/* File is `me.tsx`, not `profile.tsx`: `app/profile/[id].tsx` already
+          owns the `profile` segment at the root, and two nodes with the same
+          name at the same level is the kind of routing ambiguity that resolves
+          differently between dev and a release bundle. The tab is still
+          labelled Profile. */}
       <Tabs.Screen
-        name="settings"
+        name="me"
         options={{
           title: "Profile",
           tabBarIcon: ({ color }) => <TabIcon glyph="◐" color={color} />,

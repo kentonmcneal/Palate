@@ -117,6 +117,10 @@ export type FriendProfileSnapshot = {
   current_city: string | null;
   instagram_handle: string | null;
   tiktok_handle: string | null;
+  // Visits the owner has kept off their profile. Null for everyone but the
+  // owner — a friend must not be able to tell a curated profile from a
+  // complete one, which a zero-vs-null distinction would give away.
+  hidden_visits: number | null;
 };
 
 export async function getFriendProfileSnapshot(targetId: string): Promise<FriendProfileSnapshot | null> {
@@ -237,4 +241,32 @@ export async function uploadAvatar(uri: string): Promise<string> {
   if (updateErr) throw updateErr;
 
   return url;
+}
+
+// ============================================================================
+// Palate matches — "you and Maya keep landing at the same places".
+// ============================================================================
+// Deliberately count-free. The RPC (0074) returns names and one example place
+// and nothing rankable, because the moment this shows a number it becomes a
+// standing people compare themselves against. Reciprocity and the friends-only
+// gate are enforced server-side; there is no client flag that loosens them.
+
+export type PalateMatchPeer = {
+  id: string;
+  display_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  shared_place: string | null;
+};
+
+export async function loadPalateMatches(
+  targetId: string,
+  limit = 3,
+): Promise<PalateMatchPeer[]> {
+  const { data, error } = await supabase
+    .rpc("palate_matches", { target_id: targetId, p_limit: limit });
+  // A profile you cannot see returns an empty set rather than an error, so a
+  // failure here is genuinely unexpected — surface nothing, log nothing loud.
+  if (error) return [];
+  return (data as PalateMatchPeer[]) ?? [];
 }

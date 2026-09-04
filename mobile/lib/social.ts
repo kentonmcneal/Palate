@@ -1,3 +1,4 @@
+import { Linking } from "react-native";
 // ============================================================================
 // social.ts — the people layer: your card, and everyone else's.
 // ----------------------------------------------------------------------------
@@ -71,6 +72,33 @@ export function instagramUrl(handle: string): string {
 
 export function tiktokUrl(handle: string): string {
   return `https://tiktok.com/@${handle}`;
+}
+
+/**
+ * Open a profile in the Instagram app, falling back to the web profile.
+ *
+ * `canOpenURL` for a custom scheme is gated by LSApplicationQueriesSchemes on
+ * iOS: without `instagram` declared in app.json it returns false even when the
+ * app is installed, and the user silently gets the website instead. That entry
+ * is native config, so it only takes effect in a new build — the web fallback
+ * is what runs everywhere else, and it is a correct outcome, not a failure.
+ */
+export async function openInstagram(handle: string): Promise<void> {
+  const web = instagramUrl(handle);
+  try {
+    const appUrl = `instagram://user?username=${encodeURIComponent(handle)}`;
+    if (await Linking.canOpenURL(appUrl)) {
+      await Linking.openURL(appUrl);
+      return;
+    }
+  } catch {
+    // Fall through to the browser.
+  }
+  await Linking.openURL(web);
+}
+
+export async function openTikTok(handle: string): Promise<void> {
+  await Linking.openURL(tiktokUrl(handle));
 }
 
 export async function saveSocialFields(input: {
