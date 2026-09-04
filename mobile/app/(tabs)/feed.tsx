@@ -93,7 +93,7 @@ export default function FeedTab() {
         <View style={styles.header}>
           <Text style={type.title}>Feed</Text>
           <Text style={[type.body, { color: colors.mute, marginTop: 4 }]}>
-            How your friends actually eat.
+            How everyone on Palate actually eats.
           </Text>
         </View>
         <ScrollView
@@ -126,16 +126,17 @@ export default function FeedTab() {
 
         {!loading && events.length === 0 && (
           <View style={styles.empty}>
-            <Text style={type.subtitle}>Your feed is quiet right now.</Text>
+            <Text style={type.subtitle}>Nobody's eaten yet today.</Text>
             <Text style={[type.small, { marginTop: 8, lineHeight: 20 }]}>
-              When friends share Wrapped or hit a milestone, it'll show up here.
+              Every meal anyone logs shows up here — you don't have to add them
+              first. Log one and you'll be the one everybody sees.
             </Text>
             <Spacer />
             <Pressable
-              onPress={() => router.push("/friends")}
+              onPress={() => router.push("/people")}
               style={styles.emptyCta}
             >
-              <Text style={styles.emptyCtaText}>Find friends →</Text>
+              <Text style={styles.emptyCtaText}>Browse everyone →</Text>
             </Pressable>
           </View>
         )}
@@ -165,7 +166,9 @@ function FeedRow({
   onReportedEvent: (eventId: string) => void;
 }) {
   const router = useRouter();
-  const name = event.user?.display_name || (event.user?.email ? event.user.email.split("@")[0] : "Someone");
+  // No email fallback any more — `list_feed` does not return one, on purpose.
+  const name = event.user?.display_name
+    || (event.user?.username ? `@${event.user.username}` : "Someone");
   const when = relativeTime(event.created_at);
 
   function doReport(reason: (typeof REPORT_REASONS)[number]["key"]) {
@@ -214,7 +217,7 @@ function FeedRow({
           style={styles.rowMain}
           onPress={() => event.user_id && router.push(`/profile/${event.user_id}`)}
         >
-          <Avatar uri={event.user?.avatar_url} name={event.user?.display_name} email={event.user?.email} size={40} />
+          <Avatar uri={event.user?.avatar_url} name={event.user?.display_name} size={40} />
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{name}</Text>
             <Text style={styles.when}>{when}</Text>

@@ -1,9 +1,11 @@
 // ============================================================================
-// feed.ts — friends' feed events + likes.
+// feed.ts — the feed, and likes.
 // ----------------------------------------------------------------------------
-// Events you can see (governed by RLS in 0007_social_layer.sql):
+// Events you can see (0077):
 //   - your own
-//   - your friends' (when their visibility is 'friends' or 'public')
+//   - anyone whose profile visibility is 'public'
+//   - your friends', when their visibility is 'friends'
+//   - never anyone whose visibility is 'private', and never across a block
 //
 // Event kinds:
 //   wrapped_shared  — user explicitly shared their weekly Wrapped to feed
@@ -28,11 +30,18 @@ export type FeedEvent = {
   kind: FeedEventKind;
   payload: any; // type depends on kind; cast at consumer
   created_at: string;
-  /** Joined profile of the user. */
+  /**
+   * The author. Comes from `list_feed`, not a PostgREST join: `profiles` is
+   * own-row RLS, so the embedded join this used to do returned null for
+   * everybody but you — every post in the feed was nameless and faceless.
+   *
+   * No email. 0036 took it out of user search to stop address enumeration and
+   * the feed is a far wider surface than search.
+   */
   user: {
     id: string;
-    email: string | null;
     display_name: string | null;
+    username: string | null;
     avatar_url: string | null;
   } | null;
   /** True if current user has liked this event. */
@@ -50,46 +59,34 @@ export async function listFeed(limit = 50): Promise<FeedEvent[]> {
   const me = await currentUserId();
   if (!me) return [];
 
+  // One definer call replaces the table read plus two like queries. Visibility,
+  // per-visit curation and author identity are all resolved server-side, so
+  // there is no arrangement of client state that can widen what comes back.
   const [{ data, error }, hidden] = await Promise.all([
-    supabase
-      .from("feed_events")
-      .select(`
-        id, user_id, kind, payload, created_at,
-        user:profiles!feed_events_user_id_fkey ( id, email, display_name, avatar_url )
-      `)
-      .order("created_at", { ascending: false })
-      .limit(limit),
+    supabase.rpc("list_feed", { p_limit: limit }),
     hiddenUserIds(),
   ]);
   if (error) throw error;
-  // Drop posts from anyone blocked (either direction) before anything else.
-  const events = ((data ?? []) as any[]).filter((e) => !hidden.has(e.user_id));
-  if (!events.length) return [];
 
-  // Bulk-load like counts + my likes so we don't N+1
-  const ids = events.map((e) => e.id);
-  const [{ data: likeRows }, { data: myLikeRows }] = await Promise.all([
-    supabase.from("feed_likes").select("feed_event_id").in("feed_event_id", ids),
-    supabase.from("feed_likes").select("feed_event_id").eq("user_id", me).in("feed_event_id", ids),
-  ]);
-  const likeCounts = new Map<string, number>();
-  for (const r of (likeRows ?? []) as Array<{ feed_event_id: string }>) {
-    likeCounts.set(r.feed_event_id, (likeCounts.get(r.feed_event_id) ?? 0) + 1);
-  }
-  const myLikes = new Set<string>(
-    ((myLikeRows ?? []) as Array<{ feed_event_id: string }>).map((r) => r.feed_event_id),
-  );
-
-  return events.map((e) => ({
-    id: e.id,
-    user_id: e.user_id,
-    kind: e.kind as FeedEventKind,
-    payload: e.payload,
-    created_at: e.created_at,
-    user: e.user,
-    iLiked: myLikes.has(e.id),
-    likeCount: likeCounts.get(e.id) ?? 0,
-  }));
+  // Blocks are enforced in the RPC too. This is the local mute list, which the
+  // server has no reason to know about.
+  return ((data ?? []) as any[])
+    .filter((e) => !hidden.has(e.user_id))
+    .map((e) => ({
+      id: e.id,
+      user_id: e.user_id,
+      kind: e.kind as FeedEventKind,
+      payload: e.payload,
+      created_at: e.created_at,
+      user: {
+        id: e.user_id,
+        display_name: e.author_display_name,
+        username: e.author_username,
+        avatar_url: e.author_avatar_url,
+      },
+      iLiked: Boolean(e.i_liked),
+      likeCount: e.like_count ?? 0,
+    }));
 }
 
 // ----------------------------------------------------------------------------

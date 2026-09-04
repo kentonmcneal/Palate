@@ -56,13 +56,17 @@ export function ProfileBody({ targetId }: { targetId: string }) {
   }, []);
 
   useEffect(() => {
-    if (!snapshot?.is_friend || snapshot?.is_self) return;
+    // Compatibility is computed for anyone whose profile you can actually see,
+    // not just accepted friends — since 0077 that includes every public
+    // profile. `friend_taste_features` applies the same gate server-side and
+    // returns nothing when it does not hold.
+    if (snapshot?.is_self || snapshot?.total_visits === null) return;
     let alive = true;
     loadPalateMatch(targetId)
       .then((m) => alive && setMatch(m))
       .catch(() => {});
     return () => { alive = false; };
-  }, [snapshot?.is_friend, snapshot?.is_self, targetId]);
+  }, [snapshot?.total_visits, snapshot?.is_self, targetId]);
 
   const load = useCallback(async () => {
     try {
@@ -163,6 +167,11 @@ export function ProfileBody({ targetId }: { targetId: string }) {
   }
 
   const mine = Boolean(snapshot?.is_self);
+  // Whether this viewer is allowed to see profile CONTENT, as opposed to bare
+  // identity. The RPC is the authority: it nulls every content column when the
+  // answer is no, so asking the data beats re-deriving the rule here and
+  // getting a different answer than the server did.
+  const canSee = mine || (snapshot != null && snapshot.total_visits !== null);
 
   return (
     <>
@@ -255,7 +264,7 @@ export function ProfileBody({ targetId }: { targetId: string }) {
                 who simply hasn't been classified yet (in week 1 nobody has a
                 persona, so every friend would otherwise read as private). */}
             {snapshot.persona_label === null && !mine && (
-              snapshot.is_friend ? (
+              canSee ? (
                 <View style={styles.privateCard}>
                   <Text style={type.subtitle}>No persona yet.</Text>
                   <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
@@ -320,7 +329,7 @@ export function ProfileBody({ targetId }: { targetId: string }) {
 
             {/* The ranked list is an identity object, so it belongs on the
                 profile for everyone — including you. */}
-            {(mine || snapshot.is_friend) && (
+            {canSee && (
               <TopFive userId={targetId} mine={mine} displayName={snapshot.display_name} />
             )}
 
@@ -342,7 +351,7 @@ export function ProfileBody({ targetId }: { targetId: string }) {
               </>
             )}
 
-            {snapshot.is_friend && !mine && (
+            {canSee && !mine && (
               <>
                 {/* The number IS the object — one figure, reasons underneath.
                     A link labelled "see your compatibility" asks the user to
