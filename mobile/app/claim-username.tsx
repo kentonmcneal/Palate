@@ -8,6 +8,7 @@ import { colors, spacing, type } from "../theme";
 import { getMyProfile, setUsername } from "../lib/profile";
 import { validateUsername, suggestUsername } from "../lib/username";
 import { track } from "../lib/analytics";
+import { markUsernameClaimed } from "../lib/username-gate";
 
 /**
  * Claiming a handle, for accounts that predate it being required.
@@ -56,6 +57,9 @@ export default function ClaimUsername() {
         );
         return;
       }
+      // Synchronously, and BEFORE navigating: the route guard reads this on
+      // its next run, which happens the instant we replace below.
+      markUsernameClaimed();
       void track("username_claimed", { surface: "gate" });
       router.replace("/(tabs)");
     } catch (e: any) {

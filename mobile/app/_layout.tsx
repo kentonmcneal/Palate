@@ -28,6 +28,7 @@ import { supabase } from "../lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { colors } from "../theme";
 import { getMyProfile } from "../lib/profile";
+import { subscribeUsernameClaimed, isUsernameClaimed } from "../lib/username-gate";
 import * as WebBrowser from "expo-web-browser";
 import { initObservability, captureError } from "../lib/observability";
 import { registerPushToken } from "../lib/notifications";
@@ -166,6 +167,21 @@ export default function RootLayout() {
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // The weekly discovery pings (Friday date night, Saturday brunch, Thursday
+  // stretch) were only ever registered with iOS when somebody toggled the
+  // switch in Settings. The switch defaults to ON, so it read as enabled while
+  // nothing had ever been scheduled — nobody was getting a Friday nudge, and
+  // the settings screen said they were.
+  //
+  // refreshDiscoveryPings cancels before it schedules, so running it on every
+  // authed launch is idempotent, and it re-arms after an OS notification reset.
+  // Guarded: an unhandled rejection in a fire-and-forget startup task is what
+  // made new accounts crash on launch once (build 13).
+  useEffect(() => {
+    if (!session?.user) return;
+    void refreshDiscoveryPings().catch((e) => captureError(e, { at: "refreshDiscoveryPings" }));
+  }, [session]);
 
   // Auto-detect: every time the app comes to foreground (or first launches
   // while already authed), check if the user appears to be at a restaurant.
@@ -368,6 +384,12 @@ export default function RootLayout() {
     return () => { alive = false; };
   }, [session]);
 
+  // The claim screen flips this the moment a handle is saved. Without it the
+  // lookup above — keyed on [session], which does not change when you save —
+  // stayed true forever and the guard bounced you back onto the gate you had
+  // just completed.
+  useEffect(() => subscribeUsernameClaimed(() => setNeedsUsername(false)), []);
+
   // Route guard: kick to /sign-in if not authed; bounce away from /sign-in
   // once authed. Signed-in users are allowed to be in /onboarding so brand-new
   // accounts can finish setup before landing in the tabs.
@@ -394,7 +416,8 @@ export default function RootLayout() {
       // step that asks. Since the profile stopped showing login emails, an
       // account with no handle and no display name is anonymous to its own
       // friends. Onboarding is exempt because it asks for one itself.
-      if (needsUsername && seg0 !== "onboarding" && seg0 !== "claim-username") {
+      if (needsUsername && !isUsernameClaimed()
+          && seg0 !== "onboarding" && seg0 !== "claim-username") {
         router.replace("/claim-username");
       }
     }

@@ -52,3 +52,38 @@ describe("digest rollover", () => {
     expect(entriesForDigest([lunch], new Date("2026-09-02T20:30:00"))).toHaveLength(1);
   });
 });
+
+// The other half of the calendar-day bug. buildDigest now carries a late
+// dinner into the next digest — but digestTimeFor returned null once 8:30 had
+// passed, so no notification was ever scheduled for it, and rescheduleDigest
+// only re-runs when a NEW entry lands. The visit sat in the inbox and nobody
+// was ever asked.
+describe("digestTimeFor", () => {
+  const { digestTimeFor, DIGEST_HOUR, DIGEST_MINUTE } = require("../passive-digest");
+
+  it("schedules tonight when the slot is still ahead", () => {
+    const when = digestTimeFor(new Date("2026-09-02T14:00:00"));
+    expect(when.getDate()).toBe(2);
+    expect(when.getHours()).toBe(DIGEST_HOUR);
+    expect(when.getMinutes()).toBe(DIGEST_MINUTE);
+  });
+
+  it("rolls a 9pm capture to tomorrow instead of dropping it", () => {
+    const when = digestTimeFor(new Date("2026-09-02T21:00:00"));
+    expect(when.getDate()).toBe(3);
+    expect(when.getHours()).toBe(DIGEST_HOUR);
+  });
+
+  it("rolls across a month boundary", () => {
+    const when = digestTimeFor(new Date("2026-09-30T23:30:00"));
+    expect(when.getMonth()).toBe(9); // October
+    expect(when.getDate()).toBe(1);
+  });
+
+  it("always returns a future time, at every hour of the day", () => {
+    for (let h = 0; h < 24; h++) {
+      const now = new Date(2026, 8, 2, h, 31);
+      expect(digestTimeFor(now).getTime()).toBeGreaterThan(now.getTime());
+    }
+  });
+});

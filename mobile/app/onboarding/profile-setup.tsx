@@ -9,6 +9,7 @@ import { colors, spacing, type } from "../../theme";
 import { setDisplayName, uploadAvatar, setUsername, getMyProfile } from "../../lib/profile";
 import { UsernameField } from "../../components/UsernameField";
 import { validateUsername, suggestUsername } from "../../lib/username";
+import { markUsernameClaimed } from "../../lib/username-gate";
 import { track } from "../../lib/analytics";
 
 export default function ProfileSetup() {
@@ -81,6 +82,7 @@ export default function ProfileSetup() {
         );
         return;
       }
+      markUsernameClaimed();
       if (name.trim()) {
         await setDisplayName(name);
       }

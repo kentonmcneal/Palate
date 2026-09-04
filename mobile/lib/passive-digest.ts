@@ -165,10 +165,22 @@ const DIGEST_NOTIF_ID_KEY = "palate.passive.digestNotifId";
  * A capture at 11pm does not get a digest — it rolls into tomorrow's, which is
  * better than buzzing someone at midnight about dinner.
  */
-export function digestTimeFor(now: Date): Date | null {
+export function digestTimeFor(now: Date): Date {
   const at = new Date(now);
   at.setHours(DIGEST_HOUR, DIGEST_MINUTE, 0, 0);
-  return at.getTime() <= now.getTime() ? null : at;
+  // Past tonight's slot, roll to tomorrow's rather than returning null.
+  //
+  // Returning null meant a visit detected AFTER 8:30 — a late dinner, the
+  // single most likely thing to be captured in an evening — scheduled no
+  // notification at all. Nothing re-ran the scheduler the next day either,
+  // because rescheduleDigest only fires when a new entry lands in the inbox.
+  // So the entry sat there and nobody was ever asked about it.
+  //
+  // This is the other half of the calendar-day bug: buildDigest now carries a
+  // late visit into the next digest, and this makes sure that digest is
+  // actually announced.
+  if (at.getTime() <= now.getTime()) at.setDate(at.getDate() + 1);
+  return at;
 }
 
 /**
@@ -191,7 +203,7 @@ export async function scheduleDigest(
     await setStoredId(null);
   }
 
-  if (!when || !isDigestWorthSending(digest)) return null;
+  if (!isDigestWorthSending(digest)) return null;
 
   const body = digestNotificationBody(digest, (ms) =>
     new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
