@@ -61,23 +61,47 @@ function toDigestEntry(entry: InboxEntry): DigestEntry {
 
 const byTime = (a: DigestEntry, b: DigestEntry) => a.detectedAt - b.detectedAt;
 
-/** Entries detected on the same local calendar day as `now`. */
-export function entriesForDay(entries: InboxEntry[], now: Date): InboxEntry[] {
-  const y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
-  return entries.filter((e) => {
-    const t = new Date(e.detectedAt);
-    return t.getFullYear() === y && t.getMonth() === m && t.getDate() === d;
-  });
+/**
+ * Start of the period a digest covers: the most recent digest hour at or before
+ * `now`, minus a day.
+ *
+ * This replaced a strict same-calendar-day filter that silently destroyed data.
+ * The digest fires at 8:30pm; a 9pm dinner is detected AFTER it fires, so it
+ * misses that evening. Under the old rule the next evening's digest asked for
+ * "today" only — and the 9pm visit belonged to yesterday, so it was never shown
+ * again by anything. Every meal eaten after 8:30pm disappeared, which for a
+ * dining app is close to the worst possible slice to lose.
+ *
+ * Anchoring to the digest hour rather than using a plain rolling 24h keeps the
+ * list stable while somebody works through it: opening the digest at 8:35pm and
+ * again at 11pm shows the same set, instead of items falling off the top as the
+ * clock moves.
+ */
+export function digestWindowStart(now: Date): Date {
+  const anchor = new Date(now);
+  anchor.setHours(DIGEST_HOUR, DIGEST_MINUTE, 0, 0);
+  // Before today's digest hour, the live window is still the one that opened
+  // at yesterday's.
+  if (anchor.getTime() > now.getTime()) anchor.setDate(anchor.getDate() - 1);
+  anchor.setDate(anchor.getDate() - 1);
+  return anchor;
+}
+
+/** Entries detected within the current digest window. */
+export function entriesForDigest(entries: InboxEntry[], now: Date): InboxEntry[] {
+  const start = digestWindowStart(now).getTime();
+  const end = now.getTime();
+  return entries.filter((e) => e.detectedAt > start && e.detectedAt <= end);
 }
 
 export function buildDigest(entries: InboxEntry[], now = new Date()): Digest {
-  const today = entriesForDay(entries, now).map(toDigestEntry);
+  const pending = entriesForDigest(entries, now).map(toDigestEntry);
   return {
     date: now.toISOString().slice(0, 10),
-    high: today.filter((e) => e.band === "high").sort(byTime),
-    medium: today.filter((e) => e.band === "medium").sort(byTime),
-    low: today.filter((e) => e.band === "low").sort(byTime),
-    total: today.length,
+    high: pending.filter((e) => e.band === "high").sort(byTime),
+    medium: pending.filter((e) => e.band === "medium").sort(byTime),
+    low: pending.filter((e) => e.band === "low").sort(byTime),
+    total: pending.length,
   };
 }
 

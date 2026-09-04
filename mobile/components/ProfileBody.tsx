@@ -110,7 +110,9 @@ export function ProfileBody({ targetId }: { targetId: string }) {
     }
   }
 
-  const displayName = snapshot?.display_name || snapshot?.email || "this person";
+  // Used in alert copy ("Block X?"). Same rule: no email, ever.
+  const displayName = snapshot?.display_name
+    || (snapshot?.username ? `@${snapshot.username}` : "this person");
 
   function handleUnfriend() {
     if (!snapshot) return;
@@ -190,13 +192,16 @@ export function ProfileBody({ targetId }: { targetId: string }) {
           <>
             {/* Identity card */}
             <View style={styles.idCard}>
-              <Avatar uri={snapshot.avatar_url} name={snapshot.display_name} email={snapshot.email} size={80} />
+              <Avatar uri={snapshot.avatar_url} name={snapshot.display_name} size={80} />
+              {/* Identity is name, then handle. Never the login address: it used
+                  to be both the fallback name and a line of its own, which put
+                  every user's email on a screen any other user could open. */}
               <Text style={styles.name}>
-                {snapshot.display_name ||
-                  (snapshot.email ? snapshot.email.split("@")[0] : "Unknown")}
+                {snapshot.display_name
+                  || (snapshot.username ? `@${snapshot.username}` : "Someone")}
               </Text>
-              {snapshot.email && (
-                <Text style={[type.small, { marginTop: 4 }]}>{snapshot.email}</Text>
+              {!!snapshot.username && !!snapshot.display_name && (
+                <Text style={[type.small, { marginTop: 4 }]}>@{snapshot.username}</Text>
               )}
               {snapshot.is_friend && !mine && (
                 <View style={styles.friendBadge}>

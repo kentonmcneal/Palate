@@ -121,6 +121,11 @@ export type FriendProfileSnapshot = {
   // owner — a friend must not be able to tell a curated profile from a
   // complete one, which a zero-vs-null distinction would give away.
   hidden_visits: number | null;
+  // Public identity. `email` is null for everyone but the owner as of 0080, so
+  // this is what a profile falls back to when there is no display name — a
+  // login address is not an identifier and must never appear on someone
+  // else's screen.
+  username: string | null;
 };
 
 export async function getFriendProfileSnapshot(targetId: string): Promise<FriendProfileSnapshot | null> {

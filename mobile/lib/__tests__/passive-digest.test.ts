@@ -1,5 +1,5 @@
 import {
-  buildDigest, bandFor, entriesForDay, isDigestWorthSending,
+  buildDigest, bandFor, entriesForDigest, isDigestWorthSending,
   digestNotificationBody, allowsRealtimePrompt,
 } from "../passive-digest";
 import type { InboxEntry } from "../passive-confirm";
