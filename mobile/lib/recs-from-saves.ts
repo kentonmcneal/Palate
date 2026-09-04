@@ -8,6 +8,9 @@
 
 import { supabase } from "./supabase";
 import { isRecommendable, type EligibilityInput } from "./recommendation/eligibility";
+import {
+  CAFE_FORMATS, CAFE_SLOT_WEIGHT, cafeKind, currentSlot,
+} from "./recommendation/scoring";
 
 export interface SaveAnchoredRec {
   id: string;
@@ -22,6 +25,56 @@ export interface SaveAnchoredRec {
   user_rating_count: number | null;
   matchedAgainst: string[];
   totalScore: number;
+  format_class?: string | null;
+}
+
+/**
+ * How much to demote a save-anchored café at the current hour, as a multiplier.
+ *
+ * The ranked Discover path has applied a time-of-day café penalty for a while;
+ * this rail never did, so at 11:57pm Home was recommending a smoothie café and
+ * a coffee shop off the back of three dinner restaurants. The saves rail orders
+ * by the RPC's raw similarity score, which is why the fix could not simply
+ * reuse cafeFormatAdjustment: that returns an ABSOLUTE penalty tuned to a
+ * 0-100 compatibility score, and adding it to a score on a different scale
+ * would be arbitrary. This is multiplicative, so it behaves the same whatever
+ * the RPC's numbers look like.
+ *
+ * The slot table itself is shared, so the two surfaces cannot disagree about
+ * when a coffee shop is a good idea.
+ *
+ * `formatAffinity` is the user's share of visits by format: somebody who
+ * genuinely lives in cafés keeps seeing them.
+ */
+export function cafeTimeMultiplier(
+  formatClass: string | null | undefined,
+  now: Date,
+  formatAffinity: Record<string, number> = {},
+): number {
+  const fc = (formatClass ?? "").toLowerCase();
+  if (!CAFE_FORMATS.has(fc)) return 1;
+
+  const weight = CAFE_SLOT_WEIGHT[cafeKind(fc)][currentSlot(now)];
+  const total = Object.values(formatAffinity).reduce((sum, n) => sum + n, 0);
+  const share = total > 0 ? (formatAffinity[fc] ?? 0) / total : 0;
+  const affinity = Math.min(1, share * 3);
+
+  // At breakfast the weight is 0 and this is exactly 1 — a coffee shop in the
+  // morning is the right answer, not a compromise, and must not be demoted.
+  const demotion = Math.min(0.85, 0.7 * weight * (1 - affinity));
+  return 1 - demotion;
+}
+
+/** Re-rank save-anchored recs for the time of day. Pure, so it can be tested. */
+export function rankSavesRecs<T extends { totalScore: number; format_class?: string | null }>(
+  recs: T[],
+  now: Date,
+  formatAffinity: Record<string, number> = {},
+): T[] {
+  return [...recs]
+    .map((r) => ({ r, k: r.totalScore * cafeTimeMultiplier(r.format_class, now, formatAffinity) }))
+    .sort((a, b) => b.k - a.k)
+    .map((x) => x.r);
 }
 
 export interface RecsFromSavesResult {
@@ -37,6 +90,10 @@ export async function loadRecsFromSaves(
     /** User's current location — bounds matches to nearby so out-of-town saves
      *  don't surface out-of-town recs. Omit to skip the geo filter. */
     here?: { lat: number; lng: number } | null;
+    /** Clock for the café time-of-day demotion. Injectable for tests. */
+    now?: Date;
+    /** The user's share of visits by format, so café regulars still see cafés. */
+    formatAffinity?: Record<string, number>;
   } = {},
 ): Promise<RecsFromSavesResult> {
   const maxAnchors = opts.maxAnchors ?? 5;
@@ -100,5 +157,8 @@ export async function loadRecsFromSaves(
     });
   }
 
-  return { anchors, recs };
+  return {
+    anchors,
+    recs: rankSavesRecs(recs, opts.now ?? new Date(), opts.formatAffinity ?? {}),
+  };
 }
