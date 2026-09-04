@@ -32,6 +32,16 @@ describe("Gmail OAuth", () => {
     expect(gmailSrc).toMatch(/exchangeGmailCode/);
   });
 
+  it("registers the URL schemes the provider's redirect can use", () => {
+    // expo's Google provider builds `${bundleId}:/oauthredirect`. If that scheme
+    // is not in CFBundleURLSchemes, Google accepts the request and iOS silently
+    // fails to route the callback home — the app just sits there.
+    const appJson = require("../../app.json");
+    const schemes: string[] = appJson.expo.ios.infoPlist.CFBundleURLTypes
+      .flatMap((t: { CFBundleURLSchemes: string[] }) => t.CFBundleURLSchemes);
+    expect(schemes).toContain(appJson.expo.ios.bundleIdentifier);
+  });
+
   it("requests read-only Gmail access and nothing broader", () => {
     expect(GMAIL_SCOPES).toContain("https://www.googleapis.com/auth/gmail.readonly");
     expect(GMAIL_SCOPES.some((s) => s.includes("gmail.modify"))).toBe(false);
