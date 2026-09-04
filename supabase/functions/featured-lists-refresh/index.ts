@@ -38,6 +38,56 @@ const TOP_N = 10;
 const MAX_PAGES = 3;
 const STALE_AFTER_MS = 36 * 60 * 60 * 1000; // 36h
 
+// The same daily budget places-proxy meters against. This function used to be
+// the one Google caller outside the kill switch — a nightly cron over every
+// active city, multiplied by ~15 categories and up to 3 pages each, that could
+// keep spending after the switch had already tripped everywhere else. It now
+// checks and counts like every other caller.
+const GOOGLE_DAILY_CALL_CAP = Number(Deno.env.get("GOOGLE_DAILY_CALL_CAP") ?? "1500");
+
+function todayUTC(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// True when today's billable-call budget is already spent.
+async function isTripped(admin: ReturnType<typeof createClient>): Promise<boolean> {
+  const { data } = await admin
+    .from("google_usage_counter")
+    .select("tripped")
+    .eq("day", todayUTC())
+    .maybeSingle();
+  return data?.tripped === true;
+}
+
+// Count one billable Google call against the shared daily budget. Best-effort:
+// metering must never break a refresh, and an uncounted call is a smaller
+// problem than a crashed cron. The tripped CHECK is what actually stops spend.
+async function reserveGoogleCall(admin: ReturnType<typeof createClient>) {
+  try {
+    await admin.rpc("bump_google_usage", {
+      p_day: todayUTC(),
+      p_cap: GOOGLE_DAILY_CALL_CAP,
+    });
+  } catch (_) { /* metering must never break the refresh */ }
+}
+
+async function recordUsage(admin: ReturnType<typeof createClient>, action: string) {
+  try {
+    await admin.rpc("record_api_usage", {
+      p_day: todayUTC(),
+      p_action: action,
+      p_source: "google",
+    });
+  } catch (_) { /* telemetry must never break the refresh */ }
+}
+
+// Raised when the budget runs out mid-refresh. Caught at the city level so the
+// categories already written are kept rather than rolled back — a partial
+// Featured Lists page is better than none, and tomorrow's run fills the rest.
+class BudgetExhausted extends Error {
+  constructor() { super("google daily cap reached"); }
+}
+
 // ----------------------------------------------------------------------------
 // Categories — must stay in sync with the mobile client's CATEGORIES list.
 // Each entry has a Google Places Text Search query that pulls real category
@@ -106,8 +156,18 @@ serve(async (req) => {
       if (!city_key || !city_label || lat == null || lng == null) {
         return json({ error: "missing_params" }, 400);
       }
-      const result = await refreshCity(admin, city_key, city_label, lat, lng);
-      return json({ ok: true, ...result });
+      try {
+        const result = await refreshCity(admin, city_key, city_label, lat, lng);
+        return json({ ok: true, ...result });
+      } catch (e) {
+        // The lazy on-demand path. 200 with a flag, not a 500: the budget being
+        // spent is an expected state, and the client's job is to fall back to
+        // whatever is already cached rather than show an error.
+        if (e instanceof BudgetExhausted) {
+          return json({ ok: false, budget_exhausted: true, categories_refreshed: 0, total_restaurants: 0 });
+        }
+        throw e;
+      }
     }
 
     if (action === "refresh_all_active") {
@@ -119,15 +179,28 @@ serve(async (req) => {
       if (error) throw error;
 
       const results = [];
+      let budgetExhausted = false;
       for (const c of cities ?? []) {
         try {
           const r = await refreshCity(admin, c.city_key, c.city_label, c.city_lat, c.city_lng);
           results.push({ city: c.city_key, ...r });
         } catch (e) {
+          if (e instanceof BudgetExhausted) {
+            // The budget is global, so there is nothing left for any remaining
+            // city. Stop rather than looping through them to fail identically.
+            budgetExhausted = true;
+            results.push({ city: c.city_key, error: "google_daily_cap_reached" });
+            break;
+          }
           results.push({ city: c.city_key, error: String(e) });
         }
       }
-      return json({ ok: true, refreshed: results.length, results });
+      return json({
+        ok: true,
+        refreshed: results.length,
+        budget_exhausted: budgetExhausted,
+        results,
+      });
     }
 
     return json({ error: "unknown_action" }, 400);
@@ -179,7 +252,7 @@ async function refreshCity(
       let pageToken: string | undefined = undefined;
       let eligibleRows: ClassifiedRow[] = [];
       for (let page = 0; page < MAX_PAGES; page++) {
-        const { places, nextPageToken } = await googleTextSearch(query, lat, lng, pageToken);
+        const { places, nextPageToken } = await googleTextSearch(admin, query, lat, lng, pageToken);
         for (const p of places) rawById.set(p.id, p);
 
         // Per-category time-of-day filter (late-night must be open late, etc.),
@@ -224,6 +297,10 @@ async function refreshCity(
       categoriesRefreshed++;
       totalRestaurants += ranked.length;
     } catch (e) {
+      // A spent budget is not a per-category failure — every remaining
+      // category would hit the same wall. Propagate so the caller stops,
+      // keeping the categories already written.
+      if (e instanceof BudgetExhausted) throw e;
       console.warn(`refresh failed for ${city_key}/${cat.slug}`, e);
       // continue with other categories
     }
@@ -249,11 +326,19 @@ type GooglePlace = {
 };
 
 async function googleTextSearch(
+  admin: ReturnType<typeof createClient>,
   query: string,
   lat: number,
   lng: number,
   pageToken?: string,
 ): Promise<{ places: GooglePlace[]; nextPageToken?: string }> {
+  // Checked per CALL, not once per run: a nightly refresh over every active
+  // city is long enough that the budget can be exhausted by another caller
+  // while this one is still paginating.
+  if (await isTripped(admin)) throw new BudgetExhausted();
+  await reserveGoogleCall(admin);
+  await recordUsage(admin, "featured_lists_text_search");
+
   const resp = await fetch("https://places.googleapis.com/v1/places:searchText", {
     method: "POST",
     headers: {

@@ -13,7 +13,13 @@ import { loadPalateMatches, type PalateMatchPeer } from "../lib/profile";
  *
  *   - no numbers anywhere, so there is nothing to compare or screenshot
  *   - order is not stated, so nobody is anyone's "number one"
- *   - reciprocal and friends-only, both enforced in the RPC (0074)
+ *   - reciprocal: you appear on their list exactly when they appear on yours
+ *
+ * It was friends-only until 0078. Once the app stopped asking anyone to add
+ * friends (0077), that gate returned an empty set for every user — so the pool
+ * is now everyone whose profile you can see. Reciprocity and the absence of
+ * numbers are what keep it from being a leaderboard, and both are enforced in
+ * the RPC rather than here.
  *
  * It says "keep landing at the same places" and not "eat together", because
  * Palate cannot establish that two people shared a meal — group selections are
@@ -52,7 +58,8 @@ export function PalateMatches({
     <View style={styles.card}>
       <Text style={type.micro}>PALATE MATCHES</Text>
       <Text style={styles.headline}>
-        {who} keep landing at the same places as these {peers.length === 1 ? "friend" : "friends"}.
+        {who} keep landing at the same places as
+        {peers.length === 1 ? " this person." : " these people."}
       </Text>
 
       {peers.map((peer) => (
@@ -80,7 +87,8 @@ export function PalateMatches({
 
       {mine && (
         <Text style={styles.footnote}>
-          Only your friends can see this, and only when it goes both ways.
+          Someone only shows up here when you show up for them too. Hidden
+          visits never count toward this.
         </Text>
       )}
     </View>
