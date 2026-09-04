@@ -200,12 +200,22 @@ export async function saveVisit(opts: {
 
   // Quietly drop a feed event so friends see "Kenton visited an American spot."
   // No push notification — visit events are passive, not real-time.
-  void emitVisitFeedEvent(user.id, restaurantId, opts.googlePlaceId);
+  // Only announce a visit that is actually public. The flag defaults true, so
+  // this is a no-op today — it matters the moment defaultVisitVisibility is
+  // wired, and wiring it later without this would publish hidden visits.
+  if ((data as { is_public?: boolean }).is_public !== false) {
+    void emitVisitFeedEvent(user.id, restaurantId, opts.googlePlaceId, (data as { id: string }).id);
+  }
 
   return { ...(data as Visit), isFirstVisit: total === 1, totalVisits: total };
 }
 
-async function emitVisitFeedEvent(userId: string, restaurantId: string, googlePlaceId: string) {
+async function emitVisitFeedEvent(
+  userId: string,
+  restaurantId: string,
+  googlePlaceId: string,
+  visitId?: string,
+) {
   try {
     const { data: rest } = await supabase
       .from("restaurants_resolved")
@@ -216,6 +226,9 @@ async function emitVisitFeedEvent(userId: string, restaurantId: string, googlePl
     await supabase.from("feed_events").insert({
       user_id: userId,
       kind: "visit_logged",
+      // Linked so hiding or deleting the visit can retract this post. Matching
+      // on payload and timestamp would be a guess that retracts the wrong one.
+      visit_id: visitId ?? null,
       payload: {
         restaurant_name: rest.name,
         cuisine: rest.cuisine_type,
@@ -390,4 +403,56 @@ export async function recordPromptDecision(
     google_place_id: googlePlaceId,
     outcome,
   });
+}
+
+
+// ---------------------------------------------------------------------------
+// Per-visit visibility — the private ledger / public profile split
+// ---------------------------------------------------------------------------
+//
+// The ledger is ALWAYS complete: recommendations, the taste graph, Wrapped and
+// insights read every visit regardless of this flag. It governs one thing —
+// whether a visit is published to other people.
+
+/**
+ * Show or hide a visit on the public profile, and keep its feed post in sync.
+ *
+ * Hiding has to retract the announcement, not just the entry. A visit removed
+ * from the profile while its "ate at X" post stays in friends' feeds is worse
+ * than not having the feature: the user believes they hid something they did
+ * not.
+ */
+export async function setVisitVisibility(visitId: string, isPublic: boolean): Promise<void> {
+  const { error } = await supabase
+    .from("visits")
+    .update({ is_public: isPublic })
+    .eq("id", visitId);
+  if (error) throw error;
+
+  if (!isPublic) {
+    // Best-effort: the visibility flag is the source of truth, and a failed
+    // cleanup must not leave the user thinking the update itself failed.
+    try {
+      await supabase.from("feed_events").delete().eq("visit_id", visitId);
+    } catch {
+      // ignore — see above
+    }
+  }
+}
+
+/** Visits for the curation surface. Own visits only — RLS enforces that. */
+export async function listVisitsForCuration(limit = 100) {
+  const { data, error } = await supabase
+    .from("visits")
+    .select("id, visited_at, is_public, restaurant:restaurants(google_place_id, name, chain_name, primary_type, types, cuisine_type)")
+    .order("visited_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as unknown as Array<{
+    id: string;
+    visited_at: string;
+    is_public: boolean;
+    restaurant: { google_place_id: string; name: string; chain_name: string | null;
+      primary_type: string | null; types: string[] | null; cuisine_type: string | null } | null;
+  }>;
 }

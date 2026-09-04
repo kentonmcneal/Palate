@@ -561,6 +561,17 @@ export default function Settings() {
               </Pressable>
             ))}
           </View>
+          <Spacer />
+          <Button
+            title="Choose what friends see"
+            variant="ghost"
+            onPress={() => router.push("/curate-profile" as never)}
+          />
+          <Note>
+            Your history stays complete either way — this only controls which visits
+            appear on your profile.
+          </Note>
+          <Spacer />
           <Note>
             {visibility === "public" && "Anyone on Palate can see your profile and persona."}
             {visibility === "friends" && "Only your accepted friends can see your profile and persona."}
