@@ -23,7 +23,11 @@ export function MoodRow({
   onChange: (m: Mood) => void;
   note?: string | null;
 }) {
-  if (chips.length <= 2) return null; // just Anything + Surprise: nothing to say yet
+  // Was "hide below three chips", from when a new account had only Anything +
+  // Surprise and there was genuinely nothing to offer. Quick / Sit down /
+  // Somewhere new need no history at all, and a brand-new user is exactly who
+  // needs help deciding, so the row now earns its place from day one.
+  if (chips.length <= 1) return null;
 
   return (
     <View>

@@ -15,10 +15,11 @@ const breakdown = [
 ];
 
 describe("mood chips", () => {
-  it("offers Anything, the user's real habits, then Surprise me", () => {
+  it("offers Anything, the intents, the user's real habits, then Surprise me", () => {
     const chips = buildMoodChips(breakdown);
     expect(chips.map((c) => c.label)).toEqual([
-      "Anything", "American", "Mexican", "Italian", "Surprise me",
+      "Anything", "Quick", "Sit down", "Somewhere new",
+      "American", "Mexican", "Italian", "Surprise me",
     ]);
   });
 
@@ -41,11 +42,21 @@ describe("mood chips", () => {
       { cuisine: "mediterranean", count: 1, pct: 20 },
     ];
     const labels = buildMoodChips(sparse).map((c) => c.label);
-    expect(labels).toEqual(["Anything", "American", "Bar", "Cafe", "Mediterranean", "Surprise me"]);
+    expect(labels).toEqual([
+      "Anything", "Quick", "Sit down", "Somewhere new",
+      "American", "Bar", "Cafe", "Mediterranean", "Surprise me",
+    ]);
   });
 
-  it("renders just Anything + Surprise on a brand-new account (row hides itself)", () => {
-    expect(buildMoodChips([])).toHaveLength(2);
+  it("still offers the intents on a brand-new account", () => {
+    // Quick / Sit down / Somewhere new need no history, so the row is useful
+    // from day one — it used to collapse to Anything + Surprise and hide.
+    const labels = buildMoodChips([]).map((c) => c.label);
+    expect(labels).toEqual(["Anything", "Quick", "Sit down", "Somewhere new"]);
+  });
+
+  it("drops Surprise me until there is a usual to be surprised away from", () => {
+    expect(buildMoodChips([]).map((c) => c.key)).not.toContain("surprise");
   });
 });
 

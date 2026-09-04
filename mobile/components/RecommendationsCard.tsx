@@ -123,6 +123,11 @@ export function RecommendationsCard({
             google_place_id: p.google_place_id,
             name: p.name,
             cuisine: p.cuisine_type ?? null,
+            // Carried for the non-cuisine moods. format_class was already read
+            // for scoring and then dropped; "Quick" and "Sit down" need it, and
+            // "Somewhere new" needs to know whether you have been.
+            format_class: (p as any).format_class ?? null,
+            visited: (personal?.visitsByPlaceId.get(p.google_place_id) ?? 0) > 0,
             neighborhood: p.neighborhood ?? null,
             price_level: p.price_level ?? null,
             latitude: p.latitude ?? null,
