@@ -105,8 +105,10 @@ describe("digest fixtures", () => {
     // which is a distinct path worth exercising.
     expect(d.low[0].ambiguous).toBe(true);
     expect(d.low[0].alternates.length).toBeGreaterThan(0);
-    // High arrives pre-checked; nothing else does.
+    // High and medium arrive pre-checked — the two bands the notification
+    // counts. The ambiguous low entry does not: it needs a place picked first.
     expect(d.high[0].preChecked).toBe(true);
-    expect(d.medium[0].preChecked).toBe(false);
+    expect(d.medium[0].preChecked).toBe(true);
+    expect(d.low[0].preChecked).toBe(false);
   });
 });

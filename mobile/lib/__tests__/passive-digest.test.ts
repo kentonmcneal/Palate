@@ -49,15 +49,32 @@ describe("buildDigest", () => {
     expect(d.medium.map((e) => e.name)).toEqual(["coffee", "maybe"]);
   });
 
-  it("pre-checks High and nothing else", () => {
+  it("pre-checks everything it presents as a likely visit", () => {
+    // The notification counts high + medium — "2 places to confirm" — so
+    // pre-checking only high meant tapping a notification about two places and
+    // landing on a button that said "Confirm 1".
     const d = buildDigest([
       entry({ id: "sure", detectedAt: at(12), confidenceBand: "high" }),
       entry({ id: "maybe", detectedAt: at(13), confidenceBand: "medium" }),
       entry({ id: "doubt", detectedAt: at(14), confidenceBand: "low" }),
     ], DAY);
     expect(d.high[0].preChecked).toBe(true);
-    expect(d.medium[0].preChecked).toBe(false);
+    expect(d.medium[0].preChecked).toBe(true);
+    // Low is where ambiguous stops live, and an ambiguous entry needs you to
+    // pick WHICH place first. Pre-ticking a guess is the one thing this screen
+    // must never do.
     expect(d.low[0].preChecked).toBe(false);
+  });
+
+  it("agrees with the count the notification promised", () => {
+    const d = buildDigest([
+      entry({ id: "sure", detectedAt: at(12), confidenceBand: "high" }),
+      entry({ id: "maybe", detectedAt: at(13), confidenceBand: "medium" }),
+      entry({ id: "doubt", detectedAt: at(14), confidenceBand: "low" }),
+    ], DAY);
+    const promised = d.high.length + d.medium.length;
+    const ticked = [...d.high, ...d.medium, ...d.low].filter((e) => e.preChecked).length;
+    expect(ticked).toBe(promised);
   });
 
   it("flags multi-candidate entries as ambiguous, for a which-one picker", () => {

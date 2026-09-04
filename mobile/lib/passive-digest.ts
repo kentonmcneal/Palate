@@ -54,7 +54,17 @@ function toDigestEntry(entry: InboxEntry): DigestEntry {
   return {
     ...entry,
     band,
-    preChecked: band === "high",
+    // High AND medium arrive ticked. The notification that brought you here
+    // counts both — "2 places to confirm" is high + medium — so pre-checking
+    // only high meant tapping a notification about two places and landing on a
+    // button that said "Confirm 1". The screen now agrees with the thing that
+    // opened it.
+    //
+    // Low stays unticked, and that is not symmetry for its own sake: the low
+    // band is where ambiguous stops live, and an ambiguous entry needs you to
+    // pick WHICH place before it can be confirmed at all. Pre-ticking a guess
+    // is the one thing this screen must not do.
+    preChecked: band === "high" || band === "medium",
     ambiguous: (entry.candidateCount ?? 1) >= AMBIGUOUS_CANDIDATE_COUNT,
   };
 }

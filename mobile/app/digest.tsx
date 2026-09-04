@@ -40,8 +40,12 @@ export default function DigestScreen() {
   const load = useCallback(async () => {
     const d = buildDigest(await getInbox());
     setDigest(d);
-    // High arrives pre-checked; everything else is a deliberate opt-in.
-    setChecked(new Set(d.high.map((e) => e.id)));
+    // Everything the digest presents as a likely visit arrives ticked, so the
+    // common case — "yes, all of these" — is one tap. Driven off preChecked
+    // rather than the band, so the rule lives in one place.
+    setChecked(new Set(
+      [...d.high, ...d.medium, ...d.low].filter((e) => e.preChecked).map((e) => e.id),
+    ));
     void track("digest_opened", {
       high: d.high.length, medium: d.medium.length, low: d.low.length,
     });
