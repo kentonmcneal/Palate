@@ -7,6 +7,7 @@ import { Button, Spacer } from "../components/Button";
 import { colors, spacing, type } from "../theme";
 import { supabase } from "../lib/supabase";
 import { signOut } from "../lib/auth";
+import { buildInfoLine } from "../lib/build-info";
 import { generateForCurrentWeek } from "../lib/wrapped";
 import {
   isReminderEnabled,
@@ -322,6 +323,10 @@ export default function Settings() {
             Palate v0.1 — no ads, we don't sell your data, you control what's
             public. Questions? hello@palate.app.
           </Note>
+          {/* Which bundle is actually running. Two OTAs on the same runtime
+              both report the same app version, so the version alone cannot
+              answer "did the update land?" — this can. */}
+          <Note>{buildInfoLine()}</Note>
         </CollapsibleSection>
       </ScrollView>
 
