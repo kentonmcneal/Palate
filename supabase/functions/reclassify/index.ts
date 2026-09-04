@@ -17,7 +17,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { classifyAndBuildRow } from "../_shared/classifier.ts";
+import { googleToRestaurantRow, type GooglePlace } from "../_shared/classifier.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -115,10 +115,12 @@ serve(async (req) => {
       if (!resp.ok) { failed++; continue; }
       const place = await resp.json();
 
-      // useLLM false: this is a bulk structural pass over rules that are pure,
-      // and paying for a thousand LLM calls to re-derive vibe tags is a
-      // different decision from paying for a thousand Places lookups.
-      const built = await classifyAndBuildRow(place, { useLLM: false, admin });
+      // googleToRestaurantRow is the PURE deterministic builder. The LLM
+      // enrichment path lives inside places-proxy and is deliberately not used
+      // here: this is a bulk structural pass over rules that need no model, and
+      // paying for a thousand LLM calls to re-derive vibe tags is a separate
+      // decision from paying for a thousand Places lookups.
+      const built = googleToRestaurantRow(place as GooglePlace);
       await admin.from("restaurants").upsert(built, { onConflict: "google_place_id" });
       updated++;
       if (changes.length < 25) {
