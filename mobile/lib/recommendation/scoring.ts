@@ -112,9 +112,9 @@ const SLOT_TO_OCCASIONS: Record<string, string[]> = {
 // meal. Demote them — unless the user has actually shown they gravitate there
 // (their own café share cancels the penalty), and soften at breakfast/brunch
 // when a café is a legitimate pick.
-export const CAFE_FORMATS = new Set(["café", "cafe", "bakery", "dessert"]);
+const CAFE_FORMATS = new Set(["café", "cafe", "bakery", "dessert"]);
 
-export type CafeKind = "coffee" | "bakery" | "dessert";
+type CafeKind = "coffee" | "bakery" | "dessert";
 
 /**
  * How much of the café penalty applies in each part of the day, per format.
@@ -128,14 +128,14 @@ export type CafeKind = "coffee" | "bakery" | "dessert";
  *
  * 0 = no penalty · 1 = full penalty · >1 = worse than the baseline.
  */
-export const CAFE_SLOT_WEIGHT: Record<CafeKind, Record<keyof typeof SLOT_TO_OCCASIONS, number>> = {
+const CAFE_SLOT_WEIGHT: Record<CafeKind, Record<keyof typeof SLOT_TO_OCCASIONS, number>> = {
   coffee:  { breakfast: 0,   brunch: 0.2, lunch: 0.6, dinner: 1,   late_night: 1.2 },
   bakery:  { breakfast: 0,   brunch: 0.2, lunch: 0.7, dinner: 1,   late_night: 1 },
   // Dessert inverts: bad in the morning, one of the better answers after a meal.
   dessert: { breakfast: 1,   brunch: 0.8, lunch: 0.8, dinner: 0.5, late_night: 0.2 },
 };
 
-export function cafeKind(formatClass: string): CafeKind {
+function cafeKind(formatClass: string): CafeKind {
   if (formatClass === "dessert") return "dessert";
   if (formatClass === "bakery") return "bakery";
   return "coffee";
