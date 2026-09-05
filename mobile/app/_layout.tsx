@@ -483,6 +483,7 @@ export default function RootLayout() {
               editing. */}
           <Stack.Screen name="settings" />
           <Stack.Screen name="edit-profile" />
+          <Stack.Screen name="import-email" options={{ presentation: "modal" }} />
         </Stack>
         <ScreenshotFeedbackSheet
           visible={screenshotPrompt}

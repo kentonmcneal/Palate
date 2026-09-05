@@ -42,6 +42,25 @@ const corsHeaders = {
 // Senders we know how to parse. The query in scanInbox restricts Gmail to
 // these so we only fetch what we can use.
 
+/** Domain of a `From:` header, or null when it does not look like one. */
+export function senderDomain(from: string | null | undefined): string | null {
+  const m = /<?([^<>\s@]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})>?/.exec(from ?? "");
+  if (!m) return null;
+  const host = m[2].toLowerCase();
+  // Collapse the sending subdomain: em.opentable.com and mgs.opentable.com are
+  // one platform, and three rows for one answer is a worse answer.
+  const parts = host.split(".");
+  return parts.length > 2 ? parts.slice(-2).join(".") : host;
+}
+
+async function recordSenderMiss(admin: any, from: string | null | undefined) {
+  const domain = senderDomain(from);
+  if (!domain) return;
+  try {
+    await admin.rpc("record_sender_miss", { p_domain: domain });
+  } catch (_) { /* telemetry must never break an import */ }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -240,7 +259,15 @@ async function handleCommit(
         text: bodyText(detail) + " " + (detail.snippet ?? ""),
         internalDate: detail.internalDate ? new Date(parseInt(detail.internalDate)) : new Date(),
       });
-      if (!parsed) { skipped++; continue; }
+      if (!parsed) {
+        // Record which PLATFORM we could not read, so "are there other emails
+        // to add?" is answered from evidence instead of guessed at. Domain
+        // only — no address, no subject, no user id. Best-effort: telemetry
+        // must never cost somebody an import.
+        void recordSenderMiss(admin, header(detail, "from"));
+        skipped++;
+        continue;
+      }
       const ok = await createImportedVisit(admin, userId, id, parsed);
       if (ok) imported++; else skipped++;
     } catch {

@@ -26,10 +26,10 @@ export default function Permission() {
         if (passiveOn) {
           router.push({
             pathname: "/passive-capture-intro",
-            params: { next: "/onboarding/privacy" },
+            params: { next: "/onboarding/email" },
           });
         } else {
-          router.push("/onboarding/privacy");
+          router.push("/onboarding/email");
         }
       } else if (status === "denied") {
         void track("permission_denied", { kind: "foreground" });

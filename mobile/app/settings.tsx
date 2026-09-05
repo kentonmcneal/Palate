@@ -184,6 +184,10 @@ export default function Settings() {
             rather than on your settings. */}
         <CollapsibleSection title="Bring in your history">
           <GmailImportCard />
+          <Note>
+            Reservation and delivery confirmations become visits, so Palate knows
+            your taste before you log anything.
+          </Note>
         </CollapsibleSection>
 
         <Section title="Friends">
