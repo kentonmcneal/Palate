@@ -168,6 +168,7 @@ export function allowsRealtimePrompt(entry: InboxEntry): boolean {
 // nothing and the user hears nothing.
 
 import * as Notifications from "expo-notifications";
+import { cancelScheduledOfKind } from "./notification-dedupe";
 import { track } from "./analytics";
 
 // The digest fires later on the nights people actually eat later — Friday and
@@ -247,6 +248,9 @@ export async function scheduleDigest(
     await Notifications.cancelScheduledNotificationAsync(previous).catch(() => {});
     await setStoredId(null);
   }
+  // And anything the stored id does not know about. Two captures landing at
+  // once used to leave one digest orphaned; the person got it twice.
+  await cancelScheduledOfKind(Notifications, "kind", DIGEST_KIND);
 
   if (!isDigestWorthSending(digest)) return null;
 

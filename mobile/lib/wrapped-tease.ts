@@ -13,6 +13,7 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { isoWeekStart } from "./wrapped";
+import { cancelScheduledOfKind } from "./notification-dedupe";
 
 const TEASE_ID_KEY = "palate.wrapped_tease.notif_id.v1";
 export const TEASE_HOUR = 18;
@@ -65,11 +66,8 @@ export async function refreshWrappedTease(
   const perm = await Notifications.getPermissionsAsync().catch(() => ({ granted: false }));
   if (!perm.granted) return;
 
-  const previous = await AsyncStorage.getItem(TEASE_ID_KEY).catch(() => null);
-  if (previous) {
-    await Notifications.cancelScheduledNotificationAsync(previous).catch(() => {});
-    await AsyncStorage.removeItem(TEASE_ID_KEY).catch(() => {});
-  }
+  await cancelScheduledOfKind(Notifications, "type", "wrapped_tease");
+  await AsyncStorage.removeItem(TEASE_ID_KEY).catch(() => {});
 
   const copy = teaseCopy(weekSoFar(visits, now));
   const when = teaseTimeFor(now);

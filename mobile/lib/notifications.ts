@@ -11,6 +11,7 @@
 // ============================================================================
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { cancelScheduledOfKind } from "./notification-dedupe";
 // Static named import ONLY. A dynamic `import("react-native")` (or `import *`)
 // enumerates the whole RN namespace, tripping the deprecated PushNotificationIOS
 // lazy getter, which does `new NativeEventEmitter(null)` under the New
@@ -70,11 +71,8 @@ export async function enableSundayWrappedReminder(): Promise<{ ok: boolean; reas
   }
   if (!granted) return { ok: false, reason: "denied" };
 
-  // Cancel any prior scheduling so we don't stack duplicates.
-  const existingId = await AsyncStorage.getItem(SCHEDULED_KEY);
-  if (existingId) {
-    try { await Notifications.cancelScheduledNotificationAsync(existingId); } catch {}
-  }
+  // Cancel every prior Sunday reminder by kind, not by a remembered id.
+  await cancelScheduledOfKind(Notifications, "type", "weekly_wrapped");
 
   // Weekly trigger: Sunday at 9:00 AM local time.
   // Notifications.WeekdayTrigger uses 1=Sunday in iOS calendar terms.
@@ -219,12 +217,10 @@ export async function refreshDailyReminder(opts: { loggedToday: boolean; streak:
   const perm = await Notifications.getPermissionsAsync();
   if (!perm.granted) return;
 
-  // Clear any prior daily reminder so we never stack duplicates.
-  const existing = await AsyncStorage.getItem(DAILY_REMINDER_KEY);
-  if (existing) {
-    try { await Notifications.cancelScheduledNotificationAsync(existing); } catch {}
-    await AsyncStorage.removeItem(DAILY_REMINDER_KEY);
-  }
+  // Clear every prior daily reminder, by kind rather than by a remembered
+  // id, so overlapping runs cannot leave orphans (lib/notification-dedupe.ts).
+  await cancelScheduledOfKind(Notifications, "type", "streak_reminder");
+  await AsyncStorage.removeItem(DAILY_REMINDER_KEY).catch(() => {});
 
   // Already logged today → nothing to nudge. Tomorrow's Home load reschedules.
   if (opts.loggedToday) return;

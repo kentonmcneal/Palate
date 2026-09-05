@@ -233,10 +233,13 @@ export default function RootLayout() {
   }, []);
   // Reconcile the weekly discovery nudges on every launch. Idempotent: it
   // cancels what it previously scheduled before re-adding.
+  // Keyed on the id, not the user object: the object changes identity on
+  // INITIAL_SESSION, SIGNED_IN and TOKEN_REFRESHED, which ran this three
+  // times per launch and is how six brunch pings ended up on one lock screen.
   useEffect(() => {
     if (!session?.user) return;
     void refreshDiscoveryPings().catch(() => {});
-  }, [session?.user]);
+  }, [session?.user?.id]);
   useEffect(() => {
     if (!session?.user) return;
     void recordHeartbeat(true).catch(() => {});

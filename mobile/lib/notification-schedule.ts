@@ -25,6 +25,7 @@
 // ============================================================================
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { cancelScheduledOfKind, serialize } from "./notification-dedupe";
 import { isFlagEnabled } from "./flags";
 
 export const DISCOVERY_PINGS_FLAG = "discovery_pings";
@@ -96,15 +97,10 @@ export async function setDiscoveryPingsEnabled(on: boolean): Promise<void> {
 }
 
 async function cancelAll(Notifications: typeof import("expo-notifications")): Promise<void> {
-  try {
-    const raw = await AsyncStorage.getItem(SCHEDULED_IDS_KEY);
-    const ids = raw ? (JSON.parse(raw) as string[]) : [];
-    for (const id of ids) {
-      await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
-    }
-  } finally {
-    await AsyncStorage.removeItem(SCHEDULED_IDS_KEY);
-  }
+  // Was: cancel the ids stored last time. Overlapping runs lost ids and the
+  // orphans fired every Saturday, six abreast (lib/notification-dedupe.ts).
+  await cancelScheduledOfKind(Notifications, "type", "discovery_ping");
+  await AsyncStorage.removeItem(SCHEDULED_IDS_KEY).catch(() => {});
 }
 
 /**
@@ -115,7 +111,7 @@ async function cancelAll(Notifications: typeof import("expo-notifications")): Pr
  *
  * Never prompts for permission — it rides on a grant the user already gave.
  */
-export async function refreshDiscoveryPings(): Promise<number> {
+export const refreshDiscoveryPings = serialize(async (): Promise<number> => {
   const Notifications = await loadLib();
   if (!Notifications) return 0;
 
@@ -160,7 +156,7 @@ export async function refreshDiscoveryPings(): Promise<number> {
 
   await AsyncStorage.setItem(SCHEDULED_IDS_KEY, JSON.stringify(ids));
   return ids.length;
-}
+});
 
 /** Every fire time must sit inside waking hours — asserted in tests so a
  *  future edit can't quietly introduce a 3am buzz. */
