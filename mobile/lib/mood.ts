@@ -191,3 +191,87 @@ export function moodFallbackNote(mood: Mood): string {
   if (mood === SOMEWHERE_NEW) return "You've been to everything good nearby — here's the regular list.";
   return `Nothing great nearby for ${cuisineLabel(String(mood))} tonight — closest picks instead.`;
 }
+
+
+// ============================================================================
+// Chips for what is actually AROUND you, not only what you already eat.
+// ============================================================================
+// buildMoodChips draws from the user's own cuisine breakdown, so a cuisine they
+// have never eaten can never be offered. Someone who does not eat steak had no
+// way to ask for a steakhouse, which is precisely when you would want to: a
+// mood is about tonight, and tonight is often not the pattern.
+//
+// The pool is therefore the union: your habits first, because those chips get
+// tapped most, then everything else nearby. A cuisine with nowhere to send you
+// is not offered at all — a chip that returns the fallback list is worse than
+// no chip.
+
+/** Cuisines present in the nearby candidate pool, most common first. */
+export function nearbyCuisines(
+  pool: Array<{ cuisine_type?: string | null }>,
+  minPlaces = 1,
+): string[] {
+  const counts = new Map<string, number>();
+  for (const r of pool) {
+    const c = (r.cuisine_type ?? "").toLowerCase().trim();
+    if (!c || c === "other") continue;
+    counts.set(c, (counts.get(c) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .filter(([, n]) => n >= minPlaces)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([c]) => c);
+}
+
+/**
+ * The full chip row: intents, your habits, then anything else nearby.
+ *
+ * `mine` keeps its place at the front because those are the taps that happen.
+ * The rest are what makes the row a way to ask for something, rather than a
+ * summary of what you already do.
+ */
+export function buildCuisineChips(
+  breakdown: CuisineSlice[],
+  pool: Array<{ cuisine_type?: string | null }>,
+  opts: { mineLimit?: number; totalLimit?: number } = {},
+): MoodChip[] {
+  const mineLimit = opts.mineLimit ?? 4;
+  const totalLimit = opts.totalLimit ?? 10;
+
+  const base = buildMoodChips(breakdown, mineLimit);
+  const already = new Set(base.map((c) => String(c.key ?? "")));
+
+  const extra: MoodChip[] = [];
+  for (const c of nearbyCuisines(pool)) {
+    if (extra.length >= totalLimit) break;
+    if (already.has(c)) continue;
+    extra.push({ key: c as Mood, label: cuisineLabel(c) });
+  }
+
+  // Surprise me, when present, stays last.
+  const surpriseIdx = base.findIndex((c) => c.key === SURPRISE);
+  if (surpriseIdx === -1) return [...base, ...extra];
+  return [...base.slice(0, surpriseIdx), ...extra, base[surpriseIdx]];
+}
+
+
+/**
+ * What to say above a cuisine you asked for but do not eat.
+ *
+ * Asking for steakhouses when you never eat steak is a legitimate request, and
+ * the answer is the best steakhouses nearby with the truth attached — not an
+ * empty list, and not a match percentage pretending you will love them. The old
+ * behaviour filtered a ranked list to nothing and silently showed the unfiltered
+ * one back, which reads as a broken toggle.
+ *
+ * `topScore` is the best compatibility in the filtered set, 0-100.
+ */
+export function moodContextNote(mood: Mood, topScore: number | null): string | null {
+  if (!mood || isIntentMood(mood) || isSurprise(mood)) return null;
+  if (topScore == null) return null;
+
+  const label = cuisineLabel(String(mood));
+  if (topScore >= 60) return null; // it speaks for itself
+  if (topScore >= 45) return `${label} is not really your pattern. These are the closest fits.`;
+  return `You have never gone in for ${label}. These are just the best ones near you.`;
+}

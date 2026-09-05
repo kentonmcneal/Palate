@@ -25,7 +25,7 @@ import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
 import { matchScoreColor, matchScoreTint } from "../lib/match-score";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { SaveBurst } from "./SaveBurst";
-import { applyMood, moodFallbackNote, type Mood } from "../lib/mood";
+import { applyMood, moodFallbackNote, moodContextNote, type Mood } from "../lib/mood";
 import { FONT_CAP, useFontScale } from "../lib/a11y";
 import { useRouter } from "expo-router";
 import { TapCard } from "./TapCard";
@@ -46,6 +46,7 @@ export function RecommendationsCard({
   mood = null,
   habitualCuisines = [],
   excludePlaceIds = [],
+  onCuisinesAvailable,
 }: {
   /** Temporary cuisine override from the mood row. null = Anything. */
   mood?: Mood;
@@ -55,6 +56,9 @@ export function RecommendationsCard({
    *  rank the same nearby pool on the same taste graph, so the top pick landed
    *  in both by default rather than by accident. */
   excludePlaceIds?: string[];
+  /** Cuisines present in the nearby pool, so the chip row above can offer a
+   *  cuisine the user has never eaten. The pool lives here; the chips do not. */
+  onCuisinesAvailable?: (pool: Array<{ cuisine_type?: string | null }>) => void;
 } = {}) {
   const [recs, setRecs] = useState<RestaurantRecommendation[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -144,6 +148,9 @@ export function RecommendationsCard({
       // switching mood should feel instant.
       enriched.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
       setAllRecs(enriched);
+      onCuisinesAvailable?.(
+        enriched.map((r) => ({ cuisine_type: (r as any).cuisine ?? null })),
+      );
       setRecs(enriched.slice(0, 3));
     } catch {
       setError(true);
@@ -162,7 +169,15 @@ export function RecommendationsCard({
     if (!allRecs) return;
     const { items, matched } = applyMood(allRecs, mood, habitualCuisines);
     setRecs(items.slice(0, 3));
-    setMoodNote(mood && !matched ? moodFallbackNote(mood) : null);
+    const top = items.length > 0 ? items[0].matchScore ?? null : null;
+    // "Nothing matched" and "these matched and are not your thing" are
+    // different things to say, and saying the second is what lets somebody ask
+    // for a cuisine they never eat and still get an answer.
+    setMoodNote(
+      mood && !matched
+        ? moodFallbackNote(mood)
+        : moodContextNote(mood, typeof top === "number" ? top : null),
+    );
   }, [allRecs, mood, habitualCuisines]);
 
   // Hide the card entirely until we know if we have anything to show — keeps

@@ -24,7 +24,7 @@ import { HomeHero, TrackingLine } from "../../components/HomeHero";
 import { MoodRow } from "../../components/MoodRow";
 import { RecommendationsCard } from "../../components/RecommendationsCard";
 import { Spacer } from "../../components/Button";
-import { buildMoodChips, palateRead, SURPRISE, type Mood, type MoodChip } from "../../lib/mood";
+import { buildCuisineChips, palateRead, SURPRISE, type Mood, type MoodChip } from "../../lib/mood";
 import { homeState, type HomeState } from "../../lib/home-state";
 import { getInbox } from "../../lib/passive-confirm";
 import { isPassiveOptedIn } from "../../lib/passive-capture";
@@ -78,6 +78,10 @@ export default function Home() {
   const { mood: moodParam } = useLocalSearchParams<{ mood?: string }>();
   const [mood, setMood] = useState<Mood>(null);
   const [moodChips, setMoodChips] = useState<MoodChip[]>([]);
+  // Cuisines available nearby, reported up by the recommendations card so a
+  // cuisine the user has never eaten is still offerable.
+  const [nearbyPool, setNearbyPool] = useState<Array<{ cuisine_type?: string | null }>>([]);
+  const [myCuisines, setMyCuisines] = useState<any[]>([]);
   const [palateLine, setPalateLine] = useState<string | null>(null);
   const [habitualCuisines, setHabitualCuisines] = useState<string[]>([]);
   const [home, setHome] = useState<HomeState | null>(null);
@@ -94,7 +98,7 @@ export default function Home() {
     loadAnalytics("month")
       .then((a) => {
         if (!alive) return;
-        setMoodChips(buildMoodChips(a.cuisineBreakdown));
+        setMyCuisines(a.cuisineBreakdown);
         setPalateLine(palateRead(a.cuisineBreakdown));
         setHabitualCuisines(
           a.cuisineBreakdown.filter((c) => c.count >= 2).slice(0, 3).map((c) => c.cuisine),
@@ -103,6 +107,10 @@ export default function Home() {
       .catch(() => {});
     return () => { alive = false; };
   }, []);
+
+  useEffect(() => {
+    setMoodChips(buildCuisineChips(myCuisines, nearbyPool));
+  }, [myCuisines, nearbyPool]);
 
   // The Thursday nudge deep-links in with ?mood=surprise.
   useEffect(() => {
@@ -279,6 +287,7 @@ export default function Home() {
           mood={mood}
           habitualCuisines={habitualCuisines}
           excludePlaceIds={[]}
+          onCuisinesAvailable={setNearbyPool}
         />
 
         <TrackingLine on={trackingOn} lastCheck={lastCheck} />

@@ -8,8 +8,11 @@ import { nearbyRestaurants, searchRestaurants, type Restaurant } from "../../lib
 import { getOrFetchNearby } from "../../lib/nearby-cache";
 import { StretchPick } from "../../components/StretchPick";
 import { MoodRow } from "../../components/MoodRow";
-import { buildMoodChips, applyMood, moodFallbackNote, type Mood, type MoodChip } from "../../lib/mood";
-import { loadAnalytics } from "../../lib/analytics-stats";
+import {
+  buildCuisineChips, applyMood, moodFallbackNote, moodContextNote,
+  type Mood, type MoodChip,
+} from "../../lib/mood";
+import { loadAnalytics, type CuisineSlice } from "../../lib/analytics-stats";
 import { supabase } from "../../lib/supabase";
 import { listWishlist, type WishlistEntry } from "../../lib/palate-insights";
 import { getCurrentLocation, classifyAccuracy } from "../../lib/location";
@@ -100,11 +103,11 @@ export default function DiscoverTab() {
   // browse surface too — Discover could sort by fit and distance but had no way
   // to say "Thai, tonight".
   const [mood, setMood] = useState<Mood>(null);
-  const [moodChips, setMoodChips] = useState<MoodChip[]>([]);
+  const [myCuisines, setMyCuisines] = useState<CuisineSlice[]>([]);
   useEffect(() => {
     let alive = true;
     loadAnalytics("month")
-      .then((a) => { if (alive) setMoodChips(buildMoodChips(a.cuisineBreakdown)); })
+      .then((a) => { if (alive) setMyCuisines(a.cuisineBreakdown); })
       .catch(() => {});
     return () => { alive = false; };
   }, []);
@@ -329,6 +332,14 @@ export default function DiscoverTab() {
   // A mood narrows the already-ranked list; it never re-scores. The candidates
   // carry cuisine_type and format_class, and applyMood reads `cuisine`, so the
   // two are bridged here rather than by loosening the shared helper.
+  // Chips come from the union of your habits and what is actually nearby, so a
+  // cuisine you have never eaten is still askable. Derived from the pool rather
+  // than fetched, or it could never know what is around you.
+  const moodChips = useMemo(
+    () => buildCuisineChips(myCuisines, allNearby),
+    [myCuisines, allNearby],
+  );
+
   const moodedList = useMemo(() => {
     const shaped = mostCompatibleList.map((r) => ({
       ...r,
@@ -336,9 +347,15 @@ export default function DiscoverTab() {
       format_class: (r as any).format_class ?? null,
     }));
     const { items, matched } = applyMood(shaped, mood, []);
+    const top = items.length > 0 ? (items[0] as any)?.score?.compatibilityScore ?? null : null;
     return {
       items: items as typeof mostCompatibleList,
-      note: mood && !matched ? moodFallbackNote(mood) : null,
+      // Two different messages. "Nothing matched, here is everything" when the
+      // filter found nobody, versus "these are the best ones and they are not
+      // your thing" when it found some and they score low.
+      note: mood && !matched
+        ? moodFallbackNote(mood)
+        : moodContextNote(mood, typeof top === "number" ? Math.round(top) : null),
     };
   }, [mostCompatibleList, mood]);
 
