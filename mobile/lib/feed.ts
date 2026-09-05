@@ -15,6 +15,7 @@
 
 import { supabase } from "./supabase";
 import { hiddenUserIds } from "./moderation";
+import type { RestaurantInput } from "./recommendation/types";
 
 export type FeedEventKind = "wrapped_shared" | "persona_change" | "milestone" | "visit_logged";
 
@@ -47,6 +48,17 @@ export type FeedEvent = {
   /** True if current user has liked this event. */
   iLiked: boolean;
   likeCount: number;
+  // The card's numbers (0096). Null on posts that are not visits, or legacy
+  // posts whose visit row is gone.
+  visitedAt: string | null;
+  mealType: string | null;
+  photoUrl: string | null;
+  /** The author's nth time at this place, as of that visit. */
+  authorVisitOrdinal: number | null;
+  /** How many times the READER has been. 0 is "never", null is "unknown". */
+  viewerVisitCount: number | null;
+  /** The place's tags, so "your match" is scored on the same graph as Home. */
+  restaurant: RestaurantInput | null;
 };
 
 async function currentUserId(): Promise<string | null> {
@@ -86,6 +98,12 @@ export async function listFeed(limit = 50): Promise<FeedEvent[]> {
       },
       iLiked: Boolean(e.i_liked),
       likeCount: e.like_count ?? 0,
+      visitedAt: e.visited_at ?? null,
+      mealType: e.meal_type ?? null,
+      photoUrl: e.photo_url ?? null,
+      authorVisitOrdinal: e.author_visit_ordinal ?? null,
+      viewerVisitCount: e.viewer_visit_count ?? null,
+      restaurant: (e.restaurant as RestaurantInput | null) ?? null,
     }));
 }
 

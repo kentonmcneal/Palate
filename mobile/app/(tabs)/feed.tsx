@@ -1,4 +1,14 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { Image } from "react-native";
+import { computeTasteVector } from "../../lib/taste-vector";
+import { loadPersonalSignal } from "../../lib/personal-signal";
+import { assembleGraph, getCompatibility, type TasteGraph } from "../../lib/recommendation";
+import { matchScoreColor, matchScoreTint } from "../../lib/match-score";
+import { addToWishlist } from "../../lib/palate-insights";
+import { triggerHapticSuccess } from "../../lib/haptics";
+import {
+  ordinalLabel, youveBeenLabel, mealLine, groupFeedByDay, weekSummary,
+} from "../../lib/feed-card";
 import { HypeMap } from "../../components/HypeMap";
 import {
   View,
@@ -31,6 +41,10 @@ export default function FeedTab() {
   const [myId, setMyId] = useState<string | null>(null);
   // Held in state, not swallowed into a console nobody reads.
   const [error, setError] = useState<unknown>(null);
+  // "Your match" on every card, scored on the same graph Home and Discover
+  // use, so the number beside a friend's visit is the number you would see
+  // on the place itself.
+  const [graph, setGraph] = useState<TasteGraph | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -49,6 +63,11 @@ export default function FeedTab() {
       setPendingCount(requests.length);
       setMyId(auth.user?.id ?? null);
       setError(null);
+      void Promise.all([
+        computeTasteVector().catch(() => null),
+        loadPersonalSignal().catch(() => null),
+      ]).then(([vector, personal]) => setGraph(assembleGraph(vector, personal)))
+        .catch(() => {});
     } catch (e: any) {
       // The feed once returned 400 on every call for its whole existence and
       // rendered as "quiet right now" the entire time. A failure has to look
@@ -66,6 +85,8 @@ export default function FeedTab() {
   }, [load]));
 
   const view = loadView({ loading, error, count: events.length });
+  const sections = useMemo(() => groupFeedByDay(events), [events]);
+  const summary = useMemo(() => weekSummary(events), [events]);
 
   function removeUser(userId: string) {
     setEvents((curr) => curr.filter((e) => e.user_id !== userId));
@@ -172,15 +193,23 @@ export default function FeedTab() {
           </View>
         )}
 
-        {events.map((ev) => (
-          <FeedRow
-            key={ev.id}
-            event={ev}
-            isSelf={ev.user_id === myId}
-            onLike={() => handleLike(ev)}
-            onBlockedUser={removeUser}
-            onReportedEvent={removeEvent}
-          />
+        {summary && <Text style={styles.summary}>{summary}</Text>}
+
+        {sections.map((section) => (
+          <View key={section.title}>
+            <Text style={styles.dayHeader}>{section.title}</Text>
+            {section.data.map((ev) => (
+              <FeedRow
+                key={ev.id}
+                event={ev}
+                isSelf={ev.user_id === myId}
+                graph={graph}
+                onLike={() => handleLike(ev)}
+                onBlockedUser={removeUser}
+                onReportedEvent={removeEvent}
+              />
+            ))}
+          </View>
         ))}
       </ScrollView>
     </SafeAreaView>
@@ -188,10 +217,11 @@ export default function FeedTab() {
 }
 
 function FeedRow({
-  event, isSelf, onLike, onBlockedUser, onReportedEvent,
+  event, isSelf, graph, onLike, onBlockedUser, onReportedEvent,
 }: {
   event: FeedEvent;
   isSelf: boolean;
+  graph: TasteGraph | null;
   onLike: () => void;
   onBlockedUser: (userId: string) => void;
   onReportedEvent: (eventId: string) => void;
@@ -261,16 +291,108 @@ function FeedRow({
         )}
       </View>
 
-      <FeedBody event={event} />
+      {event.kind === "visit_logged"
+        ? <VisitCard event={event} isSelf={isSelf} graph={graph} />
+        : <FeedBody event={event} />}
 
       <View style={styles.actions}>
-        <Pressable onPress={onLike} style={styles.likeBtn} accessibilityRole="button">
-          <Text style={[styles.likeText, event.iLiked && styles.likeTextActive]}>
-            {event.iLiked ? "♥" : "♡"} {event.likeCount > 0 ? event.likeCount : ""}
+        {/* Kudos, not a heart. Strava's word for "I saw this and it counts",
+            which is what a like on somebody's dinner actually means. */}
+        <Pressable onPress={onLike} style={[styles.kudos, event.iLiked && styles.kudosActive]} accessibilityRole="button">
+          <Text style={[styles.kudosText, event.iLiked && styles.kudosTextActive]}>
+            {event.iLiked ? "🔥 Kudos" : "Kudos"}{event.likeCount > 0 ? ` · ${event.likeCount}` : ""}
           </Text>
         </Pressable>
+        {event.kind === "visit_logged" && !isSelf && event.restaurant?.google_place_id
+          && (event.viewerVisitCount ?? 0) === 0 && (
+          <SaveButton placeId={event.restaurant.google_place_id} />
+        )}
       </View>
     </View>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// A visit, as a card with numbers on it.
+// ----------------------------------------------------------------------------
+// Header says who and when. The place is the headline. Under it a strip of
+// three stats: their nth time here, your match with the place, and whether
+// you have been. The last two are about the reader, which is the whole
+// difference between a feed people scroll and one they read.
+function VisitCard({ event, isSelf, graph }: { event: FeedEvent; isSelf: boolean; graph: TasteGraph | null }) {
+  const router = useRouter();
+  const p = event.payload as { restaurant_name: string; cuisine: string | null; neighborhood: string | null; google_place_id?: string };
+  const placeId = event.restaurant?.google_place_id ?? p.google_place_id ?? null;
+  const match = graph && event.restaurant ? getCompatibility(graph, event.restaurant).score : null;
+  const nth = ordinalLabel(event.authorVisitOrdinal);
+  const been = youveBeenLabel(event.viewerVisitCount, isSelf);
+  const meal = mealLine(event.mealType, event.visitedAt);
+  const chips = [p.cuisine ? prettyCuisine(p.cuisine) : null, p.neighborhood, meal].filter(Boolean) as string[];
+
+  return (
+    <View>
+      <Pressable
+        onPress={() => placeId && router.push(`/restaurant/${placeId}` as never)}
+        disabled={!placeId}
+        accessibilityRole={placeId ? "button" : undefined}
+      >
+        <Text style={styles.place}>{p.restaurant_name}</Text>
+        {chips.length > 0 && (
+          <Text style={styles.chips}>{chips.join("  ·  ")}</Text>
+        )}
+      </Pressable>
+
+      {event.photoUrl && (
+        <Image source={{ uri: event.photoUrl }} style={styles.photo} resizeMode="cover" />
+      )}
+
+      <View style={styles.stats}>
+        {nth && (
+          <View style={styles.stat}>
+            <Text style={styles.statV}>{nth}</Text>
+            <Text style={styles.statL}>for them</Text>
+          </View>
+        )}
+        {match != null && (
+          <Pressable
+            style={[styles.stat, { backgroundColor: matchScoreTint(match), borderColor: matchScoreColor(match) }]}
+            onPress={() => placeId && router.push(`/restaurant/${placeId}` as never)}
+          >
+            <Text style={[styles.statV, { color: matchScoreColor(match) }]}>{Math.round(match)}%</Text>
+            <Text style={styles.statL}>your match</Text>
+          </Pressable>
+        )}
+        {been && (
+          <View style={styles.stat}>
+            <Text style={styles.statV} numberOfLines={1}>{been}</Text>
+            <Text style={styles.statL}>you</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function SaveButton({ placeId }: { placeId: string }) {
+  const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
+  async function save() {
+    if (state !== "idle") return;
+    setState("saving");
+    try {
+      await addToWishlist(placeId, { source: "recommendation" });
+      void triggerHapticSuccess();
+      setState("saved");
+    } catch (e: any) {
+      setState("idle");
+      Alert.alert("Couldn't save", e?.message ?? "Try again");
+    }
+  }
+  return (
+    <Pressable onPress={save} style={[styles.save, state === "saved" && styles.saveDone]} accessibilityRole="button">
+      <Text style={[styles.saveText, state === "saved" && styles.saveTextDone]}>
+        {state === "saving" ? "…" : state === "saved" ? "Saved" : "Save it"}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -429,8 +551,30 @@ const styles = StyleSheet.create({
   wrappedStatV: { color: "#fff", fontSize: 16, fontWeight: "800" },
   wrappedStatL: { color: "rgba(255,255,255,0.55)", fontSize: 10, fontWeight: "600", marginTop: 2 },
 
-  actions: { marginTop: 12, flexDirection: "row" },
-  likeBtn: { paddingVertical: 6, paddingHorizontal: 4 },
-  likeText: { fontSize: 16, color: colors.mute, fontWeight: "700" },
-  likeTextActive: { color: colors.red },
+  summary: { ...type.small, marginBottom: 6 },
+  dayHeader: { ...type.micro, marginTop: 10, marginBottom: 10 },
+
+  place: { marginTop: 12, fontSize: 20, fontWeight: "800", color: colors.ink, letterSpacing: -0.4 },
+  chips: { ...type.small, marginTop: 4 },
+  photo: { marginTop: 12, width: "100%", aspectRatio: 16 / 10, borderRadius: 12, backgroundColor: colors.faint },
+  stats: { flexDirection: "row", gap: 8, marginTop: 14 },
+  stat: {
+    flex: 1, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 12,
+    backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
+  },
+  statV: { fontSize: 15, fontWeight: "800", color: colors.ink },
+  statL: { ...type.micro, marginTop: 3, fontSize: 10 },
+
+  actions: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 8 },
+  kudos: {
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999,
+    borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper,
+  },
+  kudosActive: { borderColor: colors.red, backgroundColor: colors.redTint },
+  kudosText: { fontSize: 13, fontWeight: "700", color: colors.ink },
+  kudosTextActive: { color: colors.red },
+  save: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: colors.red },
+  saveDone: { backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line },
+  saveText: { fontSize: 13, fontWeight: "700", color: "#fff" },
+  saveTextDone: { color: colors.mute },
 });
