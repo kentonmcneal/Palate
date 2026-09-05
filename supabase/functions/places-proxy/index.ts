@@ -123,10 +123,10 @@ serve(async (req) => {
       return await handleNearby(body, user.id, adminClient);
     }
     if (action === "details") {
-      return await handleDetails(body, adminClient);
+      return await handleDetails(body, user.id, adminClient);
     }
     if (action === "search") {
-      return await handleSearch(body, adminClient);
+      return await handleSearch(body, user.id, adminClient);
     }
     if (action === "blurb") {
       return await handleBlurb(body, adminClient);
@@ -137,6 +137,25 @@ serve(async (req) => {
     return json({ error: String(e) }, 500);
   }
 });
+
+// Per-user Google spend, two windows: a burst limit per minute for map
+// panning, and a daily limit that no single account can exceed whatever the
+// global budget has left.
+const USER_CAP_PER_MINUTE = NEARBY_RATE_LIMIT_MAX;
+const USER_CAP_PER_DAY = 120;
+async function overUserCap(admin: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
+  const now = Date.now();
+  const minuteAgo = new Date(now - NEARBY_RATE_LIMIT_SECONDS * 1000).toISOString();
+  const dayAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+  const [{ count: perMinute }, { count: perDay }] = await Promise.all([
+    admin.from("proxy_calls").select("user_id", { count: "exact", head: true }).eq("user_id", userId).gte("called_at", minuteAgo),
+    admin.from("proxy_calls").select("user_id", { count: "exact", head: true }).eq("user_id", userId).gte("called_at", dayAgo),
+  ]);
+  return (perMinute ?? 0) >= USER_CAP_PER_MINUTE || (perDay ?? 0) >= USER_CAP_PER_DAY;
+}
+async function countUserCall(admin: ReturnType<typeof createClient>, userId: string, action: string): Promise<void> {
+  await admin.from("proxy_calls").insert({ user_id: userId, action }).then(() => undefined, () => undefined);
+}
 
 // ----- handlers ---------------------------------------------------------
 
@@ -151,16 +170,12 @@ async function handleNearby(
     return json({ error: "lat/lng required" }, 400);
   }
 
-  // Coarse abuse ceiling: bail only if this user has been extremely active in
-  // the last minute. Normal map panning stays well under this.
-  const cutoff = new Date(Date.now() - NEARBY_RATE_LIMIT_SECONDS * 1000).toISOString();
-  const { count } = await admin
-    .from("location_events")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .gte("captured_at", cutoff);
-
-  if ((count ?? 0) > NEARBY_RATE_LIMIT_MAX) {
+  // Per-user ceiling on Google-backed calls. This used to count
+  // location_events, a table nothing writes, so there was no per-user cap at
+  // all — one enthusiastic phone could spend the whole daily budget. Found by
+  // the code review. proxy_calls (0106) is written on every Google-backed
+  // call below; cache hits are free and uncounted.
+  if (await overUserCap(admin, userId)) {
     return json({ error: "rate_limited" }, 429);
   }
 
@@ -262,11 +277,13 @@ async function handleNearby(
   );
 
   await recordUsage(admin, "nearby", "google");
+  await countUserCall(admin, userId, "nearby");
   return json({ places: rows });
 }
 
 async function handleDetails(
   body: { place_id?: string },
+  userId: string,
   admin: ReturnType<typeof createClient>,
 ) {
   const placeId = body.place_id;
@@ -319,11 +336,13 @@ async function handleDetails(
   const row = await classifyAndBuildRow(place, { useLLM: true, admin });
   await admin.from("restaurants").upsert(row, { onConflict: "google_place_id" });
   await recordUsage(admin, "details", "google");
+  await countUserCall(admin, userId, "details");
   return json({ place: row });
 }
 
 async function handleSearch(
   body: { query?: string; lat?: number; lng?: number },
+  userId: string,
   admin: ReturnType<typeof createClient>,
 ) {
   if (!body.query) return json({ error: "query required" }, 400);
@@ -377,6 +396,7 @@ async function handleSearch(
     await admin.from("restaurants").upsert(rows, { onConflict: "google_place_id" });
   }
   await recordUsage(admin, "search", "google");
+  await countUserCall(admin, userId, "search");
   return json({ places: rows });
 }
 

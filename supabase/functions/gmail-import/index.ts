@@ -612,9 +612,21 @@ async function createImportedVisit(
   const placeId = await placeIdForName(admin, parsed.restaurantName);
   if (!placeId) return false;
 
-  // Ensure the restaurant exists in our cache (places-proxy upserts)
-  const { data: rest } = await admin
+  // A place we have never seen: insert the minimal row (id + the name on
+  // the receipt) so the visit records now. The catalogue fills the rest the
+  // first time anyone opens the place through places-proxy. This used to
+  // return false here, which dropped the visit after paying for the lookup.
+  // Found by the code review.
+  let { data: rest } = await admin
     .from("restaurants").select("id").eq("google_place_id", placeId).maybeSingle();
+  if (!rest) {
+    const { data: made } = await admin
+      .from("restaurants")
+      .upsert({ google_place_id: placeId, name: parsed.restaurantName }, { onConflict: "google_place_id" })
+      .select("id")
+      .maybeSingle();
+    rest = made;
+  }
   if (!rest) return false;
 
   const { error } = await admin.from("visits").insert({

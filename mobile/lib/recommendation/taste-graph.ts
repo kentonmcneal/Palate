@@ -122,7 +122,7 @@ export function topKey(map: Record<string, number>): string | null {
   return best;
 }
 
-function emptyVector(): TasteVector {
+export function emptyVector(): TasteVector {
   return {
     visitCount: 0, wishlistCount: 0,
     cuisineRegion: {}, cuisineSubregion: {},

@@ -128,7 +128,13 @@ function scoreTaste(g: TasteGraph, r: RestaurantInput): Dim {
   // at 0 visits (the seed fills these maps but leaves totalVisits at 0, so the
   // old `totalVisits === 0` gate silently discarded it). True zero-signal =
   // neutral (the UI suppresses the number at low confidence regardless).
-  if (!hasEntries(g.cuisinesSubregion) && !hasEntries(g.cuisines) && !hasEntries(g.flavors)) {
+  // Gate on the attributes this block actually scores. Flavor is weight 0
+  // and the onboarding quiz seeds flavor keys, so a brand-new account that
+  // took the quiz had "entries" here, skipped the neutral branch, and scored
+  // every restaurant 0 on taste — the quiz made cold start WORSE than no
+  // quiz. Found by the code review, LIVE.
+  if (!hasEntries(g.cuisinesSubregion) && !hasEntries(g.cuisines)
+      && !(FLAVOR_WEIGHT > 0 && hasEntries(g.flavors))) {
     return { s: 0.5, matched: false };
   }
   let score = 0;

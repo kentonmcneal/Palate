@@ -112,7 +112,14 @@ serve(async (req) => {
       await admin.rpc("bump_google_usage", { p_day: todayUTC(), p_cap: GOOGLE_DAILY_CALL_CAP });
       await admin.rpc("record_api_usage", { p_day: todayUTC(), p_action: "reclassify", p_source: "google" });
 
-      if (!resp.ok) { failed++; continue; }
+      if (!resp.ok) {
+        // Advance the cursor anyway. The sweep orders by refreshed_at, so a
+        // row whose fetch fails sat at the head forever and every run re-paid
+        // for the same failure. Found by the code review.
+        await admin.from("restaurants").update({ refreshed_at: new Date().toISOString() }).eq("google_place_id", row.google_place_id);
+        failed++;
+        continue;
+      }
       const place = await resp.json();
 
       // googleToRestaurantRow is the PURE deterministic builder. The LLM

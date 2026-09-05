@@ -517,8 +517,11 @@ export function inferOccasionTags(
   }
   if (formatClass === "bar" || formatClass === "wine_bar") {
     tags.add("late_night");
-    tags.add("party");
     tags.add("group_dinner");
+    // Not "party". The eligibility gate reads the party tag as "this is a
+    // club, do not recommend it for dinner", and adding it to every bar by
+    // format made every bar ineligible — 255 rows. Party comes from review
+    // text and live-music signals only. Found by the code review, LIVE.
   }
   if (formatClass === "café") {
     tags.add("breakfast");

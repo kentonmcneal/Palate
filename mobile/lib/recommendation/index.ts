@@ -122,5 +122,6 @@ function makeGraphId(g: TasteGraph): string {
     g.friendVisitsByPlace.size,
     g.dismissesByPlace.size,
     g.skipsByPlace.size,
+    g.dislikes.placeIds.size,
   ].join(":");
 }
