@@ -53,8 +53,16 @@ export async function generateForCurrentWeek(): Promise<Wrapped | null> {
 export function wrappedIsStale(
   storedWeekStart: string | null | undefined,
   thisWeekStart: string,
+  storedVisits?: number | null,
+  liveVisits?: number | null,
 ): boolean {
-  return storedWeekStart !== thisWeekStart;
+  if (storedWeekStart !== thisWeekStart) return true;
+  // Same week, but the world moved on. The row is written once when it is
+  // first asked for; every meal after that was invisible to the "This week"
+  // card while the live analytics under it counted them, so the same screen
+  // said 1 visit and 5 visits at once (founder's screenshot, 2026-09-05).
+  if (storedVisits != null && liveVisits != null && liveVisits !== storedVisits) return true;
+  return false;
 }
 
 /**
@@ -68,9 +76,24 @@ export function wrappedIsStale(
  */
 export async function currentWrapped(): Promise<Wrapped | null> {
   const stored = await latestWrapped();
-  if (!wrappedIsStale(stored?.week_start, isoWeekStart())) return stored;
+  const weekStart = isoWeekStart();
+  const live = await visitsSince(weekStart).catch(() => null);
+  if (!wrappedIsStale(stored?.week_start, weekStart, stored?.total_visits, live)) return stored;
   const fresh = await generateForCurrentWeek().catch(() => null);
   return fresh ?? stored;
+}
+
+/** The reader's own visit count since a date. One cheap head query. */
+async function visitsSince(isoDate: string): Promise<number | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { count, error } = await supabase
+    .from("visits")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .gte("visited_at", `${isoDate}T00:00:00`);
+  if (error) return null;
+  return count ?? 0;
 }
 
 export async function latestWrapped(): Promise<Wrapped | null> {

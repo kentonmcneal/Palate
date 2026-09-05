@@ -1,5 +1,5 @@
 import { distanceKm } from "../../lib/match-score";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, StyleSheet, Alert, ScrollView, RefreshControl, Pressable, Image, Share } from "react-native";
 import { Text } from "../../components/Text";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -15,6 +15,7 @@ import { AnimatedNumber } from "../../components/AnimatedNumber";
 import { computeStreak, type StreakInfo } from "../../lib/streak";
 import { refreshDailyReminder } from "../../lib/notifications";
 import { refreshWrappedTease } from "../../lib/wrapped-tease";
+import { weekStrip, weekStripCopy } from "../../lib/week-strip";
 import { captureError } from "../../lib/observability";
 import { postMilestoneAndNotify } from "../../lib/feed";
 import { generateInviteLink } from "../../lib/referrals";
@@ -87,6 +88,7 @@ export default function Home() {
   const [palateLine, setPalateLine] = useState<string | null>(null);
   const [habitualCuisines, setHabitualCuisines] = useState<string[]>([]);
   const [home, setHome] = useState<HomeState | null>(null);
+  const weekLine = useMemo(() => weekStripCopy(weekStrip(visits)), [visits]);
   const [trackingOn, setTrackingOn] = useState(false);
   const [lastCheck, setLastCheck] = useState<string | null>(null);
 
@@ -157,7 +159,9 @@ export default function Home() {
     // out-of-town saves).
     const locP = getEffectiveLocation().catch(() => null);
     const [v, s, w] = await Promise.allSettled([
-      recentVisits(10),
+      // Sixty rather than ten: the week strip and the Saturday tease both
+      // read the current week from this list, and ten is not a week.
+      recentVisits(60),
       computeStreak(),
       loadCurrentWeekInsight(),
     ]);
@@ -176,11 +180,10 @@ export default function Home() {
       void refreshDailyReminder({ loggedToday: s.value.loggedToday, streak: s.value.current })
         .catch((e) => captureError(e, { at: "refreshDailyReminder" }));
       // Saturday 18:30: the week's numbers, and that Wrapped is in tomorrow.
-      // Its own read of the week, since the ten recent visits above are not
-      // the week.
-      void recentVisits(60)
-        .then((all) => refreshWrappedTease(all))
-        .catch((e) => captureError(e, { at: "refreshWrappedTease" }));
+      if (v.status === "fulfilled") {
+        void refreshWrappedTease(v.value)
+          .catch((e) => captureError(e, { at: "refreshWrappedTease" }));
+      }
       // Fire confetti once per session when the user crosses a milestone day.
       const m = milestoneFor(s.value.current);
       if (m && celebratedStreak !== m) {
@@ -287,6 +290,19 @@ export default function Home() {
         )}
 
         <View style={styles.homeRule} />
+
+        {/* The week, in one line. The full cards stay on Wrapped; this is
+            the Strava move of putting the numbers where you land. */}
+        {!!weekLine && (
+          <Pressable
+            onPress={() => router.push("/(tabs)/wrapped" as never)}
+            style={styles.weekStrip}
+            accessibilityRole="button"
+          >
+            <Text style={styles.weekStripText}>{weekLine}</Text>
+            <Text style={styles.weekStripChev}>→</Text>
+          </Pressable>
+        )}
 
         <Text style={styles.moodHead}>What are you in the mood for?</Text>
         {!!palateLine && <Text style={styles.palateRead}>{palateLine}</Text>}
@@ -418,6 +434,13 @@ function prettyType(t: string) {
 }
 
 const styles = StyleSheet.create({
+  weekStrip: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    marginBottom: 14, paddingHorizontal: 14, paddingVertical: 11,
+    borderRadius: 14, backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
+  },
+  weekStripText: { flex: 1, fontSize: 14, fontWeight: "700", color: colors.ink },
+  weekStripChev: { fontSize: 14, fontWeight: "800", color: colors.red },
   moodHead: {
     ...type.title, fontSize: 21, lineHeight: 25,
     color: colors.ink, letterSpacing: -0.4, marginBottom: 4,

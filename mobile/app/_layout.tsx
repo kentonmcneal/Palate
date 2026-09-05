@@ -98,11 +98,12 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
       >
         <Text style={{ color: "#fff", fontWeight: "800" }}>Reload</Text>
       </Pressable>
-      {__DEV__ && (
-        <Text style={{ marginTop: 16, fontSize: 11, color: colors.mute, textAlign: "center" }}>
-          {error?.message}
-        </Text>
-      )}
+      {/* Shown in release too. This is a beta with fourteen people on it,
+          and "the app hit an unexpected error" with no message is a screenshot
+          nobody can act on. The text is the exception message, never a stack. */}
+      <Text style={{ marginTop: 16, fontSize: 11, color: colors.mute, textAlign: "center" }} selectable>
+        {String(error?.message ?? error ?? "").slice(0, 300)}
+      </Text>
     </View>
   );
 }

@@ -28,4 +28,17 @@ describe("wrappedIsStale", () => {
     // recomputed, rather than assuming newer means correct.
     expect(wrappedIsStale("2026-09-07", thisWeek)).toBe(true);
   });
+
+  it("is stale when the same week has gained visits since the row was written", () => {
+    // The row said 1 visit; the analytics under it said 5. Same week.
+    expect(wrappedIsStale("2026-08-31", thisWeek, 1, 5)).toBe(true);
+  });
+
+  it("is current when the same week's count still matches", () => {
+    expect(wrappedIsStale("2026-08-31", thisWeek, 5, 5)).toBe(false);
+  });
+
+  it("does not regenerate when the live count is unknown", () => {
+    expect(wrappedIsStale("2026-08-31", thisWeek, 1, null)).toBe(false);
+  });
 });
