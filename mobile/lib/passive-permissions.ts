@@ -153,3 +153,35 @@ export async function checkPermissionDowngrade(): Promise<boolean> {
 export async function currentPermissionState(): Promise<{ whenInUse: boolean; always: boolean }> {
   return { whenInUse: await hasWhenInUse(), always: await hasAlways() };
 }
+
+
+// ----------------------------------------------------------------------------
+// "You opted in, but Always was never granted."
+// ----------------------------------------------------------------------------
+// checkPermissionDowngrade only fires on granted -> not-granted. Somebody who
+// never granted Always in the first place — because onboarding used to tell
+// them to pick "While Using the App" — was never told anything at all. They
+// opted into passive capture, saw a tracking toggle reading ON, and got no
+// visits, with nothing anywhere explaining why.
+//
+// Rate-limited rather than persistent: this is a real problem worth raising,
+// and it is still a banner about a permission somebody may have chosen on
+// purpose. Dismissing holds it for a week.
+
+const ALWAYS_NAG_KEY = "palate.passive.alwaysNagDismissedAt";
+const NAG_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export async function needsAlwaysPrompt(): Promise<boolean> {
+  if (await hasAlways()) return false;
+  try {
+    const raw = await AsyncStorage.getItem(ALWAYS_NAG_KEY);
+    if (raw && Date.now() - Number(raw) < NAG_INTERVAL_MS) return false;
+  } catch {
+    // Storage failure should not silence a real problem.
+  }
+  return true;
+}
+
+export async function dismissAlwaysPrompt(): Promise<void> {
+  await AsyncStorage.setItem(ALWAYS_NAG_KEY, String(Date.now())).catch(() => {});
+}

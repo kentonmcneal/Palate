@@ -41,7 +41,9 @@ import {
   resumePassiveCaptureIfOptedIn, isPassiveOptedIn, reportDay7PermissionState,
 } from "../lib/passive-capture";
 import { addVisitListener } from "../modules/palate-visit-monitor";
-import { checkPermissionDowngrade, hasAlways } from "../lib/passive-permissions";
+import {
+  checkPermissionDowngrade, hasAlways, needsAlwaysPrompt, dismissAlwaysPrompt,
+} from "../lib/passive-permissions";
 import { PermissionRepairBanner } from "../components/PermissionRepairBanner";
 
 // Install app-wide catch-alls for uncaught errors / unhandled rejections BEFORE
@@ -208,7 +210,13 @@ export default function RootLayout() {
       // is doing exactly what they meant to.
       void checkPermissionDowngrade()
         .then(async (downgraded) => {
-          if (downgraded && (await isPassiveOptedIn())) setRepairVisible(true);
+          if (!(await isPassiveOptedIn())) return;
+          // A downgrade always surfaces. So does never having granted Always at
+          // all — onboarding used to tell people to pick "While Using the App",
+          // so an opted-in account could sit for weeks with a tracking toggle
+          // reading ON, capturing nothing, and nothing explaining why. That
+          // second case is rate-limited to once a week.
+          if (downgraded || (await needsAlwaysPrompt())) setRepairVisible(true);
         })
         .catch((e) => captureError(e, { at: "passive:downgrade" }));
     };
@@ -435,7 +443,10 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar style="dark" />
-        <PermissionRepairBanner visible={repairVisible} onDismiss={() => setRepairVisible(false)} />
+        <PermissionRepairBanner
+          visible={repairVisible}
+          onDismiss={() => { setRepairVisible(false); void dismissAlwaysPrompt(); }}
+        />
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.paper } }}>
           <Stack.Screen name="sign-in" />
           <Stack.Screen name="onboarding" />

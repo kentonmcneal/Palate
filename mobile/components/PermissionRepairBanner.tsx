@@ -28,8 +28,8 @@ export function PermissionRepairBanner({
   return (
     <View style={styles.wrap}>
       <View style={{ flex: 1 }}>
-        <Text style={styles.title}>Passive logging is paused</Text>
-        <Text style={styles.sub}>Re-enable “Always” location to keep auto-detecting your visits.</Text>
+        <Text style={styles.title}>Palate isn\u2019t logging your visits</Text>
+        <Text style={styles.sub}>It needs Location set to “Always” — your phone is in your pocket while you eat.</Text>
       </View>
       <Pressable onPress={onFix} style={styles.fixBtn} hitSlop={6}>
         <Text style={styles.fixText}>Fix</Text>
