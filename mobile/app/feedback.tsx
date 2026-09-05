@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   View,
   StyleSheet,
-  TextInput,
   ScrollView,
   Pressable,
   Alert,
@@ -10,6 +9,7 @@ import {
   Platform,
   Image,
 } from "react-native";
+import { TextInput } from "../components/TextInput";
 import { Text } from "../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";

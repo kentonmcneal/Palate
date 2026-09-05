@@ -1,4 +1,5 @@
-import { View, TextInput, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
+import { TextInput } from "./TextInput";
 import { Text } from "./Text";
 import { colors, spacing, type } from "../theme";
 import { validateUsername, USERNAME_MAX } from "../lib/username";

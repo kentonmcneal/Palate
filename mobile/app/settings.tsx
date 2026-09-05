@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, StyleSheet, Switch, Alert, Linking, ScrollView, Share, Pressable, Modal, TextInput } from "react-native";
+import { View, StyleSheet, Switch, Alert, Linking, ScrollView, Share, Pressable, Modal } from "react-native";
+import { TextInput } from "../components/TextInput";
 import { Text } from "../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";

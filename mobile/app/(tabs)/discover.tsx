@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, StyleSheet, ScrollView, Pressable, RefreshControl, TextInput, ActivityIndicator, Modal } from "react-native";
+import { View, StyleSheet, ScrollView, Pressable, RefreshControl, ActivityIndicator, Modal } from "react-native";
+import { TextInput } from "../../components/TextInput";
 import { Text } from "../../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";

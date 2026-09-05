@@ -5,11 +5,11 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  TextInput,
   Pressable,
   ActivityIndicator,
   Alert,
 } from "react-native";
+import { TextInput } from "../components/TextInput";
 import { Text } from "../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
