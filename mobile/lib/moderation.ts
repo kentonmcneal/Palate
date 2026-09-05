@@ -70,23 +70,17 @@ export type BlockedProfile = {
 
 /** Everyone the current user has blocked, with their profile, newest first. */
 export async function listBlockedUsers(): Promise<BlockedProfile[]> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
-  const { data, error } = await supabase
-    .from("blocked_users")
-    .select(`
-      blocked_id, created_at,
-      profile:profiles!blocked_users_blocked_id_fkey ( id, display_name, email, avatar_url )
-    `)
-    .eq("blocker_id", user.id)
-    .order("created_at", { ascending: false });
+  // A definer RPC (0102) rather than an embed through profiles, whose only
+  // SELECT policy is own-row — the embed returned every blocked person as
+  // null. No email.
+  const { data, error } = await supabase.rpc("list_blocked");
   if (error) throw error;
   return ((data ?? []) as any[]).map((r) => ({
     id: r.blocked_id,
-    display_name: r.profile?.display_name ?? null,
-    email: r.profile?.email ?? null,
-    avatar_url: r.profile?.avatar_url ?? null,
-    blocked_at: r.created_at,
+    display_name: r.display_name ?? null,
+    email: null,
+    avatar_url: r.avatar_url ?? null,
+    blocked_at: r.blocked_at,
   }));
 }
 

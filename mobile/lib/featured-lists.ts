@@ -83,7 +83,11 @@ export async function buildFeaturedLists(opts: {
   vector?: unknown;
   personal?: unknown;
 }): Promise<FeaturedList[]> {
-  const cityKey = opts.city ? slugify(opts.city) : `gps:${opts.here.lat.toFixed(2)},${opts.here.lng.toFixed(2)}`;
+  // 0.1°, not 0.01°. LIVE on 2026-09-05: 17 of the 25 "cities" the nightly
+  // refresh was paying to keep fresh were 1km GPS cells — seven of them a walk
+  // across Philadelphia, six across Memphis — at 15 Google Text Searches each.
+  // A 0.1° cell is ~11km, which is a city for this purpose.
+  const cityKey = opts.city ? slugify(opts.city) : `gps:${opts.here.lat.toFixed(1)},${opts.here.lng.toFixed(1)}`;
   const cityLabel = opts.city ?? "Nearby";
   const subtitle = opts.city ? `in ${opts.city}` : "Nearby";
 

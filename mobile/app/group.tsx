@@ -123,7 +123,7 @@ export default function GroupScreen() {
 
         {!!friends?.length && (
           <View style={styles.chips}>
-            {friends.map((f) => {
+            {friends.filter((f) => f.friend?.id).map((f) => {
               const on = selected.has(f.friend.id);
               const full = !on && selected.size >= MAX_OTHERS;
               return (

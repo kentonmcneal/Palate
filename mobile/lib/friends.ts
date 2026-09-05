@@ -143,57 +143,51 @@ export type FriendListItem = {
   friend: FriendProfile;
 };
 
-export async function listFriends(): Promise<FriendListItem[]> {
-  const me = await currentUserId();
-  const { data, error } = await supabase
-    .from("friendships")
-    .select(`
-      *,
-      requester:profiles!friendships_requester_id_fkey ( id, email, display_name, username, avatar_url, profile_visibility ),
-      addressee:profiles!friendships_addressee_id_fkey ( id, email, display_name, username, avatar_url, profile_visibility )
-    `)
-    .eq("status", "accepted")
-    .or(`requester_id.eq.${me},addressee_id.eq.${me}`)
-    .order("accepted_at", { ascending: false });
-  if (error) throw error;
-
-  return ((data ?? []) as any[]).map((row) => ({
+// ----------------------------------------------------------------------------
+// Friend lists — one definer RPC (0102), never a PostgREST embed.
+// ----------------------------------------------------------------------------
+// The embed through profiles came back with the OTHER person null, because
+// the only SELECT policy on profiles is own-row. friends.tsx ran f.friend.id
+// on that and the whole app fell into the error boundary ("the Board crash").
+// The RPC returns exactly what the screen needs, and no email.
+function rowToItem(row: any): FriendListItem {
+  return {
     friendship: {
-      id: row.id,
+      id: row.friendship_id,
       requester_id: row.requester_id,
       addressee_id: row.addressee_id,
       status: row.status,
       created_at: row.created_at,
       accepted_at: row.accepted_at,
     },
-    friend: row.requester_id === me ? row.addressee : row.requester,
-  }));
+    friend: {
+      id: row.other_id,
+      email: null,
+      display_name: row.other_display_name ?? null,
+      username: row.other_username ?? null,
+      avatar_url: row.other_avatar_url ?? null,
+      profile_visibility: row.other_visibility ?? "friends",
+    },
+  };
+}
+
+async function listFriendships(kind: "accepted" | "pending_in" | "pending_out"): Promise<FriendListItem[]> {
+  const { data, error } = await supabase.rpc("list_friendships", { p_kind: kind });
+  if (error) throw error;
+  // Belt and braces: a row with no other party is not a friend you can render.
+  return ((data ?? []) as any[]).filter((r) => r.other_id).map(rowToItem);
+}
+
+export async function listFriends(): Promise<FriendListItem[]> {
+  return listFriendships("accepted");
 }
 
 export async function listIncomingRequests(): Promise<FriendListItem[]> {
-  const me = await currentUserId();
-  const { data, error } = await supabase
-    .from("friendships")
-    .select(`
-      *,
-      requester:profiles!friendships_requester_id_fkey ( id, email, display_name, username, avatar_url, profile_visibility )
-    `)
-    .eq("status", "pending")
-    .eq("addressee_id", me)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
+  return listFriendships("pending_in");
+}
 
-  return ((data ?? []) as any[]).map((row) => ({
-    friendship: {
-      id: row.id,
-      requester_id: row.requester_id,
-      addressee_id: row.addressee_id,
-      status: row.status,
-      created_at: row.created_at,
-      accepted_at: row.accepted_at,
-    },
-    friend: row.requester,
-  }));
+export async function listOutgoingRequests(): Promise<FriendListItem[]> {
+  return listFriendships("pending_out");
 }
 
 // ----------------------------------------------------------------------------
@@ -217,28 +211,3 @@ export async function loadFriendsLeaderboard(): Promise<LeaderboardEntry[]> {
   return (data ?? []) as LeaderboardEntry[];
 }
 
-export async function listOutgoingRequests(): Promise<FriendListItem[]> {
-  const me = await currentUserId();
-  const { data, error } = await supabase
-    .from("friendships")
-    .select(`
-      *,
-      addressee:profiles!friendships_addressee_id_fkey ( id, email, display_name, username, avatar_url, profile_visibility )
-    `)
-    .eq("status", "pending")
-    .eq("requester_id", me)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-
-  return ((data ?? []) as any[]).map((row) => ({
-    friendship: {
-      id: row.id,
-      requester_id: row.requester_id,
-      addressee_id: row.addressee_id,
-      status: row.status,
-      created_at: row.created_at,
-      accepted_at: row.accepted_at,
-    },
-    friend: row.addressee,
-  }));
-}

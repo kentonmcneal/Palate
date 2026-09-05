@@ -171,12 +171,19 @@ serve(async (req) => {
     }
 
     if (action === "refresh_all_active") {
-      const { data: cities, error } = await admin
+      const { data: allCities, error } = await admin
         .from("featured_lists_active_cities")
-        .select("city_key, city_label, city_lat, city_lng")
+        .select("city_key, city_label, city_lat, city_lng, last_seen_at")
         // Only refresh cities seen in the last 14 days
         .gte("last_seen_at", new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString());
       if (error) throw error;
+      // A named city someone picked is worth keeping warm for two weeks. A
+      // GPS cell is where one person happened to stand; three days, then it
+      // goes cold until somebody stands there again. Each city here is ~15
+      // paid Text Searches a night.
+      const gpsCutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
+      const cities = (allCities ?? []).filter((c) =>
+        !c.city_key.startsWith("gps:") || new Date(c.last_seen_at).getTime() >= gpsCutoff);
 
       const results = [];
       let budgetExhausted = false;

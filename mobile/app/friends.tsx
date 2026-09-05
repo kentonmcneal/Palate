@@ -43,7 +43,7 @@ export default function FriendsScreen() {
   useEffect(() => {
     if (friends.length === 0) return;
     let alive = true;
-    void loadPalateMatches(friends.map((f) => f.friend.id))
+    void loadPalateMatches(friends.map((f) => f.friend?.id).filter(Boolean) as string[])
       .then((next) => { if (alive) setMatches(next); })
       .catch(() => {});
     return () => { alive = false; };

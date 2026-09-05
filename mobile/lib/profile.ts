@@ -33,6 +33,12 @@ export type Profile = {
   hometown: string | null;
   current_city: string | null;
   created_at: string;
+  bio: string | null;
+  school: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  instagram_handle: string | null;
+  tiktok_handle: string | null;
 };
 
 export async function getMyProfile(): Promise<Profile | null> {
@@ -40,7 +46,11 @@ export async function getMyProfile(): Promise<Profile | null> {
   if (!user) return null;
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, email, display_name, username, avatar_url, taste_preferences, profile_visibility, age_range, gender_identity, race_ethnicity, hometown, current_city, created_at")
+    // bio, school, first/last name and the two handles are edited on the
+    // Edit Profile screen, which initialises its fields from this object and
+    // writes all six back on Save. Leaving them out of the select meant every
+    // Save overwrote them with empty strings. Found by the code review.
+    .select("id, email, display_name, username, avatar_url, taste_preferences, profile_visibility, age_range, gender_identity, race_ethnicity, hometown, current_city, created_at, bio, school, first_name, last_name, instagram_handle, tiktok_handle")
     .eq("id", user.id)
     .maybeSingle();
   if (error || !data) return null;
