@@ -62,3 +62,36 @@ export function formatBuildInfo(info: BuildInfo): string {
 export function buildInfoLine(): string {
   return formatBuildInfo(buildInfo());
 }
+
+/**
+ * Force a check now, and reload if something new arrived.
+ *
+ * expo-updates checks on launch and applies on the NEXT launch, which means a
+ * tester who opens the app, looks, and closes it is permanently one update
+ * behind — and during a run of frequent publishes they never catch up. This is
+ * the way out that does not involve explaining app lifecycles to somebody.
+ *
+ * Returns what happened so the caller can say it plainly rather than leaving
+ * the user to guess whether anything occurred.
+ */
+export async function checkForUpdateNow(): Promise<
+  | { status: "updated" }
+  | { status: "current" }
+  | { status: "unavailable"; reason: string }
+> {
+  if (!Updates.isEnabled) {
+    return { status: "unavailable", reason: "Updates are off in this build." };
+  }
+  try {
+    const result = await Updates.checkForUpdateAsync();
+    if (!result.isAvailable) return { status: "current" };
+    await Updates.fetchUpdateAsync();
+    await Updates.reloadAsync(); // does not return
+    return { status: "updated" };
+  } catch (e: any) {
+    return {
+      status: "unavailable",
+      reason: String(e?.message ?? e).slice(0, 140),
+    };
+  }
+}

@@ -7,7 +7,7 @@ import { Button, Spacer } from "../components/Button";
 import { colors, spacing, type } from "../theme";
 import { supabase } from "../lib/supabase";
 import { signOut } from "../lib/auth";
-import { buildInfoLine } from "../lib/build-info";
+import { buildInfoLine, checkForUpdateNow } from "../lib/build-info";
 import { generateForCurrentWeek } from "../lib/wrapped";
 import {
   isReminderEnabled,
@@ -45,6 +45,7 @@ const PAUSE_KEY = TRACKING_PAUSED_KEY;
 export default function Settings() {
   const router = useRouter();
   const [tracking, setTracking] = useState(true);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
   const [sundayReminder, setSundayReminder] = useState(false);
   const [screenshotPrompt, setScreenshotPrompt] = useState(true);
@@ -327,6 +328,28 @@ export default function Settings() {
               both report the same app version, so the version alone cannot
               answer "did the update land?" — this can. */}
           <Note>{buildInfoLine()}</Note>
+          <Spacer />
+          {/* Updates apply on the NEXT launch, so a tester who opens the app,
+              looks, and closes it stays one behind indefinitely. This is the
+              way out that does not involve explaining app lifecycles. */}
+          <Button
+            title={checkingUpdate ? "Checking…" : "Check for updates"}
+            variant="ghost"
+            onPress={async () => {
+              setCheckingUpdate(true);
+              try {
+                const r = await checkForUpdateNow();
+                if (r.status === "current") {
+                  Alert.alert("You're up to date", "This is the latest version.");
+                } else if (r.status === "unavailable") {
+                  Alert.alert("Couldn't check", r.reason);
+                }
+                // "updated" never gets here — the app reloads.
+              } finally {
+                setCheckingUpdate(false);
+              }
+            }}
+          />
         </CollapsibleSection>
       </ScrollView>
 
