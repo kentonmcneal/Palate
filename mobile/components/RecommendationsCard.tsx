@@ -185,19 +185,17 @@ export function RecommendationsCard({
 
   return (
     <View style={styles.card}>
-      <View style={styles.head}>
-        <View style={{ flex: 1 }}>
-          {/* Was: an "EARLY ESTIMATE · sharper after a few more visits" badge.
-              A disclaimer stapled to a recommendation is the app apologizing
-              for its own output. The eyebrow carries the confidence instead —
-              it says what the list IS, and stops promising to improve. */}
-          <Text style={styles.eyebrow} maxFontSizeMultiplier={FONT_CAP.eyebrow}>
-            {earlyEstimate ? "A FIRST READ ON YOUR PALATE" : "MOST COMPATIBLE"}
-          </Text>
-        </View>
-      </View>
+      {/* No "MOST COMPATIBLE" eyebrow. Home now asks "What are you in the mood
+          for?" directly above this and the chips answer it, so a label saying
+          what the list is was a third heading for one list. The early-read
+          caveat is kept — that one says something the question does not. */}
+      {earlyEstimate && (
+        <Text style={styles.eyebrow} maxFontSizeMultiplier={FONT_CAP.eyebrow}>
+          A FIRST READ ON YOUR PALATE
+        </Text>
+      )}
       {!!moodNote && <Text style={styles.moodNote}>{moodNote}</Text>}
-      <View style={{ marginTop: 16 }}>
+      <View style={{ marginTop: earlyEstimate ? 14 : 2 }}>
         {recs.map((rec) => (
           <RecRow key={rec.google_place_id} rec={rec} />
         ))}

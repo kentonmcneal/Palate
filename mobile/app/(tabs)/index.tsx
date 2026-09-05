@@ -46,7 +46,6 @@ function milestoneFor(count: number): number | null {
 
 export default function Home() {
   const router = useRouter();
-  const [checking, setChecking] = useState(false);
   const [visits, setVisits] = useState<Visit[]>([]);
   // Only feeds NextStepCard — an account with no friends is a different
   // problem from an account with no visits, and the two need different advice.
@@ -224,62 +223,6 @@ export default function Home() {
     }
   }
 
-  async function handleCheckNow() {
-    setChecking(true);
-    try {
-      const perm = await requestForegroundPermission();
-      if (!perm.granted) {
-        Alert.alert("Location off", "Turn on location in Settings → Palate.");
-        return;
-      }
-
-      const loc = await getCurrentLocation();
-      const confidence = classifyAccuracy(loc.accuracy);
-      if (confidence === "low") {
-        Alert.alert(
-          "We couldn't confidently detect a restaurant nearby.",
-          "Your location signal is fuzzy right now — usually means you're indoors or moving. Step outside or try again in a minute.",
-        );
-        return;
-      }
-      const places = await nearbyRestaurants(loc.lat, loc.lng);
-      await logLocationEvent(loc, places[0]?.google_place_id ?? null);
-
-      if (!places.length) {
-        Alert.alert(
-          "We couldn't confidently detect a restaurant nearby.",
-          "If you're sure you're at one, you can log it manually from the + button.",
-        );
-        return;
-      }
-
-      // Pick the first place we haven't recently asked about.
-      let target: Restaurant | undefined;
-      for (const p of places) {
-        const wasAsked = await recentlyPrompted(p.google_place_id);
-        if (!wasAsked) {
-          target = p;
-          break;
-        }
-      }
-      target = target ?? places[0];
-
-      router.push({
-        pathname: "/confirm-visit",
-        params: {
-          place_id: target.google_place_id,
-          name: target.name,
-          address: target.address ?? "",
-          alternates: JSON.stringify(places.slice(0, 6).filter((p) => p.google_place_id !== target!.google_place_id)),
-          confidence,
-        },
-      });
-    } catch (e: any) {
-      Alert.alert("Couldn't check right now", e.message ?? "Try again");
-    } finally {
-      setChecking(false);
-    }
-  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -332,7 +275,6 @@ export default function Home() {
         <Text style={styles.moodHead}>What are you in the mood for?</Text>
         {!!palateLine && <Text style={styles.palateRead}>{palateLine}</Text>}
         <MoodRow chips={moodChips} value={mood} onChange={setMood} />
-        <Spacer size={14} />
         <RecommendationsCard
           mood={mood}
           habitualCuisines={habitualCuisines}
@@ -341,12 +283,6 @@ export default function Home() {
 
         <TrackingLine on={trackingOn} lastCheck={lastCheck} />
 
-        {/* The manual path stays reachable and stops defining the screen. */}
-        <Pressable onPress={handleCheckNow} style={styles.checkNowGhost} accessibilityRole="button">
-          <Text style={styles.checkNowGhostText}>
-            {checking ? "Checking…" : "Eating somewhere right now? Check →"}
-          </Text>
-        </Pressable>
 
       </ScrollView>
     </SafeAreaView>
@@ -466,16 +402,14 @@ function prettyType(t: string) {
 
 const styles = StyleSheet.create({
   moodHead: {
-    fontFamily: "Georgia", fontSize: 27, lineHeight: 32,
-    color: colors.ink, letterSpacing: -0.3, marginBottom: 6,
+    fontFamily: "Georgia", fontSize: 21, lineHeight: 25,
+    color: colors.ink, letterSpacing: -0.2, marginBottom: 4,
   },
-  palateRead: { ...type.small, marginBottom: 12, lineHeight: 19 },
+  palateRead: { ...type.small, marginBottom: 10, lineHeight: 18 },
   homeRule: {
     height: 1, backgroundColor: colors.line,
     marginTop: spacing.lg, marginBottom: spacing.lg,
   },
-  checkNowGhost: { paddingVertical: 14, alignItems: "center" },
-  checkNowGhostText: { fontSize: 13, fontWeight: "700", color: colors.redText },
   safe: { flex: 1, backgroundColor: colors.paper },
   container: { padding: spacing.lg, paddingBottom: 100 },
   header: {

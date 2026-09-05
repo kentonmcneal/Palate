@@ -179,9 +179,12 @@ export default function Settings() {
         <View style={{ width: 40 }} />
       </View>
       <ScrollView contentContainerStyle={styles.container}>
-        <Section title="Bring in your history">
+        {/* Collapsed like every other section. It was the one always-open
+            block, and it sat first, so Settings opened on a Gmail prompt
+            rather than on your settings. */}
+        <CollapsibleSection title="Bring in your history">
           <GmailImportCard />
-        </Section>
+        </CollapsibleSection>
 
         <Section title="Friends">
           <Button
