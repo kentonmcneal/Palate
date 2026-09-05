@@ -105,7 +105,7 @@ const BRAND_PROFILE: Record<string, BrandOverride> = {
   },
   "Taco Bell": {
     decisionIntent: "no_friction",
-    flavorSignature: "indulgent, late-night, value-engineered Tex-Mex",
+    flavorSignature: "indulgent, late night, value engineered Tex Mex",
     tasteTags: ["spicy", "cheesy", "savory"],
     behaviorTags: ["indulgent", "convenient", "budget_friendly"],
     healthSignal: "low", comfortSignal: "high",
@@ -328,7 +328,7 @@ function inferFlavorSignature(cuisine: string | null | undefined, format: Restau
   if (format === "bar") return `${cuisineLabel} bar bites, designed to share`;
   if (format === "fast_casual") return `${cuisineLabel} done quickly without cutting corners`;
   if (format === "quick_service") return `${cuisineLabel} engineered for speed`;
-  return `${cuisineLabel} in a sit-down format`;
+  return `${cuisineLabel} in a sit down format`;
 }
 
 // ============================================================================

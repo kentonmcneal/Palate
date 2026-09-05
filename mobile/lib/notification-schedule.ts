@@ -52,7 +52,7 @@ export const PINGS: Ping[] = [
     hour: 16,
     minute: 30,
     title: "It's Friday",
-    body: "Three date-night spots near you, picked for your palate.",
+    body: "Three date night spots near you, picked for your palate.",
     pathname: "/(tabs)/discover",
     params: { list: "date-night" },
   },

@@ -11,7 +11,9 @@ import { computeTasteVector, type TasteVector } from "../lib/taste-vector";
 import { loadPersonalSignal } from "../lib/personal-signal";
 import { assembleGraph, getCompatibility } from "../lib/recommendation";
 import { isRecommendable } from "../lib/recommendation/eligibility";
-import { MatchMarker, TopMatchMarker } from "../components/MatchMarker";
+import { MatchMarker, TopMatchMarker, DotMarker } from "../components/MatchMarker";
+import { LoadError } from "../components/LoadError";
+import { formatDistance } from "../lib/match-score";
 import { getCachedNearby, setCachedNearby } from "../lib/nearby-cache";
 import { LocationPill } from "../components/LocationPill";
 
@@ -21,6 +23,10 @@ import { LocationPill } from "../components/LocationPill";
 const INITIAL_RADIUS_M = 4000;
 const PAN_RADIUS_M = 2500;
 const HIGH_MATCH_THRESHOLD = 75;
+// Only this many places get a numbered pin. Everything else is a dot. At
+// 4km the map held sixty pulsing badges and read as a wall; twelve is the
+// most anyone reads before they start scanning colour instead.
+const NUMBERED_PINS = 12;
 
 // Distance threshold (km) — when the map center moves more than this from
 // the last query center, refetch nearby for the new area. Quantized so a
@@ -43,6 +49,11 @@ export default function FullscreenMap() {
   const [loading, setLoading] = useState(true);
   const [refetching, setRefetching] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [initialError, setInitialError] = useState<unknown>(null);
+  // Tapping a marker selects it and shows a card at the bottom; a second tap
+  // or the card's Open button navigates. The native callout bubble is gone:
+  // it hid the number and offered nothing to do.
+  const [selected, setSelected] = useState<MapPlace | null>(null);
   const vectorRef = useRef<TasteVector | null>(null);
   const lastFetchCenter = useRef<{ lat: number; lng: number } | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -121,11 +132,13 @@ export default function FullscreenMap() {
 
   const initialLoad = useCallback(async () => {
     try {
+      setInitialError(null);
       const loc = await getEffectiveLocation();
       if (!loc) { setLoading(false); return; }
       setHere({ lat: loc.lat, lng: loc.lng });
       await fetchAt(loc.lat, loc.lng, INITIAL_RADIUS_M, true);
-    } catch {
+    } catch (e) {
+      setInitialError(e ?? new Error("map load failed"));
       setLoading(false);
     }
   }, [fetchAt]);
@@ -165,6 +178,18 @@ export default function FullscreenMap() {
 
   const placesArr = [...places.values()];
   const topScore = placesArr.reduce((m, p) => Math.max(m, p.matchScore ?? 0), 0);
+  // Hierarchy: the best dozen carry a number, the rest are dots. The eye finds
+  // the warm cluster first and reads numbers only where they are worth it.
+  const numbered = new Set(
+    [...placesArr]
+      .filter((p) => p.matchScore != null)
+      .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
+      .slice(0, NUMBERED_PINS)
+      .map((p) => p.google_place_id),
+  );
+  const selectedKm = selected && here
+    ? haversineKm(here, { lat: selected.latitude, lng: selected.longitude })
+    : null;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -175,7 +200,11 @@ export default function FullscreenMap() {
         <LocationPill />
         <View style={{ width: 40 }} />
       </View>
-      {loading || !here ? (
+      {initialError ? (
+        <View style={{ paddingHorizontal: spacing.lg }}>
+          <LoadError error={initialError} onRetry={() => { setLoading(true); void initialLoad(); }} />
+        </View>
+      ) : loading || !here ? (
         <View style={styles.center}><ActivityIndicator color={colors.red} /></View>
       ) : (
         <View style={{ flex: 1 }}>
@@ -191,6 +220,15 @@ export default function FullscreenMap() {
             }}
             showsUserLocation
             showsMyLocationButton
+            // Apple's own POI labels were competing with ours for every
+            // restaurant on screen. Off, along with traffic, so the only
+            // things named on this map are the ones we put there.
+            showsPointsOfInterests={false}
+            showsTraffic={false}
+            showsBuildings
+            showsCompass={false}
+            mapPadding={{ top: 8, right: 8, bottom: selected ? 150 : 8, left: 8 }}
+            onPress={() => setSelected(null)}
             onRegionChangeComplete={handleRegionChangeComplete}
           >
             {placesArr.map((p) => {
@@ -199,12 +237,16 @@ export default function FullscreenMap() {
                 <Marker
                   key={p.google_place_id}
                   coordinate={{ latitude: p.latitude, longitude: p.longitude }}
-                  title={p.name}
-                  description={p.matchScore ? `${p.matchScore}% match` : undefined}
                   anchor={{ x: 0.5, y: 0.5 }}
-                  onPress={() => router.push(`/restaurant/${p.google_place_id}` as any)}
+                  zIndex={isTop ? 3 : numbered.has(p.google_place_id) ? 2 : 1}
+                  tracksViewChanges={numbered.has(p.google_place_id)}
+                  onPress={(e) => { e.stopPropagation(); setSelected(p); }}
                 >
-                  {isTop ? <TopMatchMarker score={p.matchScore!} /> : <MatchMarker score={p.matchScore} />}
+                  {isTop
+                    ? <TopMatchMarker score={p.matchScore!} />
+                    : numbered.has(p.google_place_id)
+                      ? <MatchMarker score={p.matchScore} />
+                      : <DotMarker score={p.matchScore} />}
                 </Marker>
               );
             })}
@@ -213,6 +255,26 @@ export default function FullscreenMap() {
             <View style={styles.refetchPill}>
               <ActivityIndicator size="small" color="#fff" />
               <Text style={styles.refetchText}>Loading area…</Text>
+            </View>
+          )}
+          {selected && (
+            <View style={styles.sheet}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetName} numberOfLines={1}>{selected.name}</Text>
+                <Text style={styles.sheetMeta}>
+                  {[
+                    selected.matchScore != null ? `${selected.matchScore}% match` : null,
+                    selectedKm != null ? formatDistance(selectedKm) : null,
+                  ].filter(Boolean).join(" · ")}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => router.push(`/restaurant/${selected.google_place_id}` as any)}
+                style={styles.sheetBtn}
+                accessibilityRole="button"
+              >
+                <Text style={styles.sheetBtnText}>Open</Text>
+              </Pressable>
             </View>
           )}
           {!refetching && fetchError && (
@@ -267,4 +329,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(200,30,20,0.95)",
   },
   errorText: { color: "#fff", fontSize: 12, fontWeight: "700", textAlign: "center" },
+  sheet: {
+    position: "absolute", left: spacing.lg, right: spacing.lg, bottom: spacing.lg,
+    flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 16, borderRadius: 18, backgroundColor: colors.paper,
+    borderWidth: 1, borderColor: colors.line,
+    shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+  },
+  sheetName: { fontSize: 16, fontWeight: "700", color: colors.ink },
+  sheetMeta: { ...type.small, marginTop: 3 },
+  sheetBtn: { paddingHorizontal: 16, height: 36, borderRadius: 18, backgroundColor: colors.red, alignItems: "center", justifyContent: "center" },
+  sheetBtnText: { color: "#fff", fontSize: 14, fontWeight: "800" },
 });

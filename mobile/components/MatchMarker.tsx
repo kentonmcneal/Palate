@@ -23,6 +23,25 @@ import { matchScoreColor } from "../lib/match-score";
 const PULSE_THRESHOLD = 40;
 const FIREBALL_THRESHOLD = 80;
 
+// The quiet marker. A map at 4km holds sixty places, and sixty pulsing
+// badges with numbers on them is a wall, not a map: nothing has hierarchy
+// because everything is shouting. Below the threshold a place is a dot,
+// coloured by its match so the eye still reads warm versus cool, and the
+// numbered pin is reserved for the handful worth reading.
+export function DotMarker({ score }: { score: number | null }) {
+  const c = score == null ? colors.mute : matchScoreColor(score);
+  const size = score == null ? 8 : 8 + Math.round((Math.max(0, Math.min(100, score)) / 100) * 6);
+  return (
+    <View style={{ width: 20, height: 20, alignItems: "center", justifyContent: "center" }}>
+      <View style={{
+        width: size, height: size, borderRadius: size / 2, backgroundColor: c,
+        borderWidth: 1.5, borderColor: "#fff",
+        shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 2, shadowOffset: { width: 0, height: 1 },
+      }} />
+    </View>
+  );
+}
+
 export function MatchMarker({ score }: { score: number | null }) {
   if (score == null) {
     return <View style={styles.dot} />;

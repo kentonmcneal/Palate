@@ -297,7 +297,7 @@ function Dashboard({
       </Section>
 
       {/* Format bars */}
-      <Section title="Where you eat" subtitle="Quick service vs sit-down vs café" narrative={formatNarr}>
+      <Section title="Where you eat" subtitle="Quick service, sit down, or café" narrative={formatNarr}>
         <HorizontalBars data={formatRows} />
       </Section>
 

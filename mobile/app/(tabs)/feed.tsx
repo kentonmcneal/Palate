@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { HypeMap } from "../../components/HypeMap";
 import {
   View,
   StyleSheet,
@@ -142,6 +143,10 @@ export default function FeedTab() {
         </ScrollView>
         <Spacer size={20} />
 
+        {/* The crowd view. Renders nothing at all when there is nothing to
+            show, so the feed of people always comes first on an empty city. */}
+        <HypeMap />
+
         {loading && events.length === 0 && (
           <View style={styles.center}><ActivityIndicator color={colors.red} /></View>
         )}
@@ -154,7 +159,7 @@ export default function FeedTab() {
           <View style={styles.empty}>
             <Text style={type.subtitle}>Nobody's eaten yet today.</Text>
             <Text style={[type.small, { marginTop: 8, lineHeight: 20 }]}>
-              Every meal anyone logs shows up here — you don't have to add them
+              Every meal anyone logs shows up here. You don't have to add them
               first. Log one and you'll be the one everybody sees.
             </Text>
             <Spacer />

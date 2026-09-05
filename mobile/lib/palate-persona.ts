@@ -251,7 +251,7 @@ const PERSONAS: PersonaDef[] = [
     matches: (c) => c.visitCount >= 2 && ((c.formatCounts["bar"] ?? 0) >= 1 || (c.behaviorCounts["social"] ?? 0) >= 2),
     describe: (c) => {
       const examples = topNames(c, 2);
-      return `Your week skewed social${examples ? `: ${examples}` : ""}. Bars, group-friendly tables, places designed for hanging out. The meal is the medium, the people are the message.`;
+      return `Your week skewed social${examples ? `: ${examples}` : ""}. Bars, group friendly tables, places designed for hanging out. The meal is the medium, the people are the message.`;
     },
     signals: (c) => signalList(c, ["social", "shareable", "late-night"]),
   },

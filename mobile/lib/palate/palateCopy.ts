@@ -13,25 +13,28 @@ import type {
 // Identity descriptions — used on the "What are Palates?" explainer.
 // Copy locked per design bible: short, observational, slightly editorial.
 // ----------------------------------------------------------------------------
+// Four identities, written so a person would argue about which one they are.
+// The old blurbs all reduced to "you like food": each of these names the
+// thing the OTHER three would not do.
 export const IDENTITY_BLURB: Record<PrimaryIdentity, { tagline: string; description: string; shareDescriptor: string }> = {
   Curator: {
-    tagline: "Seeks new things, picks them carefully.",
-    description: "Curators explore new places with intention. They gravitate toward elevated, thoughtful, or reservation-worthy spots.",
-    shareDescriptor: "New places, carefully chosen.",
+    tagline: "New places, but only the ones worth a reservation.",
+    description: "You go somewhere new most weeks and you research it first. A Forager would walk into the next door down; you would not. A Steward would go back to last month's find; you already have the next one booked.",
+    shareDescriptor: "New places, chosen on purpose.",
   },
   Forager: {
-    tagline: "Always trying something new, casually.",
-    description: "Foragers explore widely without needing every meal to be an event. Variety, movement, and discovery define the pattern.",
-    shareDescriptor: "Always trying something new, casually.",
+    tagline: "Anywhere new. Bonus points if nobody has heard of it.",
+    description: "Variety is the whole point. You repeat almost nothing, you do not need the room to be nice, and the counter with three stools beats the place with the wait list. A Curator would check the reviews. You are already inside.",
+    shareDescriptor: "Never the same place twice.",
   },
   Steward: {
-    tagline: "Returns to the right places, deliberately.",
-    description: "Stewards keep a refined short list and revisit it. Quality over quantity, depth over breadth.",
+    tagline: "A short list, and you keep it sharp.",
+    description: "You have found your places and you go back, deliberately. Not out of habit, out of judgement: a new spot has to beat the list to get on it, and most do not. Anchors return for comfort. You return because you were right.",
     shareDescriptor: "Returns to the right places.",
   },
   Anchor: {
-    tagline: "Leans into the trusted few.",
-    description: "Anchors keep a core rotation of casual, comfortable spots. Familiarity is the point.",
+    tagline: "The regulars know your order.",
+    description: "Same few spots, casual, dependable, and you would not have it any other way. The point of dinner is not the search. A Forager finds this baffling. You find the Forager exhausting.",
     shareDescriptor: "Rooted in the trusted few.",
   },
   Learning: {
@@ -41,12 +44,6 @@ export const IDENTITY_BLURB: Record<PrimaryIdentity, { tagline: string; descript
   },
 };
 
-// ----------------------------------------------------------------------------
-// Headline explanation — observational, never robotic.
-// Copy locked per design bible. NEVER produces "strongly Forager" — uses
-// "moved like a ___" framing for the strong-signal case so the grammar
-// always reads.
-// ----------------------------------------------------------------------------
 export function composeExplanation(
   primary: PrimaryIdentity,
   secondary: PrimaryIdentity | undefined,
