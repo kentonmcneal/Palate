@@ -38,11 +38,27 @@ export function isIntentMood(mood: Mood): boolean {
   return typeof mood === "string" && INTENT_MOODS.has(mood);
 }
 
-// Format classes that mean "in and out" versus "sit and stay". Anything the
-// classifier has not labelled is in NEITHER set, so an unlabelled venue is
-// never claimed by a mood it might not satisfy.
-const QUICK_FORMATS = new Set(["quick_service", "fast_casual", "café", "cafe", "bakery"]);
-const SIT_DOWN_FORMATS = new Set(["casual_dining", "fine_dining"]);
+// Format classes that mean "in and out" versus "sit and stay".
+//
+// Written against the real vocabulary rather than a guess at it. Across 1043
+// classified restaurants: fast_casual 343, bar 255, quick_service 207, café
+// 168, ghost_kitchen 26, casual_dining 24, fine_dining 7.
+//
+// The first version of these sets had "Sit down" as casual_dining + fine_dining
+// — 31 rows, 3% of the database. Nearby that is reliably nothing, so the mood
+// matched nothing, fell back to the full list, and read as a dead toggle. `bar`
+// was in neither set despite being the second most common class in the data,
+// and a bar is somewhere you sit.
+//
+// ghost_kitchen stays out of both: it is delivery-only, so it is neither a
+// place you nip into nor one you sit in. An unlabelled venue is in neither set
+// either — a mood must not claim something the classifier never established.
+const QUICK_FORMATS = new Set([
+  "quick_service", "fast_casual", "café", "cafe", "bakery",
+]);
+const SIT_DOWN_FORMATS = new Set([
+  "casual_dining", "fine_dining", "bar",
+]);
 
 export type MoodChip = { key: Mood; label: string };
 

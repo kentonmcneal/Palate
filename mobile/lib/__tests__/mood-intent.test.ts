@@ -12,6 +12,7 @@ const place = (
 
 const nearby = [
   place("Chipotle", "mexican", "fast_casual"),
+  place("Royal Tavern", "american", "bar"),
   place("K'Far Cafe", "bakery", "café", true),
   place("Sampan", "asian", "casual_dining", true),
   place("Vetri", "italian", "fine_dining"),
@@ -29,12 +30,15 @@ describe("intent moods", () => {
 
   it("Sit down keeps casual and fine dining", () => {
     const { items } = applyMood(nearby, SIT_DOWN, []);
-    expect(items.map((r) => r.name)).toEqual(["Sampan", "Vetri", "Hen House"]);
+    // `bar` is the second most common format in the real data and a bar is
+    // somewhere you sit. Leaving it out made this mood match 3% of the
+    // database, which nearby is nothing at all.
+    expect(items.map((r) => r.name)).toEqual(["Royal Tavern", "Sampan", "Vetri", "Hen House"]);
   });
 
   it("Somewhere new drops places you have been", () => {
     const { items } = applyMood(nearby, SOMEWHERE_NEW, []);
-    expect(items.map((r) => r.name)).toEqual(["Chipotle", "Vetri", "Hen House"]);
+    expect(items.map((r) => r.name)).toEqual(["Chipotle", "Royal Tavern", "Vetri", "Hen House"]);
   });
 
   it("preserves ranking — a mood narrows, it never re-scores", () => {
@@ -104,5 +108,35 @@ describe("buildMoodChips", () => {
 
   it("still never offers 'other', which nobody is in the mood for", () => {
     expect(buildMoodChips(breakdown).map((c) => c.key)).not.toContain("other");
+  });
+});
+
+
+// Written against the live vocabulary, not a guess at it.
+describe("format vocabulary matches the data", () => {
+  const { QUICK, SIT_DOWN } = require("../mood");
+  const { applyMood } = require("../mood");
+
+  it("claims a bar for Sit down, not for Quick", () => {
+    const bar = [{ name: "b", cuisine: "american", format_class: "bar" }];
+    expect(applyMood(bar, SIT_DOWN, []).matched).toBe(true);
+    expect(applyMood(bar, QUICK, []).matched).toBe(false);
+  });
+
+  it("claims a ghost kitchen for neither — you cannot go there", () => {
+    const gk = [{ name: "g", cuisine: "thai", format_class: "ghost_kitchen" }];
+    expect(applyMood(gk, QUICK, []).matched).toBe(false);
+    expect(applyMood(gk, SIT_DOWN, []).matched).toBe(false);
+  });
+
+  it("covers the four largest classes between the two moods", () => {
+    // fast_casual, bar, quick_service and café are 973 of 1043 rows. If a mood
+    // covers only a rump of the data it reads as a dead toggle.
+    const big = ["fast_casual", "bar", "quick_service", "café"].map((f, i) => ({
+      name: String(i), cuisine: "american", format_class: f,
+    }));
+    const quick = applyMood(big, QUICK, []).items.length;
+    const sit = applyMood(big, SIT_DOWN, []).items.length;
+    expect(quick + sit).toBe(big.length);
   });
 });

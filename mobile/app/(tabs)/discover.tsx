@@ -7,6 +7,9 @@ import { colors, spacing, type } from "../../theme";
 import { nearbyRestaurants, searchRestaurants, type Restaurant } from "../../lib/places";
 import { getOrFetchNearby } from "../../lib/nearby-cache";
 import { StretchPick } from "../../components/StretchPick";
+import { MoodRow } from "../../components/MoodRow";
+import { buildMoodChips, applyMood, moodFallbackNote, type Mood, type MoodChip } from "../../lib/mood";
+import { loadAnalytics } from "../../lib/analytics-stats";
 import { supabase } from "../../lib/supabase";
 import { listWishlist, type WishlistEntry } from "../../lib/palate-insights";
 import { getCurrentLocation, classifyAccuracy } from "../../lib/location";
@@ -93,6 +96,18 @@ export default function DiscoverTab() {
   const [tab, setTab] = useState<SubTab>("most_compatible");
   const [sort, setSort] = useState<SortKey>("compat_high");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Same control as Home. Asking "what are you in the mood for" belongs on the
+  // browse surface too — Discover could sort by fit and distance but had no way
+  // to say "Thai, tonight".
+  const [mood, setMood] = useState<Mood>(null);
+  const [moodChips, setMoodChips] = useState<MoodChip[]>([]);
+  useEffect(() => {
+    let alive = true;
+    loadAnalytics("month")
+      .then((a) => { if (alive) setMoodChips(buildMoodChips(a.cuisineBreakdown)); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
   const [formatFilter, setFormatFilter] = useState<FormatFilter>("all");
   // When true, the taste vector is rebuilt from saved (wishlist) restaurants
   // only — recommendations reflect what you've saved, not where you've been.
@@ -311,6 +326,22 @@ export default function DiscoverTab() {
     return arr.map((x) => x.item).slice(0, TOP_PER_TAB);
   }, [visibleRanked, sort]);
 
+  // A mood narrows the already-ranked list; it never re-scores. The candidates
+  // carry cuisine_type and format_class, and applyMood reads `cuisine`, so the
+  // two are bridged here rather than by loosening the shared helper.
+  const moodedList = useMemo(() => {
+    const shaped = mostCompatibleList.map((r) => ({
+      ...r,
+      cuisine: (r as any).cuisine_type ?? null,
+      format_class: (r as any).format_class ?? null,
+    }));
+    const { items, matched } = applyMood(shaped, mood, []);
+    return {
+      items: items as typeof mostCompatibleList,
+      note: mood && !matched ? moodFallbackNote(mood) : null,
+    };
+  }, [mostCompatibleList, mood]);
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView
@@ -435,12 +466,17 @@ export default function DiscoverTab() {
               <>
                 {tab === "most_compatible" && (
                   <>
+                    <MoodRow chips={moodChips} value={mood} onChange={setMood} />
+                    {!!moodedList.note && (
+                      <Text style={styles.moodNote}>{moodedList.note}</Text>
+                    )}
+                    <Spacer size={10} />
                     {/* One place slightly outside the pattern. It lived on Home
                         until the mood row took that screen over; Discover is
                         where you go to be shown something, so it belongs here.
                         Under the ranked list on purpose — a stretch is what you
                         read after the safe answers, not instead of them. */}
-                    <List items={mostCompatibleList} surface="discover_for_you" emptyMsg="Log a few visits — once Palate sees a pattern, we'll personalize this list. In the meantime, the Trending tab shows what's hot in your area." />
+                    <List items={moodedList.items} surface="discover_for_you" emptyMsg="Log a few visits — once Palate sees a pattern, we'll personalize this list. In the meantime, the Trending tab shows what's hot in your area." />
                     <Spacer size={20} />
                     <Text style={styles.stretchHead}>Stretch your palate</Text>
                     <StretchPick />
@@ -990,6 +1026,7 @@ function fallbackScore(r: RankedRestaurant): number {
 }
 
 const styles = StyleSheet.create({
+  moodNote: { ...type.small, marginTop: 10, lineHeight: 17 },
   stretchHead: {
     fontSize: 17, fontWeight: "800", color: colors.ink,
     letterSpacing: -0.3, marginBottom: 10,
