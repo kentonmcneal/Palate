@@ -1,4 +1,5 @@
-import { Pressable, Text, StyleSheet, ActivityIndicator, View } from "react-native";
+import { Pressable, StyleSheet, ActivityIndicator, View } from "react-native";
+import { Text } from "./Text";
 import { colors, radius } from "../theme";
 import { FONT_CAP, useFontScale, scaleSpace } from "../lib/a11y";
 

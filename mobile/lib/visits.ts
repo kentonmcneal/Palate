@@ -239,19 +239,13 @@ async function emitVisitFeedEvent(
       },
     }).select("id").single();
 
-    // Tell their friends. This call was missing entirely: the row was written
-    // and nobody was notified, while Settings offered a toggle for "friends'
-    // visits" under Activity from other people. Wrapped shares and milestones
-    // both fanned out; the most common event in the app did not.
-    //
-    // Audience is accepted friends only, decided inside the function. With the
-    // feed open to everyone since 0077, fanning out every visit to every user
-    // would be a push per meal per person.
-    if (created?.id) {
-      void supabase.functions.invoke("notify-feed-post", {
-        body: { feed_event_id: created.id },
-      });
-    }
+    // Friends are told by the database, not from here. visits_enqueue_friend_push
+    // fires on the visit insert above and writes one push_outbox row per
+    // accepted friend, which send-push drains on a schedule with quiet hours,
+    // dedupe and a daily cap. A direct notify-feed-post call from here sent a
+    // second, uncapped push for the same meal the moment that drain was turned
+    // on, so it is gone. `created` is kept only so the feed row exists.
+    void created;
   } catch {
     // silent — feed event is best-effort
   }

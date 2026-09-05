@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Alert } from "react-native";
+import { View, StyleSheet, Pressable, Alert } from "react-native";
+import { Text } from "./Text";
 import { colors, spacing, type, card } from "../theme";
 import { listWishlist } from "../lib/palate-insights";
 import { supabase } from "../lib/supabase";

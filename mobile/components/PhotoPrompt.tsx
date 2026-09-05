@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, Image, Alert, ActivityIndicator } from "react-native";
+import { View, StyleSheet, Pressable, Image, Alert, ActivityIndicator } from "react-native";
+import { Text } from "./Text";
 import * as ImagePicker from "expo-image-picker";
 import { colors, card, radius, shadow, type } from "../theme";
 import { attachPhotoToVisit } from "../lib/visits";

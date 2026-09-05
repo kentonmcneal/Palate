@@ -1,4 +1,5 @@
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Pressable, StyleSheet } from "react-native";
+import { Text } from "./Text";
 import { colors, spacing, type } from "../theme";
 import { loadErrorMessage } from "../lib/load-state";
 

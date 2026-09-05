@@ -31,7 +31,11 @@ const MAX_PER_RUN = 400;
 /** A row that has failed this many times is left alone for a human. */
 const MAX_ATTEMPTS = 4;
 /** At most one proactive push per user per day, regardless of what queued. */
-const MAX_PER_USER_PER_DAY = 1;
+// Was 1. A single social push per day meant that with two friends who both
+// ate out, you heard about one of them and the other arrived tomorrow as
+// stale news. Three is still a cap, not a firehose, and it is the number at
+// which a beta of fourteen people can actually see each other's activity.
+const MAX_PER_USER_PER_DAY = 3;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,8 +54,19 @@ type OutboxRow = {
   expires_at: string | null;
 };
 
+const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  // Deployed with --no-verify-jwt so pg_cron can call it with a shared secret
+  // (the gateway's JWT check rejected the cron's bearer, which is how the
+  // nightly featured-lists job silently 401'd for a day). The secret is the
+  // whole gate: without it, anybody holding the anon key could drain the
+  // outbox on demand. Fails closed when the secret is unset.
+  if (!CRON_SECRET || req.headers.get("x-cron-secret") !== CRON_SECRET) {
+    return json({ error: "unauthorized" }, 401);
+  }
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 

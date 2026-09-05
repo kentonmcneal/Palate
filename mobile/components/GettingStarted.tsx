@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, ScrollView } from "react-native";
+import { View, StyleSheet, ScrollView } from "react-native";
+import { Text } from "./Text";
 import { colors, spacing, type, card } from "../theme";
 
 const STARTER_PERSONAS = [

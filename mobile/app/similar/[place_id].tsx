@@ -2,8 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import { loadView } from "../../lib/load-state";
 import { LoadError } from "../../components/LoadError";
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Switch,
+  View,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  ActivityIndicator,
+  Switch,
 } from "react-native";
+import { Text } from "../../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { colors, spacing, type, radius } from "../../theme";

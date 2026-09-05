@@ -4,7 +4,8 @@
 // Filtering / data loading lives in the parent screen; this component is
 // purely presentational so it can drop into any layout.
 
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { View, StyleSheet, ScrollView, Pressable } from "react-native";
+import { Text } from "./Text";
 import { colors, spacing, type, radius } from "../theme";
 import { distanceKm } from "../lib/match-score";
 import type { WishlistEntry } from "../lib/palate-insights";

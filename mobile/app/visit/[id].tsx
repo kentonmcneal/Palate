@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LoadError } from "../../components/LoadError";
 import {
-  View, Text, StyleSheet, ScrollView, Pressable,
-  ActivityIndicator, Alert, Image, TextInput, Linking, Platform, Share,
+  View,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  ActivityIndicator,
+  Alert,
+  Image,
+  TextInput,
+  Linking,
+  Platform,
+  Share,
 } from "react-native";
+import { Text } from "../../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";

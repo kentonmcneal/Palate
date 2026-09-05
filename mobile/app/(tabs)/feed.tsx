@@ -1,8 +1,14 @@
 import { useCallback, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, RefreshControl,
-  Pressable, ActivityIndicator, Alert,
+  View,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  Pressable,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
+import { Text } from "../../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Spacer } from "../../components/Button";
@@ -27,9 +33,15 @@ export default function FeedTab() {
 
   const load = useCallback(async () => {
     try {
+      // The pending-request count is a badge on a button. It must not be able
+      // to take the feed down with it: listIncomingRequests answered 400 for
+      // its whole life (its embed pointed at auth.users, fixed in 0092), and
+      // because it sat in this Promise.all the feed reported that failure as
+      // its own. The Friends screen shows that call's errors; this one only
+      // needs a number.
       const [feed, requests, { data: auth }] = await Promise.all([
         listFeed(60),
-        listIncomingRequests(),
+        listIncomingRequests().catch(() => []),
         supabase.auth.getUser(),
       ]);
       setEvents(feed);

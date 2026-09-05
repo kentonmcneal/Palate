@@ -2,9 +2,15 @@ import { useCallback, useState } from "react";
 import { loadView } from "../lib/load-state";
 import { LoadError } from "../components/LoadError";
 import {
-  View, Text, StyleSheet, FlatList, Pressable, Image, ActivityIndicator,
+  View,
+  StyleSheet,
+  FlatList,
+  Pressable,
+  Image,
+  ActivityIndicator,
   Dimensions,
 } from "react-native";
+import { Text } from "../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, StyleSheet, Pressable } from "react-native";
+import { Text } from "./Text";
 import { colors, spacing, type, card } from "../theme";
 import { getAreaPalates, type AreaPalateSummary } from "../lib/area-palates";
 

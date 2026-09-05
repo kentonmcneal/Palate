@@ -119,13 +119,15 @@ export async function registerPushToken(): Promise<void> {
     // native rejection here (not a plain "denied" status) would otherwise escape
     // as an unhandled rejection — which the New Architecture turns into a fatal
     // that expo-updates escalates to a launch crash.
+    // Never prompts. This runs on every session, which on a fresh install is
+    // the first second of the first launch: the worst possible moment to put
+    // up the iOS permission dialog, with no explanation of what it is for.
+    // 6 of 14 accounts said yes to it. The ask now lives on
+    // /notifications-intro (requestPushPermission below), which says what the
+    // notifications are before iOS asks; this only records a grant that
+    // already exists.
     const perm = await Notifications.getPermissionsAsync();
-    let granted = perm.granted;
-    if (!granted) {
-      const ask = await Notifications.requestPermissionsAsync();
-      granted = ask.granted;
-    }
-    if (!granted) return;
+    if (!perm.granted) return;
 
     const Constants = await import("expo-constants");
     const projectId =
@@ -171,6 +173,29 @@ export async function registerPushToken(): Promise<void> {
   } catch (err) {
     console.warn("[notifications] push token register failed", err);
   }
+}
+
+export type PushAsk = "granted" | "denied" | "blocked";
+
+/**
+ * The one place the app asks iOS for notification permission cold, called
+ * from the primer screen after the person has read what they are agreeing
+ * to. "blocked" means iOS will not show the dialog again and the only route
+ * is Settings.
+ */
+export async function requestPushPermission(): Promise<PushAsk> {
+  const Notifications = await loadNotificationsLib();
+  if (!Notifications) return "blocked";
+  const perm = await Notifications.getPermissionsAsync();
+  if (perm.granted) {
+    await registerPushToken();
+    return "granted";
+  }
+  if (!perm.canAskAgain) return "blocked";
+  const ask = await Notifications.requestPermissionsAsync();
+  if (!ask.granted) return ask.canAskAgain === false ? "blocked" : "denied";
+  await registerPushToken();
+  return "granted";
 }
 
 async function loadDeviceLib(): Promise<typeof import("expo-device") | null> {

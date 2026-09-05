@@ -1,4 +1,5 @@
-import { ScrollView, StyleSheet, Text, Pressable, View } from "react-native";
+import { ScrollView, StyleSheet, Pressable, View } from "react-native";
+import { Text } from "./Text";
 import { colors, spacing } from "../theme";
 import { triggerHapticSelection } from "../lib/haptics";
 import type { Mood, MoodChip } from "../lib/mood";

@@ -15,7 +15,8 @@ import {
   recordPromptDismissed,
 } from "../lib/screenshot-feedback";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, AppState, View, Text, Pressable } from "react-native";
+import { ActivityIndicator, AppState, View, Pressable } from "react-native";
+import { Text } from "../components/Text";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -29,6 +30,7 @@ import type { Session } from "@supabase/supabase-js";
 import { colors } from "../theme";
 import { getMyProfile } from "../lib/profile";
 import { subscribeUsernameClaimed, isUsernameClaimed } from "../lib/username-gate";
+import { needsNotificationPrimer, isPrimerSeen, subscribePrimerSeen } from "../lib/notification-primer";
 import * as WebBrowser from "expo-web-browser";
 import { initObservability, captureError } from "../lib/observability";
 import { registerPushToken } from "../lib/notifications";
@@ -67,17 +69,6 @@ Notifications.setNotificationHandler({
 // Resolve any pending OAuth session (Gmail Connect) when the app is reopened
 // after the system browser hand-off.
 WebBrowser.maybeCompleteAuthSession();
-
-// Map RN font weights to the loaded Inter variants. Set once, applied app-wide
-// via Text.defaultProps below.
-function fontFamilyForWeight(w: string | number | undefined): string {
-  const n = typeof w === "string" ? parseInt(w, 10) : w ?? 400;
-  if (n >= 800) return "Inter_800ExtraBold";
-  if (n >= 700) return "Inter_700Bold";
-  if (n >= 600) return "Inter_600SemiBold";
-  if (n >= 500) return "Inter_500Medium";
-  return "Inter_400Regular";
-}
 
 // Root error boundary. expo-router renders this instead of letting a render-time
 // exception propagate to a native fatal — which, with expo-updates' error
@@ -129,17 +120,11 @@ export default function RootLayout() {
     Inter_700Bold, Inter_800ExtraBold,
   });
 
-  // Once fonts load, default every Text to Inter regular. Heavier weights are
-  // applied via theme.ts (per-weight Inter family); inline `fontWeight`
-  // styles RN can synth-bold from regular which is acceptable as a fallback.
-  useEffect(() => {
-    if (!fontsLoaded) return;
-    (Text as any).defaultProps = (Text as any).defaultProps || {};
-    (Text as any).defaultProps.style = [
-      { fontFamily: fontFamilyForWeight(undefined) },
-      (Text as any).defaultProps.style,
-    ];
-  }, [fontsLoaded]);
+  // Inter for every Text is handled by components/Text, which every screen
+  // imports instead of react-native's. This used to set Text.defaultProps
+  // here; React 19 dropped defaultProps on function components and RN's Text
+  // is one, so that had been a no-op since the upgrade and most of the app
+  // was quietly rendering in San Francisco.
 
   useEffect(() => {
     // These startup tasks are fire-and-forget, so EVERY one must have its own
@@ -398,6 +383,19 @@ export default function RootLayout() {
   // just completed.
   useEffect(() => subscribeUsernameClaimed(() => setNeedsUsername(false)), []);
 
+  // The notification ask, once, with an explanation in front of it. Resolved
+  // per session like the username gate and cleared the same one-way way.
+  const [needsPrimer, setNeedsPrimer] = useState(false);
+  useEffect(() => {
+    if (!session) { setNeedsPrimer(false); return; }
+    let alive = true;
+    void needsNotificationPrimer()
+      .then((n) => { if (alive) setNeedsPrimer(n); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [session]);
+  useEffect(() => subscribePrimerSeen(() => setNeedsPrimer(false)), []);
+
   // Route guard: kick to /sign-in if not authed; bounce away from /sign-in
   // once authed. Signed-in users are allowed to be in /onboarding so brand-new
   // accounts can finish setup before landing in the tabs.
@@ -427,9 +425,18 @@ export default function RootLayout() {
       if (needsUsername && !isUsernameClaimed()
           && seg0 !== "onboarding" && seg0 !== "claim-username") {
         router.replace("/claim-username");
+        return;
+      }
+
+      // After the handle, before the tabs: say what the notifications are,
+      // then ask. Only ever once per install (lib/notification-primer.ts).
+      if (needsPrimer && !isPrimerSeen()
+          && seg0 !== "onboarding" && seg0 !== "claim-username"
+          && seg0 !== "notifications-intro" && seg0 !== "passive-capture-intro") {
+        router.replace("/notifications-intro");
       }
     }
-  }, [session, loaded, segments, needsUsername]);
+  }, [session, loaded, segments, needsUsername, needsPrimer]);
 
   if (!loaded || !fontsLoaded) {
     return (
@@ -452,6 +459,7 @@ export default function RootLayout() {
           <Stack.Screen name="onboarding" />
           {/* Gate, not a destination: no back, reached only by the guard. */}
           <Stack.Screen name="claim-username" options={{ gestureEnabled: false }} />
+          <Stack.Screen name="notifications-intro" options={{ gestureEnabled: false }} />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="confirm-visit" options={{ presentation: "modal" }} />
           <Stack.Screen name="confirm-multi" options={{ presentation: "modal" }} />

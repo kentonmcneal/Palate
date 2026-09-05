@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import { View, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import { Text } from "./Text";
 import { colors, card, radius, shadow, type } from "../theme";
 import { ensureRated, nextComparison, recordComparison, type RankedPlace } from "../lib/rankings-store";
 import { triggerHapticSelection } from "../lib/haptics";

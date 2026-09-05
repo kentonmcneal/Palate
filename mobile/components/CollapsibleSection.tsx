@@ -6,12 +6,12 @@
 import { useState } from "react";
 import {
   View,
-  Text,
   Pressable,
   LayoutAnimation,
   Platform,
   UIManager,
 } from "react-native";
+import { Text } from "./Text";
 import { spacing, colors, type as typeTokens } from "../theme";
 
 if (

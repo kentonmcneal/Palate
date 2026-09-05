@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Modal, View, Text, StyleSheet, Pressable, Animated, Easing } from "react-native";
+import { Modal, View, StyleSheet, Pressable, Animated, Easing } from "react-native";
+import { Text } from "./Text";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors, spacing } from "../theme";

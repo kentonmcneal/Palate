@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Animated, Easing } from "react-native";
+import { View, StyleSheet, Pressable, ActivityIndicator, Animated, Easing } from "react-native";
+import { Text } from "./Text";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { colors, spacing, type, card } from "../theme";

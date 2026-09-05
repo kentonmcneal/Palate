@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { LoadError } from "../../components/LoadError";
-import { View, Text, StyleSheet, Alert, ScrollView, Share, Pressable } from "react-native";
+import { View, StyleSheet, Alert, ScrollView, Share, Pressable } from "react-native";
+import { Text } from "../../components/Text";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -614,7 +615,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
-  insightText: { fontSize: 15, color: colors.ink, lineHeight: 21, fontStyle: "italic" },
+  // Was italic. No Inter italic face is loaded, so iOS answered that with the
+  // system font and this one line on Wrapped sat in a different typeface.
+  insightText: { fontSize: 15, color: colors.ink, lineHeight: 21, fontWeight: "500" },
   insightEyebrow: { ...type.micro, color: colors.mute },
   insightTitle: { fontSize: 18, fontWeight: "800", color: colors.ink, marginTop: 8, letterSpacing: -0.3, lineHeight: 24 },
   insightBody: { fontSize: 14, color: colors.ink, marginTop: 6, lineHeight: 20 },

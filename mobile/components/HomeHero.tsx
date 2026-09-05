@@ -1,4 +1,5 @@
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Pressable, StyleSheet } from "react-native";
+import { Text } from "./Text";
 import { useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import { whenLabel, type HomeState } from "../lib/home-state";

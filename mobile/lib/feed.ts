@@ -132,10 +132,10 @@ export async function shareWrappedToFeed(opts: {
   }).select("id").single();
   if (error) throw error;
 
-  // Fire-and-forget push notification fanout. Failures don't block the share.
-  void supabase.functions.invoke("notify-feed-post", {
-    body: { feed_event_id: data.id },
-  });
+  // No push from here. weekly_wrapped_enqueue_push already queues "X's
+  // Wrapped is in" to everyone the moment the Wrapped row is written, so a
+  // second fanout on share was the same news twice.
+  void data;
 }
 
 export async function postMilestoneAndNotify(streakDays: number): Promise<void> {

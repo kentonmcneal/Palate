@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, Image } from "react-native";
+import { View, StyleSheet, Image } from "react-native";
+import { Text } from "./Text";
 import { LinearGradient } from "expo-linear-gradient";
 import { categoryColors, radius } from "../theme";
 

@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import { useEffect, useState } from "react";
-import { Text, View, type ColorValue } from "react-native";
+import { View, type ColorValue } from "react-native";
+import { Text } from "../../components/Text";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "../../theme";
 import { latestWrapped } from "../../lib/wrapped";

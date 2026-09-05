@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Modal, View, Text, StyleSheet, Pressable, Animated, Easing, Share } from "react-native";
+import { Modal, View, StyleSheet, Pressable, Animated, Easing, Share } from "react-native";
+import { Text } from "./Text";
 import { colors, spacing, type } from "../theme";
 import { Confetti } from "./Confetti";
 import { generateInviteLink } from "../lib/referrals";

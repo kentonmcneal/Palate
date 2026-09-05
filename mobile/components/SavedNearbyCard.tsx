@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Linking, Platform, Alert } from "react-native";
+import { View, StyleSheet, Pressable, Linking, Platform, Alert } from "react-native";
+import { Text } from "./Text";
 import { useRouter } from "expo-router";
 import { colors, spacing, type, card, shadow } from "../theme";
 import { listWishlist, type WishlistEntry } from "../lib/palate-insights";

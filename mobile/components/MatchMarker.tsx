@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { View, Text, StyleSheet, Animated, Easing } from "react-native";
+import { View, StyleSheet, Animated, Easing } from "react-native";
+import { Text } from "./Text";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../theme";
 import { matchScoreColor } from "../lib/match-score";

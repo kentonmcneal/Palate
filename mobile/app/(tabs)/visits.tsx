@@ -1,7 +1,13 @@
 import { useCallback, useMemo, useState } from "react";
 import {
-  View, Text, StyleSheet, SectionList, Pressable, ActivityIndicator, TextInput,
+  View,
+  StyleSheet,
+  SectionList,
+  Pressable,
+  ActivityIndicator,
+  TextInput,
 } from "react-native";
+import { Text } from "../../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { colors, spacing, type } from "../../theme";

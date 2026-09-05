@@ -1,4 +1,5 @@
-import { Text, type TextProps } from "react-native";
+import { type TextProps } from "react-native";
+import { Text } from "./Text";
 
 // ============================================================================
 // CanvasText — text inside a share card, which is a picture, not an interface.

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from "react-native";
+import { View, StyleSheet, Pressable, ActivityIndicator, Alert } from "react-native";
+import { Text } from "./Text";
 import { colors, spacing, type, card, shadow } from "../theme";
 import { addToWishlist, type RestaurantRecommendation } from "../lib/palate-insights";
 import {

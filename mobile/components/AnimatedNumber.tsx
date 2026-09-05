@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Text, type TextProps, type TextStyle, Animated, Easing } from "react-native";
+import { type TextProps, type TextStyle, Animated, Easing } from "react-native";
+import { Text } from "./Text";
 
 // ============================================================================
 // AnimatedNumber — ticks from 0 (or `from`) up to `value` over `duration` ms.

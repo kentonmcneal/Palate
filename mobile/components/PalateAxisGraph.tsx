@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { View, Text, StyleSheet, Animated, Easing } from "react-native";
+import { View, StyleSheet, Animated, Easing } from "react-native";
+import { Text } from "./Text";
 import Svg, { Defs, Marker, Path } from "react-native-svg";
 import { colors, spacing } from "../theme";
 import { palateColors, palateMotion } from "../lib/theme/palateTheme";

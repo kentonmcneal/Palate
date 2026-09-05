@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, Pressable, Animated, Easing } from "react-native";
+import { View, StyleSheet, ActivityIndicator, Pressable, Animated, Easing } from "react-native";
+import { Text } from "./Text";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, spacing, type } from "../theme";
 import { loadAnalytics, type AnalyticsSummary } from "../lib/analytics-stats";

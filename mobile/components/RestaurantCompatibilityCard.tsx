@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Alert, Animated, Easing } from "react-native";
+import { View, StyleSheet, Pressable, Alert, Animated, Easing } from "react-native";
+import { Text } from "./Text";
 import { useRouter } from "expo-router";
 import { colors, spacing, type, card, shadow } from "../theme";
 import type { RankedRestaurant } from "../lib/recommendation/types";

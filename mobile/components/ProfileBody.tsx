@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Share } from "react-native";
+import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Share } from "react-native";
+import { Text } from "./Text";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Avatar } from "./Avatar";
 import { TopFive } from "./TopFive";

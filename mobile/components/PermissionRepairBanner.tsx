@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { View, Text, StyleSheet, Pressable, Linking } from "react-native";
+import { View, StyleSheet, Pressable, Linking } from "react-native";
+import { Text } from "./Text";
 import { colors, spacing, type } from "../theme";
 import { track } from "../lib/analytics";
 

@@ -1,5 +1,6 @@
 import Svg, { Rect, Path } from "react-native-svg";
-import { View, Text, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
+import { Text } from "./Text";
 import { colors } from "../theme";
 
 // Standardized sizes — keep usage to these values so the brand mark looks

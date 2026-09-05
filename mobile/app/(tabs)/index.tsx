@@ -1,6 +1,7 @@
 import { distanceKm } from "../../lib/match-score";
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, Alert, ScrollView, RefreshControl, Pressable, Image, Share } from "react-native";
+import { View, StyleSheet, Alert, ScrollView, RefreshControl, Pressable, Image, Share } from "react-native";
+import { Text } from "../../components/Text";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";

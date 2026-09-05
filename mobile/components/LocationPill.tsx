@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Pressable, StyleSheet, View } from "react-native";
+import { Text } from "./Text";
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
 import { colors } from "../theme";

@@ -1,4 +1,5 @@
-import { Pressable, View, Text, StyleSheet } from "react-native";
+import { Pressable, View, StyleSheet } from "react-native";
+import { Text } from "./Text";
 import { colors, spacing, type } from "../theme";
 import { PalateAxisGraph } from "./PalateAxisGraph";
 import { IDENTITY_BLURB, WHAT_ARE_PALATES, type PalateProfile, type PrimaryIdentity } from "../lib/palate";
