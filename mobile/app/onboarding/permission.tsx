@@ -42,6 +42,10 @@ export default function Permission() {
             { text: "Continue without", onPress: () => router.push("/onboarding/privacy") },
           ],
         );
+      } else {
+        // Neither granted nor denied (dialog dismissed, restricted, unknown):
+        // onboarding dead-ended here. Move on; the Home card re-asks later.
+        router.push("/onboarding/privacy");
       }
     } catch {
       // A native rejection (not a plain "denied" status) would otherwise escape

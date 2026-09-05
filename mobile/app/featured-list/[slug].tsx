@@ -79,6 +79,16 @@ export default function FeaturedListScreen() {
     return () => { alive = false; };
   }, [list]);
 
+  // Below every hook. This early return used to sit between two useEffects,
+  // so the screen threw "Rendered fewer hooks than expected" whenever it had
+  // to load — which is every tap on the Friday and Saturday pings.
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.center}><Text style={[type.body, { color: colors.mute }]}>Loading list…</Text></View>
+      </SafeAreaView>
+    );
+  }
   if (missing || !list) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -95,16 +105,6 @@ export default function FeaturedListScreen() {
     );
   }
 
-  // Below every hook. This early return used to sit between two useEffects,
-  // so the screen threw "Rendered fewer hooks than expected" whenever it had
-  // to load — which is every tap on the Friday and Saturday pings.
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.center}><Text style={[type.body, { color: colors.mute }]}>Loading list…</Text></View>
-      </SafeAreaView>
-    );
-  }
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>

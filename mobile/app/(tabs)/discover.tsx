@@ -126,6 +126,7 @@ export default function DiscoverTab() {
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<RankedRestaurant[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
   // searchActive flips to true on TextInput focus and stays true until the
   // user taps "Cancel". Drives the suggestion panel ("Find similar to X" +
   // city-wide list) that appears while the query is still empty.
@@ -222,6 +223,9 @@ export default function DiscoverTab() {
   // Re-run load whenever the user picks a different city. (load itself depends
   // on browsingCity now, so the focus effect picks up city changes via its dep.)
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  // A city switch must not show the old city's cards with recomputed
+  // distances while the new fetch runs.
+  useEffect(() => { setAllNearby([]); setCataloguePicks(null); }, [browsingCity?.id]);
 
   // The search suggestion panel caches its city list for ONE location and the
   // openSearch guard below never refetches. Switching cities therefore left the
@@ -248,13 +252,16 @@ export default function DiscoverTab() {
     if (!query.trim()) { setSearchResults(null); return; }
     setSearching(true);
     try {
+      setSearchFailed(false);
       const results = await searchRestaurants(query.trim(), here ?? undefined);
       const ranked = results
         .filter((p) => !personal?.dislikes.placeIds.has(p.google_place_id) && !hiddenIds.has(p.google_place_id))
         .map((p) => buildRankedRestaurant(graph, toInput(p), { here: here ?? undefined, now: new Date() }));
       setSearchResults(ranked);
     } catch {
+      // A failed request is not "this restaurant does not exist".
       setSearchResults([]);
+      setSearchFailed(true);
     } finally {
       setSearching(false);
     }
@@ -513,7 +520,7 @@ export default function DiscoverTab() {
             {searching ? (
               <ActivityIndicator color={colors.red} />
             ) : searchResults.length === 0 ? (
-              <Text style={[type.small, { lineHeight: 20 }]}>No matches.</Text>
+              <Text style={[type.small, { lineHeight: 20 }]}>{searchFailed ? "Search didn't go through. Try again." : "No matches."}</Text>
             ) : (
               searchResults.map((r) => (
                 <RestaurantCompatibilityCard
@@ -570,7 +577,11 @@ export default function DiscoverTab() {
               </View>
             )}
 
-            {hereLoading || feedLoading ? (
+            {/* Skeletons only when there is nothing to show. Every return to
+                this tab re-ran load(), which flipped hereLoading and swapped
+                twelve mounted cards for skeletons, replaying entrances and
+                losing scroll position on the browse → tap → back loop. */}
+            {error ? null : (hereLoading || feedLoading) && allNearby.length === 0 ? (
               <>
                 <Shimmer height={240} borderRadius={18} />
                 <Spacer size={16} />

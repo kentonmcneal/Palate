@@ -294,6 +294,18 @@ export default function RootLayout() {
         return;
       }
 
+      if (data?.type === "weekly_wrapped" || data?.type === "wrapped_tease") {
+        router.push("/(tabs)/wrapped" as never);
+        return;
+      }
+      if (data?.type === "streak_reminder") {
+        router.push("/(tabs)/add" as never);
+        return;
+      }
+      if (data?.type === "comeback" && data.place_id) {
+        router.push(`/restaurant/${String(data.place_id)}` as never);
+        return;
+      }
       if (data?.kind === "passive_digest") {
         router.push("/digest" as never);
         return;

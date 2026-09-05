@@ -206,7 +206,14 @@ export default function ConfirmVisit() {
             : `Are you eating at ${params.name}?`}
         </Text>
         <Spacer />
-        <Button title={params.confidence === "medium" ? "Yes, log visit" : "Yes, log visit"} onPress={handleYes} loading={busy} />
+        <Button title="Yes, log visit" onPress={handleYes} loading={busy} />
+        {params.confidence === "medium" && (
+          <>
+            <Spacer size={8} />
+            {/* "…or just nearby?" asked a two-way question with one button. */}
+            <Button title="Just nearby" variant="ghost" onPress={handleNotNow} />
+          </>
+        )}
         <Spacer />
         <View style={{ flexDirection: "row", gap: 8 }}>
           <Pressable onPress={() => openInAppleMaps(params.name as string, { address: params.address as string | undefined })} style={styles.mapsBtn}>

@@ -140,11 +140,15 @@ function scoreTaste(g: TasteGraph, r: RestaurantInput): Dim {
   let score = 0;
   let weight = 0;
 
-  if (r.cuisine_subregion) {
+  // Each dimension counts only when the PERSON has a map for it. A quiz
+  // seeds regions but never subregions, so a perfect region match used to be
+  // averaged with a subregion term the quiz-taker could not possibly satisfy,
+  // capping taste at 37 — below the 50 a quiz-skipper gets.
+  if (r.cuisine_subregion && hasEntries(g.cuisinesSubregion)) {
     const aff = affinityOf(g.cuisinesSubregion, r.cuisine_subregion);
     score += aff * 0.5; weight += 0.5;
   }
-  if (r.cuisine_region) {
+  if (r.cuisine_region && hasEntries(g.cuisines)) {
     const aff = affinityOf(g.cuisines, r.cuisine_region);
     score += aff * 0.3; weight += 0.3;
   }

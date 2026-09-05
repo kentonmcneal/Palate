@@ -53,7 +53,7 @@ export default function TabsLayout() {
           height: scaleSpace(84, fontScale, FONT_CAP.tabBar),
           paddingTop: 8,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+        tabBarLabelStyle: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
         tabBarLabelPosition: "below-icon",
         tabBarAllowFontScaling: true,
       }}

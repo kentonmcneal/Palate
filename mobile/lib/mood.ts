@@ -180,7 +180,10 @@ export function applyMood<T extends MoodCandidate>(
   mood: Mood,
   habitualCuisines: string[],
 ): { items: T[]; matched: boolean } {
-  if (!mood || list.length === 0) return { items: list, matched: true };
+  if (!mood) return { items: list, matched: true };
+  // An empty pool used to report matched:true, which told the catalogue
+  // fallback it was not needed — in exactly the sparse area it was built for.
+  if (list.length === 0) return { items: list, matched: isIntentMood(mood) || isSurprise(mood) };
 
   if (isIntentMood(mood)) {
     const out = list.filter((r) => {

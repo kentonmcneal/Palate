@@ -31,6 +31,7 @@ import { cuisinesNear, cuisineCandidates, dishCandidates, mergeCuisinePools } fr
 import { FONT_CAP, useFontScale } from "../lib/a11y";
 import { useRouter } from "expo-router";
 import { TapCard } from "./TapCard";
+import { LoadError } from "./LoadError";
 import { askNotInterested } from "./notInterested";
 
 // ============================================================================
@@ -139,6 +140,7 @@ export function RecommendationsCard({
 
   const load = useCallback(async () => {
     try {
+      setError(false);
       const [vector, here, personal] = await Promise.all([
         computeTasteVector().catch(() => null),
         getEffectiveLocation().catch(() => null),
@@ -291,7 +293,11 @@ export function RecommendationsCard({
   // Hide the card entirely until we know if we have anything to show — keeps
   // the Home tab from flashing a useless block on first load.
   if (loading) return null;
-  if (error) return null;
+  // Home's main retention surface used to vanish on any throw and never come
+  // back (error was never reset). It says so and offers Retry now.
+  if (error && (!recs || recs.length === 0)) {
+    return <LoadError error={new Error("recommendations failed")} onRetry={() => { setError(false); setLoading(true); void load(); }} />;
+  }
   // Empty state — no nearby restaurants found at all (rare). Render an
   // inviting nudge instead of silently disappearing.
   if (!recs || recs.length === 0) {

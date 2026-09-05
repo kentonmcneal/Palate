@@ -119,6 +119,11 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = body.action as string;
 
+    // Per-user cap on every Google-backed action, here rather than inside
+    // handleNearby only: search has no cache and was per-user unbounded.
+    if ((action === "nearby" || action === "details" || action === "search") && await overUserCap(adminClient, user.id)) {
+      return json({ error: "rate_limited" }, 429);
+    }
     if (action === "nearby") {
       return await handleNearby(body, user.id, adminClient);
     }
@@ -453,8 +458,9 @@ async function handleBlurb(
   // client-controlled `force=true` — that would be a cost-spam vector (any
   // authenticated user could trigger LLM regen at will). Invalidation goes
   // through the backfill script or a direct SQL update by an admin.
-  const cacheValid = rest.editorial_blurb
-    && rest.editorial_blurb_generated_at
+  // A stamp is enough: an empty generation is cached too, or a place with
+  // thin reviews re-billed the model on every open.
+  const cacheValid = rest.editorial_blurb_generated_at
     && (!rest.reviews_refreshed_at
         || new Date(rest.editorial_blurb_generated_at).getTime()
            >= new Date(rest.reviews_refreshed_at).getTime());

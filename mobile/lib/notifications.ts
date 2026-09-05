@@ -213,9 +213,15 @@ async function loadDeviceLib(): Promise<typeof import("expo-device") | null> {
  * it never prompts. (The Sunday-Wrapped opt-in in Settings is where users
  * grant permission; this rides on that grant.)
  */
-export async function refreshDailyReminder(opts: { loggedToday: boolean; streak: number }): Promise<void> {
+export async function refreshDailyReminder(opts: { loggedToday: boolean; streak: number; visitCount?: number }): Promise<void> {
   const Notifications = await loadNotificationsLib();
   if (!Notifications) return;
+  // Nothing to nudge about. A brand-new account was getting "every visit
+  // sharpens your Wrapped" at 20:00 nightly before it had a visit.
+  if (opts.visitCount === 0) {
+    await cancelScheduledOfKind(Notifications, "type", "streak_reminder");
+    return;
+  }
 
   const perm = await Notifications.getPermissionsAsync();
   if (!perm.granted) return;
@@ -260,10 +266,7 @@ function streakReminderCopy(streak: number): { title: string; body: string } {
 export async function disableSundayWrappedReminder(): Promise<void> {
   const Notifications = await loadNotificationsLib();
   if (!Notifications) return;
-  const existingId = await AsyncStorage.getItem(SCHEDULED_KEY);
-  if (existingId) {
-    try { await Notifications.cancelScheduledNotificationAsync(existingId); } catch {}
-  }
+  await cancelScheduledOfKind(Notifications, "type", "weekly_wrapped");
   await AsyncStorage.removeItem(SCHEDULED_KEY);
   await AsyncStorage.setItem(PREF_KEY, "0");
 }

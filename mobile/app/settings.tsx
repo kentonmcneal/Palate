@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { View, StyleSheet, Switch, Alert, Linking, ScrollView, Share, Pressable, Modal } from "react-native";
 import { TextInput } from "../components/TextInput";
 import { Text } from "../components/Text";
@@ -502,10 +502,15 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Row({ label, right }: { label: string; right: React.ReactNode }) {
+  // The control inherits the row's label, so VoiceOver reads "Sunday Wrapped
+  // reminder, switch, on" instead of "switch, on". All six were unnamed.
+  const named = React.isValidElement(right)
+    ? React.cloneElement(right as React.ReactElement<{ accessibilityLabel?: string }>, { accessibilityLabel: label })
+    : right;
   return (
     <View style={styles.row}>
       <Text style={type.body}>{label}</Text>
-      {right}
+      {named}
     </View>
   );
 }

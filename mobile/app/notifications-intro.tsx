@@ -6,7 +6,8 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import { Button, Spacer } from "../components/Button";
 import { track } from "../lib/analytics";
-import { requestPushPermission, type PushAsk } from "../lib/notifications";
+import { requestPushPermission, enableSundayWrappedReminder, type PushAsk } from "../lib/notifications";
+import { refreshDiscoveryPings } from "../lib/notification-schedule";
 import { markPrimerSeen } from "../lib/notification-primer";
 
 // The notification ask, with the reasons in front of it.
@@ -39,7 +40,13 @@ export default function NotificationsIntro() {
       setBusy(false);
     }
     void track("notif_primer_answered", { result });
-    if (result === "granted") { setStep("done"); return; }
+    if (result === "granted") {
+      // The grant is the moment to schedule what it just agreed to.
+      void enableSundayWrappedReminder().catch(() => {});
+      void refreshDiscoveryPings().catch(() => {});
+      setStep("done");
+      return;
+    }
     if (result === "blocked") { setStep("needs-settings"); return; }
     finish();
   }

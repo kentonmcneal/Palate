@@ -190,7 +190,7 @@ export default function Home() {
       // Re-engagement: schedule (or clear) tonight's streak-at-risk nudge.
       // Guarded: a rejection in the notification-scheduling path must not escape
       // as an unhandled fatal (see _layout startup effect for why that crashes).
-      void refreshDailyReminder({ loggedToday: s.value.loggedToday, streak: s.value.current })
+      void refreshDailyReminder({ loggedToday: s.value.loggedToday, streak: s.value.current, visitCount: v.status === "fulfilled" ? v.value.length : undefined })
         .catch((e) => captureError(e, { at: "refreshDailyReminder" }));
       // Saturday 18:30: the week's numbers, and that Wrapped is in tomorrow.
       if (v.status === "fulfilled") {

@@ -142,23 +142,30 @@ serve(async (req) => {
 
     const eligible: OutboxRow[] = [];
     const deferred: string[] = [];
-    const seenThisRun = new Set<string>();
+    // A Map, not a Set: the set saturated at one, so a user with eight due
+    // rows at the 08:00 drain got all eight. Found by the code review.
+    const admittedThisRun = new Map<string, number>();
+    const expireNow: string[] = [];
     for (const r of live) {
-      const already = (sentToday.get(r.user_id) ?? 0) + (seenThisRun.has(r.user_id) ? 1 : 0);
+      const already = (sentToday.get(r.user_id) ?? 0) + (admittedThisRun.get(r.user_id) ?? 0);
       if (already >= MAX_PER_USER_PER_DAY) {
-        deferred.push(r.id);
+        // Deferring past the row's own expiry is a slower way of dropping it.
+        if (r.expires_at && new Date(r.expires_at).getTime() < Date.now() + 24 * 3600 * 1000) expireNow.push(r.id);
+        else deferred.push(r.id);
         continue;
       }
-      seenThisRun.add(r.user_id);
+      admittedThisRun.set(r.user_id, (admittedThisRun.get(r.user_id) ?? 0) + 1);
       eligible.push(r);
     }
 
-    // Push a deferred row into tomorrow rather than dropping it.
     if (deferred.length) {
       await admin
         .from("push_outbox")
         .update({ send_after: new Date(Date.now() + 24 * 3600 * 1000).toISOString() })
         .in("id", deferred);
+    }
+    if (expireNow.length) {
+      await admin.from("push_outbox").update({ error: "expired", attempts: MAX_ATTEMPTS }).in("id", expireNow);
     }
     if (eligible.length === 0) return json({ sent: 0, deferred: deferred.length });
 
