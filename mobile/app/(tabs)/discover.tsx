@@ -17,7 +17,7 @@ import {
 } from "../../lib/mood";
 import { loadAnalytics, type CuisineSlice } from "../../lib/analytics-stats";
 import {
-  cuisinesNear, cuisineCandidates, dishesNear, dishCandidates, mergeCuisinePools,
+  cuisinesNear, cuisineCandidates, dishesNear, dishCandidates, mergeCuisinePools, restaurantsNear,
   type CuisineCount, type DishCount,
 } from "../../lib/cuisine-catalogue";
 import { supabase } from "../../lib/supabase";
@@ -176,11 +176,18 @@ export default function DiscoverTab() {
       const { data: { user } } = await supabase.auth.getUser();
       // Taste vector is computed separately (see effect below) so toggling
       // "saves only" recomputes it without refetching nearby places.
-      const [nearby, sig, visitedIds] = await Promise.all([
+      const [googleNearby, catalogueNearby, sig, visitedIds] = await Promise.all([
         getOrFetchNearby(loc.lat, loc.lng, NEARBY_RADIUS_M, nearbyRestaurants),
+        // The catalogue within 5km, free. One 20-result Google call minus
+        // chains minus places you have been left a handful; the shelves
+        // never formed. Google rows come first (they are fresher), the
+        // catalogue fills in behind them by place id.
+        restaurantsNear({ lat: loc.lat, lng: loc.lng }, { radiusM: 5000, limit: 150 }).catch(() => [] as Restaurant[]),
         loadPersonalSignal().catch(() => null),
         user ? loadVisitedPlaceIds(user.id) : Promise.resolve(new Set<string>()),
       ]);
+      const seenIds = new Set(googleNearby.map((p) => p.google_place_id));
+      const nearby = [...googleNearby, ...catalogueNearby.filter((p) => !seenIds.has(p.google_place_id))];
 
       // Hybrid discovery policy:
       //   - Drop anything the shared eligibility gate rejects (chains, fast

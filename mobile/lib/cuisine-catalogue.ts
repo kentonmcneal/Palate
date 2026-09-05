@@ -143,3 +143,21 @@ export async function dishCandidates(
   if (error) throw error;
   return filterRecommendable((data ?? []) as any) as unknown as Restaurant[];
 }
+
+
+/**
+ * Everything recommendable in the catalogue within a radius, best first.
+ * Zero Google spend: this is the depth Discover was missing when one
+ * 20-result Nearby call, minus chains, minus places you have been, left a
+ * handful.
+ */
+export async function restaurantsNear(
+  here: { lat: number; lng: number },
+  opts: { radiusM?: number; limit?: number } = {},
+): Promise<Restaurant[]> {
+  const { data, error } = await supabase.rpc("restaurants_near", {
+    p_lat: here.lat, p_lng: here.lng, p_radius_m: opts.radiusM ?? 5000, p_limit: opts.limit ?? 150,
+  });
+  if (error) throw error;
+  return (data ?? []) as Restaurant[];
+}
