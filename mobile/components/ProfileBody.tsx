@@ -12,7 +12,7 @@ import { captureRef } from "react-native-view-shot";
 import { loadSharedPlaces, openInstagram, openTikTok, type SharedPlace } from "../lib/social";
 import { loadPalateMatch } from "../lib/palate/pairCompatibility";
 import { matchHeadline, type PalateMatch } from "../lib/recommendation/palate-match";
-import { requestFriendship, unfriend } from "../lib/friends";
+import { requestFriendship, unfriend, acceptFriendship } from "../lib/friends";
 import { reportContent, blockUser, unblockUser, isBlocked, REPORT_REASONS } from "../lib/moderation";
 
 /**
@@ -105,6 +105,18 @@ export function ProfileBody({ targetId }: { targetId: string }) {
       await load();
     } catch (e: any) {
       Alert.alert("Couldn't add friend", e.message ?? "Try again");
+    } finally {
+      setActing(false);
+    }
+  }
+
+  async function handleAcceptFriend() {
+    setActing(true);
+    try {
+      await acceptFriendship(targetId);
+      await load();
+    } catch (e: any) {
+      Alert.alert("Couldn't accept", e.message ?? "Try again");
     } finally {
       setActing(false);
     }
@@ -454,15 +466,32 @@ export function ProfileBody({ targetId }: { targetId: string }) {
             {/* Actions */}
             {!mine && (
               <View style={{ marginTop: spacing.xl, gap: 12 }}>
-                {!blocked && (snapshot.is_friend ? (
-                  <Pressable onPress={handleUnfriend} disabled={acting} style={styles.btnGhost}>
-                    <Text style={styles.btnGhostText}>{acting ? "…" : "Remove friend"}</Text>
-                  </Pressable>
-                ) : (
-                  <Pressable onPress={handleAddFriend} disabled={acting} style={styles.btnPrimary}>
-                    <Text style={styles.btnPrimaryText}>{acting ? "…" : "Add friend"}</Text>
-                  </Pressable>
-                ))}
+                {/* Four states, not two. A request you have SENT used to render
+                    the same "Add friend" button as one you had never sent,
+                    because is_friend only ever meant accepted — so the tap
+                    looked like it had done nothing, and the obvious response
+                    is to tap it again. */}
+                {!blocked && (
+                  snapshot.friend_state === "accepted" ? (
+                    <Pressable onPress={handleUnfriend} disabled={acting} style={styles.btnGhost}>
+                      <Text style={styles.btnGhostText}>{acting ? "…" : "Remove friend"}</Text>
+                    </Pressable>
+                  ) : snapshot.friend_state === "pending_in" ? (
+                    <Pressable onPress={handleAcceptFriend} disabled={acting} style={styles.btnPrimary}>
+                      <Text style={styles.btnPrimaryText}>
+                        {acting ? "…" : `Accept ${snapshot.display_name || "request"}`}
+                      </Text>
+                    </Pressable>
+                  ) : snapshot.friend_state === "pending_out" ? (
+                    <View style={styles.btnGhost}>
+                      <Text style={styles.btnGhostText}>Request sent</Text>
+                    </View>
+                  ) : (
+                    <Pressable onPress={handleAddFriend} disabled={acting} style={styles.btnPrimary}>
+                      <Text style={styles.btnPrimaryText}>{acting ? "…" : "Add friend"}</Text>
+                    </Pressable>
+                  )
+                )}
 
                 <View style={styles.safetyRow}>
                   <Pressable onPress={handleReport} disabled={acting} hitSlop={8}>

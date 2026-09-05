@@ -126,6 +126,10 @@ export type FriendProfileSnapshot = {
   // login address is not an identifier and must never appear on someone
   // else's screen.
   username: string | null;
+  /** 'self' | 'accepted' | 'pending_out' | 'pending_in' | 'none'.
+   *  is_friend only ever meant 'accepted', so a request you had just sent
+   *  rendered identically to one you had never sent. */
+  friend_state: "self" | "accepted" | "pending_out" | "pending_in" | "none";
 };
 
 export async function getFriendProfileSnapshot(targetId: string): Promise<FriendProfileSnapshot | null> {

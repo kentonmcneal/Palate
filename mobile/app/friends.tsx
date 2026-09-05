@@ -28,6 +28,7 @@ export default function FriendsScreen() {
   const [outgoing, setOutgoing] = useState<FriendListItem[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<unknown>(null);
 
   // Palate match per friend. Loaded after the list renders — the list must not
   // wait on N round trips — then used to sort, so the top of the list IS the
@@ -61,8 +62,9 @@ export default function FriendsScreen() {
         loadFriendsLeaderboard().catch(() => []),
       ]);
       setFriends(f); setIncoming(i); setOutgoing(o); setLeaderboard(lb);
+      setLoadError(null);
     } catch (e: any) {
-      console.warn("friends load", e?.message);
+      setLoadError(e ?? new Error("friends load failed"));
     } finally {
       setLoading(false);
     }

@@ -8,6 +8,8 @@ import { colors, spacing, type } from "../../theme";
 import { recentVisits, type Visit } from "../../lib/visits";
 import { getInbox } from "../../lib/passive-confirm";
 import { groupByDay, repeatOrdinals, filterVisits } from "../../lib/visit-history";
+import { loadView } from "../../lib/load-state";
+import { LoadError } from "../../components/LoadError";
 
 /**
  * Visits — the dining memory, finally somewhere you can find it.
@@ -30,6 +32,7 @@ export default function VisitsScreen() {
   const [pending, setPending] = useState(0);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<unknown>(null);
 
   const load = useCallback(async () => {
     try {
@@ -39,8 +42,9 @@ export default function VisitsScreen() {
       ]);
       setVisits(all);
       setPending(inbox.length);
+      setError(null);
     } catch (e: any) {
-      console.warn("visits load", e?.message);
+      setError(e ?? new Error("visits load failed"));
     } finally {
       setLoading(false);
     }
@@ -59,6 +63,7 @@ export default function VisitsScreen() {
   );
 
   const searching = query.trim().length > 0;
+  const view = loadView({ loading, error, count: visits.length });
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -102,7 +107,11 @@ export default function VisitsScreen() {
         </View>
       )}
 
-      {loading && visits.length === 0 ? (
+      {view === "error" ? (
+        <View style={{ paddingHorizontal: spacing.lg }}>
+          <LoadError error={error} onRetry={() => { setLoading(true); load(); }} />
+        </View>
+      ) : view === "loading" ? (
         <View style={styles.center}><ActivityIndicator color={colors.red} /></View>
       ) : visits.length === 0 ? (
         <View style={styles.center}>

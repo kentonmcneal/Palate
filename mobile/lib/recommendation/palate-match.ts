@@ -183,11 +183,23 @@ export function computePalateMatch(
 /** One-line headline for the share card and the friend row. */
 export function matchHeadline(match: PalateMatch, theirName: string): string {
   if (!match.ready) {
-    const short = Math.max(
-      match.threshold - match.yourVisits,
-      match.threshold - match.theirVisits,
-    );
-    return `${short} more visit${short === 1 ? "" : "s"} to unlock`;
+    // Say WHOSE history is short. "4 more visits to unlock" read as a demand on
+    // the reader, who in the reported case had 33 visits while the person they
+    // were looking at had one.
+    const youOwe = Math.max(0, match.threshold - match.yourVisits);
+    const theyOwe = Math.max(0, match.threshold - match.theirVisits);
+    const plural = (n: number) => `${n} more visit${n === 1 ? "" : "s"}`;
+
+    if (youOwe > 0 && theyOwe > 0) {
+      return `You both need a few more visits before this means anything`;
+    }
+    if (theyOwe > 0) {
+      return `${theirName} needs ${plural(theyOwe)} before this means anything`;
+    }
+    if (youOwe > 0) {
+      return `You need ${plural(youOwe)} before this means anything`;
+    }
+    return "Not enough shared history yet";
   }
   if (match.score >= 85) return `You and ${theirName} eat the same`;
   if (match.score >= 65) return `You and ${theirName} overlap a lot`;

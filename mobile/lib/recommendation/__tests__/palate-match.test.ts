@@ -122,14 +122,44 @@ describe("computePalateMatch", () => {
 });
 
 describe("matchHeadline", () => {
-  it("tells an unready pair what it needs, not that it failed", () => {
+  it("tells an unready pair what it needs, and whose it is", () => {
+    // Was "4 more visits to unlock", which named nobody. Here the READER is
+    // the one with a thin history, so it should say so.
     const r = computePalateMatch(vec({ visitCount: 1 }), vec({ visitCount: 20 }));
-    expect(matchHeadline(r, "Marcus")).toBe("4 more visits to unlock");
+    expect(matchHeadline(r, "Marcus")).toBe("You need 4 more visits before this means anything");
   });
 
   it("is honest at the bottom of the range", () => {
     const a = vec({ cuisineRegion: { american: 1 } });
     const b = vec({ cuisineRegion: { japanese: 1 } });
     expect(matchHeadline(computePalateMatch(a, b), "Marcus")).toBe("Marcus eats nothing like you");
+  });
+});
+
+// "4 more visits to unlock" read as a demand on the reader, who had 33 visits
+// while the person they were looking at had one. A locked state has to say
+// whose history is short or it accuses the wrong person.
+describe("locked headline names who is short", () => {
+  const locked = (yourVisits: number, theirVisits: number) =>
+    matchHeadline({ ready: false, yourVisits, theirVisits, threshold: 5 } as never, "Candice");
+
+  it("names them when it is their history that is thin", () => {
+    expect(locked(33, 1)).toBe("Candice needs 4 more visits before this means anything");
+  });
+
+  it("names you when it is yours", () => {
+    expect(locked(2, 40)).toBe("You need 3 more visits before this means anything");
+  });
+
+  it("says both when neither has enough", () => {
+    expect(locked(1, 1)).toMatch(/You both/);
+  });
+
+  it("uses the singular for one visit", () => {
+    expect(locked(33, 4)).toContain("1 more visit before");
+  });
+
+  it("never blames the reader for someone else's empty history", () => {
+    expect(locked(33, 1)).not.toMatch(/^You /);
   });
 });

@@ -10,6 +10,8 @@ import { Avatar } from "../../components/Avatar";
 import { colors, spacing, type } from "../../theme";
 import { listFeed, toggleLike, type FeedEvent } from "../../lib/feed";
 import { listIncomingRequests } from "../../lib/friends";
+import { loadView } from "../../lib/load-state";
+import { LoadError } from "../../components/LoadError";
 import { reportContent, blockUser, REPORT_REASONS } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
 
@@ -20,6 +22,8 @@ export default function FeedTab() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [myId, setMyId] = useState<string | null>(null);
+  // Held in state, not swallowed into a console nobody reads.
+  const [error, setError] = useState<unknown>(null);
 
   const load = useCallback(async () => {
     try {
@@ -31,8 +35,12 @@ export default function FeedTab() {
       setEvents(feed);
       setPendingCount(requests.length);
       setMyId(auth.user?.id ?? null);
+      setError(null);
     } catch (e: any) {
-      console.warn("feed load", e?.message);
+      // The feed once returned 400 on every call for its whole existence and
+      // rendered as "quiet right now" the entire time. A failure has to look
+      // like a failure.
+      setError(e ?? new Error("feed load failed"));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -43,6 +51,8 @@ export default function FeedTab() {
     setLoading(true);
     load();
   }, [load]));
+
+  const view = loadView({ loading, error, count: events.length });
 
   function removeUser(userId: string) {
     setEvents((curr) => curr.filter((e) => e.user_id !== userId));
@@ -124,7 +134,11 @@ export default function FeedTab() {
           <View style={styles.center}><ActivityIndicator color={colors.red} /></View>
         )}
 
-        {!loading && events.length === 0 && (
+        {view === "error" && (
+          <LoadError error={error} onRetry={() => { setLoading(true); load(); }} />
+        )}
+
+        {view === "empty" && (
           <View style={styles.empty}>
             <Text style={type.subtitle}>Nobody's eaten yet today.</Text>
             <Text style={[type.small, { marginTop: 8, lineHeight: 20 }]}>
