@@ -225,7 +225,11 @@ export default function Settings() {
 
         <Section title="Passive tracking">
           <Row label="Check when I open the app" right={<Switch value={tracking} onValueChange={toggleTracking} thumbColor={tracking ? colors.red : "#fff"} trackColor={{ true: colors.redTintBorder, false: colors.line }} />} />
-          <Note>Looks for a nearby restaurant each time you open Palate.</Note>
+          <Note>
+            Looks for a nearby restaurant each time you open Palate. This is the
+            manual fallback. Background logging below is the one that means you
+            never have to think about it.
+          </Note>
           <PassiveCaptureEntry />
         </Section>
 
@@ -450,8 +454,10 @@ function PassiveCaptureEntry() {
       />
       <Note>
         {needsRepair
-          ? "Paused. iOS set location back to \"While Using.\" Switch it to Always to resume."
-          : "Notices restaurant stops with the app closed, then asks. Nothing is logged until you confirm."}
+          ? "Paused. iOS set Location back to \"While Using.\" Switch it to Always and Palate goes back to logging for you."
+          : on
+            ? "Notices restaurant stops with the app closed, then asks once at the end of the day. Nothing is logged until you confirm."
+            : "Turn this on, and set Location to Always, and your meals log themselves. Your phone is in your pocket while you eat, so on \"While Using the App\" Palate sees almost nothing and you are back to typing every meal in by hand."}
       </Note>
       {needsRepair && (
         <>

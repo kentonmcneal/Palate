@@ -153,10 +153,14 @@ export default function PassiveCaptureIntro() {
         <Text style={styles.emoji}>📍🍽️</Text>
         <Text style={styles.h1}>Log where you ate without opening the app</Text>
         <Text style={styles.p}>
-          Palate can notice when you've spent time at a restaurant and ask you — with one tap — if
-          you ate there. No check-ins, no manual logging.
+          Palate can notice when you've spent time at a restaurant and ask, with
+          one tap, whether you ate there. No check-ins and no typing meals in.
         </Text>
         <Spacer />
+        <Text style={styles.bullet}>
+          • On the next screen, choose <Text style={styles.bulletStrong}>Always</Text>. Your phone is
+          in your pocket while you eat, so "While Using the App" sees almost nothing.
+        </Text>
         <Text style={styles.bullet}>• You confirm every visit. Nothing is logged silently.</Text>
         <Text style={styles.bullet}>• We only look at where you stopped, not everywhere you go.</Text>
         <Text style={styles.bullet}>• Home and work are filtered out on your phone.</Text>
@@ -186,6 +190,7 @@ const styles = StyleSheet.create({
   emoji: { fontSize: 40, marginBottom: spacing.lg },
   h1: { ...type.display, color: colors.ink },
   p: { ...type.body, color: colors.mute, marginTop: spacing.md },
+  bulletStrong: { fontWeight: "800", color: colors.ink },
   bullet: { ...type.body, color: colors.ink, marginTop: 8 },
   card: {
     borderColor: colors.line,

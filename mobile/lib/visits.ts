@@ -225,7 +225,7 @@ async function emitVisitFeedEvent(
       .eq("id", restaurantId)
       .maybeSingle();
     if (!rest) return;
-    await supabase.from("feed_events").insert({
+    const { data: created } = await supabase.from("feed_events").insert({
       user_id: userId,
       kind: "visit_logged",
       // Linked so hiding or deleting the visit can retract this post. Matching
@@ -237,7 +237,21 @@ async function emitVisitFeedEvent(
         neighborhood: rest.neighborhood,
         google_place_id: googlePlaceId,
       },
-    });
+    }).select("id").single();
+
+    // Tell their friends. This call was missing entirely: the row was written
+    // and nobody was notified, while Settings offered a toggle for "friends'
+    // visits" under Activity from other people. Wrapped shares and milestones
+    // both fanned out; the most common event in the app did not.
+    //
+    // Audience is accepted friends only, decided inside the function. With the
+    // feed open to everyone since 0077, fanning out every visit to every user
+    // would be a push per meal per person.
+    if (created?.id) {
+      void supabase.functions.invoke("notify-feed-post", {
+        body: { feed_event_id: created.id },
+      });
+    }
   } catch {
     // silent — feed event is best-effort
   }

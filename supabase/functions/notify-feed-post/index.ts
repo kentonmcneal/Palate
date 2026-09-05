@@ -118,13 +118,20 @@ serve(async (req) => {
 function subtitleFor(kind: string, payload: unknown, posterName: string): string {
   const p = (payload ?? {}) as Record<string, unknown>;
   if (kind === "wrapped_shared") {
-    return `Shared a Wrapped — ${p.persona_label ?? "their week's read"}`;
+    return `Shared a Wrapped: ${p.persona_label ?? "their week's read"}`;
   }
   if (kind === "milestone") {
     return `Hit a ${p.streak_days ?? ""}-day streak`;
   }
   if (kind === "persona_change") {
-    return `New persona: ${p.to_persona ?? "—"}`;
+    return `New persona: ${p.to_persona ?? "unknown"}`;
+  }
+  // The most common event by far, and the one this function was never called
+  // for: emitVisitFeedEvent wrote the row and notified nobody, while Settings
+  // promised "friends' visits" under Activity from other people.
+  if (kind === "visit_logged") {
+    const name = typeof p.restaurant_name === "string" ? p.restaurant_name : null;
+    return name ? `Ate at ${name}` : "Logged a visit";
   }
   return `${posterName} posted to your feed`;
 }
