@@ -16,6 +16,7 @@
 // ============================================================================
 
 import { computeTasteVector, type TasteVector } from "../taste-vector";
+import { EMPTY_DISLIKES, type DislikeProfile } from "../dislikes";
 import { loadPersonalSignal, type PersonalSignal } from "../personal-signal";
 
 export type EntityWeight = { key: string; weight: number };
@@ -41,6 +42,8 @@ export type TasteGraph = {
   // Negative event counts
   dismissesByPlace: Map<string, number>;
   skipsByPlace: Map<string, number>;
+  // "Not interested": excluded ids and the learned profile (lib/dislikes.ts)
+  dislikes: DislikeProfile;
   // Aggregate behavioral metrics
   totalVisits: number;
   uniqueRestaurants: number;
@@ -87,6 +90,7 @@ export function assembleGraph(vector: TasteVector | null, personal: PersonalSign
     friendVisitsByPlace: p.friendVisitsByPlaceId,
     dismissesByPlace: p.dismissesByPlaceId,
     skipsByPlace: p.skipsByPlaceId,
+    dislikes: p.dislikes ?? EMPTY_DISLIKES,
     totalVisits: v.visitCount,
     uniqueRestaurants: v.uniqueRestaurants,
     repeatRate: v.repeatRate,
@@ -142,5 +146,6 @@ function emptyPersonal(): PersonalSignal {
     itemSentimentByRestaurantId: new Map(),
     itemSentimentByCuisine: new Map(),
     friendVisitsByPlaceId: new Map(),
+    dislikes: EMPTY_DISLIKES,
   };
 }

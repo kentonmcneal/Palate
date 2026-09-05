@@ -87,7 +87,7 @@ export default function FullscreenMap() {
           // Skip ineligible places on the discovery map (chains, fast food,
           // airports, hotels). One shared gate — see recommendation/eligibility.
           // Visit-logging surfaces deliberately do NOT apply this filter.
-          if (!isRecommendable(p)) continue;
+          if (!isRecommendable(p, { hidden: personal?.dislikes.placeIds ?? null })) continue;
           const compat = getCompatibility(graph, {
             google_place_id: p.google_place_id,
             name: p.name,

@@ -31,6 +31,7 @@ import { cuisinesNear, cuisineCandidates, dishCandidates, mergeCuisinePools } fr
 import { FONT_CAP, useFontScale } from "../lib/a11y";
 import { useRouter } from "expo-router";
 import { TapCard } from "./TapCard";
+import { askNotInterested } from "./notInterested";
 
 // ============================================================================
 // RecommendationsCard — always-visible spot suggestions on the Home tab.
@@ -167,7 +168,8 @@ export function RecommendationsCard({
       // One gate for every surface (lib/recommendation/eligibility.ts) — the
       // old `eligibility > 0` check only caught venues the classifier had
       // already labeled, so unclassified chains still reached this list.
-      const enriched: RestaurantRecommendation[] = filterRecommendable(nearby)
+      const hidden = personal?.dislikes.placeIds ?? null;
+      const enriched: RestaurantRecommendation[] = filterRecommendable(nearby, { hidden })
         .filter((p) => !visitedHeavy.has(p.google_place_id))
         .filter((p) => !excludePlaceIds.includes(p.google_place_id))
         .map((p) => toRecommendation(p, graph, here, personal));
@@ -200,6 +202,13 @@ export function RecommendationsCard({
 
   useEffect(() => { load(); }, [load, browsingCity?.id]);
 
+  // "Not interested" from a row: gone from this list now, and from every
+  // surface on the next load (the signal cache was invalidated).
+  function hidePlace(placeId: string) {
+    setAllRecs((cur) => (cur ? cur.filter((r) => r.google_place_id !== placeId) : cur));
+    setRecs((cur) => (cur ? cur.filter((r) => r.google_place_id !== placeId) : cur));
+  }
+
   // A mood filters the SAME personally-ranked list. The compat score still
   // comes from the user's own history — we only restrict which venues are
   // eligible for the three slots.
@@ -230,6 +239,7 @@ export function RecommendationsCard({
         .then((rows) => {
           if (!alive) return;
           const scored = rows
+            .filter((r) => !personal?.dislikes.placeIds.has(r.google_place_id))
             .map((r) => toRecommendation(r, graph, here, personal))
             .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
           if (scored.length === 0) {
@@ -308,14 +318,14 @@ export function RecommendationsCard({
         : !!moodNote && <Text style={styles.moodNote}>{moodNote}</Text>}
       <View style={{ marginTop: earlyEstimate ? 14 : 2 }}>
         {recs.map((rec) => (
-          <RecRow key={rec.google_place_id} rec={rec} />
+          <RecRow key={rec.google_place_id} rec={rec} onHide={() => hidePlace(rec.google_place_id)} />
         ))}
       </View>
     </View>
   );
 }
 
-function RecRow({ rec }: { rec: RestaurantRecommendation }) {
+function RecRow({ rec, onHide }: { rec: RestaurantRecommendation; onHide: () => void }) {
   const router = useRouter();
   // At large accessibility sizes [name | match | Save] compresses the name to
   // an ellipsis and the buttons to slivers. Past the threshold the row becomes
@@ -409,7 +419,21 @@ function RecRow({ rec }: { rec: RestaurantRecommendation }) {
           </Pressable>
         </View>
       </TapCard>
-      <View>
+      <View style={{ alignItems: "flex-end", gap: 8 }}>
+        {/* "Not interested". The TikTok gesture: gone for good for you, and
+            the reason you give is what the app learns from. */}
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation();
+            askNotInterested({ google_place_id: rec.google_place_id, name: rec.name }, { surface: "home_recs", onDone: onHide });
+          }}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={`Not interested in ${rec.name}`}
+          style={styles.hideBtn}
+        >
+          <Text style={styles.hideText}>✕</Text>
+        </Pressable>
         <Pressable
           onPress={(e) => { e.stopPropagation(); save(); }}
           style={[styles.saveBtn, saved && styles.saveBtnDone]}
@@ -519,5 +543,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.line,
   },
   saveText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  hideBtn: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line },
+  hideText: { fontSize: 12, fontWeight: "800", color: colors.mute },
   saveTextDone: { color: colors.mute },
 });

@@ -59,7 +59,7 @@ export async function generateCandidates(opts: GenerateOptions): Promise<Candida
   // the gate and act as the fallback (ranked below gems by gemAdjustment).
   // Dedupe before pooling: a venue Google lists twice would otherwise be
   // scored twice and could take two of the three Home slots.
-  const eligible = dedupeVenues(filterRecommendable(nearby));
+  const eligible = dedupeVenues(filterRecommendable(nearby, { hidden: opts.graph.dislikes.placeIds }));
   if (eligible.length === 0) return [];
 
   // Pool A — taste_similar: cuisine subregion or region overlaps with user pattern.

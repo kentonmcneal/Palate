@@ -35,6 +35,8 @@ export type EligibilityOptions = {
    * and "brunch" featured lists — pass "allow".
    */
   cafes?: "gems-only" | "allow";
+  /** "Not interested" ids for this person. Excluded before anything is ranked. */
+  hidden?: Set<string> | null;
 };
 
 /**
@@ -47,6 +49,7 @@ export function isRecommendable(
   r: EligibilityInput,
   opts: EligibilityOptions = {},
 ): boolean {
+  if (opts.hidden && r.google_place_id && opts.hidden.has(r.google_place_id)) return false;
   const input = r as RestaurantInput;
 
   // Hard gate — format class, Google fast-food types, classifier chain_name,

@@ -300,6 +300,8 @@ export default function Settings() {
         </CollapsibleSection>
 
         <CollapsibleSection title="Account">
+          <Button title="Hidden places" onPress={() => router.push("/hidden-places" as never)} variant="ghost" />
+          <Spacer />
           <Button title="Blocked accounts" onPress={() => router.push("/blocked")} variant="ghost" />
           <Spacer />
           <Button title="Sign out" onPress={async () => { await signOut(); router.replace("/sign-in"); }} variant="ghost" />

@@ -26,6 +26,7 @@ import { LocationPill } from "../../components/LocationPill";
 import { HomeHero, TrackingLine } from "../../components/HomeHero";
 import { MoodRow } from "../../components/MoodRow";
 import { RecommendationsCard } from "../../components/RecommendationsCard";
+import { AllTimeCard } from "../../components/AllTimeCard";
 import { Spacer } from "../../components/Button";
 import { buildDishChips, palateRead, SURPRISE, type Mood, type MoodChip } from "../../lib/mood";
 import { dishesNear, type DishCount } from "../../lib/cuisine-catalogue";
@@ -328,6 +329,10 @@ export default function Home() {
           excludePlaceIds={[]}
           onCuisinesAvailable={setNearbyPool}
         />
+
+        {/* All time, under the picks: visits, cuisines as bars, who you are,
+            and the three palates closest to yours. */}
+        <AllTimeCard />
 
         <TrackingLine on={trackingOn} lastCheck={lastCheck} />
 

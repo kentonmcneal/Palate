@@ -15,6 +15,7 @@
 // ============================================================================
 
 import { supabase } from "./supabase";
+import { buildDislikeProfile, dislikePenalty, listDislikes, EMPTY_DISLIKES, type DislikeProfile, type DislikeCandidate } from "./dislikes";
 
 export type PersonalSignal = {
   /** google_place_id → number of logged visits */
@@ -30,6 +31,8 @@ export type PersonalSignal = {
   itemSentimentByCuisine: Map<string, { loved: number; not_for_me: number }>;
   /** google_place_id → number of friends who've visited */
   friendVisitsByPlaceId: Map<string, number>;
+  /** "Not interested": the excluded ids and what they taught (lib/dislikes.ts). */
+  dislikes: DislikeProfile;
 };
 
 const EMPTY: PersonalSignal = {
@@ -40,6 +43,7 @@ const EMPTY: PersonalSignal = {
   itemSentimentByRestaurantId: new Map(),
   itemSentimentByCuisine: new Map(),
   friendVisitsByPlaceId: new Map(),
+  dislikes: EMPTY_DISLIKES,
 };
 
 export function emptyPersonalSignal(): PersonalSignal {
@@ -113,7 +117,12 @@ export async function loadPersonalSignal(): Promise<PersonalSignal> {
         itemSentimentByRestaurantId: new Map(),
         itemSentimentByCuisine: new Map(),
         friendVisitsByPlaceId: new Map(),
+        dislikes: EMPTY_DISLIKES,
       };
+
+      // "Not interested", separately: it must not take the rest of the
+      // signal down with it if the table read fails.
+      sig.dislikes = buildDislikeProfile(await listDislikes().catch(() => []));
 
       // Visits — both indexes
       for (const row of (visitsRes.data ?? []) as any[]) {
@@ -252,6 +261,8 @@ export function personalAdjustment(opts: {
   googlePlaceId: string;
   restaurantId?: string | null;
   cuisineType?: string | null;
+  /** The candidate's tags, so a learned dislike can apply here too. */
+  candidate?: DislikeCandidate;
   /** When true (Home recs feed), apply anti-staleness. Disabled on detail
    *  pages, restaurant search, or favorites where the user wants their
    *  known spots. */
@@ -279,6 +290,15 @@ export function personalAdjustment(opts: {
   const skips = opts.signal.skipsByPlaceId.get(opts.googlePlaceId) ?? 0;
   if (skips > 0) {
     delta -= Math.min(SKIP_CAP, skips * SKIP_PER_EVENT);
+  }
+
+  // What "Not interested" taught, applied to places like the ones you said
+  // no to. The place itself never reaches a scorer: it is excluded upstream.
+  const cand: DislikeCandidate = opts.candidate ?? { google_place_id: opts.googlePlaceId, cuisine_type: opts.cuisineType ?? null };
+  const learned = dislikePenalty(opts.signal.dislikes, cand);
+  if (learned > 0) {
+    delta -= learned;
+    notes.push("like places you passed on");
   }
 
   // Item-level sentiment at this restaurant

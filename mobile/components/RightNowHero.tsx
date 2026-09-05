@@ -95,7 +95,7 @@ export function RightNowHero({ onTakeMeThere, onPicked }: Props) {
       // Add the new exclusion (if any) to the running dismissed set
       if (extraExcludeId) dismissedRef.current.add(extraExcludeId);
 
-      const filtered = filterRecommendable(nearby).filter(
+      const filtered = filterRecommendable(nearby, { hidden: personal?.dislikes.placeIds ?? null }).filter(
         (r) => !dismissedRef.current.has(r.google_place_id),
       );
 

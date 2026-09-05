@@ -12,6 +12,7 @@
 // ============================================================================
 
 import type { Compatibility, RestaurantInput } from "./types";
+import { dislikePenalty } from "../dislikes";
 import type { TasteGraph } from "./taste-graph";
 import { shareOf, topKey } from "./taste-graph";
 import { explainCompatibility } from "./explanations";
@@ -28,6 +29,7 @@ const W = {
 // Cap on how many points the personal-signal layer can shift the raw score.
 // Stops a single dismiss from tanking a 90% match into 60%.
 const PERSONAL_CAP = 18;
+const PERSONAL_NEGATIVE_CAP = 32;
 
 // ----------------------------------------------------------------------------
 // Public entry — context-free, deterministic given (graph, restaurant).
@@ -55,7 +57,10 @@ export function computeCompatibility(graph: TasteGraph, r: RestaurantInput): Com
 
   // Personal-signal adjustment: item ratings, friend visits, dismisses, skips.
   const personalDelta = computePersonalDelta(graph, r);
-  raw += clamp(personalDelta, -PERSONAL_CAP, PERSONAL_CAP);
+  // Asymmetric on purpose: a learned dislike may push further down than a
+  // friend visit may push up. "I said no to this" is stronger evidence than
+  // "a friend went".
+  raw += clamp(personalDelta, -PERSONAL_NEGATIVE_CAP, PERSONAL_CAP);
 
   const score = Math.min(99, Math.max(20, raw));
 
@@ -240,6 +245,14 @@ function computePersonalDelta(g: TasteGraph, r: RestaurantInput): number {
       d += clamp(net * 1.5, -8, 8);
     }
   }
+
+  // What "Not interested" taught. Dampened by how much of this cuisine the
+  // person has actually eaten: one dismissed taqueria does not outweigh forty
+  // taco visits. The place itself never gets here; it is excluded upstream.
+  const share = r.cuisine_subregion
+    ? shareOf(g.cuisinesSubregion, r.cuisine_subregion)
+    : r.cuisine_region ? shareOf(g.cuisines, r.cuisine_region) : 0;
+  d -= dislikePenalty(g.dislikes, r, Math.round(share * g.totalVisits));
 
   // Negative events
   const dismisses = g.dismissesByPlace.get(r.google_place_id) ?? 0;

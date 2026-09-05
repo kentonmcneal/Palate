@@ -190,7 +190,7 @@ export default function DiscoverTab() {
       // dedupeVenues collapses one venue listed twice by Google under
       // different place ids ("Hong Kong Restaurant" + "Hong Kong Restaurant |
       // Chinese") — the duplicate rows a tester saw in this feed.
-      const candidates = dedupeVenues(filterRecommendable(nearby)).filter(
+      const candidates = dedupeVenues(filterRecommendable(nearby, { hidden: sig?.dislikes.placeIds ?? null })).filter(
         (p) => !visitedIds.has(p.google_place_id),
       );
 

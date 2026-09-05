@@ -9,6 +9,7 @@ import { triggerHapticSuccess, triggerHapticSelection } from "../lib/haptics";
 import { pickSaveCopy } from "../lib/save-copy";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
 import { trackRecEvent, type RecEventContext } from "../lib/recommendation-events";
+import { askNotInterested } from "./notInterested";
 import { formatDistance, matchScoreColor, matchBand } from "../lib/match-score";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { SaveBurst } from "./SaveBurst";
@@ -103,18 +104,9 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
   ].filter(Boolean).join(" · ");
 
   function showLessLikeThis() {
-    void triggerHapticSelection();
-    Alert.alert(
-      "Show less like this?",
-      `We'll surface fewer spots like ${restaurant.name} in your recs.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Show less",
-          style: "destructive",
-          onPress: () => dismiss(),
-        },
-      ],
+    askNotInterested(
+      { google_place_id: restaurant.google_place_id, name: restaurant.name },
+      { surface, onDone: () => { setDismissed(true); onDismissed?.(); } },
     );
   }
 

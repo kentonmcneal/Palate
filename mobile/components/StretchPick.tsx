@@ -49,7 +49,7 @@ export function StretchPick() {
         // One gate for every surface (lib/recommendation/eligibility.ts). The
         // old `eligibility > 0` check let unclassified chains through — this
         // slot is where Domino's Pizza surfaced at 31% match.
-        preFetched: filterRecommendable(nearby.map(toCandidateInput)),
+        preFetched: filterRecommendable(nearby.map(toCandidateInput), { hidden: personal?.dislikes.placeIds ?? null }),
       });
       setPick(result.stretch);
     } catch {
