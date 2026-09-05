@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Avatar } from "../components/Avatar";
+import { loadCompatiblePeople, compatibilityLine, type CompatiblePerson } from "../lib/social";
 import { colors, spacing, type, card, shadow } from "../theme";
 import {
   browseProfiles, instagramUrl, tiktokUrl,
@@ -34,6 +35,7 @@ export default function PeopleScreen() {
   const [people, setPeople] = useState<PublicProfile[] | null>(null);
   const [matches, setMatches] = useState<Record<string, PalateMatch>>({});
   const [refreshing, setRefreshing] = useState(false);
+  const [compatible, setCompatible] = useState<CompatiblePerson[]>([]);
   const [error, setError] = useState<string | null>(null);
   // Accounts created before the directory existed signed up under 'friends'.
   // They are asked once rather than switched for them — a default governs
@@ -45,6 +47,12 @@ export default function PeopleScreen() {
       setError(null);
       const rows = await browseProfiles(50, 0);
       setPeople(rows);
+
+      // Ranked across everybody, server-side, in one call. A directory without
+      // it is still a directory, so a failure here never fails the screen.
+      loadCompatiblePeople(5)
+        .then(setCompatible)
+        .catch(() => setCompatible([]));
 
       // Matches load AFTER the list renders, and in ONE round trip — this
       // used to be a call per person, each re-fetching the caller's own
@@ -100,6 +108,33 @@ export default function PeopleScreen() {
         <Text style={styles.lead}>
           Sorted by how much your palate overlaps with theirs.
         </Text>
+
+        {/* Ranked across everybody, not just friends, so a new tester can find
+            somebody worth following before they have any. Each row says what it
+            is claiming, because a checkable sentence beats a percentage. */}
+        {compatible.length > 0 && (
+          <View style={styles.compatBlock}>
+            <Text style={styles.compatEyebrow}>WHO EATS LIKE YOU</Text>
+            {compatible.map((c) => (
+              <Pressable
+                key={c.id}
+                onPress={() => router.push(`/profile/${c.id}` as never)}
+                style={styles.compatRow}
+                accessibilityRole="button"
+              >
+                <Avatar uri={c.avatar_url} name={c.display_name} size={40} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.compatName} numberOfLines={1}>
+                    {c.display_name || (c.username ? `@${c.username}` : "Someone")}
+                  </Text>
+                  <Text style={styles.compatWhy} numberOfLines={1}>
+                    {compatibilityLine(c)}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        )}
 
         {askDiscovery && (
           <View style={styles.askCard}>
@@ -211,6 +246,17 @@ function PersonRow({
 }
 
 const styles = StyleSheet.create({
+  compatBlock: {
+    marginTop: spacing.md, marginBottom: spacing.lg, padding: spacing.md,
+    borderRadius: 18, backgroundColor: colors.faint,
+    borderWidth: 1, borderColor: colors.line,
+  },
+  compatEyebrow: { ...type.micro, marginBottom: 8 },
+  compatRow: {
+    flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 9,
+  },
+  compatName: { fontSize: 15, fontWeight: "700", color: colors.ink },
+  compatWhy: { ...type.small, marginTop: 2 },
   safe: { flex: 1, backgroundColor: colors.paper },
   header: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",

@@ -210,3 +210,46 @@ export async function markDiscoveryPrompted(): Promise<void> {
     .update({ discovery_prompted_at: new Date().toISOString() })
     .eq("id", user.id);
 }
+
+// ============================================================================
+// People who eat like you — across the whole app, not just friends.
+// ============================================================================
+// Distinct from palate_matches, which is friends-only, reciprocal and
+// count-free by design. This is an explicit ranking so a new tester can find
+// somebody worth following before they have a single friend.
+//
+// The score and both counts come back so a row can say what it is claiming.
+// "You have both been to McDonald's" is checkable; a bare percentage is not.
+
+export type CompatiblePerson = {
+  id: string;
+  display_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  shared_places: number;
+  shared_cuisines: number;
+  score: number;
+  top_shared: string | null;
+};
+
+export async function loadCompatiblePeople(limit = 10): Promise<CompatiblePerson[]> {
+  const { data, error } = await supabase
+    .rpc("compatible_people", { p_limit: limit });
+  if (error) throw error;
+  return (data as CompatiblePerson[]) ?? [];
+}
+
+/** What a row says about itself. Never a bare number. */
+export function compatibilityLine(p: CompatiblePerson): string {
+  if (p.shared_places > 0 && p.top_shared) {
+    return p.shared_places === 1
+      ? `You have both been to ${p.top_shared}`
+      : `${p.shared_places} places in common, including ${p.top_shared}`;
+  }
+  if (p.shared_cuisines > 0) {
+    return p.shared_cuisines === 1
+      ? "You eat one of the same cuisines"
+      : `You eat ${p.shared_cuisines} of the same cuisines`;
+  }
+  return "Some overlap with how you eat";
+}
