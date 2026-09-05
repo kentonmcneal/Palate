@@ -34,6 +34,27 @@ export const SOMEWHERE_NEW = "mood:new";
 
 const INTENT_MOODS = new Set<string>([QUICK, SIT_DOWN, SOMEWHERE_NEW]);
 
+// A dish is what people are actually in the mood for. "dish:tacos" rather
+// than "tacos" so a dish can never collide with a cuisine slug.
+export const DISH_PREFIX = "dish:";
+export function dishMood(dish: string): string { return DISH_PREFIX + dish.toLowerCase().trim(); }
+export function isDishMood(mood: Mood): boolean {
+  return typeof mood === "string" && mood.startsWith(DISH_PREFIX);
+}
+export function dishOf(mood: Mood): string | null {
+  return isDishMood(mood) ? String(mood).slice(DISH_PREFIX.length) : null;
+}
+const DISH_LABEL: Record<string, string> = {
+  pizza: "Pizza", burgers: "Burgers", sandwiches: "Sandwiches", fried_chicken: "Fried chicken",
+  wings: "Wings", tacos: "Tacos", bbq: "BBQ", steak: "Steak", seafood: "Seafood", sushi: "Sushi",
+  ramen: "Ramen", noodles: "Noodles", dumplings: "Dumplings", salads: "Salads", brunch: "Brunch",
+  bagels: "Bagels", donuts: "Donuts", ice_cream: "Ice cream", dessert: "Dessert", pastries: "Pastries",
+  coffee: "Coffee", tea: "Tea", juice: "Juice", wine: "Wine", cocktails: "Cocktails", beer: "Beer",
+};
+export function dishLabel(dish: string): string {
+  return DISH_LABEL[dish] ?? cuisineLabel(dish);
+}
+
 export function isIntentMood(mood: Mood): boolean {
   return typeof mood === "string" && INTENT_MOODS.has(mood);
 }
@@ -127,6 +148,7 @@ export function palateRead(breakdown: CuisineSlice[], minVisits = 3): string | n
 
 type MoodCandidate = {
   cuisine?: string | null;
+  dish_family?: string[] | null;
   format_class?: string | null;
   /** Whether the user has ever logged a visit here. Drives "Somewhere new". */
   visited?: boolean;
@@ -170,6 +192,12 @@ export function applyMood<T extends MoodCandidate>(
     return out.length > 0 ? { items: out, matched: true } : { items: list, matched: false };
   }
 
+  if (isDishMood(mood)) {
+    const want = dishOf(mood) ?? "";
+    const out = list.filter((r) => (r.dish_family ?? []).map(normalizeCuisine).includes(want));
+    return out.length > 0 ? { items: out, matched: true } : { items: list, matched: false };
+  }
+
   if (isSurprise(mood)) {
     const habit = new Set(habitualCuisines.map(normalizeCuisine));
     const out = list.filter((r) => {
@@ -191,7 +219,19 @@ export function moodFallbackNote(mood: Mood): string {
   if (mood === QUICK) return "Nothing quick nearby right now. Here's the regular list.";
   if (mood === SIT_DOWN) return "Nowhere to sit down nearby right now. Here's the regular list.";
   if (mood === SOMEWHERE_NEW) return "You've been to everything good nearby. Here's the regular list.";
+  if (isDishMood(mood)) return `Nowhere for ${dishLabel(dishOf(mood) ?? "").toLowerCase()} nearby tonight. Closest picks instead.`;
   return `Nothing great nearby for ${cuisineLabel(String(mood))} tonight. Closest picks instead.`;
+}
+
+/** The label for any chip key: dish, cuisine, or intent. */
+export function moodLabel(mood: Mood): string {
+  if (!mood) return "Anything";
+  if (isDishMood(mood)) return dishLabel(dishOf(mood) ?? "");
+  if (mood === QUICK) return "Quick";
+  if (mood === SIT_DOWN) return "Sit down";
+  if (mood === SOMEWHERE_NEW) return "Somewhere new";
+  if (isSurprise(mood)) return "Surprise me";
+  return cuisineLabel(String(mood));
 }
 
 
@@ -273,8 +313,48 @@ export function moodContextNote(mood: Mood, topScore: number | null): string | n
   if (!mood || isIntentMood(mood) || isSurprise(mood)) return null;
   if (topScore == null) return null;
 
-  const label = cuisineLabel(String(mood));
+  const label = moodLabel(mood);
   if (topScore >= 60) return null; // it speaks for itself
   if (topScore >= 45) return `${label} is not really your pattern. These are the closest fits.`;
   return `You have never gone in for ${label}. These are just the best ones near you.`;
+}
+
+
+// ============================================================================
+// The row, with dishes first.
+// ============================================================================
+// Anything · Somewhere new · the dishes around you by how many places serve
+// them · the cuisines not already covered by a dish · Surprise me. Dishes
+// come from Google types via dish_family (0099), so this is free and it is
+// what a person is actually in the mood for.
+export type DishCount = { dish: string; place_count: number };
+
+// Drinks are not dinner. They exist as dish families for Discover's filter;
+// the mood row is about what to eat.
+const NOT_A_MEAL = new Set(["coffee", "tea", "juice", "wine", "cocktails", "beer"]);
+
+export function buildDishChips(
+  breakdown: CuisineSlice[],
+  pool: Array<{ cuisine_type?: string | null }>,
+  dishes: DishCount[],
+  opts: { dishLimit?: number; totalLimit?: number } = {},
+): MoodChip[] {
+  const dishLimit = opts.dishLimit ?? 8;
+  const totalLimit = opts.totalLimit ?? 14;
+  const dishChips: MoodChip[] = dishes
+    .filter((d) => d.dish && !NOT_A_MEAL.has(d.dish) && d.place_count > 0)
+    .slice(0, dishLimit)
+    .map((d) => ({ key: dishMood(d.dish), label: dishLabel(d.dish) }));
+
+  const cuisineRow = buildCuisineChips(breakdown, pool, { totalLimit });
+  const surprise = cuisineRow.find((c) => c.key === SURPRISE);
+  const cuisines = cuisineRow.filter((c) => c.key !== null && c.key !== SURPRISE && !isIntentMood(c.key));
+  const intents = cuisineRow.filter((c) => c.key === null || isIntentMood(c.key));
+
+  const out: MoodChip[] = [...intents, ...dishChips];
+  for (const c of cuisines) {
+    if (out.length >= totalLimit + intents.length) break;
+    out.push(c);
+  }
+  return surprise ? [...out, surprise] : out;
 }

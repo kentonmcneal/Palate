@@ -26,8 +26,8 @@ import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
 import { matchScoreColor, matchScoreTint } from "../lib/match-score";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { SaveBurst } from "./SaveBurst";
-import { applyMood, moodFallbackNote, moodContextNote, isIntentMood, isSurprise, cuisineLabel, type Mood } from "../lib/mood";
-import { cuisinesNear, cuisineCandidates, mergeCuisinePools } from "../lib/cuisine-catalogue";
+import { applyMood, moodFallbackNote, moodContextNote, isIntentMood, isSurprise, isDishMood, dishOf, moodLabel, type Mood } from "../lib/mood";
+import { cuisinesNear, cuisineCandidates, dishCandidates, mergeCuisinePools } from "../lib/cuisine-catalogue";
 import { FONT_CAP, useFontScale } from "../lib/a11y";
 import { useRouter } from "expo-router";
 import { TapCard } from "./TapCard";
@@ -85,6 +85,7 @@ function toRecommendation(
     // scoring and then dropped; "Quick" and "Sit down" need it, and "Somewhere
     // new" needs to know whether you have been.
     format_class: p.format_class ?? null,
+    dish_family: p.dish_family ?? null,
     visited: (personal?.visitsByPlaceId.get(p.google_place_id) ?? 0) > 0,
     neighborhood: p.neighborhood ?? null,
     price_level: p.price_level ?? null,
@@ -222,7 +223,10 @@ export function RecommendationsCard({
     if (wantsCatalogue && scoringRef.current) {
       const { graph, here, personal } = scoringRef.current;
       setCatalogueLoading(true);
-      void cuisineCandidates(here, String(mood))
+      const fetchCandidates = isDishMood(mood)
+        ? dishCandidates(here, dishOf(mood) ?? "")
+        : cuisineCandidates(here, String(mood));
+      void fetchCandidates
         .then((rows) => {
           if (!alive) return;
           const scored = rows
@@ -295,12 +299,12 @@ export function RecommendationsCard({
       )}
       {typeof mood === "string" && !isIntentMood(mood) && !isSurprise(mood) && (
         <Text style={styles.moodHead}>
-          {cuisineLabel(String(mood))} near you
+          {moodLabel(mood)} near you
           {moodCount != null && !catalogueLoading ? ` · ${moodCount} ${moodCount === 1 ? "place" : "places"}` : ""}
         </Text>
       )}
       {catalogueLoading
-        ? <Text style={styles.moodNote}>Looking further out for {cuisineLabel(String(mood))}…</Text>
+        ? <Text style={styles.moodNote}>Looking further out for {moodLabel(mood)}…</Text>
         : !!moodNote && <Text style={styles.moodNote}>{moodNote}</Text>}
       <View style={{ marginTop: earlyEstimate ? 14 : 2 }}>
         {recs.map((rec) => (

@@ -119,3 +119,27 @@ export async function cuisineCandidates(
   const rows = await restaurantsByCuisine(here.lat, here.lng, cuisine, { limit });
   return filterRecommendable(rows as any) as unknown as Restaurant[];
 }
+
+
+// ----------------------------------------------------------------------------
+// Dishes (0099). Same shape as cuisines, second axis.
+// ----------------------------------------------------------------------------
+export type DishCount = { dish: string; place_count: number };
+
+export async function dishesNear(lat: number, lng: number, radiusM = CATALOGUE_RADIUS_M): Promise<DishCount[]> {
+  const { data, error } = await supabase.rpc("dishes_near", { p_lat: lat, p_lng: lng, p_radius_m: radiusM });
+  if (error) throw error;
+  return (data ?? []) as DishCount[];
+}
+
+export async function dishCandidates(
+  here: { lat: number; lng: number },
+  dish: string,
+  limit = 20,
+): Promise<Restaurant[]> {
+  const { data, error } = await supabase.rpc("restaurants_by_dish", {
+    p_lat: here.lat, p_lng: here.lng, p_dish: dish, p_radius_m: CATALOGUE_RADIUS_M, p_limit: limit,
+  });
+  if (error) throw error;
+  return filterRecommendable((data ?? []) as any) as unknown as Restaurant[];
+}

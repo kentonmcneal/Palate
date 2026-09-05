@@ -11,13 +11,14 @@ import { getOrFetchNearby } from "../../lib/nearby-cache";
 import { StretchPick } from "../../components/StretchPick";
 import { MoodRow } from "../../components/MoodRow";
 import {
-  buildCuisineChips, applyMood, moodFallbackNote, moodContextNote,
-  isIntentMood, isSurprise, cuisineLabel,
+  buildDishChips, applyMood, moodFallbackNote, moodContextNote,
+  isIntentMood, isSurprise, isDishMood, dishOf, moodLabel,
   type Mood, type MoodChip,
 } from "../../lib/mood";
 import { loadAnalytics, type CuisineSlice } from "../../lib/analytics-stats";
 import {
-  cuisinesNear, cuisineCandidates, mergeCuisinePools, type CuisineCount,
+  cuisinesNear, cuisineCandidates, dishesNear, dishCandidates, mergeCuisinePools,
+  type CuisineCount, type DishCount,
 } from "../../lib/cuisine-catalogue";
 import { supabase } from "../../lib/supabase";
 import { listWishlist, type WishlistEntry } from "../../lib/palate-insights";
@@ -144,6 +145,7 @@ export default function DiscoverTab() {
   // this 2.5km fetch. Free, and the only way a chip can offer a cuisine that
   // happens to have no venue in the current pool.
   const [catalogueCuisines, setCatalogueCuisines] = useState<CuisineCount[]>([]);
+  const [catalogueDishes, setCatalogueDishes] = useState<DishCount[]>([]);
   // Places fetched because a chip asked for a cuisine the pool does not carry.
   const [cataloguePicks, setCataloguePicks] = useState<{ cuisine: string; rows: RestaurantInput[] } | null>(null);
   const [catalogueLoading, setCatalogueLoading] = useState(false);
@@ -357,8 +359,8 @@ export default function DiscoverTab() {
   // cuisine you have never eaten is still askable. Derived from the pool rather
   // than fetched, or it could never know what is around you.
   const moodChips = useMemo(
-    () => buildCuisineChips(myCuisines, mergeCuisinePools(allNearby, catalogueCuisines)),
-    [myCuisines, allNearby, catalogueCuisines],
+    () => buildDishChips(myCuisines, mergeCuisinePools(allNearby, catalogueCuisines), catalogueDishes),
+    [myCuisines, allNearby, catalogueCuisines, catalogueDishes],
   );
 
   const moodedList = useMemo(() => {
@@ -366,6 +368,7 @@ export default function DiscoverTab() {
       ...r,
       cuisine: (r as any).cuisine_type ?? null,
       format_class: (r as any).format_class ?? null,
+      dish_family: (r as any).dish_family ?? null,
     }));
     const { items, matched } = applyMood(shaped, mood, []);
 
@@ -409,6 +412,9 @@ export default function DiscoverTab() {
     void cuisinesNear(here.lat, here.lng)
       .then((c) => { if (alive) setCatalogueCuisines(c); })
       .catch(() => {});
+    void dishesNear(here.lat, here.lng)
+      .then((d) => { if (alive) setCatalogueDishes(d); })
+      .catch(() => {});
     return () => { alive = false; };
   }, [here?.lat, here?.lng]);
 
@@ -417,15 +423,15 @@ export default function DiscoverTab() {
     const isCuisine = typeof mood === "string" && !isIntentMood(mood) && !isSurprise(mood);
     if (!isCuisine) { setCataloguePicks(null); return; }
 
-    const want = String(mood).toLowerCase().trim();
-    const inPool = allNearby.some(
-      (r) => ((r as any).cuisine_type ?? "").toLowerCase().trim() === want,
-    );
+    const want = (isDishMood(mood) ? dishOf(mood) ?? "" : String(mood)).toLowerCase().trim();
+    const inPool = allNearby.some((r) => isDishMood(mood)
+      ? (((r as any).dish_family ?? []) as string[]).includes(want)
+      : ((r as any).cuisine_type ?? "").toLowerCase().trim() === want);
     if (inPool) { setCataloguePicks(null); return; }
 
     let alive = true;
     setCatalogueLoading(true);
-    void cuisineCandidates(here, String(mood))
+    void (isDishMood(mood) ? dishCandidates(here, want) : cuisineCandidates(here, String(mood)))
       .then((rows) => {
         if (alive) setCataloguePicks({ cuisine: String(mood), rows: rows as unknown as RestaurantInput[] });
       })
@@ -561,7 +567,7 @@ export default function DiscoverTab() {
                     <MoodRow chips={moodChips} value={mood} onChange={setMood} />
                     {catalogueLoading ? (
                       <Text style={styles.moodNote}>
-                        Looking further out for {cuisineLabel(String(mood))}…
+                        Looking further out for {moodLabel(mood)}…
                       </Text>
                     ) : !!moodedList.note && (
                       <Text style={styles.moodNote}>{moodedList.note}</Text>

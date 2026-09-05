@@ -27,7 +27,8 @@ import { HomeHero, TrackingLine } from "../../components/HomeHero";
 import { MoodRow } from "../../components/MoodRow";
 import { RecommendationsCard } from "../../components/RecommendationsCard";
 import { Spacer } from "../../components/Button";
-import { buildCuisineChips, palateRead, SURPRISE, type Mood, type MoodChip } from "../../lib/mood";
+import { buildDishChips, palateRead, SURPRISE, type Mood, type MoodChip } from "../../lib/mood";
+import { dishesNear, type DishCount } from "../../lib/cuisine-catalogue";
 import { homeState, type HomeState } from "../../lib/home-state";
 import { getInbox } from "../../lib/passive-confirm";
 import { isPassiveOptedIn } from "../../lib/passive-capture";
@@ -112,9 +113,20 @@ export default function Home() {
     return () => { alive = false; };
   }, []);
 
+  // The dishes around you, from the catalogue, for the browsing city. Free.
+  const [dishes, setDishes] = useState<DishCount[]>([]);
   useEffect(() => {
-    setMoodChips(buildCuisineChips(myCuisines, nearbyPool));
-  }, [myCuisines, nearbyPool]);
+    if (!here) return;
+    let alive = true;
+    void dishesNear(here.lat, here.lng)
+      .then((d) => { if (alive) setDishes(d); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [here?.lat, here?.lng]);
+
+  useEffect(() => {
+    setMoodChips(buildDishChips(myCuisines, nearbyPool, dishes));
+  }, [myCuisines, nearbyPool, dishes]);
 
   // The Thursday nudge deep-links in with ?mood=surprise.
   useEffect(() => {
@@ -253,7 +265,10 @@ export default function Home() {
         <View style={styles.header}>
           <Wordmark />
           <View style={styles.headerActions}>
-            {streak && streak.current > 0 && <StreakChip count={streak.current} loggedToday={streak.loggedToday} />}
+            {/* The streak chip is gone from Home on the founder's call. The
+                streak itself still drives the evening reminder and the
+                milestone posts; it just no longer sits in the header as a
+                number to protect. */}
             <Pressable
               onPress={() => router.push("/(tabs)/add")}
               style={styles.addBtn}
