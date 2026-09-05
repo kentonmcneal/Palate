@@ -8,7 +8,7 @@ import { Button, Spacer } from "../../components/Button";
 import { wrappedPromise } from "../../lib/next-step";
 import { visitsToWrapped } from "../../lib/visits";
 import { colors, spacing, type } from "../../theme";
-import { generateForCurrentWeek, latestWrapped, isoWeekStart, type Wrapped } from "../../lib/wrapped";
+import { generateForCurrentWeek, currentWrapped, isoWeekStart, type Wrapped } from "../../lib/wrapped";
 // Inline the constant to avoid eagerly evaluating wrapped-story.tsx on every
 // app launch. The file is loaded lazily when the user actually navigates to it.
 const STORY_LAST_SHOWN_KEY = "palate.wrappedStory.lastShownWeek";
@@ -73,7 +73,10 @@ export default function WrappedTab() {
   const refresh = useCallback(async () => {
     try {
       const [latest, allTimeVec, weekVec, st] = await Promise.all([
-        latestWrapped(),
+        // Regenerates when what is stored is not this week — the Sunday cron
+        // writes once a week, so every meal after it was invisible until the
+        // next Sunday.
+        currentWrapped(),
         computeTasteVector().catch(() => null),
         computeTasteVector({ sinceDays: 7 }).catch(() => null),
         getSessionStage().catch(() => 1 as SessionStage),

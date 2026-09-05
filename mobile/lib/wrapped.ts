@@ -42,6 +42,37 @@ export async function generateForCurrentWeek(): Promise<Wrapped | null> {
   return data as Wrapped;
 }
 
+/**
+ * Whether the stored Wrapped is worth regenerating before it is shown.
+ *
+ * The Sunday cron writes one row a week, and the tab only ever read the newest
+ * stored row — so a week's worth of meals eaten after Sunday 14:00 UTC were
+ * invisible until the NEXT Sunday. Someone with thirty restaurants saw a card
+ * saying one visit and reasonably concluded it was broken.
+ */
+export function wrappedIsStale(
+  storedWeekStart: string | null | undefined,
+  thisWeekStart: string,
+): boolean {
+  return storedWeekStart !== thisWeekStart;
+}
+
+/**
+ * The current week's Wrapped, regenerated if what is stored is not this week.
+ *
+ * Regeneration is a single aggregate over your own visits, so doing it when the
+ * tab opens is cheap and makes the card live rather than a Sunday snapshot. A
+ * week with no visits generates nothing; the previous week is shown rather than
+ * an empty tab, and the card carries its own date range so it never pretends to
+ * be current.
+ */
+export async function currentWrapped(): Promise<Wrapped | null> {
+  const stored = await latestWrapped();
+  if (!wrappedIsStale(stored?.week_start, isoWeekStart())) return stored;
+  const fresh = await generateForCurrentWeek().catch(() => null);
+  return fresh ?? stored;
+}
+
 export async function latestWrapped(): Promise<Wrapped | null> {
   const { data, error } = await supabase
     .from("weekly_wrapped")
