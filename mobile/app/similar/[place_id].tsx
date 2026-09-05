@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { loadView } from "../../lib/load-state";
+import { LoadError } from "../../components/LoadError";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Switch,
 } from "react-native";
@@ -31,6 +33,7 @@ export default function SimilarScreen() {
   const [matches, setMatches] = useState<SimilarRestaurant[]>([]);
   const [loading, setLoading] = useState(true);
   const [excludeVisited, setExcludeVisited] = useState(true);
+  const [error, setError] = useState<unknown>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,14 +51,17 @@ export default function SimilarScreen() {
       setSource(rest as SourceRestaurant);
       const sim = await loadSimilarRestaurants(rest.id, { includeVisited: !excludeVisited });
       setMatches(sim);
+      setError(null);
     } catch (e: any) {
-      console.warn("similar restaurants", e?.message);
+      setError(e ?? new Error("similar load failed"));
     } finally {
       setLoading(false);
     }
   }, [place_id, excludeVisited]);
 
   useEffect(() => { load(); }, [load]);
+
+  const view = loadView({ loading, error, count: matches.length });
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -78,9 +84,13 @@ export default function SimilarScreen() {
         />
       </View>
 
-      {loading ? (
+      {view === "loading" ? (
         <View style={styles.center}><ActivityIndicator color={colors.red} /></View>
-      ) : matches.length === 0 ? (
+      ) : view === "error" ? (
+        <View style={{ paddingHorizontal: spacing.lg }}>
+          <LoadError error={error} onRetry={load} />
+        </View>
+      ) : view === "empty" ? (
         <View style={styles.center}>
           <Text style={type.body}>No similar places nearby yet.</Text>
           <Text style={[type.small, { marginTop: 6, textAlign: "center" }]}>

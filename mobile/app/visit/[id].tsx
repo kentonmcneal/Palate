@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { LoadError } from "../../components/LoadError";
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
   ActivityIndicator, Alert, Image, TextInput, Linking, Platform, Share,
@@ -32,6 +33,7 @@ export default function VisitDetailScreen() {
   const [visit, setVisit] = useState<Visit | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<unknown>(null);
   const [editingNote, setEditingNote] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
   const [editingPlace, setEditingPlace] = useState(false);
@@ -79,8 +81,9 @@ export default function VisitDetailScreen() {
       const v = data as unknown as Visit | null;
       setVisit(v);
       setNoteDraft(v?.notes ?? "");
+      setError(null);
     } catch (e: any) {
-      console.warn("visit load", e?.message);
+      setError(e ?? new Error("visit load failed"));
     } finally {
       setLoading(false);
     }
@@ -179,6 +182,18 @@ export default function VisitDetailScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}><ActivityIndicator color={colors.red} /></View>
+      </SafeAreaView>
+    );
+  }
+
+  // "Visit not found" and "the request failed" are different facts, and the
+  // first one is alarming: it says a meal you logged is gone.
+  if (!visit && error) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={{ paddingHorizontal: spacing.lg }}>
+          <LoadError error={error} onRetry={() => { setLoading(true); setError(null); load(); }} />
+        </View>
       </SafeAreaView>
     );
   }

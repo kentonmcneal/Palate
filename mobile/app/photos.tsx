@@ -1,4 +1,6 @@
 import { useCallback, useState } from "react";
+import { loadView } from "../lib/load-state";
+import { LoadError } from "../components/LoadError";
 import {
   View, Text, StyleSheet, FlatList, Pressable, Image, ActivityIndicator,
   Dimensions,
@@ -28,6 +30,7 @@ export default function PhotosScreen() {
   const router = useRouter();
   const [photos, setPhotos] = useState<PhotoRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<unknown>(null);
 
   const load = useCallback(async () => {
     try {
@@ -46,14 +49,17 @@ export default function PhotosScreen() {
         restaurant_name: Array.isArray(r.restaurant) ? r.restaurant[0]?.name : r.restaurant?.name,
       })) as PhotoRow[];
       setPhotos(rows);
+      setError(null);
     } catch (e: any) {
-      console.warn("photos load", e?.message);
+      setError(e ?? new Error("photos load failed"));
     } finally {
       setLoading(false);
     }
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const view = loadView({ loading, error, count: photos.length });
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -65,9 +71,13 @@ export default function PhotosScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {loading && photos.length === 0 ? (
+      {view === "loading" ? (
         <View style={styles.center}><ActivityIndicator color={colors.red} /></View>
-      ) : photos.length === 0 ? (
+      ) : view === "error" ? (
+        <View style={{ paddingHorizontal: spacing.lg }}>
+          <LoadError error={error} onRetry={load} />
+        </View>
+      ) : view === "empty" ? (
         <View style={styles.center}>
           <Text style={type.subtitle}>No photos yet.</Text>
           <Text style={[type.small, { marginTop: 6, textAlign: "center", paddingHorizontal: 32 }]}>

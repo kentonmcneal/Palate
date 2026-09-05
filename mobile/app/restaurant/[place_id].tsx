@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { LoadError } from "../../components/LoadError";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator,
   Image, Alert,
@@ -97,6 +98,7 @@ export default function RestaurantDetailScreen() {
   const [matchReasons, setMatchReasons] = useState<string[]>([]);
   const [matchConfidence, setMatchConfidence] = useState<"low" | "medium" | "high">("low");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [alreadySaved, setAlreadySaved] = useState(false);
@@ -212,8 +214,9 @@ export default function RestaurantDetailScreen() {
         setMatchReasons(compat.reasons);
         setMatchConfidence(compat.confidence);
       }
+      setError(null);
     } catch (e: any) {
-      console.warn("restaurant detail", e?.message);
+      setError(e ?? new Error("restaurant load failed"));
     } finally {
       setLoading(false);
     }
@@ -324,11 +327,24 @@ export default function RestaurantDetailScreen() {
     );
   }
 
+  // This one was already honest that something went wrong. It just gave you
+  // nowhere to go: no reason, no retry, and the same screen whether the place
+  // does not exist or the network dropped.
+  if (!restaurant && error) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={{ paddingHorizontal: spacing.lg }}>
+          <LoadError error={error} onRetry={() => { setLoading(true); setError(null); load(); }} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!restaurant) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <Text style={type.subtitle}>Couldn't load this place.</Text>
+          <Text style={type.subtitle}>We don't have this place yet.</Text>
         </View>
       </SafeAreaView>
     );

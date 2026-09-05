@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { loadView } from "../../lib/load-state";
+import { LoadError } from "../../components/LoadError";
 import {
   View,
   Text,
@@ -38,8 +40,12 @@ export default function WishlistTab() {
   const [groupBy, setGroupBy] = useState<GroupBy>("recent");
   const [tagging, setTagging] = useState<WishlistEntry | null>(null);
   const [burst, setBurst] = useState(0);
+  const [error, setError] = useState<unknown>(null);
 
   const grouped = useMemo(() => groupEntries(entries, groupBy), [entries, groupBy]);
+  // A wishlist that failed to load used to say "Nothing saved yet", which tells
+  // somebody their saves are gone.
+  const view = loadView({ loading, error, count: entries.length });
 
   async function handleSaveTags(entry: WishlistEntry, tags: AspirationTag[]) {
     setTagging(null);
@@ -57,8 +63,9 @@ export default function WishlistTab() {
     try {
       const e = await listWishlist();
       setEntries(e);
+      setError(null);
     } catch (e: any) {
-      console.warn("wishlist load", e?.message);
+      setError(e ?? new Error("wishlist load failed"));
     } finally {
       setLoading(false);
     }
@@ -151,13 +158,17 @@ export default function WishlistTab() {
         )}
         <Spacer size={20} />
 
-        {loading && (
+        {view === "loading" && (
           <View style={styles.center}>
             <ActivityIndicator color={colors.red} />
           </View>
         )}
 
-        {!loading && entries.length === 0 && (
+        {view === "error" && (
+          <LoadError error={error} onRetry={() => { setLoading(true); setError(null); load(); }} />
+        )}
+
+        {view === "empty" && (
           <View style={styles.emptyCard}>
             <Text style={type.subtitle}>Nothing saved yet.</Text>
             <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
@@ -168,7 +179,7 @@ export default function WishlistTab() {
           </View>
         )}
 
-        {!loading && grouped.map(({ heading, items }) => (
+        {view === "content" && grouped.map(({ heading, items }) => (
           <View key={heading} style={{ marginBottom: spacing.lg }}>
             {groupBy !== "recent" && (
               <Text style={styles.groupHeading}>{heading}</Text>

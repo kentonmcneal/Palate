@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { LoadError } from "../../components/LoadError";
 import { View, Text, StyleSheet, Alert, ScrollView, Share, Pressable } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -66,6 +67,7 @@ export default function WrappedTab() {
   const [areaPalates, setAreaPalates] = useState<AreaPalateSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [confettiKey, setConfettiKey] = useState(0);
+  const [error, setError] = useState<unknown>(null);
   const cardRef = useRef<View>(null);
   // All-time totals, for the hero. The week keeps its own section below.
   const [allTime, setAllTime] = useState<AnalyticsSummary | null>(null);
@@ -120,8 +122,12 @@ export default function WrappedTab() {
       // cohort, aspirational, top dishes) moved to the Wrapped Story.
       const ar = await getAreaPalates().catch(() => null);
       setAreaPalates(ar);
+      setError(null);
     } catch (e: any) {
-      console.warn("wrapped load", e?.message);
+      // A Wrapped that failed to load used to render the sample card under
+      // "No Wrapped yet", which tells somebody thirty visits in that the app
+      // has nothing on them.
+      setError(e ?? new Error("wrapped load failed"));
     }
   }, []);
 
@@ -292,7 +298,9 @@ export default function WrappedTab() {
         </View>
         <Spacer size={16} />
 
-        {data ? (
+        {!data && error ? (
+          <LoadError error={error} onRetry={() => { setError(null); void refresh(); }} />
+        ) : data ? (
           <>
             {/* 1. Black hero — identity + stats + top spots + top cuisines.
                 Identity name is now Curator/Forager/Steward/Anchor (or

@@ -5,18 +5,25 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Avatar } from "../components/Avatar";
 import { colors, spacing, type } from "../theme";
 import { listBlockedUsers, unblockUser, type BlockedProfile } from "../lib/moderation";
+import { loadView } from "../lib/load-state";
+import { LoadError } from "../components/LoadError";
 
 export default function BlockedAccounts() {
   const router = useRouter();
   const [rows, setRows] = useState<BlockedProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // A failed load here used to render "You haven't blocked anyone", which is
+  // not an empty state, it is a claim about who can see you. Of every screen
+  // in the app this is the worst one to be confidently wrong on.
+  const [error, setError] = useState<unknown>(null);
 
   const load = useCallback(async () => {
     try {
       setRows(await listBlockedUsers());
+      setError(null);
     } catch (e: any) {
-      console.warn("blocked load", e?.message);
+      setError(e ?? new Error("blocked load failed"));
     } finally {
       setLoading(false);
     }
@@ -40,6 +47,8 @@ export default function BlockedAccounts() {
     ]);
   }
 
+  const view = loadView({ loading, error, count: rows.length });
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -51,9 +60,13 @@ export default function BlockedAccounts() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        {loading && <View style={styles.center}><ActivityIndicator color={colors.red} /></View>}
+        {view === "loading" && <View style={styles.center}><ActivityIndicator color={colors.red} /></View>}
 
-        {!loading && rows.length === 0 && (
+        {view === "error" && (
+          <LoadError error={error} onRetry={() => { setLoading(true); setError(null); load(); }} />
+        )}
+
+        {view === "empty" && (
           <View style={styles.empty}>
             <Text style={type.subtitle}>You haven't blocked anyone.</Text>
             <Text style={[type.small, { marginTop: 8, lineHeight: 20 }]}>
@@ -62,7 +75,7 @@ export default function BlockedAccounts() {
           </View>
         )}
 
-        {!loading && rows.map((row) => {
+        {view === "content" && rows.map((row) => {
           const name = row.display_name || (row.email ? row.email.split("@")[0] : "Unknown");
           return (
             <View key={row.id} style={styles.row}>
