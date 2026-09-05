@@ -73,6 +73,17 @@ serve(async (req) => {
   try {
     // Master kill switch. Fails CLOSED: a missing row, or any error reading
     // it, means we do not send.
+    // Expire perishable rows BEFORE the switch check. With the sweep after
+    // it, nothing aged out while server_push was off, and flipping it on
+    // would have delivered weeks of "X joined" in one go.
+    await admin
+      .from("push_outbox")
+      .update({ error: "expired", attempts: MAX_ATTEMPTS })
+      .is("sent_at", null)
+      .lt("attempts", MAX_ATTEMPTS)
+      .not("expires_at", "is", null)
+      .lt("expires_at", new Date().toISOString());
+
     const { data: flag } = await admin
       .from("feature_flags")
       .select("enabled")

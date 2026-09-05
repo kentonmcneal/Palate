@@ -156,6 +156,28 @@ serve(async (req) => {
       if (!city_key || !city_label || lat == null || lng == null) {
         return json({ error: "missing_params" }, 400);
       }
+      // Any signed-in account could spend the whole daily Google budget here
+      // with made-up city keys (LIVE, code review). A city is refreshable on
+      // demand only if the app registered it in the last day AND its cache is
+      // empty or older than a day. Everything else waits for the cron.
+      const { data: known } = await admin
+        .from("featured_lists_active_cities")
+        .select("last_seen_at")
+        .eq("city_key", city_key)
+        .maybeSingle();
+      const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+      if (!known || new Date(known.last_seen_at).getTime() < dayAgo) {
+        return json({ ok: false, skipped: "city not registered" }, 200);
+      }
+      const { data: fresh } = await admin
+        .from("featured_lists_cache")
+        .select("refreshed_at")
+        .eq("city_key", city_key)
+        .gte("refreshed_at", new Date(dayAgo).toISOString())
+        .limit(1);
+      if (fresh && fresh.length > 0) {
+        return json({ ok: false, skipped: "cache is under a day old" }, 200);
+      }
       try {
         const result = await refreshCity(admin, city_key, city_label, lat, lng);
         return json({ ok: true, ...result });
@@ -282,7 +304,9 @@ async function refreshCity(
       // Side-effect: keep `restaurants` warm with the full classified row.
       // Stripping google_raw to keep upsert payload reasonable.
       const restaurantRows = eligibleRows.map(({ google_raw: _r, ...rest }) => rest);
-      void admin.from("restaurants").upsert(restaurantRows, {
+      // `void builder` never executed: postgrest-js only sends the request
+      // when the builder is awaited. Found by the code review.
+      await admin.from("restaurants").upsert(restaurantRows, {
         onConflict: "google_place_id",
       });
 

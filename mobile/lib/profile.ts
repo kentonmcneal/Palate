@@ -185,7 +185,12 @@ export async function hasCompletedOnboarding(): Promise<boolean> {
     .select("onboarding_complete, quiz_persona")
     .eq("id", user.id)
     .maybeSingle();
-  if (error) return true; // fail closed — never re-onboard on a transient error
+  if (error) {
+    // A transient error must not re-onboard a returning account, and must
+    // not skip onboarding for a brand-new one. The account's age decides.
+    const created = user.created_at ? new Date(user.created_at).getTime() : 0;
+    return Date.now() - created > 10 * 60 * 1000;
+  }
   return Boolean(data?.onboarding_complete) || data?.quiz_persona != null;
 }
 

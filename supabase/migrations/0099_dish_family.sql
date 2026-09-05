@@ -124,6 +124,9 @@ do $$
 declare n int;
 begin
   select count(*) into n from public.restaurants where cardinality(dish_family) > 0;
-  if n < 400 then raise exception '0099: only % rows got a dish family', n; end if;
+  -- Relative, so a from-scratch (empty) database still applies cleanly.
+  if (select count(*) from public.restaurants) >= 100 and n < 400 then
+    raise exception '0099: only % rows got a dish family', n;
+  end if;
   raise notice '0099: % rows carry a dish family', n;
 end $$;

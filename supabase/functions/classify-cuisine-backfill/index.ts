@@ -58,6 +58,10 @@ serve(async (req) => {
     .from("restaurants")
     .select("id, google_place_id, name, types, primary_type, price_level, user_rating_count, neighborhood, cuisine_region, cuisine_subregion, occasion_tags, classification_confidence")
     .is("cuisine_type", null)
+    // Judged once. Without this, a row the model abstained on stayed null and
+    // came back every ten minutes forever — a one-time $0.50 pass turned into
+    // a permanent 500-calls-a-day loop. Found by the code review.
+    .is("llm_backfill_at", null)
     .not("types", "is", null)
     .order("user_rating_count", { ascending: false, nullsFirst: false })
     .limit(limit);
@@ -81,17 +85,31 @@ serve(async (req) => {
         editorialSummary: null,
         reviewSnippets: [],
       };
-      const s = await classifyWithLLM(input, anthropic.messages.create.bind(anthropic.messages));
+      // Counted BEFORE the call: a call that throws is still billed, and an
+      // uncounted failure at temperature 0 repeats forever under the cap.
       processed++;
       await admin.rpc("record_api_usage", { p_day: day, p_action: "llm_cuisine_backfill", p_source: "anthropic" });
+      const stamp = new Date().toISOString();
+      let s;
+      try {
+        s = await classifyWithLLM(input, anthropic.messages.create.bind(anthropic.messages));
+      } catch (e) {
+        await admin.from("restaurants").update({ llm_backfill_at: stamp }).eq("id", row.id);
+        throw e;
+      }
 
       const conf = s.confidence?.cuisine_type ?? 0;
       if (sample.length < 15) sample.push({ name: row.name, cuisine: s.cuisine_type, confidence: conf });
-      if (!s.cuisine_type || conf < MIN_CONFIDENCE) { abstained++; continue; }
+      if (!s.cuisine_type || conf < MIN_CONFIDENCE) {
+        abstained++;
+        if (commit) await admin.from("restaurants").update({ llm_backfill_at: stamp }).eq("id", row.id);
+        continue;
+      }
       if (!commit) continue;
 
       const patch: Record<string, unknown> = {
         cuisine_type: s.cuisine_type,
+        llm_backfill_at: stamp,
         classifier_version: VERSION,
         classification_confidence: { ...(row.classification_confidence ?? {}), cuisine_type: conf, source: "llm_backfill" },
       };

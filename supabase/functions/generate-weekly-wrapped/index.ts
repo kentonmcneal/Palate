@@ -76,6 +76,13 @@ serve(async (req) => {
   }
 
   // Batch push (Expo accepts up to 100 per request)
+    // The one switch for server-sent push (0055). This function posted
+    // straight to Expo and ignored it: a second push path that bypassed quiet
+    // hours, the cap and every preference. Found by the code review.
+    {
+      const { data: flag } = await admin.from("feature_flags").select("enabled").eq("key", "server_push").maybeSingle();
+      if (!flag?.enabled) return json({ generated, pushed: 0, skipped: "server_push disabled", users: ids.length });
+    }
   let pushed = 0;
   for (let i = 0; i < tokens.length; i += 100) {
     const batch = tokens.slice(i, i + 100).map((to) => ({

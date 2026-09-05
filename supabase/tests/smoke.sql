@@ -49,6 +49,22 @@ select set_config(
 -- Each of these must execute its main branch without raising. A 42702-class
 -- error here fails the build, which is the entire point of the file.
 select count(*) from public.get_friend_profile_snapshot('00000000-0000-0000-0000-0000000000b2');
+-- Added by the 2026-09-05 review: every reader written since 0077, executed
+-- on its main branch. friends_leaderboard is plpgsql with `return query`,
+-- the exact shape this file exists to catch, and nothing called it.
+select count(*) from public.list_feed(5);
+select count(*) from public.friends_leaderboard();
+select count(*) from public.list_friendships('accepted');
+select count(*) from public.list_friendships('pending_in');
+select count(*) from public.list_blocked();
+select count(*) from public.gmail_connection_status();
+select count(*) from public.compatible_people(5);
+select count(*) from public.cuisines_near(35.098, -89.841, 8000);
+select count(*) from public.dishes_near(35.098, -89.841, 8000);
+select count(*) from public.restaurants_by_cuisine(35.098, -89.841, 'american', 8000, 5);
+select count(*) from public.restaurants_by_dish(35.098, -89.841, 'tacos', 8000, 5);
+select count(*) from public.place_heat(35.098, -89.841, 6000, 5);
+
 select count(*) from public.get_friend_profile_snapshot('00000000-0000-0000-0000-0000000000a1');
 select public.friend_taste_features('00000000-0000-0000-0000-0000000000b2');
 select public.friend_taste_features_batch(array['00000000-0000-0000-0000-0000000000b2']::uuid[]);

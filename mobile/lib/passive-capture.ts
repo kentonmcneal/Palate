@@ -49,6 +49,9 @@ export async function startPassiveCaptureIfEnabled(): Promise<StartResult> {
     return { started: false, reason: "native-module-unavailable" };
   }
   if (!(await isFlagEnabled(PASSIVE_CAPTURE_FLAG))) {
+    // Off means off on the device too, not only in the JS pipeline. Without
+    // this the native manager kept running on every phone that had started.
+    PalateVisitMonitor.stopMonitoring();
     return { started: false, reason: "flag-off" };
   }
   if (PalateVisitMonitor.authorizationStatus() !== "always") {

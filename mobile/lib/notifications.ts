@@ -88,7 +88,10 @@ export async function enableSundayWrappedReminder(): Promise<{ ok: boolean; reas
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
       weekday: 1, // 1 = Sunday
-      hour: 9,
+      // 10, not 9: the cron writes Wrapped at 14:00 UTC, which is 09:00 in
+      // Chicago and 10:00 in New York. At 9 local, anyone east of Chicago
+      // was told it was ready before it existed.
+      hour: 10,
       minute: 0,
     },
   });

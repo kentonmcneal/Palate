@@ -1,4 +1,6 @@
 import { Stack, useRouter, useSegments, type ErrorBoundaryProps } from "expo-router";
+import { invalidatePersonalSignal } from "../lib/personal-signal";
+import { invalidateCompatibilityCache } from "../lib/recommendation";
 import * as ScreenCapture from "expo-screen-capture";
 import {
   registerConfirmCategory,
@@ -116,7 +118,7 @@ export default function RootLayout() {
 
   const [repairVisible, setRepairVisible] = useState(false);
 
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular, Inter_500Medium, Inter_600SemiBold,
     Inter_700Bold, Inter_800ExtraBold,
   });
@@ -149,6 +151,11 @@ export default function RootLayout() {
       });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
       setSession(s);
+      // Module-level caches are per process, not per account: a second
+      // sign-in on the same phone inherited the first account's visits and
+      // dismissals. Cleared on every auth transition.
+      invalidatePersonalSignal();
+      invalidateCompatibilityCache();
       // Register push token whenever a session shows up — the first-run path
       // (permission prompt + token fetch) is the one that crashed new accounts.
       if (s?.user) void registerPushToken().catch((e) => captureError(e, { at: "registerPushToken" }));
@@ -434,15 +441,16 @@ export default function RootLayout() {
 
       // After the handle, before the tabs: say what the notifications are,
       // then ask. Only ever once per install (lib/notification-primer.ts).
-      if (needsPrimer && !isPrimerSeen()
-          && seg0 !== "onboarding" && seg0 !== "claim-username"
-          && seg0 !== "notifications-intro" && seg0 !== "passive-capture-intro") {
+      // Only from the tabs. An exclusion list missed /import-email and yanked
+      // brand-new users out of onboarding into the primer, then the tabs.
+      if (needsPrimer && !isPrimerSeen() && seg0 === "(tabs)") {
         router.replace("/notifications-intro");
       }
     }
   }, [session, loaded, segments, needsUsername, needsPrimer]);
 
-  if (!loaded || !fontsLoaded) {
+  // A font that fails to load is not a reason to show a spinner forever.
+  if (!loaded || (!fontsLoaded && !fontError)) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.paper }}>
         <ActivityIndicator color={colors.red} />

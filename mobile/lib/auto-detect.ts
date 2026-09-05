@@ -20,6 +20,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { router } from "expo-router";
 import { getCurrentLocation, classifyAccuracy, requestForegroundPermission } from "./location";
+import { getOrFetchNearby } from "./nearby-cache";
 import { nearbyRestaurants } from "./places";
 import { recentlyPrompted } from "./visits";
 
@@ -66,7 +67,9 @@ export async function checkForAutoVisitOnForeground(): Promise<void> {
     if (!loc) return;
     if (classifyAccuracy(loc.accuracy) === "low") return;
 
-    const places = await nearbyRestaurants(loc.lat, loc.lng, 250).catch(() => []);
+    // Same 150m/5-minute cache Home and Discover share. A foreground every
+    // 90 seconds at the same spot used to be a paid call every 90 seconds.
+    const places = await getOrFetchNearby(loc.lat, loc.lng, 250, nearbyRestaurants).catch(() => []);
     if (!places.length) return;
 
     // Pick the closest place we can compute a distance for.

@@ -37,6 +37,13 @@ serve(async (req) => {
     if (!feedEventId) return json({ error: "feed_event_id required" }, 400);
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    // The one switch for server-sent push (0055). This function posted
+    // straight to Expo and ignored it: a second push path that bypassed quiet
+    // hours, the cap and every preference. Found by the code review.
+    {
+      const { data: flag } = await admin.from("feature_flags").select("enabled").eq("key", "server_push").maybeSingle();
+      if (!flag?.enabled) return json({ skipped: "server_push disabled", sent: 0 });
+    }
 
     // Look up the event + caller display
     const { data: event, error: eErr } = await admin
