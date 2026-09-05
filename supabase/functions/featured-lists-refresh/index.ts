@@ -204,8 +204,21 @@ serve(async (req) => {
       // goes cold until somebody stands there again. Each city here is ~15
       // paid Text Searches a night.
       const gpsCutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
-      const cities = (allCities ?? []).filter((c) =>
+      const seenRecently = (allCities ?? []).filter((c) =>
         !c.city_key.startsWith("gps:") || new Date(c.last_seen_at).getTime() >= gpsCutoff);
+
+      // Weekly per city, not nightly. LIVE on 2026-09-05: the nightly run
+      // spent 189 Text Searches (~$6) rebuilding "Top 10 Pizza" lists that do
+      // not change day to day. A city is rebuilt only when its cache is older
+      // than six days; the client already treats anything under 36 hours as
+      // fresh and everything else as stale-but-usable, so nobody sees a gap.
+      const weekAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: recent } = await admin
+        .from("featured_lists_cache")
+        .select("city_key")
+        .gte("refreshed_at", weekAgo);
+      const freshKeys = new Set(((recent ?? []) as { city_key: string }[]).map((r) => r.city_key));
+      const cities = seenRecently.filter((c) => !freshKeys.has(c.city_key));
 
       const results = [];
       let budgetExhausted = false;
