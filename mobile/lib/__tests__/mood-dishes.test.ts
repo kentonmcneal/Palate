@@ -42,3 +42,39 @@ describe("dish moods", () => {
     expect(moodLabel("italian")).toBe("Italian");
   });
 });
+
+// The founder's report, three times: "the toggles are still not shuffling
+// suggestions." Two causes, one per chip class.
+describe("a chip must change the list", () => {
+  const place = (name: string, cuisine: string, visited = false, dish: string[] = []) =>
+    ({ name, cuisine, dish_family: dish, format_class: "casual_dining", visited });
+
+  it("Somewhere new re-ranks when nothing is visited, instead of returning the same order", () => {
+    // Everything nearby is unvisited, so filtering on "not visited" changed
+    // nothing and the top three stayed put.
+    const list = [
+      place("Usual American", "american"),
+      place("Usual Burger", "american"),
+      place("Thai Place", "thai"),
+      place("Ethiopian Place", "african"),
+    ];
+    const { items, matched } = applyMood(list, "mood:new", ["american"]);
+    expect(matched).toBe(true);
+    expect(items[0].name).not.toBe("Usual American");
+    expect(["Thai Place", "Ethiopian Place"]).toContain(items[0].name);
+  });
+
+  it("a dish chip with one local match still reports a short list, so the card tops it up", () => {
+    const list = [place("Taqueria", "mexican", false, ["tacos"]), place("Diner", "american")];
+    const { items, matched } = applyMood(list, dishMood("tacos"), []);
+    expect(matched).toBe(true);
+    expect(items).toHaveLength(1); // fewer than three → the card asks the catalogue
+  });
+
+  it("a dish chip with no local match asks the catalogue rather than showing the default", () => {
+    const list = [place("Diner", "american"), place("Grill", "american")];
+    const { items, matched } = applyMood(list, dishMood("ramen"), []);
+    expect(matched).toBe(false);
+    expect(items).toHaveLength(2); // unchanged list, but matched:false is the signal
+  });
+});

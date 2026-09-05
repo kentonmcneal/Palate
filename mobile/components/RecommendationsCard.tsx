@@ -238,8 +238,12 @@ export function RecommendationsCard({
     // The catalogue knows better. Ask it for that cuisine, score what comes
     // back on the same graph, and show it. A low match is the honest answer to
     // "I never eat this", and moodContextNote says so in words.
-    const wantsCatalogue =
-      typeof mood === "string" && !isIntentMood(mood) && !isSurprise(mood) && !matched;
+    // Top up from the catalogue whenever the pool cannot fill the three slots
+    // — not only when it matches nothing. A cuisine with one place nearby used
+    // to show one card and look broken; there are usually a dozen more within
+    // reach that the 3km Google fetch never saw.
+    const isCatalogueMood = typeof mood === "string" && !isIntentMood(mood) && !isSurprise(mood);
+    const wantsCatalogue = isCatalogueMood && (!matched || items.length < 3);
 
     if (wantsCatalogue && scoringRef.current) {
       const { graph, here, personal } = scoringRef.current;
@@ -250,10 +254,17 @@ export function RecommendationsCard({
       void fetchCandidates
         .then((rows) => {
           if (!alive) return;
-          const scored = rows
-            .filter((r) => !personal?.dislikes.placeIds.has(r.google_place_id) && !hiddenRef.current.has(r.google_place_id))
-            .map((r) => toRecommendation(r, graph, here, personal))
-            .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+          // The pool's own matches keep their place at the front — they are
+          // closer and already scored — and the catalogue fills in behind.
+          const poolIds = new Set((matched ? items : []).map((r) => r.google_place_id));
+          const scored = [
+            ...(matched ? items : []),
+            ...rows
+              .filter((r) => !poolIds.has(r.google_place_id))
+              .filter((r) => !personal?.dislikes?.placeIds.has(r.google_place_id) && !hiddenRef.current.has(r.google_place_id))
+              .map((r) => toRecommendation(r, graph, here, personal))
+              .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0)),
+          ];
           if (scored.length === 0) {
             // Genuinely nothing of that cuisine within reach. That is a real
             // answer and it is not the same as a failed filter, so it gets its
@@ -269,15 +280,18 @@ export function RecommendationsCard({
         })
         .catch(() => {
           if (!alive) return;
+          // Saying nothing here shows the same three places as "Anything",
+          // which is indistinguishable from a chip that does nothing.
           setRecs(items.slice(0, 3));
-          setMoodNote(moodFallbackNote(mood));
+          setMoodCount(null);
+          setMoodNote(`Couldn't reach ${moodLabel(mood)} nearby. These are the regular picks.`);
         })
         .finally(() => { if (alive) setCatalogueLoading(false); });
       return () => { alive = false; };
     }
 
     setRecs(items.slice(0, 3));
-    setMoodCount(mood && matched ? items.length : mood ? 0 : null);
+    setMoodCount(mood ? (matched ? items.length : 0) : null);
     const top = items.length > 0 ? items[0].matchScore ?? null : null;
     // "Nothing matched" and "these matched and are not your thing" are
     // different things to say, and saying the second is what lets somebody ask
@@ -323,7 +337,7 @@ export function RecommendationsCard({
           A FIRST READ ON YOUR PALATE
         </Text>
       )}
-      {typeof mood === "string" && !isIntentMood(mood) && !isSurprise(mood) && (
+      {typeof mood === "string" && (
         <Text style={styles.moodHead}>
           {moodLabel(mood)} near you
           {moodCount != null && !catalogueLoading ? ` · ${moodCount} ${moodCount === 1 ? "place" : "places"}` : ""}
@@ -380,26 +394,37 @@ function RecRow({ rec, onHide }: { rec: RestaurantRecommendation; onHide: () => 
   }
 
   return (
-    <View style={[styles.row, stack && styles.rowStacked]}>
-      {/* The row body is the tap target — StretchPick has always opened place
-          detail on tap and this card did not, which read as a dead card. */}
+    <View style={styles.row}>
+      {/* The name gets the full width. It used to share the line with the
+          match badge AND a stacked ✕/Save column, which squeezed it to about
+          half the screen: "Huey's Southwind" wrapped to two lines and "Waffle
+          Mania winners" truncated mid-word. Actions moved to their own row. */}
       <TapCard
-        style={{ flex: 1 }}
         onPress={openDetail}
         accessibilityRole="button"
         accessibilityLabel={`${rec.name}. Open place details.`}
       >
-        <View style={[styles.nameRow, stack && styles.nameRowStacked]}>
-          {/* numberOfLines lifts with scale — two lines at 100% is generous,
-              at 235% it is a truncated word. */}
+        <View style={styles.titleRow}>
           <Text style={styles.name} numberOfLines={stack ? 4 : 2}>{rec.name}</Text>
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              askNotInterested({ google_place_id: rec.google_place_id, name: rec.name }, { surface: "home_recs", onDone: onHide });
+            }}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel={`Not interested in ${rec.name}`}
+            style={styles.hideBtn}
+          >
+            <Text style={styles.hideText}>✕</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.metaRow}>
           {rec.matchScore != null && (
             <View style={[
               styles.matchBadge,
-              {
-                backgroundColor: matchScoreTint(rec.matchScore),
-                borderColor: matchScoreColor(rec.matchScore),
-              },
+              { backgroundColor: matchScoreTint(rec.matchScore), borderColor: matchScoreColor(rec.matchScore) },
             ]}>
               <AnimatedNumber
                 value={rec.matchScore}
@@ -410,15 +435,15 @@ function RecRow({ rec, onHide }: { rec: RestaurantRecommendation; onHide: () => 
               />
             </View>
           )}
+          <Text style={styles.sub} numberOfLines={1}>
+            {[
+              rec.cuisine ? capitalize(rec.cuisine) : null,
+              rec.distanceKm != null ? formatDistance(rec.distanceKm) : null,
+            ].filter(Boolean).join(" · ") || "Nearby"}
+          </Text>
         </View>
-        <Text style={styles.sub}>
-          {[
-            rec.cuisine ? capitalize(rec.cuisine) : null,
-            rec.distanceKm != null ? formatDistance(rec.distanceKm) : null,
-          ].filter(Boolean).join(" · ") || "Nearby"}
-        </Text>
-        <View style={styles.mapsRow}>
-          {/* Nested pressables stop propagation so Maps never opens detail. */}
+
+        <View style={[styles.actionRow, stack && styles.actionRowStacked]}>
           <Pressable
             onPress={(e) => { e.stopPropagation(); openApple(); }}
             style={styles.mapsBtn}
@@ -433,34 +458,21 @@ function RecRow({ rec, onHide }: { rec: RestaurantRecommendation; onHide: () => 
           >
             <Text style={styles.mapsBtnText} maxFontSizeMultiplier={FONT_CAP.chrome}>Google Maps</Text>
           </Pressable>
+          <View style={{ flex: 1 }} />
+          <View>
+            <Pressable
+              onPress={(e) => { e.stopPropagation(); save(); }}
+              style={[styles.saveBtn, saved && styles.saveBtnDone]}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.saveText, saved && styles.saveTextDone]} maxFontSizeMultiplier={FONT_CAP.chrome}>
+                {saving ? "…" : saved ? "Saved" : "Save"}
+              </Text>
+            </Pressable>
+            <SaveBurst fire={burstKey} />
+          </View>
         </View>
       </TapCard>
-      <View style={{ alignItems: "flex-end", gap: 8 }}>
-        {/* "Not interested". The TikTok gesture: gone for good for you, and
-            the reason you give is what the app learns from. */}
-        <Pressable
-          onPress={(e) => {
-            e.stopPropagation();
-            askNotInterested({ google_place_id: rec.google_place_id, name: rec.name }, { surface: "home_recs", onDone: onHide });
-          }}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel={`Not interested in ${rec.name}`}
-          style={styles.hideBtn}
-        >
-          <Text style={styles.hideText}>✕</Text>
-        </Pressable>
-        <Pressable
-          onPress={(e) => { e.stopPropagation(); save(); }}
-          style={[styles.saveBtn, saved && styles.saveBtnDone]}
-          accessibilityRole="button"
-        >
-          <Text style={[styles.saveText, saved && styles.saveTextDone]} maxFontSizeMultiplier={FONT_CAP.chrome}>
-            {saving ? "…" : saved ? "Saved" : "Save"}
-          </Text>
-        </Pressable>
-        <SaveBurst fire={burstKey} />
-      </View>
     </View>
   );
 }
@@ -493,8 +505,6 @@ function capitalize(s: string): string {
 }
 
 const styles = StyleSheet.create({
-  rowStacked: { flexDirection: "column", alignItems: "stretch", gap: 10 },
-  nameRowStacked: { flexDirection: "column", alignItems: "flex-start", gap: 6 },
   moodNote: { fontSize: 12, color: colors.mute, marginTop: 10, lineHeight: 17 },
   moodHead: { ...type.micro, marginTop: 4 },
   card: {
@@ -522,15 +532,15 @@ const styles = StyleSheet.create({
   emptyGlyph: { fontSize: 22, color: colors.line },
 
   row: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderTopColor: colors.line,
     borderTopWidth: 1,
-    gap: 12,
   },
-  nameRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
-  name: { flex: 1, fontSize: 16, fontWeight: "700", color: colors.ink },
+  titleRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
+  actionRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
+  actionRowStacked: { flexDirection: "column", alignItems: "stretch", gap: 8 },
+  name: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.ink, letterSpacing: -0.3 },
   matchBadge: {
     paddingHorizontal: 8, paddingVertical: 4,
     borderRadius: 999,
@@ -538,10 +548,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.redTintBorder,
   },
   matchBadgeText: { fontSize: 11, fontWeight: "800", color: colors.red },
-  sub: { ...type.small, marginTop: 2 },
+  sub: { ...type.small, flexShrink: 1 },
   reason: { fontSize: 13, color: colors.mute, marginTop: 6, fontStyle: "italic", lineHeight: 18 },
 
-  mapsRow: { flexDirection: "row", gap: 6, marginTop: 10 },
   mapsBtn: {
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
     backgroundColor: colors.faint,

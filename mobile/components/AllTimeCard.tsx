@@ -12,6 +12,13 @@ import type { PrimaryIdentity } from "../lib/palate/palateTypes";
 import { loadCompatiblePeople, compatibilityLine, type CompatiblePerson } from "../lib/social";
 import { cuisineLabel } from "../lib/mood";
 import { Avatar } from "./Avatar";
+import { DonutChart, type DonutSlice } from "./charts/DonutChart";
+
+// Matches WrappedCharts so the ring on Home and the ring on Wrapped are the
+// same chart of the same data, not two designs of it.
+const CUISINE_PALETTE = [
+  colors.red, "#FF6B45", "#FF9466", "#FFB68C", "#1F1F1F", "#555555", "#9A9A9A",
+];
 
 // ============================================================================
 // AllTimeCard — the whole history, under the picks, on Home.
@@ -65,7 +72,12 @@ export function AllTimeCard() {
   if (failed || !a || a.totalVisits === 0) return null;
 
   const cuisines = a.cuisineBreakdown.filter((c) => c.cuisine && c.cuisine !== "other").slice(0, 5);
-  const max = Math.max(1, ...cuisines.map((c) => c.count));
+  // Same palette as the Wrapped donut, so the two charts read as one app.
+  const slices: DonutSlice[] = cuisines.map((c, i) => ({
+    label: cuisineLabel(c.cuisine),
+    value: c.count,
+    color: CUISINE_PALETTE[i % CUISINE_PALETTE.length],
+  }));
   const blurb = identity ? IDENTITY_BLURB[identity] : null;
 
   return (
@@ -87,17 +99,24 @@ export function AllTimeCard() {
         </View>
       </Pressable>
 
-      {cuisines.length > 0 && (
-        <View style={styles.bars}>
-          {cuisines.map((c) => (
-            <View key={c.cuisine} style={styles.barRow}>
-              <Text style={styles.barLabel} numberOfLines={1}>{cuisineLabel(c.cuisine)}</Text>
-              <View style={styles.barTrack}>
-                <View style={[styles.barFill, { width: `${Math.max(6, Math.round((c.count / max) * 100))}%` }]} />
+      {slices.length > 0 && (
+        <View style={styles.chartRow}>
+          <DonutChart
+            data={slices}
+            size={124}
+            thickness={16}
+            centerValue={String(a.totalVisits)}
+            centerLabel={a.totalVisits === 1 ? "VISIT" : "VISITS"}
+          />
+          <View style={styles.legend}>
+            {slices.map((sl, i) => (
+              <View key={sl.label} style={styles.legendRow}>
+                <View style={[styles.dot, { backgroundColor: sl.color }]} />
+                <Text style={styles.legendName} numberOfLines={1}>{sl.label}</Text>
+                <Text style={styles.legendPct}>{Math.round((cuisines[i]?.pct ?? 0) * 100)}%</Text>
               </View>
-              <Text style={styles.barCount}>{c.count}</Text>
-            </View>
-          ))}
+            ))}
+          </View>
         </View>
       )}
 
@@ -108,39 +127,27 @@ export function AllTimeCard() {
         </View>
       )}
 
-      <View style={styles.columns}>
-        <View style={styles.col}>
-          <Text style={styles.colHead}>Your cuisines</Text>
-          {cuisines.slice(0, 3).map((c, i) => (
-            <Text key={c.cuisine} style={styles.colLine} numberOfLines={1}>
-              {i + 1}. {cuisineLabel(c.cuisine)} <Text style={styles.colMeta}>{Math.round(c.pct * 100)}%</Text>
-            </Text>
-          ))}
-          {cuisines.length === 0 && <Text style={styles.colMeta}>Not enough tagged yet.</Text>}
-        </View>
-        <View style={styles.colRule} />
-        <View style={styles.col}>
-          <Text style={styles.colHead}>Closest palates</Text>
-          {people.length === 0 && (
-            <Text style={styles.colMeta}>Nobody overlaps you yet.</Text>
-          )}
-          {people.map((p) => (
-            <Pressable
-              key={p.id}
-              onPress={() => router.push(`/profile/${p.id}` as never)}
-              style={styles.person}
-              accessibilityRole="button"
-            >
-              <Avatar uri={p.avatar_url} name={p.display_name} size={24} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.personName} numberOfLines={1}>
-                  {p.display_name || (p.username ? `@${p.username}` : "Someone")}
-                </Text>
-                <Text style={styles.personLine} numberOfLines={1}>{compatibilityLine(p)}</Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
+      <View style={styles.people}>
+        <Text style={styles.colHead}>Closest palates</Text>
+        {people.length === 0 && (
+          <Text style={styles.colMeta}>Nobody overlaps you yet.</Text>
+        )}
+        {people.map((p) => (
+          <Pressable
+            key={p.id}
+            onPress={() => router.push(`/profile/${p.id}` as never)}
+            style={styles.person}
+            accessibilityRole="button"
+          >
+            <Avatar uri={p.avatar_url} name={p.display_name} size={26} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.personName} numberOfLines={1}>
+                {p.display_name || (p.username ? `@${p.username}` : "Someone")}
+              </Text>
+              <Text style={styles.personLine} numberOfLines={1}>{compatibilityLine(p)}</Text>
+            </View>
+          </Pressable>
+        ))}
       </View>
     </View>
   );
@@ -163,21 +170,18 @@ const styles = StyleSheet.create({
   stats: { flexDirection: "row", gap: 12, marginTop: 10 },
   statV: { fontSize: 20, fontWeight: "800", color: colors.ink, letterSpacing: -0.4 },
   statL: { ...type.micro, marginTop: 2, fontSize: 10 },
-  bars: { marginTop: 14, gap: 6 },
-  barRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  barLabel: { width: 92, fontSize: 12, fontWeight: "600", color: colors.ink },
-  barTrack: { flex: 1, height: 10, borderRadius: 5, backgroundColor: colors.line, overflow: "hidden" },
-  barFill: { height: 10, borderRadius: 5, backgroundColor: colors.red },
-  barCount: { width: 24, textAlign: "right", fontSize: 12, fontWeight: "700", color: colors.mute },
+  chartRow: { flexDirection: "row", alignItems: "center", gap: 14, marginTop: 14 },
+  legend: { flex: 1, gap: 7 },
+  legendRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  dot: { width: 9, height: 9, borderRadius: 4.5 },
+  legendName: { flex: 1, fontSize: 13, fontWeight: "600", color: colors.ink },
+  legendPct: { fontSize: 12, fontWeight: "700", color: colors.mute },
   identity: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.line },
   youAre: { fontSize: 15, color: colors.ink },
   identityName: { fontWeight: "800", color: colors.red },
   tagline: { ...type.small, marginTop: 2 },
-  columns: { flexDirection: "row", gap: 12, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.line },
-  col: { flex: 1, gap: 6 },
-  colRule: { width: 1, backgroundColor: colors.line },
+  people: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.line, gap: 8 },
   colHead: { ...type.micro, fontSize: 10, marginBottom: 2 },
-  colLine: { fontSize: 13, fontWeight: "600", color: colors.ink },
   colMeta: { fontSize: 12, fontWeight: "500", color: colors.mute },
   person: { flexDirection: "row", alignItems: "center", gap: 8 },
   personName: { fontSize: 13, fontWeight: "700", color: colors.ink },

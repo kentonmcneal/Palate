@@ -185,12 +185,28 @@ export function applyMood<T extends MoodCandidate>(
   // fallback it was not needed — in exactly the sparse area it was built for.
   if (list.length === 0) return { items: list, matched: isIntentMood(mood) || isSurprise(mood) };
 
+  if (mood === SOMEWHERE_NEW) {
+    // Filtering to "not visited" changes nothing when you have not been to
+    // anything nearby, which is almost everyone — so the chip returned the
+    // same three places and read as dead. It is a re-rank, not a filter:
+    // unvisited first, and within that, the cuisines you eat LEAST, because
+    // "somewhere new" means new to you, not merely unlogged.
+    const habit = new Set(habitualCuisines.map(normalizeCuisine));
+    const unvisited = list.filter((r) => r.visited !== true);
+    const pool = unvisited.length > 0 ? unvisited : list;
+    const out = [...pool].sort((a, b) => {
+      const aFamiliar = habit.has(normalizeCuisine(a.cuisine)) ? 1 : 0;
+      const bFamiliar = habit.has(normalizeCuisine(b.cuisine)) ? 1 : 0;
+      return aFamiliar - bFamiliar;
+    });
+    return { items: out, matched: out.length > 0 };
+  }
+
   if (isIntentMood(mood)) {
     const out = list.filter((r) => {
       const fmt = normalizeCuisine(r.format_class);
       if (mood === QUICK) return QUICK_FORMATS.has(fmt);
-      if (mood === SIT_DOWN) return SIT_DOWN_FORMATS.has(fmt);
-      return r.visited !== true; // SOMEWHERE_NEW
+      return SIT_DOWN_FORMATS.has(fmt); // SIT_DOWN
     });
     return out.length > 0 ? { items: out, matched: true } : { items: list, matched: false };
   }
