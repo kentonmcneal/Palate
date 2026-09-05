@@ -5,6 +5,7 @@ import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import { useRouter } from "expo-router";
 import { colors, spacing, type, card, shadow } from "../theme";
 import { getEffectiveLocation } from "../lib/browsing-location";
+import { loadPersonalSignal } from "../lib/personal-signal";
 import { placeHeat, heatHeadline, crowdSize, type HotPlace } from "../lib/place-heat";
 
 // ============================================================================
@@ -45,8 +46,11 @@ export function HypeMap() {
       try {
         const here = await getEffectiveLocation();
         if (!here) { if (alive) setPlaces([]); return; }
-        const hot = await placeHeat({ lat: here.lat, lng: here.lng });
-        if (alive) setPlaces(hot);
+        const [hot, sig] = await Promise.all([
+          placeHeat({ lat: here.lat, lng: here.lng }),
+          loadPersonalSignal().catch(() => null),
+        ]);
+        if (alive) setPlaces(hot.filter((p) => !sig?.dislikes.placeIds.has(p.google_place_id)));
       } catch {
         if (alive) setFailed(true);
       }

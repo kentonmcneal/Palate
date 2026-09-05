@@ -132,10 +132,17 @@ serve(async (req) => {
       .order("user_rating_count", { ascending: false, nullsFirst: false })
       .limit(MAX_CANDIDATES);
 
+    // A place any member said "Not interested" to is not a group pick.
+    const { data: dis } = await admin
+      .from("place_dislikes")
+      .select("google_place_id")
+      .in("user_id", memberIds);
+    const hidden = new Set(((dis ?? []) as { google_place_id: string }[]).map((d) => d.google_place_id));
+
     const candidates = ((places ?? []) as (Candidate & {
       chain_name: string | null;
       is_chain_brand: boolean | null;
-    })[]).filter((c) => !c.chain_name && c.is_chain_brand !== true);
+    })[]).filter((c) => !c.chain_name && c.is_chain_brand !== true && !hidden.has(c.google_place_id));
 
     if (candidates.length === 0) {
       // Honest, specific, and NOT a silent fallback to a paid lookup.

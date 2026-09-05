@@ -147,6 +147,9 @@ export async function buildFeaturedLists(opts: {
   const visitedIds = await loadUserVisitedIds();
 
   // 6. Map cache rows → FeaturedList[]
+  // "Not interested" applies here too: these lists are the landing screen
+  // for the Friday and Saturday pings.
+  const hiddenIds = (await loadPersonalSignal().catch(() => null))?.dislikes.placeIds ?? null;
   const lists: FeaturedList[] = [];
   for (const row of rows as any[]) {
     const meta = META_BY_SLUG.get(row.category_slug);
@@ -158,7 +161,7 @@ export async function buildFeaturedLists(opts: {
     const cafeList = row.category_slug === "cafes" || row.category_slug === "brunch";
     const restaurants = filterRecommendable(
       (row.restaurants ?? []) as RestaurantInput[],
-      { cafes: cafeList ? "allow" : "gems-only" },
+      { cafes: cafeList ? "allow" : "gems-only", hidden: hiddenIds },
     );
     const visited = restaurants.filter((r) => visitedIds.has(r.google_place_id)).length;
     lists.push({
@@ -221,7 +224,7 @@ async function loadUserVisitedIds(): Promise<Set<string>> {
 }
 
 // Bust the cache when the user logs a new visit / item rating.
-import { onPersonalSignalInvalidate } from "./personal-signal";
+import { onPersonalSignalInvalidate, loadPersonalSignal } from "./personal-signal";
 import { filterRecommendable } from "./recommendation/eligibility";
 onPersonalSignalInvalidate(() => {
   visitedIdsCache = null;

@@ -122,7 +122,15 @@ export async function loadPersonalSignal(): Promise<PersonalSignal> {
 
       // "Not interested", separately: it must not take the rest of the
       // signal down with it if the table read fails.
-      sig.dislikes = buildDislikeProfile(await listDislikes().catch(() => []));
+      try {
+        sig.dislikes = buildDislikeProfile(await listDislikes());
+      } catch {
+        // Fail open for this load (recommendations still render) but do not
+        // let the failure stick: retry on the next call rather than caching
+        // an empty exclusion set for the session.
+        sig.dislikes = EMPTY_DISLIKES;
+        setTimeout(() => invalidatePersonalSignal(), 30_000);
+      }
 
       // Visits — both indexes
       for (const row of (visitsRes.data ?? []) as any[]) {

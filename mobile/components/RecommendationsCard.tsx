@@ -15,7 +15,7 @@ import {
 import { computeTasteVector } from "../lib/taste-vector";
 import { distanceKm, formatDistance } from "../lib/match-score";
 import { getEffectiveLocation, useBrowsingCity } from "../lib/browsing-location";
-import { loadPersonalSignal } from "../lib/personal-signal";
+import { loadPersonalSignal, onPersonalSignalInvalidate } from "../lib/personal-signal";
 import { nearbyRestaurants } from "../lib/places";
 import { getOrFetchNearby } from "../lib/nearby-cache";
 import { assembleGraph, getCompatibility } from "../lib/recommendation";
@@ -204,10 +204,19 @@ export function RecommendationsCard({
 
   // "Not interested" from a row: gone from this list now, and from every
   // surface on the next load (the signal cache was invalidated).
+  // Ids hidden this session, so the catalogue fallback (which re-fetches
+  // when allRecs changes) cannot bring a just-hidden row straight back
+  // before the signal cache has reloaded.
+  const hiddenRef = useRef(new Set<string>());
   function hidePlace(placeId: string) {
+    hiddenRef.current.add(placeId);
     setAllRecs((cur) => (cur ? cur.filter((r) => r.google_place_id !== placeId) : cur));
     setRecs((cur) => (cur ? cur.filter((r) => r.google_place_id !== placeId) : cur));
   }
+  // Reload when the personal signal changes: a visit logged, a place hidden
+  // or restored anywhere in the app. Home's own focus reload did not reach
+  // this component.
+  useEffect(() => onPersonalSignalInvalidate(() => { void load(); }), [load]);
 
   // A mood filters the SAME personally-ranked list. The compat score still
   // comes from the user's own history — we only restrict which venues are
@@ -239,7 +248,7 @@ export function RecommendationsCard({
         .then((rows) => {
           if (!alive) return;
           const scored = rows
-            .filter((r) => !personal?.dislikes.placeIds.has(r.google_place_id))
+            .filter((r) => !personal?.dislikes.placeIds.has(r.google_place_id) && !hiddenRef.current.has(r.google_place_id))
             .map((r) => toRecommendation(r, graph, here, personal))
             .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
           if (scored.length === 0) {

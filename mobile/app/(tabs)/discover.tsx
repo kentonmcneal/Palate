@@ -242,7 +242,9 @@ export default function DiscoverTab() {
     setSearching(true);
     try {
       const results = await searchRestaurants(query.trim(), here ?? undefined);
-      const ranked = results.map((p) => buildRankedRestaurant(graph, toInput(p), { here: here ?? undefined, now: new Date() }));
+      const ranked = results
+        .filter((p) => !personal?.dislikes.placeIds.has(p.google_place_id) && !hiddenIds.has(p.google_place_id))
+        .map((p) => buildRankedRestaurant(graph, toInput(p), { here: here ?? undefined, now: new Date() }));
       setSearchResults(ranked);
     } catch {
       setSearchResults([]);
@@ -291,10 +293,17 @@ export default function DiscoverTab() {
   // canonical compatibility cache (in lib/recommendation) makes that true.
   const graph: TasteGraph = useMemo(() => assembleGraph(vector, personal), [vector, personal]);
 
+  // Hidden this session from any card on any tab. Every tab reads allRanked,
+  // so filtering here removes the place everywhere at once; the personal
+  // signal carries it permanently from the next load.
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const hideId = useCallback((id: string) => setHiddenIds((s) => new Set(s).add(id)), []);
   const allRanked = useMemo(() => {
     if (!here) return [];
-    return allNearby.map((r) => buildRankedRestaurant(graph, r, { here, now: new Date(), mode: "browsing" }));
-  }, [allNearby, graph, here]);
+    return allNearby
+      .filter((r) => !hiddenIds.has(r.google_place_id) && !personal?.dislikes.placeIds.has(r.google_place_id))
+      .map((r) => buildRankedRestaurant(graph, r, { here, now: new Date(), mode: "browsing" }));
+  }, [allNearby, graph, here, hiddenIds, personal]);
 
   // Apply the Casual/Boutique visibility filter once; all three tabs read
   // from this filtered list so the toggle affects every view consistently.
@@ -433,7 +442,7 @@ export default function DiscoverTab() {
     setCatalogueLoading(true);
     void (isDishMood(mood) ? dishCandidates(here, want) : cuisineCandidates(here, String(mood)))
       .then((rows) => {
-        if (alive) setCataloguePicks({ cuisine: String(mood), rows: rows as unknown as RestaurantInput[] });
+        if (alive) setCataloguePicks({ cuisine: String(mood), rows: (rows as unknown as RestaurantInput[]).filter((r) => !personal?.dislikes.placeIds.has(r.google_place_id) && !hiddenIds.has(r.google_place_id)) });
       })
       .catch(() => { if (alive) setCataloguePicks({ cuisine: String(mood), rows: [] }); })
       .finally(() => { if (alive) setCatalogueLoading(false); });
@@ -502,7 +511,7 @@ export default function DiscoverTab() {
                   key={r.google_place_id}
                   restaurant={r}
                   surface="search"
-                />
+                onDismissed={() => hideId(r.google_place_id)} />
               ))
             )}
           </View>
@@ -578,14 +587,14 @@ export default function DiscoverTab() {
                         where you go to be shown something, so it belongs here.
                         Under the ranked list on purpose — a stretch is what you
                         read after the safe answers, not instead of them. */}
-                    <List items={moodedList.items} surface="discover_for_you" emptyMsg="Log a few visits. Once Palate sees a pattern, we'll personalize this list. In the meantime, the Trending tab shows what's hot in your area." />
+                    <List items={moodedList.items} onHide={hideId} surface="discover_for_you" emptyMsg="Log a few visits. Once Palate sees a pattern, we'll personalize this list. In the meantime, the Trending tab shows what's hot in your area." />
                     <Spacer size={20} />
                     <Text style={styles.stretchHead}>Stretch your palate</Text>
                     <StretchPick />
                   </>
                 )}
                 {tab === "trending" && <TrendingGroups groups={trending.groups} fallbackNote={trending.fallbackNote} />}
-                {tab === "nearby"   && <List items={nearbyList} surface="discover_shelf" emptyMsg="Nothing nearby." />}
+                {tab === "nearby"   && <List items={nearbyList} onHide={hideId} surface="discover_shelf" emptyMsg="Nothing nearby." />}
               </>
             )}
           </>
@@ -893,8 +902,8 @@ function FiltersSheet({
   );
 }
 
-function List({ items, surface, emptyMsg }: {
-  items: RankedRestaurant[]; surface: any; emptyMsg: string;
+function List({ items, surface, emptyMsg, onHide }: {
+  items: RankedRestaurant[]; surface: any; emptyMsg: string; onHide?: (id: string) => void;
 }) {
   if (items.length === 0) {
     return (
@@ -906,7 +915,7 @@ function List({ items, surface, emptyMsg }: {
   return (
     <View>
       {items.map((r) => (
-        <RestaurantCompatibilityCard key={r.google_place_id} restaurant={r} surface={surface} />
+        <RestaurantCompatibilityCard key={r.google_place_id} restaurant={r} surface={surface} onDismissed={onHide ? () => onHide(r.google_place_id) : undefined} />
       ))}
     </View>
   );

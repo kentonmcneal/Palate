@@ -7,7 +7,7 @@ import { computeTasteVector } from "../lib/taste-vector";
 import { nearbyRestaurants } from "../lib/places";
 import { getCachedNearby, setCachedNearby } from "../lib/nearby-cache";
 import { getEffectiveLocation, useBrowsingCity } from "../lib/browsing-location";
-import { loadPersonalSignal } from "../lib/personal-signal";
+import { loadPersonalSignal, onPersonalSignalInvalidate } from "../lib/personal-signal";
 import { matchScoreColor, matchScoreTint } from "../lib/match-score";
 import { assembleGraph, computeRightNow, type RightNowPick as StretchPickType } from "../lib/recommendation";
 import { toInput as toCandidateInput } from "../lib/recommendation/candidates";
@@ -60,6 +60,7 @@ export function StretchPick() {
   }, []);
 
   useEffect(() => { load(); }, [load, browsingCity?.id]);
+  useEffect(() => onPersonalSignalInvalidate(() => { void load(); }), [load]);
 
   if (loading) return null;
   if (!pick?.restaurant?.match) return null;

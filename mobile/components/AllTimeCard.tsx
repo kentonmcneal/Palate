@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { colors, spacing, type, card, shadow } from "../theme";
 import { loadAnalytics, type AnalyticsSummary } from "../lib/analytics-stats";
 import { computeTasteVector } from "../lib/taste-vector";
+import { onPersonalSignalInvalidate } from "../lib/personal-signal";
 import { getProfileFromVector } from "../lib/palate/palateScoring";
 import { IDENTITY_BLURB } from "../lib/palate/palateCopy";
 import type { PrimaryIdentity } from "../lib/palate/palateTypes";
@@ -31,6 +32,11 @@ export function AllTimeCard() {
   const [people, setPeople] = useState<CompatiblePerson[]>([]);
   const [failed, setFailed] = useState(false);
 
+  // Reloads whenever the personal signal is invalidated (a visit logged or
+  // deleted, a place hidden or restored), so the card never disagrees with
+  // the week strip above it.
+  const [tick, setTick] = useState(0);
+  useEffect(() => onPersonalSignalInvalidate(() => setTick((t) => t + 1)), []);
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -52,7 +58,7 @@ export function AllTimeCard() {
       }
     })();
     return () => { alive = false; };
-  }, []);
+  }, [tick]);
 
   // No history is not an empty card; it is no card. Home has the activation
   // hero for that person.
@@ -107,7 +113,7 @@ export function AllTimeCard() {
           <Text style={styles.colHead}>Your cuisines</Text>
           {cuisines.slice(0, 3).map((c, i) => (
             <Text key={c.cuisine} style={styles.colLine} numberOfLines={1}>
-              {i + 1}. {cuisineLabel(c.cuisine)} <Text style={styles.colMeta}>{Math.round(c.pct)}%</Text>
+              {i + 1}. {cuisineLabel(c.cuisine)} <Text style={styles.colMeta}>{Math.round(c.pct * 100)}%</Text>
             </Text>
           ))}
           {cuisines.length === 0 && <Text style={styles.colMeta}>Not enough tagged yet.</Text>}
@@ -129,7 +135,6 @@ export function AllTimeCard() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.personName} numberOfLines={1}>
                   {p.display_name || (p.username ? `@${p.username}` : "Someone")}
-                  <Text style={styles.colMeta}>  {p.score}%</Text>
                 </Text>
                 <Text style={styles.personLine} numberOfLines={1}>{compatibilityLine(p)}</Text>
               </View>

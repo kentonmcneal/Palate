@@ -5,6 +5,7 @@
 // score + signals); restaurant columns can evolve without touching the SQL.
 
 import { supabase } from "./supabase";
+import { loadPersonalSignal } from "./personal-signal";
 import { isRecommendable, type EligibilityInput } from "./recommendation/eligibility";
 
 export interface SimilarSignals {
@@ -40,6 +41,7 @@ export async function loadSimilarRestaurants(
   sourceRestaurantId: string,
   opts: { includeVisited?: boolean; limit?: number } = {},
 ): Promise<SimilarRestaurant[]> {
+  const hidden = (await loadPersonalSignal().catch(() => null))?.dislikes.placeIds ?? null;
   // The RPC reads `auth.uid()` server-side — we don't pass a user id from the
   // client. That avoids leaking another user's visit history via the filter.
   const { data: matches, error } = await supabase.rpc("similar_restaurants", {
@@ -76,7 +78,7 @@ export async function loadSimilarRestaurants(
     .filter((r): r is SimilarRestaurant => r !== null)
     // "Find more like X" is a recommendation surface — same gate as the rest
     // (chains, fast food, non-gem cafés never proposed).
-    .filter((r) => isRecommendable(r as unknown as EligibilityInput));
+    .filter((r) => isRecommendable(r as unknown as EligibilityInput, { hidden }));
 }
 
 function describeSimilarity(s: SimilarSignals): string {

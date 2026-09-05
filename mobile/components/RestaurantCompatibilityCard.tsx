@@ -167,6 +167,15 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
       ) : null}
 
       <View style={styles.actions}>
+        <Pressable
+          onPress={(e) => { e.stopPropagation(); showLessLikeThis(); }}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={`Not interested in ${restaurant.name}`}
+          style={styles.hideBtn}
+        >
+          <Text style={styles.hideText}>✕</Text>
+        </Pressable>
         <View>
           <Pressable
             onPress={(e) => { e.stopPropagation(); save(); }}
@@ -294,4 +303,6 @@ const styles = StyleSheet.create({
   btnGhostText: { fontSize: 12, fontWeight: "700", color: colors.ink },
   btnSubtle: { paddingHorizontal: 10, paddingVertical: 8, marginLeft: "auto" },
   btnSubtleText: { fontSize: 11, fontWeight: "600", color: colors.mute },
+  hideBtn: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line },
+  hideText: { fontSize: 12, fontWeight: "800", color: colors.mute },
 });

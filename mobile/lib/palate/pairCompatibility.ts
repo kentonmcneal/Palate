@@ -139,7 +139,9 @@ export async function computePairCompatibility(
   // Joint picks — only when we have a location to search around.
   let picks: PairPick[] = [];
   if (here) {
-    const myGraph = assembleGraph(myVector, null);
+    // With the personal signal, so the viewer's "Not interested" places are
+    // excluded from the joint picks.
+    const myGraph = assembleGraph(myVector, await loadPersonalSignal().catch(() => null));
     const friendGraph = assembleGraph(friend.vector, null);
     // Fetch nearby ONCE (inside generateCandidates for my graph), then score
     // each candidate for BOTH graphs via the pure scorer (safeguard #2).
