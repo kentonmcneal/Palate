@@ -10,9 +10,13 @@ import { StretchPick } from "../../components/StretchPick";
 import { MoodRow } from "../../components/MoodRow";
 import {
   buildCuisineChips, applyMood, moodFallbackNote, moodContextNote,
+  isIntentMood, isSurprise, cuisineLabel,
   type Mood, type MoodChip,
 } from "../../lib/mood";
 import { loadAnalytics, type CuisineSlice } from "../../lib/analytics-stats";
+import {
+  cuisinesNear, cuisineCandidates, mergeCuisinePools, type CuisineCount,
+} from "../../lib/cuisine-catalogue";
 import { supabase } from "../../lib/supabase";
 import { listWishlist, type WishlistEntry } from "../../lib/palate-insights";
 import { getCurrentLocation, classifyAccuracy } from "../../lib/location";
@@ -134,6 +138,13 @@ export default function DiscoverTab() {
   const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
   const [vector, setVector] = useState<TasteVector | null>(null);
   const [allNearby, setAllNearby] = useState<RestaurantInput[]>([]);
+  // Every cuisine that exists within reach, from the catalogue rather than from
+  // this 2.5km fetch. Free, and the only way a chip can offer a cuisine that
+  // happens to have no venue in the current pool.
+  const [catalogueCuisines, setCatalogueCuisines] = useState<CuisineCount[]>([]);
+  // Places fetched because a chip asked for a cuisine the pool does not carry.
+  const [cataloguePicks, setCataloguePicks] = useState<{ cuisine: string; rows: RestaurantInput[] } | null>(null);
+  const [catalogueLoading, setCatalogueLoading] = useState(false);
   const [personal, setPersonal] = useState<PersonalSignal | null>(null);
 
   const load = useCallback(async () => {
@@ -306,7 +317,7 @@ export default function DiscoverTab() {
   // finalScore), with a small time-of-day boost so brunch spots rise on
   // weekend mornings, late_night bars at 11pm, etc. Boost is applied to the
   // sort key only, not the displayed score, to avoid inflating "% match".
-  const mostCompatibleList = useMemo(() => {
+  const mostCompatibleSorted = useMemo(() => {
     const now = new Date();
     const occs = currentOccasions(now);
     const keyFor = (r: RankedRestaurant) =>
@@ -326,8 +337,16 @@ export default function DiscoverTab() {
         return b.sortKey - a.sortKey;
       });
     }
-    return arr.map((x) => x.item).slice(0, TOP_PER_TAB);
+    // Sorted but NOT sliced. Slicing here meant a mood filtered the top twelve
+    // rather than the whole ranked pool, so a cuisine that existed nearby but
+    // sat at rank 20 reported "nothing matched" and showed the unfiltered list.
+    return arr.map((x) => x.item);
   }, [visibleRanked, sort]);
+
+  const mostCompatibleList = useMemo(
+    () => mostCompatibleSorted.slice(0, TOP_PER_TAB),
+    [mostCompatibleSorted],
+  );
 
   // A mood narrows the already-ranked list; it never re-scores. The candidates
   // carry cuisine_type and format_class, and applyMood reads `cuisine`, so the
@@ -336,20 +355,37 @@ export default function DiscoverTab() {
   // cuisine you have never eaten is still askable. Derived from the pool rather
   // than fetched, or it could never know what is around you.
   const moodChips = useMemo(
-    () => buildCuisineChips(myCuisines, allNearby),
-    [myCuisines, allNearby],
+    () => buildCuisineChips(myCuisines, mergeCuisinePools(allNearby, catalogueCuisines)),
+    [myCuisines, allNearby, catalogueCuisines],
   );
 
   const moodedList = useMemo(() => {
-    const shaped = mostCompatibleList.map((r) => ({
+    const shaped = mostCompatibleSorted.map((r) => ({
       ...r,
       cuisine: (r as any).cuisine_type ?? null,
       format_class: (r as any).format_class ?? null,
     }));
     const { items, matched } = applyMood(shaped, mood, []);
+
+    // The chip asked for a cuisine this pool does not carry, and the catalogue
+    // answered. Those rows are ranked on the same graph as everything else on
+    // the screen, so the % match beside them means the same thing.
+    if (cataloguePicks && mood === cataloguePicks.cuisine) {
+      const rows = cataloguePicks.rows.map((r) =>
+        buildRankedRestaurant(graph, r, { here: here ?? undefined, now: new Date(), mode: "browsing" }));
+      rows.sort((a, b) => b.score.compatibilityScore - a.score.compatibilityScore);
+      const best = rows.length > 0 ? Math.round(rows[0].score.compatibilityScore) : null;
+      return {
+        items: rows.slice(0, TOP_PER_TAB) as typeof mostCompatibleList,
+        note: rows.length === 0
+          ? moodFallbackNote(mood)
+          : moodContextNote(mood, best),
+      };
+    }
+
     const top = items.length > 0 ? (items[0] as any)?.score?.compatibilityScore ?? null : null;
     return {
-      items: items as typeof mostCompatibleList,
+      items: items.slice(0, TOP_PER_TAB) as typeof mostCompatibleList,
       // Two different messages. "Nothing matched, here is everything" when the
       // filter found nobody, versus "these are the best ones and they are not
       // your thing" when it found some and they score low.
@@ -357,7 +393,44 @@ export default function DiscoverTab() {
         ? moodFallbackNote(mood)
         : moodContextNote(mood, typeof top === "number" ? Math.round(top) : null),
     };
-  }, [mostCompatibleList, mood]);
+  }, [mostCompatibleSorted, mood, cataloguePicks, graph, here]);
+
+  // Two catalogue reads, both free, both against rows we already own.
+  //
+  // The first fills the chip row with every cuisine that exists within reach.
+  // The second runs when a chip is tapped and the pool turns out to have none
+  // of that cuisine — the case the founder named: ask for steakhouses having
+  // never eaten steak, and get steakhouses.
+  useEffect(() => {
+    if (!here) return;
+    let alive = true;
+    void cuisinesNear(here.lat, here.lng)
+      .then((c) => { if (alive) setCatalogueCuisines(c); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [here?.lat, here?.lng]);
+
+  useEffect(() => {
+    if (!here) return;
+    const isCuisine = typeof mood === "string" && !isIntentMood(mood) && !isSurprise(mood);
+    if (!isCuisine) { setCataloguePicks(null); return; }
+
+    const want = String(mood).toLowerCase().trim();
+    const inPool = allNearby.some(
+      (r) => ((r as any).cuisine_type ?? "").toLowerCase().trim() === want,
+    );
+    if (inPool) { setCataloguePicks(null); return; }
+
+    let alive = true;
+    setCatalogueLoading(true);
+    void cuisineCandidates(here, String(mood))
+      .then((rows) => {
+        if (alive) setCataloguePicks({ cuisine: String(mood), rows: rows as unknown as RestaurantInput[] });
+      })
+      .catch(() => { if (alive) setCataloguePicks({ cuisine: String(mood), rows: [] }); })
+      .finally(() => { if (alive) setCatalogueLoading(false); });
+    return () => { alive = false; };
+  }, [mood, here?.lat, here?.lng, allNearby]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -484,7 +557,11 @@ export default function DiscoverTab() {
                 {tab === "most_compatible" && (
                   <>
                     <MoodRow chips={moodChips} value={mood} onChange={setMood} />
-                    {!!moodedList.note && (
+                    {catalogueLoading ? (
+                      <Text style={styles.moodNote}>
+                        Looking further out for {cuisineLabel(String(mood))}…
+                      </Text>
+                    ) : !!moodedList.note && (
                       <Text style={styles.moodNote}>{moodedList.note}</Text>
                     )}
                     <Spacer size={10} />

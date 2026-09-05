@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from "react-native";
 import { colors, spacing, type, card, shadow } from "../theme";
 import { isoWeekStart } from "../lib/wrapped";
@@ -25,7 +25,8 @@ import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
 import { matchScoreColor, matchScoreTint } from "../lib/match-score";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { SaveBurst } from "./SaveBurst";
-import { applyMood, moodFallbackNote, moodContextNote, type Mood } from "../lib/mood";
+import { applyMood, moodFallbackNote, moodContextNote, isIntentMood, isSurprise, cuisineLabel, type Mood } from "../lib/mood";
+import { cuisinesNear, cuisineCandidates, mergeCuisinePools } from "../lib/cuisine-catalogue";
 import { FONT_CAP, useFontScale } from "../lib/a11y";
 import { useRouter } from "expo-router";
 import { TapCard } from "./TapCard";
@@ -41,6 +42,59 @@ import { TapCard } from "./TapCard";
 // Card kept intentionally bare per the "Home = decision only" brief.
 // No time-of-day blurbs, no explanatory subtitles — the title and the rows
 // are the whole story.
+
+// ----------------------------------------------------------------------------
+// One place a Restaurant row becomes a scored recommendation.
+// ----------------------------------------------------------------------------
+// Pulled out of `load` because the catalogue path needs exactly the same
+// treatment: a steakhouse fetched because you asked for steakhouses has to be
+// scored on the same graph, or the % match beside it would mean something
+// different from the % match beside everything else on the screen.
+function toRecommendation(
+  p: any,
+  graph: ReturnType<typeof assembleGraph>,
+  here: { lat: number; lng: number },
+  personal: { visitsByPlaceId: Map<string, number> } | null,
+): RestaurantRecommendation {
+  const compat = getCompatibility(graph, {
+    google_place_id: p.google_place_id,
+    name: p.name,
+    cuisine_type: p.cuisine_type ?? null,
+    cuisine_region: p.cuisine_region ?? null,
+    cuisine_subregion: p.cuisine_subregion ?? null,
+    format_class: p.format_class ?? null,
+    occasion_tags: p.occasion_tags ?? null,
+    flavor_tags: p.flavor_tags ?? null,
+    cultural_context: p.cultural_context ?? null,
+    neighborhood: p.neighborhood ?? null,
+    price_level: p.price_level ?? null,
+    rating: p.rating ?? null,
+    user_rating_count: p.user_rating_count ?? null,
+    latitude: p.latitude ?? null,
+    longitude: p.longitude ?? null,
+  });
+  const dKm = (p.latitude != null && p.longitude != null)
+    ? distanceKm({ lat: here.lat, lng: here.lng }, { lat: p.latitude, lng: p.longitude })
+    : null;
+  return {
+    google_place_id: p.google_place_id,
+    name: p.name,
+    cuisine: p.cuisine_type ?? null,
+    // Carried for the non-cuisine moods. format_class was already read for
+    // scoring and then dropped; "Quick" and "Sit down" need it, and "Somewhere
+    // new" needs to know whether you have been.
+    format_class: p.format_class ?? null,
+    visited: (personal?.visitsByPlaceId.get(p.google_place_id) ?? 0) > 0,
+    neighborhood: p.neighborhood ?? null,
+    price_level: p.price_level ?? null,
+    latitude: p.latitude ?? null,
+    longitude: p.longitude ?? null,
+    rating: p.rating ?? null,
+    matchScore: compat.score,
+    distanceKm: dKm,
+    reason: compat.reasons[0] ?? "Nearby and worth a try.",
+  } as RestaurantRecommendation;
+}
 
 export function RecommendationsCard({
   mood = null,
@@ -66,6 +120,15 @@ export function RecommendationsCard({
   const [earlyEstimate, setEarlyEstimate] = useState(false);
   const [allRecs, setAllRecs] = useState<RestaurantRecommendation[] | null>(null);
   const [browsingCity] = useBrowsingCity();
+  const [catalogueLoading, setCatalogueLoading] = useState(false);
+  // Kept from the load so a mood picked afterwards can score catalogue places
+  // on the same graph. Without it, asking for a cuisine that is not in the
+  // nearby pool would have to re-derive the taste vector on every chip tap.
+  const scoringRef = useRef<{
+    graph: ReturnType<typeof assembleGraph>;
+    here: { lat: number; lng: number };
+    personal: Awaited<ReturnType<typeof loadPersonalSignal>> | null;
+  } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -102,56 +165,27 @@ export function RecommendationsCard({
       const enriched: RestaurantRecommendation[] = filterRecommendable(nearby)
         .filter((p) => !visitedHeavy.has(p.google_place_id))
         .filter((p) => !excludePlaceIds.includes(p.google_place_id))
-        .map((p) => {
-          const compat = getCompatibility(graph, {
-            google_place_id: p.google_place_id,
-            name: p.name,
-            cuisine_type: p.cuisine_type ?? null,
-            cuisine_region: (p as any).cuisine_region ?? null,
-            cuisine_subregion: (p as any).cuisine_subregion ?? null,
-            format_class: (p as any).format_class ?? null,
-            occasion_tags: (p as any).occasion_tags ?? null,
-            flavor_tags: (p as any).flavor_tags ?? null,
-            cultural_context: (p as any).cultural_context ?? null,
-            neighborhood: p.neighborhood ?? null,
-            price_level: p.price_level ?? null,
-            rating: p.rating ?? null,
-            user_rating_count: (p as any).user_rating_count ?? null,
-            latitude: p.latitude ?? null,
-            longitude: p.longitude ?? null,
-          });
-          const dKm = (p.latitude != null && p.longitude != null)
-            ? distanceKm({ lat: here.lat, lng: here.lng }, { lat: p.latitude, lng: p.longitude })
-            : null;
-          return {
-            google_place_id: p.google_place_id,
-            name: p.name,
-            cuisine: p.cuisine_type ?? null,
-            // Carried for the non-cuisine moods. format_class was already read
-            // for scoring and then dropped; "Quick" and "Sit down" need it, and
-            // "Somewhere new" needs to know whether you have been.
-            format_class: (p as any).format_class ?? null,
-            visited: (personal?.visitsByPlaceId.get(p.google_place_id) ?? 0) > 0,
-            neighborhood: p.neighborhood ?? null,
-            price_level: p.price_level ?? null,
-            latitude: p.latitude ?? null,
-            longitude: p.longitude ?? null,
-            rating: p.rating ?? null,
-            matchScore: compat.score,
-            distanceKm: dKm,
-            reason: compat.reasons[0] ?? "Nearby and worth a try.",
-          } as RestaurantRecommendation;
-        });
+        .map((p) => toRecommendation(p, graph, here, personal));
 
       // Sort by canonical compatibility (high → low). Keep the full ranked
       // list so a mood can re-slice it without another network round trip —
       // switching mood should feel instant.
       enriched.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
       setAllRecs(enriched);
-      onCuisinesAvailable?.(
-        enriched.map((r) => ({ cuisine_type: (r as any).cuisine ?? null })),
-      );
+      scoringRef.current = { graph, here, personal };
       setRecs(enriched.slice(0, 3));
+
+      // The chips offered above are the union of what is in this pool and what
+      // exists in the catalogue within reach. The pool is a 3km Google fetch,
+      // so on its own it decides which cuisines are even askable — and it left
+      // out anything with no venue in that particular slice. The catalogue read
+      // is a Postgres query against rows we already own, so widening the offer
+      // costs nothing.
+      const pool = enriched.map((r) => ({ cuisine_type: (r as any).cuisine ?? null }));
+      onCuisinesAvailable?.(pool);
+      void cuisinesNear(here.lat, here.lng)
+        .then((cat) => onCuisinesAvailable?.(mergeCuisinePools(pool, cat)))
+        .catch(() => {});
     } catch {
       setError(true);
     } finally {
@@ -167,7 +201,49 @@ export function RecommendationsCard({
   const [moodNote, setMoodNote] = useState<string | null>(null);
   useEffect(() => {
     if (!allRecs) return;
+    let alive = true;
     const { items, matched } = applyMood(allRecs, mood, habitualCuisines);
+
+    // A cuisine the nearby pool does not contain used to end here: applyMood
+    // returned the UNFILTERED list with matched=false, so tapping "Steakhouse"
+    // showed the same three places as "Anything" under a line apologising for
+    // it. The chip read as broken because it was.
+    //
+    // The catalogue knows better. Ask it for that cuisine, score what comes
+    // back on the same graph, and show it. A low match is the honest answer to
+    // "I never eat this", and moodContextNote says so in words.
+    const wantsCatalogue =
+      typeof mood === "string" && !isIntentMood(mood) && !isSurprise(mood) && !matched;
+
+    if (wantsCatalogue && scoringRef.current) {
+      const { graph, here, personal } = scoringRef.current;
+      setCatalogueLoading(true);
+      void cuisineCandidates(here, String(mood))
+        .then((rows) => {
+          if (!alive) return;
+          const scored = rows
+            .map((r) => toRecommendation(r, graph, here, personal))
+            .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+          if (scored.length === 0) {
+            // Genuinely nothing of that cuisine within reach. That is a real
+            // answer and it is not the same as a failed filter, so it gets its
+            // own sentence rather than the fallback list.
+            setRecs(items.slice(0, 3));
+            setMoodNote(moodFallbackNote(mood));
+            return;
+          }
+          setRecs(scored.slice(0, 3));
+          setMoodNote(moodContextNote(mood, scored[0].matchScore ?? null));
+        })
+        .catch(() => {
+          if (!alive) return;
+          setRecs(items.slice(0, 3));
+          setMoodNote(moodFallbackNote(mood));
+        })
+        .finally(() => { if (alive) setCatalogueLoading(false); });
+      return () => { alive = false; };
+    }
+
     setRecs(items.slice(0, 3));
     const top = items.length > 0 ? items[0].matchScore ?? null : null;
     // "Nothing matched" and "these matched and are not your thing" are
@@ -178,6 +254,7 @@ export function RecommendationsCard({
         ? moodFallbackNote(mood)
         : moodContextNote(mood, typeof top === "number" ? top : null),
     );
+    return () => { alive = false; };
   }, [allRecs, mood, habitualCuisines]);
 
   // Hide the card entirely until we know if we have anything to show — keeps
@@ -209,7 +286,9 @@ export function RecommendationsCard({
           A FIRST READ ON YOUR PALATE
         </Text>
       )}
-      {!!moodNote && <Text style={styles.moodNote}>{moodNote}</Text>}
+      {catalogueLoading
+        ? <Text style={styles.moodNote}>Looking further out for {cuisineLabel(String(mood))}…</Text>
+        : !!moodNote && <Text style={styles.moodNote}>{moodNote}</Text>}
       <View style={{ marginTop: earlyEstimate ? 14 : 2 }}>
         {recs.map((rec) => (
           <RecRow key={rec.google_place_id} rec={rec} />
