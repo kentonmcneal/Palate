@@ -1,5 +1,5 @@
 import {
-  buildCuisineChips, nearbyCuisines, moodContextNote, SURPRISE, QUICK,
+  buildCuisineChips, nearbyCuisines, moodContextNote, SURPRISE, QUICK, SOMEWHERE_NEW,
 } from "../mood";
 
 const breakdown = [
@@ -38,7 +38,7 @@ describe("buildCuisineChips", () => {
   it("keeps the intents first and Surprise me last", () => {
     const chips = buildCuisineChips(breakdown, pool);
     expect(chips[0].label).toBe("Anything");
-    expect(chips[1].key).toBe(QUICK);
+    expect(chips[1].key).toBe(SOMEWHERE_NEW);
     expect(chips[chips.length - 1].key).toBe(SURPRISE);
   });
 

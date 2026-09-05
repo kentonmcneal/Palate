@@ -122,6 +122,9 @@ export function RecommendationsCard({
   const [allRecs, setAllRecs] = useState<RestaurantRecommendation[] | null>(null);
   const [browsingCity] = useBrowsingCity();
   const [catalogueLoading, setCatalogueLoading] = useState(false);
+  // How many places the current mood produced. Shown in the header so a
+  // chip that changed the list is visibly a chip that changed the list.
+  const [moodCount, setMoodCount] = useState<number | null>(null);
   // Kept from the load so a mood picked afterwards can score catalogue places
   // on the same graph. Without it, asking for a cuisine that is not in the
   // nearby pool would have to re-derive the taste vector on every chip tap.
@@ -230,10 +233,12 @@ export function RecommendationsCard({
             // answer and it is not the same as a failed filter, so it gets its
             // own sentence rather than the fallback list.
             setRecs(items.slice(0, 3));
+            setMoodCount(0);
             setMoodNote(moodFallbackNote(mood));
             return;
           }
           setRecs(scored.slice(0, 3));
+          setMoodCount(scored.length);
           setMoodNote(moodContextNote(mood, scored[0].matchScore ?? null));
         })
         .catch(() => {
@@ -246,6 +251,7 @@ export function RecommendationsCard({
     }
 
     setRecs(items.slice(0, 3));
+    setMoodCount(mood && matched ? items.length : mood ? 0 : null);
     const top = items.length > 0 ? items[0].matchScore ?? null : null;
     // "Nothing matched" and "these matched and are not your thing" are
     // different things to say, and saying the second is what lets somebody ask
@@ -285,6 +291,12 @@ export function RecommendationsCard({
       {earlyEstimate && (
         <Text style={styles.eyebrow} maxFontSizeMultiplier={FONT_CAP.eyebrow}>
           A FIRST READ ON YOUR PALATE
+        </Text>
+      )}
+      {typeof mood === "string" && !isIntentMood(mood) && !isSurprise(mood) && (
+        <Text style={styles.moodHead}>
+          {cuisineLabel(String(mood))} near you
+          {moodCount != null && !catalogueLoading ? ` · ${moodCount} ${moodCount === 1 ? "place" : "places"}` : ""}
         </Text>
       )}
       {catalogueLoading
@@ -440,6 +452,7 @@ const styles = StyleSheet.create({
   rowStacked: { flexDirection: "column", alignItems: "stretch", gap: 10 },
   nameRowStacked: { flexDirection: "column", alignItems: "flex-start", gap: 6 },
   moodNote: { fontSize: 12, color: colors.mute, marginTop: 10, lineHeight: 17 },
+  moodHead: { ...type.micro, marginTop: 4 },
   card: {
     // No top margin — the parent section header controls spacing now.
     padding: card.padding,

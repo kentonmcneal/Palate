@@ -100,10 +100,12 @@ export function buildMoodChips(breakdown: CuisineSlice[], limit = 4): MoodChip[]
   // Intents before cuisines. When you open this row you usually know what kind
   // of evening you want before you know what food, and "quick" is the single
   // most common answer at 7pm on a weekday.
+  // Quick and Sit down are gone from the row on the founder's call: a chip
+  // row is for cuisines, "whatever is in the area", and two format chips at
+  // the front pushed the cuisines off the screen. applyMood still understands
+  // both, so the deep link and the tests keep working.
   return [
     { key: null, label: "Anything" },
-    { key: QUICK, label: "Quick" },
-    { key: SIT_DOWN, label: "Sit down" },
     { key: SOMEWHERE_NEW, label: "Somewhere new" },
     ...top,
     // "Surprise me" means "outside your usual", which is not a thing that can
@@ -236,7 +238,8 @@ export function buildCuisineChips(
   opts: { mineLimit?: number; totalLimit?: number } = {},
 ): MoodChip[] {
   const mineLimit = opts.mineLimit ?? 4;
-  const totalLimit = opts.totalLimit ?? 10;
+  // Twelve: enough for every cuisine within 8km of a mid-size city.
+  const totalLimit = opts.totalLimit ?? 12;
 
   const base = buildMoodChips(breakdown, mineLimit);
   const already = new Set(base.map((c) => String(c.key ?? "")));

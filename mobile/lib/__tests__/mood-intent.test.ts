@@ -95,8 +95,10 @@ describe("buildMoodChips", () => {
 
   it("leads with intents, because you know the evening before the food", () => {
     const chips = buildMoodChips(breakdown);
-    expect(chips.slice(0, 4).map((c) => c.label))
-      .toEqual(["Anything", "Quick", "Sit down", "Somewhere new"]);
+    // Quick and Sit down left the row on the founder's call; the row is for
+    // cuisines now. Somewhere new stays because it needs no history.
+    expect(chips.slice(0, 2).map((c) => c.label))
+      .toEqual(["Anything", "Somewhere new"]);
     expect(chips[chips.length - 1].label).toBe("Surprise me");
   });
 
