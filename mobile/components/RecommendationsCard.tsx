@@ -67,6 +67,7 @@ function toRecommendation(
     format_class: p.format_class ?? null,
     occasion_tags: p.occasion_tags ?? null,
     flavor_tags: p.flavor_tags ?? null,
+    dish_family: p.dish_family ?? null,
     cultural_context: p.cultural_context ?? null,
     neighborhood: p.neighborhood ?? null,
     price_level: p.price_level ?? null,

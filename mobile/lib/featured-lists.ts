@@ -228,6 +228,10 @@ import { onPersonalSignalInvalidate, loadPersonalSignal } from "./personal-signa
 import { filterRecommendable } from "./recommendation/eligibility";
 onPersonalSignalInvalidate(() => {
   visitedIdsCache = null;
+  // A hide or restore must not be served a stale list: the detail screen
+  // reads getCachedFeaturedList first and skips the fetch when it hits.
+  cache.clear();
+  cacheCityKey = null;
 });
 
 function slugify(s: string): string {

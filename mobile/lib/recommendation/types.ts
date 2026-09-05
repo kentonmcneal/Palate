@@ -30,6 +30,9 @@ export type RestaurantInput = {
   format_class?: string | null;
   occasion_tags?: string[] | null;
   flavor_tags?: string[] | null;
+  /** Dish families from Google types (0099): burgers, tacos, sushi... The
+   *  "Not interested" lesson keys on these; strip them and it cannot apply. */
+  dish_family?: string[] | null;
   cultural_context?: string | null;
   // Free-form classifier tags (e.g. "michelin", "hidden-gem", "tourist-heavy")
   // used for discovery-signal score adjustment.

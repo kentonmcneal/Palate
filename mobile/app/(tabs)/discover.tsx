@@ -281,7 +281,9 @@ export default function DiscoverTab() {
           ? listWishlist().then((w) => setSearchWishlist(w.slice(0, 8))).catch(() => {})
           : Promise.resolve(),
         needCity
-          ? loadCityRestaurants(here).then(setSearchCityList).catch(() => {})
+          ? loadCityRestaurants(here)
+              .then((list) => setSearchCityList(list.filter((r) => !personal?.dislikes.placeIds.has(r.google_place_id) && !hiddenIds.has(r.google_place_id))))
+              .catch(() => {})
           : Promise.resolve(),
       ]);
     } finally {
@@ -961,6 +963,7 @@ function TrendingGroups({ groups, fallbackNote }: { groups: TrendingGroup[]; fal
 // ----------------------------------------------------------------------------
 function toInput(p: Restaurant): RestaurantInput {
   return {
+    dish_family: (p as any).dish_family ?? null,
     google_place_id: p.google_place_id,
     name: p.name,
     cuisine_type: p.cuisine_type ?? null,

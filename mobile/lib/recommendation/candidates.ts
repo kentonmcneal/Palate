@@ -131,6 +131,7 @@ function poolBy(arr: RestaurantInput[], pred: (r: RestaurantInput) => boolean): 
 
 export function toInput(p: any): RestaurantInput {
   return {
+    dish_family: (p as any).dish_family ?? null,
     google_place_id: p.google_place_id,
     name: p.name,
     cuisine_type: p.cuisine_type ?? null,

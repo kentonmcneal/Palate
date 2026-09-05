@@ -97,6 +97,7 @@ export default function FullscreenMap() {
             format_class: (p as any).format_class ?? null,
             occasion_tags: (p as any).occasion_tags ?? null,
             flavor_tags: (p as any).flavor_tags ?? null,
+            dish_family: (p as any).dish_family ?? null,
             cultural_context: (p as any).cultural_context ?? null,
             neighborhood: p.neighborhood ?? null,
             price_level: p.price_level ?? null,
