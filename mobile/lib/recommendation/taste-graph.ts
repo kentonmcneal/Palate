@@ -74,8 +74,13 @@ export function assembleGraph(vector: TasteVector | null, personal: PersonalSign
   for (const [k, n] of p.visitsByPlaceId.entries()) visitsByPlace[k] = n;
 
   return {
-    cuisines: v.cuisineRegion,
-    cuisinesSubregion: v.cuisineSubregion,
+    // Saves count, at 40% of a visit. A wishlist entry is the most explicit
+    // statement of intent the app collects — "I want to go here" — and
+    // assembleGraph dropped it on the floor: the aspirational maps were
+    // computed by taste-vector.ts and read by nothing that scores. A save is
+    // weaker evidence than actually going, hence 0.4, not 1.
+    cuisines: blendAspiration(v.cuisineRegion, v.cuisineRegionAspirational),
+    cuisinesSubregion: blendAspiration(v.cuisineSubregion, v.cuisineSubregionAspirational),
     cuisineTypes: v.cuisineType ?? {},
     formats: v.formatClass,
     occasions: v.occasion,
@@ -109,6 +114,20 @@ export function assembleGraph(vector: TasteVector | null, personal: PersonalSign
 // ----------------------------------------------------------------------------
 // Helpers
 // ----------------------------------------------------------------------------
+
+const ASPIRATION_WEIGHT = 0.4;
+
+function blendAspiration(
+  visited: Record<string, number>,
+  saved: Record<string, number> | undefined,
+): Record<string, number> {
+  if (!saved) return visited;
+  const out: Record<string, number> = { ...visited };
+  for (const [k, n] of Object.entries(saved)) {
+    out[k] = (out[k] ?? 0) + n * ASPIRATION_WEIGHT;
+  }
+  return out;
+}
 
 export function shareOf(map: Record<string, number>, key: string): number {
   const total = Object.values(map).reduce((s, n) => s + n, 0);

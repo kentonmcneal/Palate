@@ -807,10 +807,19 @@ export interface EligibilityResult {
 // Google place types that mean "this isn't a discovery restaurant at all" —
 // stores, institutional cafeterias, gas stations. Presence of any of these
 // (without a real restaurant type also present) drops the place.
+// A place that carries one of these is somewhere you go to EAT, not somewhere
+// that happens to sell food. `bakery` and `cafe` are deliberately absent: a
+// supermarket bakery counter is what let Walmart into the feed.
+const STRONG_RESTAURANT_TYPES = new Set([
+  "restaurant", "meal_takeaway", "meal_delivery", "bar", "pub", "wine_bar",
+  "fine_dining_restaurant", "diner", "steak_house", "pizza_restaurant",
+]);
+
 const NON_RESTAURANT_TYPES = new Set([
   "supermarket", "grocery_store", "convenience_store", "gas_station",
   "department_store", "shopping_mall", "warehouse_store", "liquor_store",
-  "drugstore", "pharmacy", "cafeteria",
+  "drugstore", "pharmacy", "cafeteria", "supermarket", "hypermarket",
+  "wholesaler", "food_store", "market",
 ]);
 
 // A "real restaurant" type present in types[] means the place serves as a
@@ -910,9 +919,19 @@ export function inferRecommendationEligibility(
     return { eligibility: 0, reason: "not_a_food_venue" };
   }
 
-  // Non-restaurant venues: grocery/convenience/gas/etc. with no real dining
-  // type present. (A market stall Google also tags `restaurant` survives.)
-  if (types.some((t) => NON_RESTAURANT_TYPES.has(t)) && !hasRestaurantType(types)) {
+  // Non-restaurant venues: grocery/convenience/gas/etc.
+  //
+  // This rule was unreachable. It required `!hasRestaurantType(types)` — but
+  // the check immediately above already returns for exactly that case, so the
+  // branch could never run, and a Walmart or a Whole Foods whose types carry
+  // `bakery` sailed through as a dining recommendation. Found by the code
+  // review.
+  //
+  // A supermarket with a bakery counter is not a dining destination; a market
+  // stall Google types `restaurant` still is. So the test is whether a STRONG
+  // dining type is present, not whether any food word appears.
+  if (types.some((t) => NON_RESTAURANT_TYPES.has(t))
+      && !types.some((t) => STRONG_RESTAURANT_TYPES.has(t))) {
     return { eligibility: 0, reason: "not_a_restaurant" };
   }
 

@@ -122,6 +122,7 @@ type Dim = { s: number; matched: boolean };
 // more than 80% of rows AND no single tag exceeds ~35% of the tagged ones.
 // Until somebody can show those two numbers, the honest weight is zero.
 const FLAVOR_WEIGHT = 0;
+const UNKNOWN_TASTE_PRIOR = 0.35;
 
 function scoreTaste(g: TasteGraph, r: RestaurantInput): Dim {
   // Compute whenever ANY taste signal exists — including a quiz-seeded persona
@@ -156,8 +157,20 @@ function scoreTaste(g: TasteGraph, r: RestaurantInput): Dim {
     const overlap = sumAffinity(g.flavors, r.flavor_tags);
     score += overlap * FLAVOR_WEIGHT; weight += FLAVOR_WEIGHT;
   }
-  const s = weight > 0 ? Math.min(1, score / weight) : 0.5;
-  return { s, matched: s >= 0.4 };
+  // A place we know nothing about must not outrank a place we know is a poor
+  // fit. It used to: with no cuisine data at all, weight is 0 and this
+  // returned a flat neutral 0.5, while a correctly-classified out-of-pattern
+  // place scored near 0. Measured in the review: a 20-visit-Italian user
+  // scored a classified Thai place 52 and the SAME ROW with cuisine nulled
+  // 71 — and 467 rows in the catalogue are unclassified, so a third of the
+  // pool floated above the places we correctly knew they would not like.
+  //
+  // 0.35 is a judgement, not a measurement: below neutral, because "we did
+  // not look" is not as good as "we looked and it fits"; above zero, because
+  // it is not evidence of a bad match either. The ordering it buys is the
+  // point — good match > unknown > known-poor match.
+  const s = weight > 0 ? Math.min(1, score / weight) : UNKNOWN_TASTE_PRIOR;
+  return { s, matched: weight > 0 && s >= 0.4 };
 }
 
 function scoreBehavior(g: TasteGraph, r: RestaurantInput): Dim {
