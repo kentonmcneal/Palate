@@ -133,10 +133,19 @@ export async function computeTasteVector(
   if (vErr) throw vErr;
   if (wErr) throw wErr;
 
-  const v = aggregate(
-    (visitsData ?? []) as unknown as VisitRow[],
-    (wishData ?? []) as unknown as WishlistRow[],
-  );
+  // Windowed vector: learn which places the person already knew before the
+  // window, so "new" is measured against their history.
+  let knownBefore: Set<string> | undefined;
+  if (since) {
+    const { data: prior } = await supabase
+      .from("visits")
+      .select("restaurant_id")
+      .lt("visited_at", since)
+      .not("restaurant_id", "is", null);
+    knownBefore = new Set(((prior ?? []) as { restaurant_id: string }[]).map((r) => r.restaurant_id));
+  }
+  const v = aggregate((visitsData ?? []) as unknown as VisitRow[],
+    (wishData ?? []) as unknown as WishlistRow[], { knownBefore });
 
   // Cold-start: until the user has a few real visits, seed the vector from
   // their onboarding quiz persona so session-one recommendations are already
@@ -190,7 +199,11 @@ type WishlistRow = {
   restaurant: Pick<RestaurantTags, "id" | "name" | "cuisine_type" | "cuisine_region" | "cuisine_subregion" | "format_class" | "neighborhood" | "price_level"> | null;
 };
 
-export function aggregate(visits: VisitRow[], wishlist: WishlistRow[]): TasteVector {
+export function aggregate(
+  visits: VisitRow[],
+  wishlist: WishlistRow[],
+  opts: { knownBefore?: Set<string> } = {},
+): TasteVector {
   const v = emptyVector();
   v.visitCount = visits.length;
   v.wishlistCount = wishlist.length;
@@ -270,6 +283,19 @@ export function aggregate(visits: VisitRow[], wishlist: WishlistRow[]): TasteVec
   const repeatVisits = [...restaurantCounts.values()].reduce((s, c) => s + Math.max(0, c - 1), 0);
   v.repeatRate = visits.length > 0 ? repeatVisits / visits.length : 0;
   v.explorationRate = 1 - v.repeatRate;
+  // "New" means new to the PERSON, not new inside the window. A place eaten
+  // at every week for a year has one visit inside any 7-day window and read
+  // as new, so the loyal-rotation user — the app's thesis user — was told
+  // "4 visits. 4 new places." and labelled a Forager. When the caller knows
+  // the history, exploration is the share of visits to places never seen
+  // before the window opened. Found by the code review.
+  if (opts.knownBefore && visits.length > 0) {
+    const newVisits = visits.filter((visit) => {
+      const r = unwrapRel(visit.restaurant) as { id?: string } | null;
+      return !r?.id || !opts.knownBefore!.has(r.id);
+    }).length;
+    v.explorationRate = newVisits / visits.length;
+  }
 
   v.averagePriceLevel = priceLevels.length > 0
     ? priceLevels.reduce((s, n) => s + n, 0) / priceLevels.length

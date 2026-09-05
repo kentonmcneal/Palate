@@ -11,10 +11,11 @@
 // ============================================================================
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { retryLater } from "./passive-runner";
 import type { RawVisit } from "./passive-capture";
 import type { Restaurant } from "./places";
 import { supabase } from "./supabase";
-import { nearbyRestaurants } from "./places";
+import { nearbyRestaurantsDetailed, nearbyRestaurants } from "./places";
 import { getCachedNearby, setCachedNearby } from "./nearby-cache";
 import { confidenceScore, confidenceBand, type ConfidenceBand } from "./passive-confidence";
 import { venueOpenAt } from "./opening-hours";
@@ -380,9 +381,17 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
     places = cached;
     cacheHit = true;
   } else {
-    places = await nearbyRestaurants(raw.lat, raw.lng, radius);
+    const res = await nearbyRestaurantsDetailed(raw.lat, raw.lng, radius);
+    places = res.places;
     cacheHit = false;
-    void setCachedNearby(raw.lat, raw.lng, radius, places);
+    // A degraded answer (Google budget tripped) is not evidence about the
+    // place. Cache nothing from it, and if it finds nothing, retry later
+    // rather than recording a miss and consuming the visit.
+    if (res.degraded) {
+      if (places.filter(isLoggableVenue).length === 0) throw retryLater("google budget tripped");
+    } else {
+      void setCachedNearby(raw.lat, raw.lng, radius, places);
+    }
   }
   void bumpCacheStats(cacheHit);
 

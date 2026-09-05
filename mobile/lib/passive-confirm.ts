@@ -32,7 +32,11 @@ export const MAX_NOTIFS_PER_DAY = 6;
  *  back past somewhere you just rejected stays quiet. */
 export const REPROMPT_SUPPRESSION_MIN = 180;
 // Inbox entries older than this are dropped so the list never becomes a chore.
-const INBOX_EXPIRY_HOURS = 24;
+// 48, not 24. The digest for a Monday 21:10 dinner fires Tuesday 21:00 and
+// names the place; at 24h the entry was purged five minutes after that
+// notification, so tapping it showed "nothing captured". Two days covers the
+// longest cycle (Friday 23:00 → Saturday 23:00) plus a reasonable evening.
+const INBOX_EXPIRY_HOURS = 48;
 
 const INBOX_KEY = "palate.passive.inbox";
 const RATE_KEY = "palate.passive.notifRate"; // { day: "YYYY-MM-DD", count: n }

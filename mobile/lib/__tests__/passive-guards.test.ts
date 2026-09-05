@@ -66,7 +66,7 @@ describe("ignored entries", () => {
     (track as jest.Mock).mockClear();
     const { getInbox } = require("../passive-confirm");
 
-    await AsyncStorage.setItem(INBOX_KEY, JSON.stringify([entry("old", 30), entry("fresh", 1)]));
+    await AsyncStorage.setItem(INBOX_KEY, JSON.stringify([entry("old", 50), entry("fresh", 1)]));
     const live = await getInbox();
 
     expect(live.map((e: any) => e.id)).toEqual(["fresh"]);

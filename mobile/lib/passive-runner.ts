@@ -11,7 +11,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { drainNativeVisits, PASSIVE_CAPTURE_FLAG, type RawVisit } from "./passive-capture";
 import { qualifyVisit, resolveVenue, recordForClustering } from "./passive-pipeline";
 import { notifyOrInbox } from "./passive-confirm";
-import { isFlagEnabled } from "./flags";
+import { readFlag, isFlagEnabled } from "./flags";
 import { track } from "./analytics";
 import { logDetectorNote } from "../modules/palate-visit-monitor";
 
@@ -75,6 +75,13 @@ async function saveRetries(items: RetryItem[]): Promise<void> {
 }
 
 /** Run the full pipeline for a single raw visit. Exposed for the debug screen. */
+/** An error the runner must not count as an attempt. */
+export function retryLater(reason: string): Error & { retryLater: true } {
+  const e = new Error(reason) as Error & { retryLater: true };
+  e.retryLater = true;
+  return e;
+}
+
 export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
   void track("visit_detected", {
     simulated: raw.simulated,
@@ -106,7 +113,13 @@ export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
     accuracy_m: Math.round(raw.horizontalAccuracy),
   });
 
-  if (!(await isFlagEnabled(RESOLVE_FLAG))) {
+  // Tri-state on purpose. "Unknown" (no network, nothing cached) must not
+  // read as "off": off returns a normal outcome, the runner marks the visit
+  // processed, and the native copy is already gone. Unknown throws, and the
+  // retry queue holds the visit until the flag can be read.
+  const resolveOn = await readFlag(RESOLVE_FLAG);
+  if (resolveOn === null) throw retryLater("resolve flag unknown");
+  if (!resolveOn) {
     logDetectorNote("miss", "resolve kill switch off");
     return { id: raw.id, stage: "resolved", detail: "resolve-flag-off" };
   }
@@ -195,7 +208,10 @@ async function runProcess(): Promise<RunSummary> {
       // Processed means SUCCEEDED. Nothing else may set it.
       processed.add(item.raw.id);
     } catch (e: any) {
-      const attempts = item.attempts + 1;
+      // A "retry later" is not an attempt: the world was not ready (flag
+      // unknown, Google budget tripped), and burning the three-strike budget
+      // on it would drop a real meal by UTC midnight.
+      const attempts = item.attempts + (e?.retryLater ? 0 : 1);
       if (attempts >= MAX_PIPELINE_ATTEMPTS) {
         // Give up — but loudly. A visit disappearing is a real product failure
         // and it should show up in analytics rather than in nobody's history.

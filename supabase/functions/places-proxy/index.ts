@@ -157,6 +157,26 @@ async function countUserCall(admin: ReturnType<typeof createClient>, userId: str
   await admin.from("proxy_calls").insert({ user_id: userId, action }).then(() => undefined, () => undefined);
 }
 
+// ----- LLM budget ---------------------------------------------------------
+// The Anthropic key is project-wide. The moment it exists for the approved
+// cuisine backfill, the blurb and details paths here go live too — and they
+// had no meter at all. Same daily-counter table as Google, its own cap.
+const LLM_DAILY_CAP = 300;
+async function llmBudgetSpent(admin: ReturnType<typeof createClient>): Promise<boolean> {
+  const day = new Date().toISOString().slice(0, 10);
+  const { data } = await admin
+    .from("api_usage_daily")
+    .select("count")
+    .eq("day", day)
+    .eq("action", "llm_proxy")
+    .eq("source", "anthropic")
+    .maybeSingle();
+  return ((data as { count?: number } | null)?.count ?? 0) >= LLM_DAILY_CAP;
+}
+async function recordLlmCall(admin: ReturnType<typeof createClient>): Promise<void> {
+  await admin.rpc("record_api_usage", { p_day: new Date().toISOString().slice(0, 10), p_action: "llm_proxy", p_source: "anthropic" });
+}
+
 // ----- handlers ---------------------------------------------------------
 
 async function handleNearby(
@@ -445,6 +465,10 @@ async function handleBlurb(
   if (!anthropic) {
     return json({ blurb: null, reason: "no_llm_configured" });
   }
+  if (await llmBudgetSpent(admin)) {
+    return json({ blurb: null, reason: "llm_budget_spent" });
+  }
+  await recordLlmCall(admin);
   const snippets: string[] = rest.review_snippets ?? [];
   if (snippets.length === 0 && !rest.editorial_summary) {
     return json({ blurb: null, reason: "no_reviews" });
@@ -534,8 +558,10 @@ async function classifyAndBuildRow(
   };
   // Fire the LLM when cuisine is ambiguous OR when there's enough review text
   // to read vibe/occasion — the latter enriches well-classified places too.
-  if (opts.useLLM && anthropic && (shouldUseLLM(derived) || shouldEnrichQualitative(llmInput))) {
+  if (opts.useLLM && anthropic && (shouldUseLLM(derived) || shouldEnrichQualitative(llmInput))
+      && !(opts.admin && await llmBudgetSpent(opts.admin))) {
     try {
+      if (opts.admin) await recordLlmCall(opts.admin);
       const suggestion = await classifyWithLLM(
         llmInput,
         anthropic.messages.create.bind(anthropic.messages),

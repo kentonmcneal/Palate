@@ -35,13 +35,21 @@ async function callProxy<T>(body: object): Promise<T> {
 }
 
 export async function nearbyRestaurants(lat: number, lng: number, radius_m = 150) {
-  const { places } = await callProxy<{ places: Restaurant[] }>({
+  const { places } = await nearbyRestaurantsDetailed(lat, lng, radius_m);
+  return places;
+}
+
+/** Same call, with the proxy's `degraded` flag: true when the daily Google
+ *  budget is spent and these are best-effort cached rows, which for passive
+ *  capture means "do not conclude anything from an empty list". */
+export async function nearbyRestaurantsDetailed(lat: number, lng: number, radius_m = 150) {
+  const res = await callProxy<{ places: Restaurant[]; degraded?: boolean }>({
     action: "nearby",
     lat,
     lng,
     radius_m,
   });
-  return places;
+  return { places: res.places, degraded: res.degraded === true };
 }
 
 export async function searchRestaurants(query: string, near?: { lat: number; lng: number }) {

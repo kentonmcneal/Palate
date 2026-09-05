@@ -37,6 +37,44 @@ export async function isFlagEnabled(key: string, fallback = false): Promise<bool
     await AsyncStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ enabled, at: Date.now() } satisfies Cached));
     return enabled;
   } catch {
-    return fallback;
+    // Stale beats wrong. A network blip used to read as "flag off", and in
+    // the passive pipeline "off" marked a real visit processed forever. The
+    // last value we ever saw is a far better guess than the fallback.
+    const stale = await readStale(key);
+    return stale ?? fallback;
+  }
+}
+
+async function readStale(key: string): Promise<boolean | null> {
+  try {
+    const raw = await AsyncStorage.getItem(CACHE_PREFIX + key);
+    if (!raw) return null;
+    return Boolean((JSON.parse(raw) as Cached).enabled);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Tri-state read: true, false, or null when the flag is genuinely unknown
+ * (no network and nothing ever cached). Callers that would destroy data on a
+ * wrong answer use this and retry on null.
+ */
+export async function readFlag(key: string): Promise<boolean | null> {
+  try {
+    const raw = await AsyncStorage.getItem(CACHE_PREFIX + key);
+    if (raw) {
+      const c = JSON.parse(raw) as Cached;
+      if (Date.now() - c.at < TTL_MS) return c.enabled;
+    }
+  } catch { /* fall through */ }
+  try {
+    const { data, error } = await supabase.from("feature_flags").select("enabled").eq("key", key).maybeSingle();
+    if (error) throw error;
+    const enabled = data ? Boolean(data.enabled) : false;
+    await AsyncStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ enabled, at: Date.now() } satisfies Cached));
+    return enabled;
+  } catch {
+    return readStale(key);
   }
 }
