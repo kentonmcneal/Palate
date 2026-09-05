@@ -20,6 +20,16 @@ import {
 
 const R_EARTH_KM = 6371;
 
+/**
+ * Total weight available if every attribute were populated: subregion 35,
+ * region 20, format 15, occasion 15, flavor 10, price 10. The neighbourhood
+ * bump is excluded because it is a bonus rather than a dimension every
+ * candidate could score on.
+ *
+ * Kept next to the weights it sums so the two cannot drift apart silently.
+ */
+export const MAX_ATTRIBUTE_WEIGHT = 35 + 20 + 15 + 15 + 10 + 10;
+
 export type MatchExplanation = {
   score: number;        // 0..100
   reasons: string[];    // 1-3 short why-bullets
@@ -109,11 +119,26 @@ export function scoreMatch(
     }
   }
 
-  // Default floor: if no signal at all, give 50% (neutral) — never zero, that
-  // would imply we know it's a bad match. We don't.
-  let score = totalWeight > 0
-    ? Math.round((raw / totalWeight) * 100)
-    : 50;
+  // Default floor: if no signal at all, give 50 (neutral). Never zero, which
+  // would imply we know it is a bad match. We don't.
+  //
+  // CONFIDENCE WEIGHTING. `raw / totalWeight` normalises over only the
+  // attributes that are PRESENT, which rewarded sparse tagging: a restaurant
+  // with one populated attribute was judged on that attribute alone and could
+  // reach 99, while a fully tagged one had to satisfy five dimensions to score
+  // the same. Measured across the live catalogue, subregion is missing on 47%
+  // of rows and carries the heaviest weight, so this was not a corner case —
+  // the ranking partly measured how much we happened to KNOW about a place
+  // rather than how well it fits.
+  //
+  // The fit is still the fit; it is now pulled toward neutral by how much of
+  // the available evidence was actually observed. A place scored on 15 of 105
+  // available weight lands near 50 whatever those 15 points said, and a
+  // thoroughly described place that genuinely matches keeps its high score.
+  const observed = totalWeight / MAX_ATTRIBUTE_WEIGHT;
+  const confidence = Math.min(1, Math.max(0, observed));
+  const fit = totalWeight > 0 ? (raw / totalWeight) * 100 : 50;
+  let score = Math.round(50 + (fit - 50) * confidence);
 
   // ---- Personal signal layer ------------------------------------------------
   // Pull anti-staleness, dismissals, item-level loved/not-for-me, friend visits,
