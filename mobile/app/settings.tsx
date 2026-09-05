@@ -450,7 +450,7 @@ function PassiveCaptureEntry() {
       />
       <Note>
         {needsRepair
-          ? "Paused — iOS set location back to \"While Using.\" Switch it to Always to resume."
+          ? "Paused. iOS set location back to \"While Using.\" Switch it to Always to resume."
           : "Notices restaurant stops with the app closed, then asks. Nothing is logged until you confirm."}
       </Note>
       {needsRepair && (

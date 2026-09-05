@@ -237,7 +237,7 @@ export default function VisitDetailScreen() {
               <Text style={styles.placeName}>{r?.name ?? "Unknown"}</Text>
               <Text style={[type.small, { marginTop: 4 }]} numberOfLines={2}>
                 {[r?.cuisine_type ? capitalize(r.cuisine_type) : null, r?.neighborhood, r?.address]
-                  .filter(Boolean).join(" · ") || "—"}
+                  .filter(Boolean).join(" · ") || "No details yet"}
               </Text>
             </View>
             <Pressable onPress={() => setEditingPlace(true)} style={styles.editPill}>

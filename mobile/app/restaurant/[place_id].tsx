@@ -579,13 +579,13 @@ function ineligibilityHint(
     return ineligibilityReason(r);
   }
   switch (r.ineligibility_reason) {
-    case "airport":         return "Inside an airport — not surfaced in discovery.";
-    case "lounge_gated":    return "Members-only / airport lounge — not surfaced in discovery.";
-    case "lounge":          return "Lounge — not surfaced in discovery.";
-    case "fast_food":       return "Fast food — not surfaced in discovery.";
+    case "airport":         return "Inside an airport. Not surfaced in discovery.";
+    case "lounge_gated":    return "Members only or airport lounge. Not surfaced in discovery.";
+    case "lounge":          return "Lounge. Not surfaced in discovery.";
+    case "fast_food":       return "Fast food. Not surfaced in discovery.";
     case "hotel":
-    case "hotel_generic":   return "Hotel restaurant — not surfaced in discovery.";
-    case "national_chain":  return "National chain — not surfaced in discovery.";
+    case "hotel_generic":   return "Hotel restaurant. Not surfaced in discovery.";
+    case "national_chain":  return "National chain. Not surfaced in discovery.";
     default:                return "Not surfaced in discovery.";
   }
 }

@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import { whenLabel, type HomeState } from "../lib/home-state";
@@ -12,10 +12,9 @@ import { whenLabel, type HomeState } from "../lib/home-state";
  * offers at most one action. States with no task deliberately have no button:
  * a screen with nothing to do must not invent something.
  *
- * The headline is set in a serif, which is the only place in the app that
- * breaks from Inter. It is a system face on iOS, so it costs no dependency, no
- * bundle and no font-loading step — and it is what makes this line read as a
- * sentence somebody wrote rather than a status field.
+ * Set in Inter, like everything else. The headline was briefly Georgia, which
+ * was the only serif in the app; one exception does not read as emphasis, it
+ * reads as a mistake. Size and leading carry the weight instead.
  */
 export function HomeHero({ state, now = new Date() }: { state: HomeState; now?: Date }) {
   const router = useRouter();
@@ -57,8 +56,6 @@ export function TrackingLine({ on, lastCheck }: { on: boolean; lastCheck: string
   );
 }
 
-const serif = Platform.select({ ios: "Georgia", default: "serif" });
-
 const styles = StyleSheet.create({
   wrap: { paddingTop: spacing.sm, paddingBottom: spacing.md },
   eyebrow: {
@@ -66,8 +63,8 @@ const styles = StyleSheet.create({
     color: colors.mute, marginBottom: 10,
   },
   headline: {
-    fontFamily: serif,
-    fontSize: 32, lineHeight: 37, color: colors.ink, letterSpacing: -0.4,
+    ...type.display,
+    fontSize: 30, lineHeight: 35, color: colors.ink, letterSpacing: -0.8,
   },
   body: { ...type.small, marginTop: 8, lineHeight: 20, fontSize: 14 },
   cta: {

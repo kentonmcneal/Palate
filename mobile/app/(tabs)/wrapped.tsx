@@ -400,7 +400,7 @@ export default function WrappedTab() {
             <Spacer size={8} />
             <Button title="Post to Feed" variant="ghost" onPress={shareToFeed} />
             <Spacer size={8} />
-            <Button title="Invite a friend — compare palates" onPress={inviteFriend} />
+            <Button title="Invite a friend to compare palates" onPress={inviteFriend} />
             <Spacer size={8} />
             <Button title="Share to Instagram Story" variant="ghost" onPress={shareToStory} />
             <Spacer size={8} />
@@ -481,7 +481,7 @@ function formatWeekRange(startISO: string, endISO: string): string {
     if (!y || !m || !d) return iso;
     return `${SHORT_MONTHS[m - 1]} ${d}`;
   };
-  return `${fmt(startISO)} — ${fmt(endISO)}`;
+  return `${fmt(startISO)} to ${fmt(endISO)}`;
 }
 
 function buildShareStats(w: Wrapped): ShareStat[] {

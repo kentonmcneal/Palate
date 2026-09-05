@@ -476,7 +476,7 @@ export default function DiscoverTab() {
                         where you go to be shown something, so it belongs here.
                         Under the ranked list on purpose — a stretch is what you
                         read after the safe answers, not instead of them. */}
-                    <List items={moodedList.items} surface="discover_for_you" emptyMsg="Log a few visits — once Palate sees a pattern, we'll personalize this list. In the meantime, the Trending tab shows what's hot in your area." />
+                    <List items={moodedList.items} surface="discover_for_you" emptyMsg="Log a few visits. Once Palate sees a pattern, we'll personalize this list. In the meantime, the Trending tab shows what's hot in your area." />
                     <Spacer size={20} />
                     <Text style={styles.stretchHead}>Stretch your palate</Text>
                     <StretchPick />
@@ -1000,7 +1000,7 @@ function buildTrendingGroups(
 
   return {
     groups: [{ title: "Popular near you", items: ranked.slice(0, TOP_PER_TAB) }],
-    fallbackNote: "Strong picks nearby — category shelves unlock as more people log in your area.",
+    fallbackNote: "Strong picks nearby. Category shelves unlock as more people log in your area.",
   };
 }
 

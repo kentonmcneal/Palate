@@ -157,7 +157,7 @@ export default function RankingsScreen() {
 function confidenceCopy(c: "none" | "low" | "medium" | "high"): string {
   switch (c) {
     case "high":   return "Built from your own head-to-heads.";
-    case "medium": return "Taking shape — a few more comparisons will sharpen it.";
+    case "medium": return "Taking shape. A few more comparisons will sharpen it.";
     case "low":    return "Early days. Answer a few more and this will settle.";
     case "none":   return "";
   }

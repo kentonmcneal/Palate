@@ -109,7 +109,7 @@ export default function FullscreenMap() {
       const msg = String(e?.message ?? e ?? "");
       setFetchError(
         msg.includes("rate_limited")
-          ? "Slow down a sec — too many map moves. New spots will load shortly."
+          ? "Slow down a sec. Too many map moves, so new spots will load shortly."
           : "Couldn't load this area. Check your connection and try again.",
       );
     } finally {

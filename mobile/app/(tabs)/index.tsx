@@ -204,7 +204,7 @@ export default function Home() {
     }
     Alert.alert(
       `🔥 ${days}-day streak!`,
-      "You're officially in the habit. Share it — and see who can keep up.",
+      "You're officially in the habit. Share it and see who can keep up.",
       [
         { text: "Not now", style: "cancel" },
         { text: "Share", onPress: () => void shareStreak(days) },
@@ -402,8 +402,8 @@ function prettyType(t: string) {
 
 const styles = StyleSheet.create({
   moodHead: {
-    fontFamily: "Georgia", fontSize: 21, lineHeight: 25,
-    color: colors.ink, letterSpacing: -0.2, marginBottom: 4,
+    ...type.title, fontSize: 21, lineHeight: 25,
+    color: colors.ink, letterSpacing: -0.4, marginBottom: 4,
   },
   palateRead: { ...type.small, marginBottom: 10, lineHeight: 18 },
   homeRule: {

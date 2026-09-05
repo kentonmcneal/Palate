@@ -31,7 +31,7 @@ export type ShareStat = { label: string; value: string };
 
 type Props = {
   identity: PrimaryIdentity;
-  /** Date range like "May 6 — May 12" */
+  /** Date range like "May 6 to May 12" */
   weekRange: string;
   /** Up to 3 stats — visits, places, repeat etc. */
   stats: ShareStat[];

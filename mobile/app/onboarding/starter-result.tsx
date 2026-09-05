@@ -23,7 +23,7 @@ export default function StarterResultScreen() {
   // an incomplete sentence.
   const starterName = p?.label ?? "Starter Palate";
   const expectationLine = p?.label
-    ? `This is your Starter Palate — ${starterName}. Your real Palate emerges from where you actually go. By Sunday, we'll know more.`
+    ? `This is your Starter Palate: ${starterName}. Your real Palate emerges from where you actually go. By Sunday, we'll know more.`
     : "This is your Starter Palate. Your real Palate emerges from where you actually go. By Sunday, we'll know more.";
 
   return (

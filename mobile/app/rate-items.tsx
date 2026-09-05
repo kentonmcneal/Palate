@@ -236,7 +236,7 @@ export default function RateItemsScreen() {
       <View style={styles.footer}>
         <Text style={styles.footerNote}>
           {savedCount === 0
-            ? "Optional — these sharpen your Palate."
+            ? "Optional. These sharpen your Palate."
             : `${savedCount} saved · sharpening your Palate.`}
         </Text>
         <Button title={savedCount === 0 ? "Skip" : "Done"} onPress={done} variant="ghost" />

@@ -115,7 +115,7 @@ function formatRange(start: string, end: string) {
   const e = new Date(end);
   const fmt = (d: Date) =>
     d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  return `${fmt(s)} — ${fmt(e)}`;
+  return `${fmt(s)} to ${fmt(e)}`;
 }
 
 // This card is the one deliberately DARK surface in the app — it is the share

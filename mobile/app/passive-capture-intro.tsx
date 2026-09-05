@@ -53,7 +53,7 @@ export default function PassiveCaptureIntro() {
     if (!r.started && r.reason === "native-module-unavailable") {
       Alert.alert(
         "Update Palate to finish",
-        "Background logging needs the latest version of the app. We've saved your choice — it turns on once you update.",
+        "Background logging needs the latest version of the app. We've saved your choice. It turns on once you update.",
       );
     }
     setStep("done");

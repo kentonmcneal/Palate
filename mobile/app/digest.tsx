@@ -99,7 +99,7 @@ export default function DigestScreen() {
         // partial success the user only discovers via a missing visit.
         Alert.alert(
           failed.length === 1 ? "One visit didn't save" : `${failed.length} visits didn't save`,
-          `${failed.map((f) => f.name).join(", ")} — still waiting for you. Try again in a moment.`,
+          `${failed.map((f) => f.name).join(", ")} still needs saving. Try again in a moment.`,
         );
       }
 

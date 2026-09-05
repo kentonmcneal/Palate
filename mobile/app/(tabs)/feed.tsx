@@ -317,8 +317,8 @@ function FeedBody({ event }: { event: FeedEvent }) {
       : "a restaurant";
     return (
       <Text style={styles.bodyText}>
-        Logged <Text style={styles.bodyAccent}>{cuisineLine}</Text>{p.neighborhood ? ` in ${p.neighborhood}` : ""}
-        {" — "}<Text style={{ color: colors.mute, fontStyle: "italic" }}>{p.restaurant_name}</Text>
+        Logged <Text style={styles.bodyAccent}>{p.restaurant_name}</Text>
+        {`, ${cuisineLine}`}{p.neighborhood ? ` in ${p.neighborhood}` : ""}
       </Text>
     );
   }

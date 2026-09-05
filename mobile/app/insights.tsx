@@ -165,7 +165,7 @@ export default function InsightsScreen() {
             <Text style={type.subtitle}>Nothing to read for {rangeLabel(range)}.</Text>
             <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
               {range === "all"
-                ? "Once you've logged a few visits, this is where your patterns surface — cuisine mix, where you eat, what time."
+                ? "Once you've logged a few visits, this is where your patterns surface: cuisine mix, where you eat, what time."
                 : "No visits logged in this range yet. Try a wider window above, or come back after a few more visits."}
             </Text>
           </View>
@@ -267,7 +267,7 @@ function Dashboard({
           <HeroStat label="Variety" value={`${Math.round(data.varietyScore * 100)}%`} />
           <HeroStat
             label="Top spot"
-            value={data.loyaltyScore > 0 ? `${Math.round(data.loyaltyScore * 100)}%` : "—"}
+            value={data.loyaltyScore > 0 ? `${Math.round(data.loyaltyScore * 100)}%` : "None yet"}
           />
         </View>
       </View>
@@ -608,13 +608,13 @@ function nextEraLine(asp: AspirationalPalate): string {
   const actualTop = asp.actualCuisines[0];
   if (cuisineGap && (!actualTop || cuisineGap.cuisine !== actualTop.cuisine)) {
     const label = (CUISINE_LABELS[cuisineGap.cuisine] ?? cuisineGap.cuisine);
-    return `You're saving more ${label} than you're eating — that's where you're headed.`;
+    return `You're saving more ${label} than you're eating. That's where you're headed.`;
   }
   if (asp.aspirationalNeighborhoods.length > 0) {
     const hood = asp.aspirationalNeighborhoods[0];
-    return `You're eyeing ${hood} — your next chapter likely starts there.`;
+    return `You're eyeing ${hood}. Your next chapter likely starts there.`;
   }
-  return "Your next era is forming — keep saving the spots that pull you.";
+  return "Your next era is forming. Keep saving the spots that pull you.";
 }
 
 function HeroStat({ label, value }: { label: string; value: string }) {
