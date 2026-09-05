@@ -9,6 +9,8 @@ import { wrappedPromise } from "../../lib/next-step";
 import { visitsToWrapped } from "../../lib/visits";
 import { colors, spacing, type } from "../../theme";
 import { generateForCurrentWeek, currentWrapped, isoWeekStart, type Wrapped } from "../../lib/wrapped";
+import { allTimeStats, weekIsWorthShowing } from "../../lib/wrapped-scope";
+import { loadAnalytics, type AnalyticsSummary } from "../../lib/analytics-stats";
 // Inline the constant to avoid eagerly evaluating wrapped-story.tsx on every
 // app launch. The file is loaded lazily when the user actually navigates to it.
 const STORY_LAST_SHOWN_KEY = "palate.wrappedStory.lastShownWeek";
@@ -65,6 +67,11 @@ export default function WrappedTab() {
   const [loading, setLoading] = useState(false);
   const [confettiKey, setConfettiKey] = useState(0);
   const cardRef = useRef<View>(null);
+  // All-time totals, for the hero. The week keeps its own section below.
+  const [allTime, setAllTime] = useState<AnalyticsSummary | null>(null);
+  // Separate from `profile`, which is the WEEK's lean and drives the "this week
+  // leaned" block lower down. The hero is about who you are, not this week.
+  const [allTimeProfile, setAllTimeProfile] = useState<PalateProfile | null>(null);
   const storyRef = useRef<View>(null);
   const palateShareRef = useRef<View>(null);
   // (storyShownThisSession lives at module scope above — see comment there.)
@@ -72,7 +79,7 @@ export default function WrappedTab() {
 
   const refresh = useCallback(async () => {
     try {
-      const [latest, allTimeVec, weekVec, st] = await Promise.all([
+      const [latest, allTimeVec, weekVec, st, analytics] = await Promise.all([
         // Regenerates when what is stored is not this week — the Sunday cron
         // writes once a week, so every meal after it was invisible until the
         // next Sunday.
@@ -80,7 +87,9 @@ export default function WrappedTab() {
         computeTasteVector().catch(() => null),
         computeTasteVector({ sinceDays: 7 }).catch(() => null),
         getSessionStage().catch(() => 1 as SessionStage),
+        loadAnalytics("all").catch(() => null),
       ]);
+      setAllTime(analytics);
       setStage(st);
       setData(latest);
       if (latest?.week_start) {
@@ -98,6 +107,13 @@ export default function WrappedTab() {
           thisWeekIso: isoWeekStart(),
         });
         setProfile(newProfile);
+      }
+      // The hero identity, from the whole history. A week vector of two visits
+      // resolves to "Learning" however long you have been using the app, which
+      // is exactly wrong on a card that is now about all of it.
+      if (allTimeVec) {
+        const p = await getProfileFromVector(allTimeVec).catch(() => null);
+        if (p) setAllTimeProfile(p);
       }
 
       // Area palates still renders on the tab. Everything else (percentile,
@@ -227,6 +243,12 @@ export default function WrappedTab() {
     }
   }
 
+  /** The hero's identity: all-time, falling back to the week if unavailable. */
+  function allTimeIdentityLabel(): string {
+    if (allTimeProfile) return allTimeProfile.primaryIdentity;
+    return identityLabel();
+  }
+
   function identityLabel(): string {
     // New Palate identity (Curator/Forager/Steward/Anchor/Learning) wins
     // when available — single source of truth.
@@ -251,7 +273,7 @@ export default function WrappedTab() {
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={type.title}>Your Wrapped</Text>
-            <Text style={styles.subtitle}>What your week says about how you eat.</Text>
+            <Text style={styles.subtitle}>Everywhere you've eaten, and what it says.</Text>
           </View>
           {/* Replay the 3-card story intro on demand. The story shows
               automatically once per ISO week; this button lets the user
@@ -279,14 +301,29 @@ export default function WrappedTab() {
             <ViewShot ref={cardRef as any} options={{ format: "png", quality: 1 }}>
               <WrappedCard
                 data={data}
-                personaOverride={identityLabel()}
-                personaDescription={profile && profile.primaryIdentity !== "Learning"
-                  ? IDENTITY_BLURB[profile.primaryIdentity].tagline
-                  : undefined}
-                topCuisines={summary?.topCuisines.slice(0, 3).map((c) => ({
-                  name: humanizeCuisine(c.name),
-                  share: c.share,
-                }))}
+                // Leads with the accumulated history. A single week reads as
+                // "2 visits" to somebody thirty restaurants in, which is true
+                // and tells them nothing about what the app has built.
+                stats={allTime ? allTimeStats(allTime) : undefined}
+                personaOverride={allTimeIdentityLabel()}
+                personaDescription={
+                  allTimeProfile && allTimeProfile.primaryIdentity !== "Learning"
+                    ? IDENTITY_BLURB[allTimeProfile.primaryIdentity].tagline
+                    : undefined
+                }
+                // All-time as well, or the card would mix scopes: lifetime
+                // visits and places above a week's worth of cuisines.
+                topCuisines={
+                  allTime
+                    ? allTime.cuisineBreakdown
+                        .filter((c) => c.cuisine && c.cuisine !== "other")
+                        .slice(0, 3)
+                        .map((c) => ({ name: humanizeCuisine(c.cuisine), share: c.pct }))
+                    : summary?.topCuisines.slice(0, 3).map((c) => ({
+                        name: humanizeCuisine(c.name),
+                        share: c.share,
+                      }))
+                }
               />
             </ViewShot>
 
@@ -295,6 +332,36 @@ export default function WrappedTab() {
                 EXCLUSIVELY in the Wrapped Story (app/wrapped-story.tsx),
                 rendered up to 5 Spotify-Wrapped-style cards. The Wrapped tab
                 stays scannable: share card, charts, area palates, explainer. */}
+
+            {/* The week as a section under it, not as the headline. Hidden
+                entirely when nothing was logged — a block reading "0 visits"
+                is worse than no block. */}
+            {weekIsWorthShowing(data.total_visits) && (
+              <View style={styles.weekBlock}>
+                <Text style={styles.weekEyebrow}>THIS WEEK</Text>
+                <Text style={styles.weekRange}>
+                  {new Date(data.week_start).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                  {" – "}
+                  {new Date(data.week_end).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                </Text>
+                <View style={styles.weekStats}>
+                  <View style={styles.weekStat}>
+                    <Text style={styles.weekStatValue}>{data.total_visits}</Text>
+                    <Text style={styles.weekStatLabel}>visits</Text>
+                  </View>
+                  <View style={styles.weekStat}>
+                    <Text style={styles.weekStatValue}>{data.unique_restaurants}</Text>
+                    <Text style={styles.weekStatLabel}>places</Text>
+                  </View>
+                  {!!data.top_restaurant && (
+                    <View style={[styles.weekStat, { flex: 2 }]}>
+                      <Text style={styles.weekStatValue} numberOfLines={1}>{data.top_restaurant}</Text>
+                      <Text style={styles.weekStatLabel}>most visited</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
 
             {/* Interactive charts — tap-to-focus donut + day-of-week bars */}
             <WrappedCharts />
@@ -455,6 +522,16 @@ const SAMPLE_WRAPPED: Wrapped = {
 };
 
 const styles = StyleSheet.create({
+  weekBlock: {
+    marginTop: spacing.lg, padding: spacing.lg, borderRadius: 20,
+    backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
+  },
+  weekEyebrow: { ...type.micro },
+  weekRange: { ...type.small, marginTop: 2 },
+  weekStats: { flexDirection: "row", gap: 16, marginTop: 14 },
+  weekStat: { flex: 1 },
+  weekStatValue: { fontSize: 22, fontWeight: "800", color: colors.ink, letterSpacing: -0.6 },
+  weekStatLabel: { ...type.small, marginTop: 2 },
   safe: { flex: 1, backgroundColor: colors.paper },
   container: { padding: spacing.lg, paddingBottom: 100 },
 

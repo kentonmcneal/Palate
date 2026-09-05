@@ -4,11 +4,14 @@ import { colors, radius } from "../theme";
 import type { Wrapped } from "../lib/wrapped";
 import { CanvasText } from "./CanvasText";
 
+import type { WrappedStats } from "../lib/wrapped-scope";
+
 export function WrappedCard({
   data,
   personaOverride,
   personaDescription,
   topCuisines,
+  stats,
 }: {
   data: Wrapped;
   /** When provided, replaces the stored personality_label — used to render
@@ -21,10 +24,21 @@ export function WrappedCard({
    *  chip row inside the black hero — same data as Profile, surfaced here
    *  so Wrapped tells the full story without an extra tab hop. */
   topCuisines?: { name: string; share: number }[];
+  /** When given, the card shows these numbers instead of the stored week's.
+   *  Used to lead with all-time while the week keeps its own section below. */
+  stats?: WrappedStats;
 }) {
   const j = data.wrapped_json;
-  const top3 = j.top_three ?? [];
   const personaLabel = personaOverride || data.personality_label;
+
+  const top3 = stats ? stats.topThree : (j.top_three ?? []);
+  const totalVisits = stats ? stats.totalVisits : data.total_visits;
+  const uniquePlaces = stats ? stats.uniqueRestaurants : data.unique_restaurants;
+  const repeatPct = Math.round(
+    (stats ? stats.repeatRate : (data.repeat_rate ?? 0)) * 100,
+  );
+  const rangeLabel = stats ? stats.rangeLabel : formatRange(data.week_start, data.week_end);
+  const eyebrow = stats ? stats.eyebrow : "YOUR PALATE THIS WEEK";
 
   return (
     <View style={styles.card} collapsable={false}>
@@ -40,24 +54,19 @@ export function WrappedCard({
         <View style={styles.logoBox}>
           <CanvasText style={styles.logoP}>p</CanvasText>
         </View>
-        <CanvasText style={styles.weekText}>
-          {formatRange(data.week_start, data.week_end)}
-        </CanvasText>
+        <CanvasText style={styles.weekText}>{rangeLabel}</CanvasText>
       </View>
 
-      <CanvasText style={styles.youAre}>YOUR PALATE THIS WEEK</CanvasText>
+      <CanvasText style={styles.youAre}>{eyebrow}</CanvasText>
       <CanvasText style={styles.persona}>{personaLabel}</CanvasText>
       {personaDescription ? (
         <CanvasText style={styles.personaDescription}>{personaDescription}</CanvasText>
       ) : null}
 
       <View style={styles.stats}>
-        <Stat label="visits" value={String(data.total_visits)} />
-        <Stat label="places" value={String(data.unique_restaurants)} />
-        <Stat
-          label="repeat"
-          value={`${Math.round((data.repeat_rate ?? 0) * 100)}%`}
-        />
+        <Stat label="visits" value={String(totalVisits)} />
+        <Stat label="places" value={String(uniquePlaces)} />
+        <Stat label="repeat" value={`${repeatPct}%`} />
       </View>
 
       <CanvasText style={styles.topLabel}>Top spots</CanvasText>
