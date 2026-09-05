@@ -63,7 +63,7 @@ export default function Permission() {
         <Text style={styles.h1}>Allow location</Text>
         <Spacer />
         <Text style={styles.p}>
-          iOS asks in two steps. Tap "Allow While Using the App" first — then
+          iOS asks in two steps. Tap "Allow While Using the App" first, then
           Palate asks once more for "Always," which is the one that matters.
         </Text>
         <Spacer size={28} />

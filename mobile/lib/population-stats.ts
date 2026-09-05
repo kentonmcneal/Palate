@@ -92,7 +92,7 @@ export function generatePercentileCards(v: TasteVector, identity: PalateIdentity
   if (v.neighborhoodLoyalty >= 0.4) {
     out.push({
       headline: intensityLabel(v.neighborhoodLoyalty),
-      body: "in neighborhood loyalty — you tend to stick close to home",
+      body: "in neighborhood loyalty. You tend to stick close to home",
       percentile: pctScore(v.neighborhoodLoyalty),
     });
   }

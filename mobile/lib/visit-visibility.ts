@@ -65,8 +65,8 @@ export function defaultVisitVisibility(place: Restaurant | null | undefined): Vi
 /** Copy for the curation surface, so the reason is legible rather than magic. */
 export function visibilityReasonLabel(reason: VisibilityDefault["reason"]): string {
   switch (reason) {
-    case "routine": return "Routine stop — hidden from your profile by default";
-    case "chain": return "Chain — hidden from your profile by default";
+    case "routine": return "Routine stop, hidden from your profile by default";
+    case "chain": return "Chain, hidden from your profile by default";
     default: return "Shown on your profile";
   }
 }

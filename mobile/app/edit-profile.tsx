@@ -307,7 +307,7 @@ export default function EditProfileScreen() {
             variant="ghost"
           />
           <Note>
-            Optional. Powers "Top Palates in your demographic" — never sold,
+            Optional. Powers "Top Palates in your demographic". Never sold,
             never shown publicly.
           </Note>
         </Section>

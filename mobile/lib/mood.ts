@@ -185,11 +185,11 @@ export function applyMood<T extends MoodCandidate>(
 /** Copy for the empty-ish case, so the UI never silently lies about what it
  *  is showing. */
 export function moodFallbackNote(mood: Mood): string {
-  if (isSurprise(mood)) return "Nothing far enough outside your usual nearby — here's the regular list.";
-  if (mood === QUICK) return "Nothing quick nearby right now — here's the regular list.";
-  if (mood === SIT_DOWN) return "Nowhere to sit down nearby right now — here's the regular list.";
-  if (mood === SOMEWHERE_NEW) return "You've been to everything good nearby — here's the regular list.";
-  return `Nothing great nearby for ${cuisineLabel(String(mood))} tonight — closest picks instead.`;
+  if (isSurprise(mood)) return "Nothing far enough outside your usual nearby. Here's the regular list.";
+  if (mood === QUICK) return "Nothing quick nearby right now. Here's the regular list.";
+  if (mood === SIT_DOWN) return "Nowhere to sit down nearby right now. Here's the regular list.";
+  if (mood === SOMEWHERE_NEW) return "You've been to everything good nearby. Here's the regular list.";
+  return `Nothing great nearby for ${cuisineLabel(String(mood))} tonight. Closest picks instead.`;
 }
 
 

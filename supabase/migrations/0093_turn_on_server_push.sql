@@ -1,9 +1,11 @@
 -- ============================================================================
--- 0093_turn_on_server_push.sql — the notifications, switched on.
+-- 0093_turn_on_server_push.sql — everything but the switch.
 -- ----------------------------------------------------------------------------
--- NOT APPLIED BY AN AGENT. This migration starts sending push notifications
--- to other people's phones, which is the founder's call. Apply with
--- `supabase db push`; turn it back off with one update to feature_flags.
+-- This migration does NOT turn server push on. feature_flags.server_push
+-- stays false, and send-push returns "skipped" every five minutes until it is
+-- true. The switch itself is admin_set_feature_flag, below, which the founder
+-- flips from Profile -> Admin on his own phone. An agent applying this sends
+-- nothing to anyone.
 --
 -- The founder logged a visit from his mother's phone and asked why nobody was
 -- told. Measured LIVE, the answer had four parts and none was the trigger:
@@ -24,8 +26,29 @@
 -- quota, sending nothing unless a row is due.
 -- ============================================================================
 
--- 1. The switch.
-update public.feature_flags set enabled = true where key = 'server_push';
+-- 1. The switch, as a function the founder can call from the app. Admin only;
+--    anyone else gets an exception, not a silent no-op.
+create or replace function public.admin_set_feature_flag(p_key text, p_enabled boolean)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null
+     or not exists (select 1 from public.profiles where id = auth.uid() and is_admin) then
+    raise exception 'admin only' using errcode = '42501';
+  end if;
+  update public.feature_flags set enabled = p_enabled where key = p_key;
+  if not found then
+    raise exception 'no such flag: %', p_key;
+  end if;
+  return p_enabled;
+end;
+$$;
+revoke all on function public.admin_set_feature_flag(text, boolean) from public;
+revoke all on function public.admin_set_feature_flag(text, boolean) from anon;
+grant execute on function public.admin_set_feature_flag(text, boolean) to authenticated;
 
 -- 2. A friend's visit is news for a few hours, not a day. Without expires_at,
 --    a row deferred by the daily cap would be delivered tomorrow as "just
@@ -57,11 +80,17 @@ begin
     return new;
   end if;
 
+  -- The Strava move: the number in the push is about the RECIPIENT. "Taylor
+  -- ate at Hog & Hominy" is news; "you have been 4 times" is a reason to tap.
   insert into public.push_outbox (user_id, title, body, data, send_after, dedupe_key, expires_at)
   select
     f.friend_id,
-    actor_name || ' just logged a visit',
-    actor_name || ' ate at ' || place_name || '.',
+    actor_name || ' just ate at ' || place_name,
+    case
+      when mine.n is null or mine.n = 0 then 'Somewhere you have not been yet.'
+      when mine.n = 1 then 'You have been once.'
+      else 'You have been ' || mine.n || ' times.'
+    end,
     jsonb_build_object('type', 'friend_visit', 'visit_id', new.id, 'user_id', new.user_id),
     public.next_sendable_at(p.timezone),
     'friend_visit:' || new.id::text,
@@ -73,6 +102,11 @@ begin
        and (requester_id = new.user_id or addressee_id = new.user_id)
   ) f
   join public.profiles p on p.id = f.friend_id
+  left join lateral (
+    select count(*)::int as n
+      from public.visits v
+     where v.user_id = f.friend_id and v.restaurant_id = new.restaurant_id
+  ) mine on true
   where p.push_social_activity
     and p.push_token is not null
     and public.next_sendable_at(p.timezone) is not null
@@ -109,10 +143,16 @@ select cron.schedule(
 
 -- 4. The nightly featured-lists refresh has been hitting pg_net's 5s default
 --    timeout (LIVE: "Timeout of 5000 ms reached" at 04:00 on 2026-09-05).
-update cron.job
-   set command = replace(command,
-                         E'body := jsonb_build_object(\'action\', \'refresh_all_active\')',
-                         E'body := jsonb_build_object(\'action\', \'refresh_all_active\'),\n      timeout_milliseconds := 120000')
+-- cron.job is not directly writable by the migration role; alter_job is.
+select cron.alter_job(
+  jobid,
+  command := replace(
+    command,
+    $old$body := jsonb_build_object('action', 'refresh_all_active')$old$,
+    $new$body := jsonb_build_object('action', 'refresh_all_active'),
+      timeout_milliseconds := 120000$new$)
+)
+  from cron.job
  where jobname = 'featured_lists_refresh_nightly'
    and command not like '%timeout_milliseconds%';
 
@@ -121,8 +161,8 @@ begin
   if not exists (select 1 from cron.job where jobname = 'drain_push_outbox' and active) then
     raise exception '0093: drain_push_outbox is not scheduled';
   end if;
-  if not exists (select 1 from public.feature_flags where key = 'server_push' and enabled) then
-    raise exception '0093: server_push is still off';
+  if exists (select 1 from public.feature_flags where key = 'server_push' and enabled) then
+    raise exception '0093: server_push must still be off after this migration';
   end if;
   if not exists (select 1 from cron.job where jobname = 'featured_lists_refresh_nightly' and command like '%timeout_milliseconds := 120000%') then
     raise exception '0093: featured-lists cron did not take the timeout';

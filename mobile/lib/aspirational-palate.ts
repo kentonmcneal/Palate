@@ -138,8 +138,8 @@ function buildInsightString(args: {
       : 0;
 
   const priceHint =
-    priceShift >= 0.7  ? " — and a step more upscale" :
-    priceShift <= -0.7 ? " — and a touch more casual" :
+    priceShift >= 0.7  ? ", and a step more upscale" :
+    priceShift <= -0.7 ? ", and a touch more casual" :
     "";
 
   return `Your current Palate is ${actualLabel}. Your Aspirational Palate leans ${aspirationalLabel}${priceHint}.`;

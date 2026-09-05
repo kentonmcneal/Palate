@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { LoadError } from "../../components/LoadError";
 import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator, Share } from "react-native";
 import { Text } from "../../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,6 +19,7 @@ export default function CompatibilityScreen() {
   const [result, setResult] = useState<PairResult | null>(null);
   const [friendName, setFriendName] = useState<string>("your friend");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<unknown>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -32,6 +34,7 @@ export default function CompatibilityScreen() {
       else if (snap?.email) setFriendName(snap.email.split("@")[0]);
     } catch (e) {
       void captureError(e, { at: "compatibility:load" });
+      setLoadError(e);
       setResult(null);
     } finally {
       setLoading(false);
@@ -69,10 +72,7 @@ export default function CompatibilityScreen() {
         )}
 
         {!loading && !result && (
-          <View style={styles.card}>
-            <Text style={type.subtitle}>Couldn't load this.</Text>
-            <Text style={[type.small, { marginTop: 6 }]}>Try again in a moment.</Text>
-          </View>
+          <LoadError error={loadError} onRetry={() => { setLoading(true); void load(); }} />
         )}
 
         {!loading && result && !result.ready && !result.authorized && (

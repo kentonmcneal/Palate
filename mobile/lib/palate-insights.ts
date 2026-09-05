@@ -436,7 +436,7 @@ function toRec(place: Restaurant, cuisine: string | null, reason: string): Resta
 function similarReasonFor(cuisine: string | null, i: PalateInsight): string {
   if (cuisine && cuisine === i.primaryCuisine) {
     const display = CUISINE_DISPLAY[cuisine] ?? cuisine;
-    return `More ${display} — your week was full of it`;
+    return `More ${display}. Your week was full of it.`;
   }
   if (i.dominantTrait) {
     return `${TRAIT_DISPLAY[i.dominantTrait][0].toUpperCase() + TRAIT_DISPLAY[i.dominantTrait].slice(1)} energy, like your usual spots`;
@@ -448,9 +448,9 @@ function stretchReasonFor(cuisine: string | null, i: PalateInsight): string {
   if (cuisine && cuisine !== i.primaryCuisine) {
     const display = CUISINE_DISPLAY[cuisine] ?? cuisine;
     if (i.experimentalTrait) {
-      return `${display} — leans into the ${TRAIT_DISPLAY[i.experimentalTrait]} side you've been exploring`;
+      return `${display} leans into the ${TRAIT_DISPLAY[i.experimentalTrait]} side you've been exploring`;
     }
-    return `${display} — a new lane for your Palate`;
+    return `${display}, a new lane for your Palate`;
   }
   return "Worth a left turn this week";
 }

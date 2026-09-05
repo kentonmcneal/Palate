@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
 import {
   View,
   StyleSheet,
@@ -19,13 +20,23 @@ export default function AdminWaitlistScreen() {
   const [pending, setPending] = useState<PendingUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string | null>(null);
+  // The server push switch. Lives here because it is the one action in the
+  // app that starts messaging other people, and that belongs to a person with
+  // is_admin, on a screen nobody else can open.
+  const [serverPush, setServerPush] = useState<boolean | null>(null);
+  const [flipping, setFlipping] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const admin = await isAdmin();
       setAllowed(admin);
-      if (admin) setPending(await listPendingUsers());
+      if (admin) {
+        setPending(await listPendingUsers());
+        const { data } = await supabase
+          .from("feature_flags").select("enabled").eq("key", "server_push").maybeSingle();
+        setServerPush(Boolean(data?.enabled));
+      }
     } catch (e: any) {
       Alert.alert("Couldn't load", e?.message ?? "Try again");
     } finally {
@@ -36,6 +47,21 @@ export default function AdminWaitlistScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function flipServerPush(next: boolean) {
+    setFlipping(true);
+    try {
+      const { error } = await supabase.rpc("admin_set_feature_flag", {
+        p_key: "server_push", p_enabled: next,
+      });
+      if (error) throw error;
+      setServerPush(next);
+    } catch (e: any) {
+      Alert.alert("Couldn't change that", e?.message ?? "Try again");
+    } finally {
+      setFlipping(false);
+    }
+  }
 
   async function act(id: string, status: "approved" | "rejected") {
     setActing(id);
@@ -69,6 +95,37 @@ export default function AdminWaitlistScreen() {
         {!loading && allowed === false && (
           <View style={styles.card}>
             <Text style={type.subtitle}>Not authorized.</Text>
+          </View>
+        )}
+
+        {!loading && allowed && serverPush !== null && (
+          <View style={styles.card}>
+            <Text style={type.subtitle}>Server push</Text>
+            <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
+              {serverPush
+                ? "On. Friends' visits, joins, Wrapped and comeback nudges are being sent, inside quiet hours and the daily cap."
+                : "Off. Everything queues and expires unsent. Turn this on when you want testers to start hearing from each other."}
+            </Text>
+            <Pressable
+              onPress={() => {
+                Alert.alert(
+                  serverPush ? "Turn server push off?" : "Turn server push on?",
+                  serverPush
+                    ? "Queued rows stop sending immediately."
+                    : "Every tester with a token starts receiving activity pushes.",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    { text: serverPush ? "Turn off" : "Turn on", onPress: () => void flipServerPush(!serverPush) },
+                  ],
+                );
+              }}
+              disabled={flipping}
+              style={[styles.approve, { marginTop: 12, alignSelf: "flex-start" }]}
+            >
+              <Text style={styles.approveText}>
+                {flipping ? "…" : serverPush ? "Turn off" : "Turn on"}
+              </Text>
+            </Pressable>
           </View>
         )}
 

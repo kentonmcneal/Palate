@@ -82,7 +82,7 @@ export function visitPayoff(f: VisitFacts): string | null {
 
   // Repeat visits say more about taste than a new place does.
   if (f.visitsHere >= 3) {
-    return `${ordinal(f.visitsHere)} time here — you're a regular.`;
+    return `${ordinal(f.visitsHere)} time here. You're a regular.`;
   }
   if (f.visitsHere === 2) {
     return "Second time here.";
@@ -101,7 +101,7 @@ export function visitPayoff(f: VisitFacts): string | null {
   }
 
   if (f.distinctPlaces >= 2 && f.visitsHere === 1) {
-    return `New place — that's ${f.distinctPlaces} you've been to.`;
+    return `New place. That's ${f.distinctPlaces} you've been to.`;
   }
 
   // Nothing worth saying. Say nothing.

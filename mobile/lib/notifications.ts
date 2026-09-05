@@ -254,7 +254,7 @@ function streakReminderCopy(streak: number): { title: string; body: string } {
   }
   return {
     title: "What did you eat today?",
-    body: "Ten seconds to log it — every visit sharpens your Wrapped.",
+    body: "Ten seconds to log it. Every visit sharpens your Wrapped.",
   };
 }
 

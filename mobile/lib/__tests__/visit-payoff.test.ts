@@ -38,10 +38,10 @@ describe("visitPayoff", () => {
 
   it("counts repeats correctly, with real ordinals", () => {
     expect(visitPayoff(f({ visitsHere: 2 }))).toBe("Second time here.");
-    expect(visitPayoff(f({ visitsHere: 3 }))).toBe("3rd time here — you're a regular.");
-    expect(visitPayoff(f({ visitsHere: 4 }))).toBe("4th time here — you're a regular.");
-    expect(visitPayoff(f({ visitsHere: 21 }))).toBe("21st time here — you're a regular.");
-    expect(visitPayoff(f({ visitsHere: 11 }))).toBe("11th time here — you're a regular.");
+    expect(visitPayoff(f({ visitsHere: 3 }))).toBe("3rd time here. You're a regular.");
+    expect(visitPayoff(f({ visitsHere: 4 }))).toBe("4th time here. You're a regular.");
+    expect(visitPayoff(f({ visitsHere: 21 }))).toBe("21st time here. You're a regular.");
+    expect(visitPayoff(f({ visitsHere: 11 }))).toBe("11th time here. You're a regular.");
   });
 
   it("surfaces a cuisine pattern the person may not have noticed", () => {

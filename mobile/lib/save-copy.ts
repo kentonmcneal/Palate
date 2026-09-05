@@ -7,11 +7,11 @@
 
 const SAVE_LINES = [
   { title: "Saved to your Next Moves", body: "We'll surface it when you're nearby." },
-  { title: "You'll thank yourself later", body: "Added to Next Moves — we'll resurface when it fits." },
+  { title: "You'll thank yourself later", body: "Added to Next Moves. We'll bring it back when it fits." },
   { title: "Banked", body: "It's on your Next Moves list now." },
   { title: "Locked in", body: "Saved. We'll nudge you when you're close." },
   { title: "On your radar", body: "Saved to Next Moves." },
-  { title: "Smart move", body: "Added — we'll bring it back at the right moment." },
+  { title: "Smart move", body: "Added. We'll bring it back at the right moment." },
 ];
 
 export function pickSaveCopy(): { title: string; body: string } {

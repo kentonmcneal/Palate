@@ -129,21 +129,21 @@ const RULES: Rule[] = [
   {
     label: "Late-Night Regular",
     secondary: "Your nights have a short list of go-to spots.",
-    description: "After-hours has a rhythm — and a small list of trusted seats.",
+    description: "After-hours has a rhythm, and a small list of trusted seats.",
     meaning: "Knows whose kitchen is still open at 11, and gets the same dish there every time.",
     match: (v) => Math.min(1, lateNightShare(v) * 1.5) * Math.min(1, 0.4 + v.repeatRate * 0.6) * gate(lateNightShare(v) >= 0.3 && v.repeatRate >= 0.4),
   },
   {
     label: "Morning Regular",
-    secondary: "Mornings have their own short list — and you keep showing up.",
-    description: "Breakfast isn't an afterthought — it's the first decision of the day.",
+    secondary: "Mornings have their own short list, and you keep showing up.",
+    description: "Breakfast isn't an afterthought. It's the first decision of the day.",
     meaning: "A counter, a paper, a regular order. Knows the baristas by name.",
     match: (v) => Math.min(1, morningShare(v) * 1.6) * gate(morningShare(v) >= 0.3),
   },
   {
     label: "Lunch-Hour Regular",
     secondary: "You've optimized the workday lunch.",
-    description: "Midday has a pattern — and you've found the spots that respect your time.",
+    description: "Midday has a pattern, and you've found the spots that respect your time.",
     meaning: "Plays the workday: fast in, fast out, never disappointed.",
     match: (v) => Math.min(1, lunchShare(v) * 1.5) * gate(lunchShare(v) >= 0.35 && v.weekendShare <= 0.3),
   },
@@ -152,7 +152,7 @@ const RULES: Rule[] = [
   {
     label: "Café Regular",
     secondary: "A familiar counter, a familiar order.",
-    description: "The café is part of your day — a place to think, not just to eat.",
+    description: "The café is part of your day. A place to think, not just to eat.",
     meaning: "Coffee, a quiet seat, a routine. Knows the staff and the wifi password.",
     match: (v) => Math.min(1, shareOf(v.formatClass, "café") * 1.6) * gate(shareOf(v.formatClass, "café") >= 0.35),
   },
@@ -196,7 +196,7 @@ const RULES: Rule[] = [
   {
     label: "Pizza Loyalist",
     secondary: "You've earned an opinion on every slice in town.",
-    description: "Pizza isn't a meal — it's a category with rules.",
+    description: "Pizza isn't a meal. It's a category with rules.",
     meaning: "Knows the difference between styles, and isn't quiet about it.",
     match: (v) => Math.min(1, pizzaShare(v) * 1.6) * gate(pizzaShare(v) >= 0.3),
   },
@@ -224,7 +224,7 @@ const RULES: Rule[] = [
   {
     label: "Burger Regular",
     secondary: "You know whose grind hits hardest.",
-    description: "Burgers are a craft — and you've ranked them.",
+    description: "Burgers are a craft, and you've ranked them.",
     meaning: "Has a top three locally. Will defend it.",
     match: (v) => Math.min(1, burgerShare(v) * 2) * gate(burgerShare(v) >= 0.3),
   },
@@ -233,14 +233,14 @@ const RULES: Rule[] = [
   {
     label: "Brunch Devotee",
     secondary: "Weekend mornings are a ritual.",
-    description: "Saturday and Sunday have a structure — and it starts with brunch.",
+    description: "Saturday and Sunday have a structure, and it starts with brunch.",
     meaning: "Books ahead. Knows the bottomless rules. Stays for the second round.",
     match: (v) => Math.min(1, shareOf(v.occasion, "brunch") * 2) * gate(shareOf(v.occasion, "brunch") >= 0.3),
   },
   {
     label: "Date-Night Curator",
     secondary: "Each pick is staged for the company.",
-    description: "Restaurants are part of the script — picked for the room as much as the food.",
+    description: "Restaurants are part of the script, picked for the room as much as the food.",
     meaning: "Notices lighting, music, and seating. Has a short list on standby.",
     match: (v) => Math.min(1, shareOf(v.occasion, "date_night") * 2) * gate(shareOf(v.occasion, "date_night") >= 0.3),
   },
@@ -257,7 +257,7 @@ const RULES: Rule[] = [
   {
     label: "Solo Diner",
     secondary: "You eat at the counter and read the room.",
-    description: "Eating alone isn't a fallback — it's the preferred mode.",
+    description: "Eating alone isn't a fallback. It's the preferred mode.",
     meaning: "Sits at the bar, talks to the chef, leaves on time.",
     match: (v) => Math.min(1, shareOf(v.occasion, "casual_solo") * 1.8) * gate(shareOf(v.occasion, "casual_solo") >= 0.4),
   },
@@ -272,7 +272,7 @@ const RULES: Rule[] = [
   },
   {
     label: "Loyal Local",
-    secondary: "A few blocks, a few favorites — that's enough.",
+    secondary: "A few blocks, a few favorites. That's enough.",
     description: "Your block is your menu. You don't need more options.",
     meaning: "Knows the staff, the timing, the off-menu. Fierce about the neighborhood.",
     match: (v) => Math.min(1, v.neighborhoodLoyalty * 1.4) * gate(v.neighborhoodLoyalty >= 0.55 && v.repeatRate >= 0.4),
@@ -294,7 +294,7 @@ const RULES: Rule[] = [
   {
     label: "Weeknight Regular",
     secondary: "Tuesday dinner has a name and a table.",
-    description: "Weeknights have a rhythm — and a small set of trusted spots.",
+    description: "Weeknights have a rhythm, and a small set of trusted spots.",
     meaning: "Goes early, sits at the same seat, knows the regular order.",
     match: (v) => Math.min(1, (1 - v.weekendShare) * 1.2) * Math.min(1, v.repeatRate * 1.4) * gate(v.weekendShare <= 0.3 && v.repeatRate >= 0.4),
   },
@@ -331,7 +331,7 @@ const RULES: Rule[] = [
   {
     label: "Pattern Forming",
     secondary: "A picture is starting to emerge.",
-    description: "Your taste is taking shape. Keep logging — week three is where it gets specific.",
+    description: "Your taste is taking shape. Keep logging. Week three is where it gets specific.",
     meaning: "Build the inputs and Palate will surface a real identity within 2-3 visits.",
     match: (v) => 0.3 * gate(v.visitCount > 0),
   },
@@ -339,7 +339,7 @@ const RULES: Rule[] = [
     label: "Just Getting Started",
     secondary: "Log a few visits and we'll start drawing the picture.",
     description: "Your palate is yet to be documented.",
-    meaning: "Log your first visit — the system gets specific quickly.",
+    meaning: "Log your first visit. It gets specific quickly.",
     match: () => 0.1,
   },
 ];
@@ -394,7 +394,7 @@ function floor(_v?: TasteVector | {}, mood?: boolean): PalateIdentity {
     : "Your palate is yet to be documented.";
   const meaning = mood
     ? "Build the inputs and Palate will surface a real identity within 2-3 visits."
-    : "Log your first visit — the system gets specific quickly.";
+    : "Log your first visit. It gets specific quickly.";
   return { label, secondary, description, meaning, evidence: [secondary], confidence: 0.2, source: "taxonomy" };
 }
 
@@ -471,7 +471,7 @@ const ARCHETYPE_LORE: Record<string, PalateLore> = {
     behavior: "Picks for the table, remembers the night.",
   },
   Seeker: {
-    story: "Familiar isn't the goal — the search is.",
+    story: "Familiar isn't the goal. The search is.",
     behavior: "First impressions, then on to the next.",
   },
   Devourer: {
@@ -503,7 +503,7 @@ const ARCHETYPE_LORE: Record<string, PalateLore> = {
     behavior: "Seats open up; you're already there.",
   },
   Riser: {
-    story: "Mornings aren't a chore — they're the plan.",
+    story: "Mornings aren't a chore. They're the plan.",
     behavior: "Counter at 7, paper, eggs.",
   },
   Default: {

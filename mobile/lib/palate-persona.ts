@@ -143,7 +143,7 @@ const PERSONAS: PersonaDef[] = [
       c.topRestaurant.profile.decisionIntent === "no_friction",
     describe: (c) => {
       const r = c.topRestaurant!;
-      return `You leaned into consistency and convenience. You chose ${r.name} ${r.count} times this week — that wasn't random. ${capFirst(r.profile.flavorSignature)}. You optimized for friction, and there is nothing wrong with that.`;
+      return `You leaned into consistency and convenience. You chose ${r.name} ${r.count} times this week. That wasn't random. ${capFirst(r.profile.flavorSignature)}. You optimized for friction, and there is nothing wrong with that.`;
     },
     signals: (c) => signalList(c, ["routine", "convenient", "low_variety"]),
   },
@@ -159,7 +159,7 @@ const PERSONAS: PersonaDef[] = [
       c.topRestaurant.profile.decisionIntent === "preference_driven",
     describe: (c) => {
       const r = c.topRestaurant!;
-      return `You showed a preference for ${r.profile.flavorSignature}. ${r.count} visits to ${r.name} this week — this wasn't convenience, you had a specific craving and you fed it.`;
+      return `You showed a preference for ${r.profile.flavorSignature}. ${r.count} visits to ${r.name} this week. This wasn't convenience, you had a specific craving and you fed it.`;
     },
     signals: (c) => signalList(c, ["craving_driven", "comfort_food", "low_variety"]),
   },
@@ -175,7 +175,7 @@ const PERSONAS: PersonaDef[] = [
       c.topRestaurant.profile.brandTier === "premium_fast_casual",
     describe: (c) => {
       const r = c.topRestaurant!;
-      return `You returned to ${r.name} ${r.count} times this week. Not the cheapest option — but the one you trust. ${capFirst(r.profile.flavorSignature)}. You're loyal to a feeling, not a price.`;
+      return `You returned to ${r.name} ${r.count} times this week. Not the cheapest option, but the one you trust. ${capFirst(r.profile.flavorSignature)}. You're loyal to a feeling, not a price.`;
     },
     signals: (c) => signalList(c, ["elevated", "routine", "healthy_leaning"]),
   },
@@ -190,7 +190,7 @@ const PERSONAS: PersonaDef[] = [
       c.visitCount >= 3 && (c.highHealthCount / c.visitCount) >= 0.6,
     describe: (c) => {
       const examples = topNames(c, 2);
-      return `You optimized for speed without giving up the plot. ${c.highHealthCount} of your ${c.visitCount} meals leaned bright, fresh, intentional${examples ? ` — ${examples}` : ""}. You'd choose a bowl over cooking, even when you have time.`;
+      return `You optimized for speed without giving up the plot. ${c.highHealthCount} of your ${c.visitCount} meals leaned bright, fresh, intentional${examples ? `: ${examples}` : ""}. You'd choose a bowl over cooking, even when you have time.`;
     },
     signals: (c) => signalList(c, ["healthy_leaning", "intentional", "elevated"]),
   },
@@ -204,7 +204,7 @@ const PERSONAS: PersonaDef[] = [
     matches: (c) => c.visitCount >= 3 && (c.formatCounts["cafe"] ?? 0) / c.visitCount > 0.5,
     describe: (c) => {
       const top = c.topRestaurant ? c.topRestaurant.name : "your café";
-      return `Five out of seven mornings start the same way. You went to ${top} more than anywhere else this week — the barista probably already knows your order.`;
+      return `Five out of seven mornings start the same way. You went to ${top} more than anywhere else this week. The barista probably already knows your order.`;
     },
     signals: (c) => signalList(c, ["routine", "morning", "café"]),
   },
@@ -218,7 +218,7 @@ const PERSONAS: PersonaDef[] = [
     matches: (c) => c.uniqueCount >= 5 && c.repeatRate <= 0.2,
     describe: (c) => {
       const cuisines = Object.keys(c.cuisineCounts).slice(0, 3).join(", ");
-      return `You barely repeated anywhere. ${c.uniqueCount} different restaurants in ${c.visitCount} meals${cuisines ? ` — across ${cuisines}` : ""}. You're collecting places, not patterns.`;
+      return `You barely repeated anywhere. ${c.uniqueCount} different restaurants in ${c.visitCount} meals${cuisines ? `, across ${cuisines}` : ""}. You're collecting places, not patterns.`;
     },
     signals: (c) => signalList(c, ["exploratory", "high_variety", "novelty_seeking"]),
   },
@@ -227,7 +227,7 @@ const PERSONAS: PersonaDef[] = [
   {
     key: "practical_variety_seeker",
     label: "The Practical Variety Seeker",
-    tagline: "You eat a little bit of everything — on purpose.",
+    tagline: "You eat a little bit of everything, on purpose.",
     recommendationStrategy: "balanced",
     matches: (c) => {
       const hasHealthy = c.highHealthCount >= 1;
@@ -237,7 +237,7 @@ const PERSONAS: PersonaDef[] = [
     },
     describe: (c) => {
       const examples = topNames(c, 3);
-      return `You balanced the week: bright and fresh on one day, indulgent on another, fast and easy when you needed it${examples ? ` — moving between ${examples}` : ""}. You're choosing different modes on purpose.`;
+      return `You balanced the week: bright and fresh on one day, indulgent on another, fast and easy when you needed it${examples ? `, moving between ${examples}` : ""}. You're choosing different modes on purpose.`;
     },
     signals: (c) => signalList(c, ["balanced", "intentional", "high_variety"]),
   },
@@ -251,7 +251,7 @@ const PERSONAS: PersonaDef[] = [
     matches: (c) => c.visitCount >= 2 && ((c.formatCounts["bar"] ?? 0) >= 1 || (c.behaviorCounts["social"] ?? 0) >= 2),
     describe: (c) => {
       const examples = topNames(c, 2);
-      return `Your week skewed social${examples ? ` — ${examples}` : ""}. Bars, group-friendly tables, places designed for hanging out. The meal is the medium, the people are the message.`;
+      return `Your week skewed social${examples ? `: ${examples}` : ""}. Bars, group-friendly tables, places designed for hanging out. The meal is the medium, the people are the message.`;
     },
     signals: (c) => signalList(c, ["social", "shareable", "late-night"]),
   },
@@ -266,7 +266,7 @@ const PERSONAS: PersonaDef[] = [
     describe: (c) => {
       const examples = topNames(c, 2);
       const cuisine = topKey(c.cuisineCounts) ?? "the things you actually crave";
-      return `Your week leaned toward ${cuisine}${examples ? ` — ${examples}` : ""}. You eat what you actually want, and we love that for you.`;
+      return `Your week leaned toward ${cuisine}${examples ? `: ${examples}` : ""}. You eat what you actually want, and we love that for you.`;
     },
     signals: (c) => signalList(c, ["comfort_food", "indulgent"]),
   },
@@ -496,9 +496,9 @@ function similarReason(persona: PalatePersona, p: RestaurantProfile): string {
     case "convenience": return "Fast and reliable, like the spots you keep going back to";
     case "flavor_loyal": return `Same craving lane: ${p.flavorSignature}`;
     case "premium":     return "Same elevated lane as your usual";
-    case "explore":     return "Different cuisine, similar vibe — worth a try";
+    case "explore":     return "Different cuisine, similar vibe. Worth a try.";
     case "morning":     return "Café energy, like your usual mornings";
-    case "wellness":    return "Bright and intentional — fits how you eat";
+    case "wellness":    return "Bright and intentional. Fits how you eat.";
     case "balanced":    return `${p.flavorSignature}, fits your week`;
   }
 }

@@ -74,7 +74,7 @@ export default function ImportEmail() {
           <Button title="Continue" onPress={done} />
           <Spacer size={8} />
           <Pressable onPress={done} style={styles.skip} accessibilityRole="button">
-            <Text style={styles.skipText}>Skip — I'll do this later</Text>
+            <Text style={styles.skipText}>Skip for now</Text>
           </Pressable>
         </View>
       )}

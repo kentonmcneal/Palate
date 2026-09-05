@@ -65,7 +65,7 @@ export function composeWrapped(graph: TasteGraph): WrappedSummary {
   const summary = summaryParts.join(" · ") || "A quiet week. Log a few visits and we'll start the picture.";
 
   const nextEra = graph.explorationRate >= 0.6
-    ? "Your next era: keep wandering — the map's getting bigger every week."
+    ? "Your next era: keep wandering. The map's getting bigger every week."
     : graph.repeatRate >= 0.55
     ? "Your next era: try one new spot this week. Stretch the routine."
     : "Your next era: lean into the cuisines you've been circling.";

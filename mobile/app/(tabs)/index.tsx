@@ -14,6 +14,7 @@ import { openInAppleMaps } from "../../lib/maps";
 import { AnimatedNumber } from "../../components/AnimatedNumber";
 import { computeStreak, type StreakInfo } from "../../lib/streak";
 import { refreshDailyReminder } from "../../lib/notifications";
+import { refreshWrappedTease } from "../../lib/wrapped-tease";
 import { captureError } from "../../lib/observability";
 import { postMilestoneAndNotify } from "../../lib/feed";
 import { generateInviteLink } from "../../lib/referrals";
@@ -174,6 +175,12 @@ export default function Home() {
       // as an unhandled fatal (see _layout startup effect for why that crashes).
       void refreshDailyReminder({ loggedToday: s.value.loggedToday, streak: s.value.current })
         .catch((e) => captureError(e, { at: "refreshDailyReminder" }));
+      // Saturday 18:30: the week's numbers, and that Wrapped is in tomorrow.
+      // Its own read of the week, since the ten recent visits above are not
+      // the week.
+      void recentVisits(60)
+        .then((all) => refreshWrappedTease(all))
+        .catch((e) => captureError(e, { at: "refreshWrappedTease" }));
       // Fire confetti once per session when the user crosses a milestone day.
       const m = milestoneFor(s.value.current);
       if (m && celebratedStreak !== m) {

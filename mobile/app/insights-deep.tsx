@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { LoadError } from "../components/LoadError";
 import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { Text } from "../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -29,6 +30,7 @@ export default function InsightsDeepScreen() {
   const [area, setArea] = useState<AreaPalateSummary | null>(null);
   const [stage, setStage] = useState<SessionStage>(1);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<unknown>(null);
 
   const load = useCallback(async () => {
     try {
@@ -57,6 +59,11 @@ export default function InsightsDeepScreen() {
         const c = await generateCohortInsightAsync(ids.primary, v).catch(() => null);
         setCohort(c);
       }
+      setError(null);
+    } catch (e) {
+      // Was try/finally with no catch: a throw here left `load()` as an
+      // unhandled rejection, which the New Architecture turns into a fatal.
+      setError(e ?? new Error("insights load failed"));
     } finally {
       setLoading(false);
     }
@@ -77,6 +84,8 @@ export default function InsightsDeepScreen() {
       <ScrollView contentContainerStyle={styles.body}>
         {loading ? (
           <View style={styles.center}><ActivityIndicator color={colors.red} /></View>
+        ) : error && !vector ? (
+          <LoadError error={error} onRetry={() => { void load(); }} />
         ) : stage < 3 ? (
           <View style={styles.lockedCard}>
             <Text style={styles.lockedTitle}>Insights unlock at 3 visits</Text>

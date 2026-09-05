@@ -118,7 +118,7 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
       { emoji: "🍳", text: "I'd rather have spent that on groceries.",
         personaWeights: { fast_casual_regular: 2, cafe_dweller: 1, practical_variety_seeker: 1 },
         chip: "Cook-at-home leanings",
-        feedback: "Eating out — but the math is in your head." },
+        feedback: "Eating out, but the math is in your head." },
     ],
   },
   {

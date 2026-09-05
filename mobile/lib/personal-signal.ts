@@ -267,7 +267,7 @@ export function personalAdjustment(opts: {
     if (over > 0) {
       const pen = Math.min(STALE_CAP, over * STALE_PER_VISIT);
       delta -= pen;
-      notes.push(`${visits} visits — easing up`);
+      notes.push(`${visits} visits, easing up`);
     }
   }
 

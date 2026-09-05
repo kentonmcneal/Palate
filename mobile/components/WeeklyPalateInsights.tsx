@@ -120,7 +120,7 @@ function ReadyView({
 
       {recs.similar.length > 0 && (
         <View style={{ marginTop: spacing.xl }}>
-          <Text style={styles.sectionLabel}>Try next — places you'll probably like</Text>
+          <Text style={styles.sectionLabel}>Try next: places you'll probably like</Text>
           <Spacer size={10} />
           {recs.similar.map((r) => (
             <RecCard key={r.google_place_id} rec={r} kind="similar" />

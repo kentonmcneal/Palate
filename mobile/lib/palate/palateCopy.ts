@@ -20,9 +20,9 @@ export const IDENTITY_BLURB: Record<PrimaryIdentity, { tagline: string; descript
     shareDescriptor: "New places, carefully chosen.",
   },
   Forager: {
-    tagline: "Always trying something new — casually.",
+    tagline: "Always trying something new, casually.",
     description: "Foragers explore widely without needing every meal to be an event. Variety, movement, and discovery define the pattern.",
-    shareDescriptor: "Always trying something new — casually.",
+    shareDescriptor: "Always trying something new, casually.",
   },
   Steward: {
     tagline: "Returns to the right places, deliberately.",
@@ -36,7 +36,7 @@ export const IDENTITY_BLURB: Record<PrimaryIdentity, { tagline: string; descript
   },
   Learning: {
     tagline: "Still finding the pattern.",
-    description: "Once you've logged a few visits, your Palate starts to surface — the kind of places you eat and how often you mix it up.",
+    description: "Once you've logged a few visits, your Palate starts to surface: the kind of places you eat and how often you mix it up.",
     shareDescriptor: "Your Palate is taking shape.",
   },
 };
@@ -81,16 +81,16 @@ function pickSecondLine(primary: PrimaryIdentity, d: UserWeeklyData): string {
     return "New places, carefully chosen.";
   }
   if (primary === "Forager") {
-    if (d.cuisineDiversity >= 0.6) return "You chased variety — new places, low repetition, and a wide cuisine spread.";
-    return "You favored new spots over the usual — without needing them to be an event.";
+    if (d.cuisineDiversity >= 0.6) return "You chased variety: new places, low repetition, and a wide cuisine spread.";
+    return "You favored new spots over the usual, without needing them to be an event.";
   }
   if (primary === "Steward") {
     if (d.repeatRate >= 0.5) return "You returned to a short list and made each visit count.";
-    return "You leaned on places that earned the trip — quality over quantity.";
+    return "You leaned on places that earned the trip. Quality over quantity.";
   }
   // Anchor
-  if (d.repeatRate >= 0.5) return "Your usual rotation carried the week — familiar, casual, dependable.";
-  return "Familiar spots, casual energy — the trusted few.";
+  if (d.repeatRate >= 0.5) return "Your usual rotation carried the week: familiar, casual, dependable.";
+  return "Familiar spots, casual energy. The trusted few.";
 }
 
 // ----------------------------------------------------------------------------
@@ -190,7 +190,7 @@ export function composeMovement(
 // "What are Palates?" copy — locked per design bible.
 // ----------------------------------------------------------------------------
 export const WHAT_ARE_PALATES = {
-  intro: "Your Palate reflects how you actually eat — not just what you say you like. It looks at where you go, what you repeat, how much you explore, and whether your choices lean casual or premium. Your Palate can change week to week because it reflects who you are right now.",
+  intro: "Your Palate reflects how you actually eat, not just what you say you like. It looks at where you go, what you repeat, how much you explore, and whether your choices lean casual or premium. Your Palate can change week to week because it reflects who you are right now.",
   axisIntro: "Two axes: how much you explore, and whether your choices lean casual or premium.",
   tagsIntro: "Tags add texture. Grounded, Roamer, Late-night, Brunch-heavy, and Stretching lately describe the details of your week without replacing your main Palate.",
   axisLabels: {
@@ -224,7 +224,7 @@ export function composeEgoHook(profile: PalateProfile): string {
     if (p <= 0.15) return "All casual this week.";
     if (p <= 0.25) return "Mostly casual this week.";
   }
-  return "You're moving — your Palate is shifting.";
+  return "You're moving. Your Palate is shifting.";
 }
 
 // ----------------------------------------------------------------------------
@@ -244,27 +244,27 @@ export function composeNextEra(
   switch (movement.direction) {
     case "more_novel":
       return current === "Anchor"
-        ? "You're moving toward Forager — exploring more, repeating less."
+        ? "You're moving toward Forager: exploring more, repeating less."
         : current === "Steward"
-        ? "You're moving toward Curator — keeping the bar high, widening the search."
-        : `You're stretching past ${current} — more new spots, fewer repeats.`;
+        ? "You're moving toward Curator: keeping the bar high, widening the search."
+        : `You're stretching past ${current}: more new spots, fewer repeats.`;
     case "more_consistent":
       return current === "Forager"
-        ? "You're moving toward Anchor — fewer new picks, more comfort."
+        ? "You're moving toward Anchor: fewer new picks, more comfort."
         : current === "Curator"
-        ? "You're moving toward Steward — refining a short list."
+        ? "You're moving toward Steward, refining a short list."
         : `You're settling deeper into ${current}.`;
     case "more_premium":
       return current === "Forager"
-        ? "You're moving toward Curator — same exploration, more elevated picks."
+        ? "You're moving toward Curator: same exploration, more elevated picks."
         : current === "Anchor"
-        ? "You're moving toward Steward — quietly raising the bar."
+        ? "You're moving toward Steward, quietly raising the bar."
         : `You're leaning more elevated than your usual ${current} pattern.`;
     case "more_casual":
       return current === "Curator"
-        ? "You're moving toward Forager — same hunger to explore, less formality."
+        ? "You're moving toward Forager: same hunger to explore, less formality."
         : current === "Steward"
-        ? "You're moving toward Anchor — easing into the trusted few."
+        ? "You're moving toward Anchor, easing into the trusted few."
         : `You're easing off the formality this week.`;
     default:
       return `You're holding the ${current} pattern.`;

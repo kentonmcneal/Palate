@@ -254,7 +254,7 @@ function deriveHourlyInsights(hours: number[], total: number): HourlyInsight[] {
   if (earlyMorning / total >= 0.3) {
     out.push({
       pattern: "early_riser",
-      text: "You tend to eat earlier than most — before 9am shows up a lot.",
+      text: "You tend to eat earlier than most. Before 9am shows up a lot.",
     });
   }
 
@@ -290,7 +290,7 @@ function deriveHourlyInsights(hours: number[], total: number): HourlyInsight[] {
   if (out.length === 0 && distinctHours >= 8) {
     out.push({
       pattern: "irregular",
-      text: "Your eating times are pretty spread out — no single hour dominates.",
+      text: "Your eating times are pretty spread out. No single hour dominates.",
     });
   }
 

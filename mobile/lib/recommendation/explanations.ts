@@ -126,7 +126,7 @@ export function explainRightNow(opts: {
 
   const out: RightNowExplanation = { primary, secondary: parts.join(" · ") };
   if (opts.compat.confidence === "low") {
-    out.confidenceNote = "Early read — Palate's still learning your taste.";
+    out.confidenceNote = "Early read. Palate's still learning your taste.";
   }
   return out;
 }

@@ -62,7 +62,7 @@ export const PINGS: Ping[] = [
     hour: 10,
     minute: 0,
     title: "Saturday brunch, sorted",
-    body: "Three near you — no scrolling required.",
+    body: "Three near you. No scrolling required.",
     pathname: "/(tabs)/discover",
     params: { list: "brunch" },
   },

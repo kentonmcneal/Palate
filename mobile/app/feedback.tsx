@@ -63,7 +63,7 @@ export default function Feedback() {
       <SafeAreaView style={styles.safe}>
         <View style={styles.doneWrap}>
           <Text style={styles.doneEmoji}>🙏</Text>
-          <Text style={[type.title, { textAlign: "center" }]}>Got it — thank you</Text>
+          <Text style={[type.title, { textAlign: "center" }]}>Got it. Thank you.</Text>
           <Text style={[type.small, { textAlign: "center", marginTop: 8, lineHeight: 20 }]}>
             This goes straight to us. Early feedback shapes what Palate becomes.
           </Text>

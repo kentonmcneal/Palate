@@ -65,6 +65,6 @@ export async function getRestaurantIdByPlaceId(googlePlaceId: string) {
     .eq("google_place_id", googlePlaceId)
     .maybeSingle();
   if (error) throw error;
-  if (!data) throw new Error("Restaurant isn't ready yet — please try again in a moment.");
+  if (!data) throw new Error("Restaurant isn't ready yet. Try again in a moment.");
   return data.id as string;
 }

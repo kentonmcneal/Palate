@@ -59,7 +59,7 @@ export function ScreenshotFeedbackSheet({
     >
       <View style={styles.card}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Saw a screenshot — something off?</Text>
+          <Text style={styles.title}>Saw a screenshot. Something off?</Text>
           <Text style={styles.sub}>Takes 20 seconds and goes straight to us.</Text>
         </View>
         <Pressable

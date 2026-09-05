@@ -126,7 +126,7 @@ export default function PassiveCaptureIntro() {
       <Screen>
         <View style={{ flex: 1, justifyContent: "center" }}>
           <Text style={styles.emoji}>✅</Text>
-          <Text style={styles.h1}>You're set — go eat</Text>
+          <Text style={styles.h1}>You're set. Go eat.</Text>
           <Text style={styles.p}>
             Next time you spend a while at a restaurant, we'll ask if you ate there. One tap and
             it's logged. Nothing is saved until you confirm it.
@@ -136,7 +136,7 @@ export default function PassiveCaptureIntro() {
             <Text style={styles.cardTitle}>One heads-up</Text>
             <Text style={styles.cardBody}>
               In a few days iOS will ask whether Palate can keep using your location in the
-              background, and show you a map of where it checked. Tap "Change to Always Allow" —
+              background, and show you a map of where it checked. Tap "Change to Always Allow".
               if you pick "Keep Only While Using," passive logging stops.
             </Text>
           </View>

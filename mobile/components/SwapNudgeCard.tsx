@@ -54,7 +54,7 @@ export function SwapNudgeCard() {
     <View style={styles.card}>
       <Text style={styles.eyebrow}>BEHAVIOR CHECK</Text>
       <Text style={styles.body}>
-        You saved <Text style={styles.bold}>{nudge.saved.name}</Text> — but you always end up
+        You saved <Text style={styles.bold}>{nudge.saved.name}</Text>, but you always end up
         at <Text style={styles.bold}>{nudge.goto.name}</Text> ({nudge.goto.visits} visits).
         {" "}This week's the week?
       </Text>

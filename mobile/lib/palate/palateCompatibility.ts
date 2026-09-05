@@ -68,7 +68,7 @@ function composeCompatibilitySummary(type: CompatibilityType, sharedSocial: Tag[
     case "Balanced Match":
       return `Different defaults, easy overlap.${sharedFragment}`;
     case "Stretch Match":
-      return `Useful contrast — meals together can pull both of you somewhere new.${sharedFragment}`;
+      return `Useful contrast. Meals together can pull both of you somewhere new.${sharedFragment}`;
     case "Friction Match":
       return `You eat very differently. Plan dinner once and you'll know what to optimize for.${sharedFragment}`;
   }

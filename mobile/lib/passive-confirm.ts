@@ -311,12 +311,12 @@ async function scheduleConfirmNotification(entry: InboxEntry): Promise<void> {
     content: isCluster
       ? {
           title: `Where'd you eat near ${entry.name}?`,
-          body: `${count} spots in range — tap to check off the ones you ate at.`,
+          body: `${count} spots in range. Tap to check off the ones you ate at.`,
           data: { kind: "passive_confirm", multi: "1", ...confirmParamsFor(entry) },
         }
       : {
           title: `Did you eat at ${entry.name}?`,
-          body: "Yes or No — no need to open the app.",
+          body: "Yes or No, no need to open the app.",
           categoryIdentifier: CONFIRM_CATEGORY,
           data: { kind: "passive_confirm", ...confirmParamsFor(entry) },
         },

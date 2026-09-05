@@ -73,9 +73,9 @@ export function filterRecommendable<T extends EligibilityInput>(
 export function ineligibilityReason(r: EligibilityInput): string | null {
   const input = r as RestaurantInput;
   if (isNationalChainName(r.name) || r.is_chain_brand === true || input.chain_name) {
-    return "National chain — not surfaced in discovery.";
+    return "National chain. Not surfaced in discovery.";
   }
-  if (isRecIneligible(input)) return "Fast food — not surfaced in discovery.";
-  if (isCafeFormat(input) && !isGem(input)) return "Café — surfaced only when it's a standout.";
+  if (isRecIneligible(input)) return "Fast food. Not surfaced in discovery.";
+  if (isCafeFormat(input) && !isGem(input)) return "Café. Surfaced only when it's a standout.";
   return null;
 }

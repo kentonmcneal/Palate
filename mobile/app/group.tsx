@@ -117,7 +117,7 @@ export default function GroupScreen() {
         {friends?.length === 0 && (
           <View style={styles.empty}>
             <Text style={styles.emptyGlyph}>◎</Text>
-            <Text style={styles.emptyLine}>Add a friend first — this needs at least two palates.</Text>
+            <Text style={styles.emptyLine}>Add a friend first. This needs at least two palates.</Text>
           </View>
         )}
 

@@ -64,7 +64,7 @@ export function nextStep(s: ActivationState): NextStep | null {
   if (s.gmailConnected && s.gmailImported === 0) {
     return {
       key: "import_review",
-      title: "Your email is connected — see what's in it",
+      title: "Your email is connected. See what's in it.",
       body: "Reservation and delivery confirmations become visits. Nothing is saved until you've looked at the list.",
       cta: "Review what we found",
       route: "/import-review",
@@ -134,7 +134,7 @@ export function wrappedPromise(visitCount: number, needed: number): string {
   const short = Math.max(0, needed - visitCount);
   if (short === 0) return "";
   if (visitCount === 0) {
-    return `Wrapped reads your week back to you — what you actually ate, which cuisine you drifted toward, the one place you kept returning to. It needs ${needed} visits.`;
+    return `Wrapped reads your week back to you: what you actually ate, which cuisine you drifted toward, the one place you kept returning to. It needs ${needed} visits.`;
   }
-  return `${short} more visit${short === 1 ? "" : "s"} and Wrapped will tell you what your week actually said — the cuisine you drifted toward, the place you kept going back to.`;
+  return `${short} more visit${short === 1 ? "" : "s"} and Wrapped will tell you what your week actually said: the cuisine you drifted toward, the place you kept going back to.`;
 }

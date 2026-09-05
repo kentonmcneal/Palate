@@ -175,7 +175,7 @@ export async function getUserPalateProfile(
       tags: [],
       explanation: "We're still learning your Palate. Log a few more visits and we'll show you who you eat like.",
       behaviorSignals: data.totalVisits === 0
-        ? ["No visits this week — log one to get started."]
+        ? ["No visits this week. Log one to get started."]
         : [`${data.totalVisits} visit${data.totalVisits === 1 ? "" : "s"} so far this week.`],
       position: { x: 0.5, y: 0.5 },
     };

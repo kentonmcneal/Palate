@@ -27,7 +27,7 @@ export type BuildInfo = {
 };
 
 export function buildInfo(): BuildInfo {
-  const version = (Constants.expoConfig?.version as string | undefined) ?? "—";
+  const version = (Constants.expoConfig?.version as string | undefined) ?? "unknown";
 
   // In development there is no update at all; every field here is optional at
   // runtime whatever the types claim, so nothing is read without a guard.
