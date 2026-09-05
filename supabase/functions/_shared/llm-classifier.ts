@@ -181,10 +181,10 @@ const SYSTEM_PROMPT = `You classify restaurants from Google Places metadata into
 
 OUTPUT FORMAT (return ONLY a single JSON object, no prose):
 {
-  "cuisine_type": one of [american, italian, chinese, japanese, korean, thai, vietnamese, indian, filipino, indonesian, mexican, latin-american, caribbean, african, mediterranean, middle-eastern, french, spanish, steakhouse, seafood, bbq, brunch, healthy, dessert, bakery, café, bar] or null,
+  "cuisine_type": WHAT FOOD they serve — one of [american, italian, chinese, japanese, korean, thai, vietnamese, indian, filipino, indonesian, mexican, latin-american, caribbean, african, mediterranean, middle-eastern, french, spanish, steakhouse, seafood, bbq, healthy, dessert] or null,
   "cuisine_subregion": one of [memphis_bbq, kc_bbq, texas_bbq, nashville_hot, cajun, soul_food, korean_bbq, korean, japanese_ramen, japanese_sushi, japanese_izakaya, japanese, chinese_szechuan, chinese_cantonese, chinese_xian, taiwanese, chinese, vietnamese_pho, vietnamese_banh_mi, vietnamese, thai, indian_south, pakistani, bangladeshi, indian_north, halal_cart, persian, lebanese, israeli, turkish, middle_eastern, greek, moroccan, mediterranean_general, italian_neapolitan, italian_trattoria, italian_pizzeria, italian_general, mexican_taqueria, mexican_regional, mexican, peruvian, brazilian, argentine, cuban, dominican, puerto_rican, jamaican, trinidadian, haitian, ethiopian, nigerian, senegalese, american_diner, deli_jewish, pizza_nyc, pizza_chicago, breakfast_diner, burger, bodega_food, wine_bar_food, steakhouse, seafood_house, bbq_general, brunch_modern, café] or null,
   "cuisine_region": one of [american, southern_us, east_asian, south_asian, middle_eastern, mediterranean, italian, latin_american, caribbean, african, european, café_culture] or null,
-  "format_class": one of [bar, wine_bar, café, fine_dining, casual_dining, fast_casual, quick_service, ghost_kitchen] or null,
+  "format_class": WHAT KIND OF PLACE it is — one of [bar, wine_bar, café, bakery, fine_dining, casual_dining, fast_casual, quick_service, ghost_kitchen] or null,
   "cultural_context": one of [comfort, modernist, heritage, hidden, trending, fusion] or null,
   "flavor_tags": array (any of [smoky, spicy, savory, umami, sweet, fresh, rich, light, char]),
   "occasion_tags": array (any of [date_night, group_dinner, casual_solo, brunch, late_night, breakfast, working_lunch, weekend_anchor, celebration, business_dinner, party, family_gathering, quick_bite]),
@@ -201,6 +201,9 @@ RULES:
 - Use only the vocabulary above. Do not invent values.
 - Return null + confidence 0 when you genuinely don't know — guessing hurts users.
 - Subregion must be consistent with cuisine_type. E.g., chinese_szechuan only when cuisine_type is "chinese".
+- CUISINE AND FORMAT ARE DIFFERENT QUESTIONS. cuisine_type answers "what food", format_class answers "what kind of place", and a value belongs to exactly one of them. A café serving croissants is format_class "café" with cuisine_type null or "french" if the food genuinely says so — never cuisine_type "café". Same for bars and bakeries. "brunch" is a meal time, not a cuisine: it belongs in occasion_tags. Measured on the live catalogue, 361 of 1043 rows had a format sitting in cuisine_type, which is what this rule exists to stop.
+- A null cuisine_type is the right answer for a place whose food is genuinely unremarkable or unknowable — a coffee shop, a dive bar, a bakery counter. Null means "we looked and there is no cuisine to state". It is not a failure, and it beats a category that means "we did not look".
+- "american" is a real answer for burgers, diners and Southern cooking. It is not a shrug: do not reach for it when the honest answer is null.
 - The restaurant name alone is sometimes diagnostic ("Sichuan Impression", "Joe's Pizza"). Use it.
 - If review snippets or editorial summary are provided, weigh them heavily — they reflect what the place actually serves.
 - Confidence above 0.85 should be reserved for cases where the name, types, or reviews are unmistakable.
@@ -246,12 +249,18 @@ function buildUserMessage(input: LLMInput): string {
 // the backfill writes LLM output across the whole table. Keep in sync with the
 // SYSTEM_PROMPT enums above.
 export const VOCAB = {
+  // café, bar, bakery and brunch are GONE from here on purpose. The first
+  // three are formats and live in format_class; brunch is a meal time and
+  // lives in occasion_tags. They were in this set, so the model putting them
+  // in cuisine_type was the vocabulary working as written, not the model
+  // misbehaving — 361 of 1043 live rows, and the mood row offered the founder
+  // "Café" and "Bar" as things to be in the mood for.
   cuisine_type: new Set([
     "american", "italian", "chinese", "japanese", "korean", "thai",
     "vietnamese", "indian", "filipino", "indonesian", "mexican",
     "latin-american", "caribbean", "african", "mediterranean",
     "middle-eastern", "french", "spanish", "steakhouse", "seafood", "bbq",
-    "brunch", "healthy", "dessert", "bakery", "café", "bar",
+    "healthy", "dessert",
   ]),
   cuisine_region: new Set([
     "american", "southern_us", "east_asian", "south_asian", "middle_eastern",
@@ -259,8 +268,8 @@ export const VOCAB = {
     "european", "café_culture",
   ]),
   format_class: new Set([
-    "bar", "wine_bar", "café", "fine_dining", "casual_dining", "fast_casual",
-    "quick_service", "ghost_kitchen",
+    "bar", "wine_bar", "café", "bakery", "fine_dining", "casual_dining",
+    "fast_casual", "quick_service", "ghost_kitchen",
   ]),
   cultural_context: new Set([
     "comfort", "modernist", "heritage", "hidden", "trending", "fusion",

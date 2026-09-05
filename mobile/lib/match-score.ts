@@ -20,15 +20,25 @@ import {
 
 const R_EARTH_KM = 6371;
 
+/** Zero, and deliberately. flavor_tags is empty on 46% of the live catalogue
+ *  and `rich` sits on two thirds of what remains, so it bought a place extra
+ *  observed weight for saying almost nothing. The full argument, and the two
+ *  measurements that would switch it back on, are on FLAVOR_WEIGHT in
+ *  lib/recommendation/compatibility.ts. */
+const FLAVOR_WEIGHT = 0;
+
 /**
  * Total weight available if every attribute were populated: subregion 35,
- * region 20, format 15, occasion 15, flavor 10, price 10. The neighbourhood
- * bump is excluded because it is a bonus rather than a dimension every
- * candidate could score on.
+ * region 20, format 15, occasion 15, flavor (0 today), price 10. The
+ * neighbourhood bump is excluded because it is a bonus rather than a dimension
+ * every candidate could score on.
  *
- * Kept next to the weights it sums so the two cannot drift apart silently.
+ * This is the denominator of the confidence weighting below, so it has to
+ * follow FLAVOR_WEIGHT exactly. Leaving 10 in here while the branch adds
+ * nothing would mean every place in the catalogue looked 10 points less
+ * observed than it is, and nothing could ever reach full confidence.
  */
-export const MAX_ATTRIBUTE_WEIGHT = 35 + 20 + 15 + 15 + 10 + 10;
+export const MAX_ATTRIBUTE_WEIGHT = 35 + 20 + 15 + 15 + FLAVOR_WEIGHT + 10;
 
 export type MatchExplanation = {
   score: number;        // 0..100
@@ -96,11 +106,13 @@ export function scoreMatch(
     totalWeight += 15;
     if (overlap >= 0.3) reasons.push(`Right vibe for your ${topOf(vector.occasion)} pattern`);
   }
-  // Flavor overlap
-  if (context?.flavorTags?.length) {
+  // Flavor overlap — weight 0 today. See FLAVOR_WEIGHT in
+  // lib/recommendation/compatibility.ts for the coverage numbers that turned
+  // it off and the two that would turn it back on.
+  if (FLAVOR_WEIGHT > 0 && context?.flavorTags?.length) {
     const overlap = sumShareAcross(vector.flavor, context.flavorTags);
-    raw += overlap * 10;
-    totalWeight += 10;
+    raw += overlap * FLAVOR_WEIGHT;
+    totalWeight += FLAVOR_WEIGHT;
   }
   // Price tier proximity (closer to user's avg = higher)
   if (rec.price_level != null && vector.averagePriceLevel > 0) {

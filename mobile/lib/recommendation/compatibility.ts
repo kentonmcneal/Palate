@@ -97,6 +97,27 @@ export function computeCompatibility(graph: TasteGraph, r: RestaurantInput): Com
 
 type Dim = { s: number; matched: boolean };
 
+// ----------------------------------------------------------------------------
+// Flavor is switched off, and the number is the argument.
+// ----------------------------------------------------------------------------
+// Measured across the 1043 live rows: flavor_tags is empty on 482 of them
+// (46%), averages 0.65 tags per row, and `rich` alone sits on 363 of the ~561
+// rows that have any. So among tagged places roughly two in three carry the
+// same tag, and half the catalogue carries none.
+//
+// That is worse than an absent attribute, not merely weaker than one. The
+// scorers normalise over the attributes that are PRESENT, so carrying a
+// near-constant tag bought a place extra observed weight — it counted as
+// evidence while saying almost nothing, and the places with no tags were
+// judged on a smaller denominator.
+//
+// Turning the weight to 0 rather than deleting the branch, because the fix is
+// a data problem and not a code one. Classifier v1.8.0 tightens what gets
+// tagged; when a reclassify has run, this comes back on if flavor_tags covers
+// more than 80% of rows AND no single tag exceeds ~35% of the tagged ones.
+// Until somebody can show those two numbers, the honest weight is zero.
+const FLAVOR_WEIGHT = 0;
+
 function scoreTaste(g: TasteGraph, r: RestaurantInput): Dim {
   // Compute whenever ANY taste signal exists — including a quiz-seeded persona
   // at 0 visits (the seed fills these maps but leaves totalVisits at 0, so the
@@ -116,9 +137,9 @@ function scoreTaste(g: TasteGraph, r: RestaurantInput): Dim {
     const aff = affinityOf(g.cuisines, r.cuisine_region);
     score += aff * 0.3; weight += 0.3;
   }
-  if (r.flavor_tags?.length) {
+  if (FLAVOR_WEIGHT > 0 && r.flavor_tags?.length) {
     const overlap = sumAffinity(g.flavors, r.flavor_tags);
-    score += overlap * 0.2; weight += 0.2;
+    score += overlap * FLAVOR_WEIGHT; weight += FLAVOR_WEIGHT;
   }
   const s = weight > 0 ? Math.min(1, score / weight) : 0.5;
   return { s, matched: s >= 0.4 };

@@ -78,7 +78,22 @@ describe("confidence weighting", () => {
 
   it("sums the weights it claims to sum", () => {
     // If a weight changes in scoreMatch and not here, every score silently
-    // shifts. 35 + 20 + 15 + 15 + 10 + 10.
-    expect(MAX_ATTRIBUTE_WEIGHT).toBe(105);
+    // shifts. subregion 35 + region 20 + format 15 + occasion 15 + flavor 0
+    // + price 10. Flavor is 0 because the attribute is empty on 46% of the
+    // live catalogue and `rich` covers two thirds of the rest; this number
+    // moves back to 105 the day that stops being true.
+    expect(MAX_ATTRIBUTE_WEIGHT).toBe(95);
+  });
+
+  it("does not credit a place for carrying a near-constant flavor tag", () => {
+    // The whole reason flavor came out. Two identical places, one tagged
+    // "rich" — which two thirds of the tagged catalogue carries — must not
+    // outrank the other, and must not look better observed either.
+    const plain = scoreMatch(vector, rec, { formatClass: "casual_dining" });
+    const tagged = scoreMatch(vector, rec, {
+      formatClass: "casual_dining",
+      flavorTags: ["rich"],
+    });
+    expect(tagged.score).toBe(plain.score);
   });
 });

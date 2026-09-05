@@ -6,14 +6,23 @@
       "id": "starbucks-basic",
       "input": {
         "id": "synthetic_starbucks_1",
-        "displayName": { "text": "Starbucks" },
-        "types": ["coffee_shop", "cafe", "restaurant", "food", "point_of_interest", "establishment"],
+        "displayName": {
+          "text": "Starbucks"
+        },
+        "types": [
+          "coffee_shop",
+          "cafe",
+          "restaurant",
+          "food",
+          "point_of_interest",
+          "establishment"
+        ],
         "primaryType": "coffee_shop",
         "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "userRatingCount": 1200
       },
       "expected": {
-        "cuisine_type": "café",
+        "cuisine_type": null,
         "format_class": "café",
         "chain_name": "Starbucks",
         "chain_type": "national_chain",
@@ -24,8 +33,14 @@
       "id": "joes-pizza-nyc",
       "input": {
         "id": "synthetic_joes_1",
-        "displayName": { "text": "Joe's Pizza" },
-        "types": ["pizza_restaurant", "italian_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Joe's Pizza"
+        },
+        "types": [
+          "pizza_restaurant",
+          "italian_restaurant",
+          "restaurant"
+        ],
         "primaryType": "pizza_restaurant",
         "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "userRatingCount": 8000
@@ -43,8 +58,13 @@
       "notes": "Famous Sichuan spot, but name has no szechuan keyword — current rules will only return cuisine='chinese'. Known fail for LLM fallback to win.",
       "input": {
         "id": "synthetic_handynasty_1",
-        "displayName": { "text": "Han Dynasty" },
-        "types": ["chinese_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Han Dynasty"
+        },
+        "types": [
+          "chinese_restaurant",
+          "restaurant"
+        ],
         "primaryType": "chinese_restaurant",
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "userRatingCount": 2200
@@ -53,15 +73,22 @@
         "cuisine_type": "chinese",
         "cuisine_region": "east_asian",
         "cuisine_subregion": "chinese_szechuan",
-        "flavor_tags_include": ["spicy"]
+        "flavor_tags_include": [
+          "spicy"
+        ]
       }
     },
     {
       "id": "pho-hoa-vietnamese",
       "input": {
         "id": "synthetic_phohoa_1",
-        "displayName": { "text": "Pho Hoa" },
-        "types": ["vietnamese_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Pho Hoa"
+        },
+        "types": [
+          "vietnamese_restaurant",
+          "restaurant"
+        ],
         "primaryType": "vietnamese_restaurant",
         "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "userRatingCount": 900
@@ -77,8 +104,13 @@
       "id": "nashville-hot-chicken",
       "input": {
         "id": "synthetic_hattie_1",
-        "displayName": { "text": "Hattie B's Nashville Hot Chicken" },
-        "types": ["american_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Hattie B's Nashville Hot Chicken"
+        },
+        "types": [
+          "american_restaurant",
+          "restaurant"
+        ],
         "primaryType": "american_restaurant",
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "userRatingCount": 3500
@@ -87,15 +119,23 @@
         "cuisine_type": "american",
         "cuisine_region": "southern_us",
         "cuisine_subregion": "nashville_hot",
-        "flavor_tags_include": ["spicy"]
+        "flavor_tags_include": [
+          "spicy"
+        ]
       }
     },
     {
       "id": "memphis-bbq",
       "input": {
         "id": "synthetic_memphisbbq_1",
-        "displayName": { "text": "Central BBQ — Memphis Ribs & Smokehouse" },
-        "types": ["barbecue_restaurant", "american_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Central BBQ — Memphis Ribs & Smokehouse"
+        },
+        "types": [
+          "barbecue_restaurant",
+          "american_restaurant",
+          "restaurant"
+        ],
         "primaryType": "barbecue_restaurant",
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "userRatingCount": 4200
@@ -104,15 +144,24 @@
         "cuisine_type": "bbq",
         "cuisine_region": "southern_us",
         "cuisine_subregion": "memphis_bbq",
-        "flavor_tags_include": ["smoky", "char"]
+        "flavor_tags_include": [
+          "smoky",
+          "char"
+        ]
       }
     },
     {
       "id": "ramen-shop",
       "input": {
         "id": "synthetic_ramen_1",
-        "displayName": { "text": "Ippudo" },
-        "types": ["ramen_restaurant", "japanese_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Ippudo"
+        },
+        "types": [
+          "ramen_restaurant",
+          "japanese_restaurant",
+          "restaurant"
+        ],
         "primaryType": "ramen_restaurant",
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "userRatingCount": 5500
@@ -121,15 +170,24 @@
         "cuisine_type": "japanese",
         "cuisine_region": "east_asian",
         "cuisine_subregion": "japanese_ramen",
-        "flavor_tags_include": ["umami", "savory"]
+        "flavor_tags_include": [
+          "umami",
+          "savory"
+        ]
       }
     },
     {
       "id": "sushi-omakase-fine",
       "input": {
         "id": "synthetic_sushi_1",
-        "displayName": { "text": "Sushi Nakazawa" },
-        "types": ["sushi_restaurant", "japanese_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Sushi Nakazawa"
+        },
+        "types": [
+          "sushi_restaurant",
+          "japanese_restaurant",
+          "restaurant"
+        ],
         "primaryType": "sushi_restaurant",
         "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
         "userRatingCount": 600
@@ -139,15 +197,23 @@
         "cuisine_subregion": "japanese_sushi",
         "format_class": "fine_dining",
         "cultural_context": "modernist",
-        "occasion_tags_include": ["date_night"]
+        "occasion_tags_include": [
+          "date_night"
+        ]
       }
     },
     {
       "id": "korean-bbq",
       "input": {
         "id": "synthetic_kbbq_1",
-        "displayName": { "text": "Cote Korean BBQ" },
-        "types": ["korean_restaurant", "barbecue_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Cote Korean BBQ"
+        },
+        "types": [
+          "korean_restaurant",
+          "barbecue_restaurant",
+          "restaurant"
+        ],
         "primaryType": "korean_restaurant",
         "priceLevel": "PRICE_LEVEL_EXPENSIVE",
         "userRatingCount": 2800
@@ -155,15 +221,24 @@
       "expected": {
         "cuisine_type": "korean",
         "cuisine_subregion": "korean_bbq",
-        "occasion_tags_include": ["date_night", "group_dinner"]
+        "occasion_tags_include": [
+          "date_night",
+          "group_dinner"
+        ]
       }
     },
     {
       "id": "halal-cart-nyc",
       "input": {
         "id": "synthetic_halal_1",
-        "displayName": { "text": "The Halal Guys" },
-        "types": ["middle_eastern_restaurant", "meal_takeaway", "restaurant"],
+        "displayName": {
+          "text": "The Halal Guys"
+        },
+        "types": [
+          "middle_eastern_restaurant",
+          "meal_takeaway",
+          "restaurant"
+        ],
         "primaryType": "meal_takeaway",
         "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "userRatingCount": 9000
@@ -178,15 +253,23 @@
       "id": "wine-bar-no-priceLevel",
       "input": {
         "id": "synthetic_winebar_1",
-        "displayName": { "text": "Compagnie des Vins Surnaturels" },
-        "types": ["wine_bar", "bar", "restaurant"],
+        "displayName": {
+          "text": "Compagnie des Vins Surnaturels"
+        },
+        "types": [
+          "wine_bar",
+          "bar",
+          "restaurant"
+        ],
         "primaryType": "wine_bar",
         "userRatingCount": 400
       },
       "expected": {
-        "cuisine_type": "bar",
+        "cuisine_type": null,
         "format_class": "bar",
-        "occasion_tags_include": ["late_night"]
+        "occasion_tags_include": [
+          "late_night"
+        ]
       }
     },
     {
@@ -194,8 +277,12 @@
       "notes": "Common bad-data case: Google only returns `restaurant` as a type. Current rules will not infer cuisine at all — known limitation.",
       "input": {
         "id": "synthetic_indie_italian_1",
-        "displayName": { "text": "Via Carota" },
-        "types": ["restaurant"],
+        "displayName": {
+          "text": "Via Carota"
+        },
+        "types": [
+          "restaurant"
+        ],
         "primaryType": "restaurant",
         "priceLevel": "PRICE_LEVEL_EXPENSIVE",
         "userRatingCount": 1800
@@ -211,8 +298,14 @@
       "notes": "Real south-Indian spot. Name has no 'dosa' or 'south indian' keyword, so current rules misclassify as indian_north. Known fail.",
       "input": {
         "id": "synthetic_southindian_1",
-        "displayName": { "text": "Saravanaa Bhavan" },
-        "types": ["indian_restaurant", "vegetarian_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Saravanaa Bhavan"
+        },
+        "types": [
+          "indian_restaurant",
+          "vegetarian_restaurant",
+          "restaurant"
+        ],
         "primaryType": "indian_restaurant",
         "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "userRatingCount": 2500
@@ -220,15 +313,22 @@
       "expected": {
         "cuisine_type": "indian",
         "cuisine_subregion": "indian_south",
-        "flavor_tags_include": ["spicy"]
+        "flavor_tags_include": [
+          "spicy"
+        ]
       }
     },
     {
       "id": "taqueria",
       "input": {
         "id": "synthetic_taqueria_1",
-        "displayName": { "text": "Taqueria El Buen Sabor" },
-        "types": ["mexican_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Taqueria El Buen Sabor"
+        },
+        "types": [
+          "mexican_restaurant",
+          "restaurant"
+        ],
         "primaryType": "mexican_restaurant",
         "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "userRatingCount": 700
@@ -244,8 +344,12 @@
       "id": "ethiopian",
       "input": {
         "id": "synthetic_ethiopian_1",
-        "displayName": { "text": "Meskerem Ethiopian Restaurant" },
-        "types": ["restaurant"],
+        "displayName": {
+          "text": "Meskerem Ethiopian Restaurant"
+        },
+        "types": [
+          "restaurant"
+        ],
         "primaryType": "restaurant",
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "userRatingCount": 450
@@ -259,8 +363,14 @@
       "id": "chipotle-quick-service",
       "input": {
         "id": "synthetic_chipotle_1",
-        "displayName": { "text": "Chipotle Mexican Grill" },
-        "types": ["mexican_restaurant", "fast_food_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Chipotle Mexican Grill"
+        },
+        "types": [
+          "mexican_restaurant",
+          "fast_food_restaurant",
+          "restaurant"
+        ],
         "primaryType": "fast_food_restaurant",
         "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "userRatingCount": 1500
@@ -278,8 +388,12 @@
       "notes": "Tasting-menu place with `restaurant` as only type. Current rules infer fine_dining from price but nothing else. Known fail for review-mining / LLM to win.",
       "input": {
         "id": "synthetic_finedining_1",
-        "displayName": { "text": "Atomix" },
-        "types": ["restaurant"],
+        "displayName": {
+          "text": "Atomix"
+        },
+        "types": [
+          "restaurant"
+        ],
         "primaryType": "restaurant",
         "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
         "userRatingCount": 800
@@ -294,23 +408,37 @@
       "id": "brunch-spot",
       "input": {
         "id": "synthetic_brunch_1",
-        "displayName": { "text": "Clinton Street Baking Company" },
-        "types": ["brunch_restaurant", "breakfast_restaurant", "american_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Clinton Street Baking Company"
+        },
+        "types": [
+          "brunch_restaurant",
+          "breakfast_restaurant",
+          "american_restaurant",
+          "restaurant"
+        ],
         "primaryType": "brunch_restaurant",
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "userRatingCount": 6500
       },
       "expected": {
-        "cuisine_type": "brunch",
-        "occasion_tags_include": ["brunch", "weekend_anchor"]
+        "cuisine_type": "american",
+        "occasion_tags_include": [
+          "brunch",
+          "weekend_anchor"
+        ]
       }
     },
     {
       "id": "small-hidden-spot",
       "input": {
         "id": "synthetic_hidden_1",
-        "displayName": { "text": "Lucia's Pierogi House" },
-        "types": ["restaurant"],
+        "displayName": {
+          "text": "Lucia's Pierogi House"
+        },
+        "types": [
+          "restaurant"
+        ],
         "primaryType": "restaurant",
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "userRatingCount": 30
@@ -323,8 +451,14 @@
       "id": "trending-mega-popular",
       "input": {
         "id": "synthetic_trending_1",
-        "displayName": { "text": "Lucali" },
-        "types": ["pizza_restaurant", "italian_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Lucali"
+        },
+        "types": [
+          "pizza_restaurant",
+          "italian_restaurant",
+          "restaurant"
+        ],
         "primaryType": "pizza_restaurant",
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "userRatingCount": 8500
@@ -340,20 +474,37 @@
       "notes": "Reviews mention spice level even though cuisine doesn't auto-trigger spicy. Review mining should add the tag.",
       "input": {
         "id": "synthetic_mining_1",
-        "displayName": { "text": "Spicy Village" },
-        "types": ["chinese_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Spicy Village"
+        },
+        "types": [
+          "chinese_restaurant",
+          "restaurant"
+        ],
         "primaryType": "chinese_restaurant",
         "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "userRatingCount": 1000,
         "reviews": [
-          { "text": { "text": "The hand-pulled noodles are amazing and the spice level here is no joke — my tongue went numbing from the szechuan peppercorn." } },
-          { "text": { "text": "Cozy spot, came on a date night, very romantic." } }
+          {
+            "text": {
+              "text": "The hand-pulled noodles are amazing and the spice level here is no joke — my tongue went numbing from the szechuan peppercorn."
+            }
+          },
+          {
+            "text": {
+              "text": "Cozy spot, came on a date night, very romantic."
+            }
+          }
         ]
       },
       "expected": {
         "cuisine_type": "chinese",
-        "flavor_tags_include": ["spicy"],
-        "occasion_tags_include": ["date_night"]
+        "flavor_tags_include": [
+          "spicy"
+        ],
+        "occasion_tags_include": [
+          "date_night"
+        ]
       }
     },
     {
@@ -361,20 +512,37 @@
       "notes": "Reviews suggest a date-night vibe at a moderate-price place that wouldn't otherwise get date_night.",
       "input": {
         "id": "synthetic_mining_2",
-        "displayName": { "text": "Rosemary's" },
-        "types": ["italian_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Rosemary's"
+        },
+        "types": [
+          "italian_restaurant",
+          "restaurant"
+        ],
         "primaryType": "italian_restaurant",
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "userRatingCount": 2200,
         "reviews": [
-          { "text": { "text": "Brought my partner here for our anniversary — candle-lit, intimate, the burrata was decadent and creamy." } },
-          { "text": { "text": "Great spot for a romantic dinner. Pasta was buttery and rich." } }
+          {
+            "text": {
+              "text": "Brought my partner here for our anniversary — candle-lit, intimate, the burrata was decadent and creamy."
+            }
+          },
+          {
+            "text": {
+              "text": "Great spot for a romantic dinner. Pasta was buttery and rich."
+            }
+          }
         ]
       },
       "expected": {
         "cuisine_type": "italian",
-        "occasion_tags_include": ["date_night"],
-        "flavor_tags_include": ["rich"]
+        "occasion_tags_include": [
+          "date_night"
+        ],
+        "flavor_tags_include": [
+          "rich"
+        ]
       }
     },
     {
@@ -382,8 +550,14 @@
       "notes": "Classic fast-food national chain — should never appear in discovery.",
       "input": {
         "id": "synthetic_mcdonalds_1",
-        "displayName": { "text": "McDonald's" },
-        "types": ["fast_food_restaurant", "hamburger_restaurant", "restaurant"],
+        "displayName": {
+          "text": "McDonald's"
+        },
+        "types": [
+          "fast_food_restaurant",
+          "hamburger_restaurant",
+          "restaurant"
+        ],
         "primaryType": "fast_food_restaurant",
         "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "userRatingCount": 800
@@ -399,8 +573,14 @@
       "notes": "Even though it's a café (not quick-service), Starbucks isn't food discovery.",
       "input": {
         "id": "synthetic_starbucks_2",
-        "displayName": { "text": "Starbucks" },
-        "types": ["coffee_shop", "cafe", "restaurant"],
+        "displayName": {
+          "text": "Starbucks"
+        },
+        "types": [
+          "coffee_shop",
+          "cafe",
+          "restaurant"
+        ],
         "primaryType": "coffee_shop",
         "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "userRatingCount": 1500
@@ -415,8 +595,13 @@
       "notes": "Restaurant inside JFK terminal — gated, can't recommend.",
       "input": {
         "id": "synthetic_airport_1",
-        "displayName": { "text": "Shake Shack JFK Terminal 4" },
-        "types": ["hamburger_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Shake Shack JFK Terminal 4"
+        },
+        "types": [
+          "hamburger_restaurant",
+          "restaurant"
+        ],
         "primaryType": "hamburger_restaurant",
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "userRatingCount": 600,
@@ -431,8 +616,13 @@
       "id": "eligibility-airport-lounge",
       "input": {
         "id": "synthetic_lounge_1",
-        "displayName": { "text": "Centurion Lounge" },
-        "types": ["bar", "restaurant"],
+        "displayName": {
+          "text": "Centurion Lounge"
+        },
+        "types": [
+          "bar",
+          "restaurant"
+        ],
         "primaryType": "bar",
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "userRatingCount": 200,
@@ -448,8 +638,13 @@
       "notes": "Generic hotel restaurant with no specific cuisine identified — likely 'Marriott Restaurant' style.",
       "input": {
         "id": "synthetic_hotel_1",
-        "displayName": { "text": "The Restaurant at Marriott Marquis" },
-        "types": ["lodging", "restaurant"],
+        "displayName": {
+          "text": "The Restaurant at Marriott Marquis"
+        },
+        "types": [
+          "lodging",
+          "restaurant"
+        ],
         "primaryType": "lodging",
         "priceLevel": "PRICE_LEVEL_EXPENSIVE",
         "userRatingCount": 300
@@ -464,8 +659,13 @@
       "notes": "A regional chain (3+ locations in DB) should be downranked but not excluded.",
       "input": {
         "id": "synthetic_regional_1",
-        "displayName": { "text": "Honest Tom's Tacos" },
-        "types": ["mexican_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Honest Tom's Tacos"
+        },
+        "types": [
+          "mexican_restaurant",
+          "restaurant"
+        ],
         "primaryType": "mexican_restaurant",
         "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "userRatingCount": 700
@@ -479,8 +679,14 @@
       "notes": "Le Coucou-style — hotel-attached but its own brand + confident cuisine. Should be eligible (primaryType is restaurant, cuisine is set, even though lodging is in types).",
       "input": {
         "id": "synthetic_destination_hotel_1",
-        "displayName": { "text": "Le Coucou" },
-        "types": ["french_restaurant", "restaurant", "lodging"],
+        "displayName": {
+          "text": "Le Coucou"
+        },
+        "types": [
+          "french_restaurant",
+          "restaurant",
+          "lodging"
+        ],
         "primaryType": "french_restaurant",
         "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
         "userRatingCount": 1800,
@@ -497,8 +703,13 @@
       "notes": "Soho cocktail bar named '... Lounge'. Should be eligible — the lounge-exclusion only fires when also in an airport/members context.",
       "input": {
         "id": "synthetic_soho_lounge_1",
-        "displayName": { "text": "Soho Lounge" },
-        "types": ["bar", "restaurant"],
+        "displayName": {
+          "text": "Soho Lounge"
+        },
+        "types": [
+          "bar",
+          "restaurant"
+        ],
         "primaryType": "bar",
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "userRatingCount": 450,
@@ -514,8 +725,13 @@
       "notes": "Independent restaurant — full eligibility.",
       "input": {
         "id": "synthetic_eligible_indie",
-        "displayName": { "text": "Vetri Cucina" },
-        "types": ["italian_restaurant", "restaurant"],
+        "displayName": {
+          "text": "Vetri Cucina"
+        },
+        "types": [
+          "italian_restaurant",
+          "restaurant"
+        ],
         "primaryType": "italian_restaurant",
         "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
         "userRatingCount": 1200
@@ -530,8 +746,14 @@
       "notes": "REGRESSION (UNIQLO 5th Ave): a clothing store with a coffee counter. Google's primaryType is clothing_store — must never be recommended despite the secondary cafe type.",
       "input": {
         "id": "synthetic_uniqlo_1",
-        "displayName": { "text": "UNIQLO 5th Avenue" },
-        "types": ["clothing_store", "store", "cafe"],
+        "displayName": {
+          "text": "UNIQLO 5th Avenue"
+        },
+        "types": [
+          "clothing_store",
+          "store",
+          "cafe"
+        ],
         "primaryType": "clothing_store",
         "userRatingCount": 900
       },
@@ -545,8 +767,14 @@
       "notes": "REGRESSION (Angelika Film Center / FRIENDS Experience): a cinema/attraction is not a dining venue, even with a cafe concession.",
       "input": {
         "id": "synthetic_cinema_1",
-        "displayName": { "text": "Angelika Film Center & Cafe" },
-        "types": ["movie_theater", "tourist_attraction", "cafe"],
+        "displayName": {
+          "text": "Angelika Film Center & Cafe"
+        },
+        "types": [
+          "movie_theater",
+          "tourist_attraction",
+          "cafe"
+        ],
         "primaryType": "movie_theater",
         "userRatingCount": 1200
       },
@@ -560,8 +788,14 @@
       "notes": "REGRESSION (Union Transfer): a live-music / event venue that runs a bar is not a dining destination. Google types it performing_arts_theater; the bar sub-type must not rescue it.",
       "input": {
         "id": "synthetic_venue_1",
-        "displayName": { "text": "Union Transfer" },
-        "types": ["performing_arts_theater", "event_venue", "bar"],
+        "displayName": {
+          "text": "Union Transfer"
+        },
+        "types": [
+          "performing_arts_theater",
+          "event_venue",
+          "bar"
+        ],
         "primaryType": "performing_arts_theater",
         "userRatingCount": 3298
       },
@@ -575,8 +809,14 @@
       "notes": "REGRESSION (Grand Central Terminal): a transit hub is not a dining venue.",
       "input": {
         "id": "synthetic_transit_1",
-        "displayName": { "text": "Grand Central Terminal" },
-        "types": ["train_station", "transit_station", "tourist_attraction"],
+        "displayName": {
+          "text": "Grand Central Terminal"
+        },
+        "types": [
+          "train_station",
+          "transit_station",
+          "tourist_attraction"
+        ],
         "primaryType": "train_station",
         "userRatingCount": 5000
       },
@@ -590,8 +830,14 @@
       "notes": "REGRESSION (Capital One Café): a bank branch with a café is not a dining venue.",
       "input": {
         "id": "synthetic_bank_1",
-        "displayName": { "text": "Capital One Café" },
-        "types": ["bank", "finance", "cafe"],
+        "displayName": {
+          "text": "Capital One Café"
+        },
+        "types": [
+          "bank",
+          "finance",
+          "cafe"
+        ],
         "primaryType": "bank",
         "userRatingCount": 200
       },
@@ -605,19 +851,37 @@
       "notes": "Reviews establish a weekend brunch anchor even though Google types only say restaurant.",
       "input": {
         "id": "synthetic_mining_3",
-        "displayName": { "text": "Buvette" },
-        "types": ["restaurant"],
+        "displayName": {
+          "text": "Buvette"
+        },
+        "types": [
+          "restaurant"
+        ],
         "primaryType": "restaurant",
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "userRatingCount": 3000,
         "reviews": [
-          { "text": { "text": "Saturday morning institution — always packed weekends. Bottomless mimosa flight is a must." } },
-          { "text": { "text": "Best brunch spot in the West Village. Fresh and light." } }
+          {
+            "text": {
+              "text": "Saturday morning institution — always packed weekends. Bottomless mimosa flight is a must."
+            }
+          },
+          {
+            "text": {
+              "text": "Best brunch spot in the West Village. Fresh and light."
+            }
+          }
         ]
       },
       "expected": {
-        "occasion_tags_include": ["brunch", "weekend_anchor"],
-        "flavor_tags_include": ["fresh", "light"]
+        "occasion_tags_include": [
+          "brunch",
+          "weekend_anchor"
+        ],
+        "flavor_tags_include": [
+          "fresh",
+          "light"
+        ]
       }
     }
   ]

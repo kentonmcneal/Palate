@@ -14,7 +14,7 @@
 // cinema/transit/bank) and any place with no food-serving type. Fixes UNIQLO-
 // as-café and other non-restaurant leaks. Bumping forces re-classification so
 // already-cached bad rows get re-scored to eligibility 0.
-export const CLASSIFIER_VERSION = "1.7.0";
+export const CLASSIFIER_VERSION = "1.8.0";
 
 // ----- Google place shape (subset we use) -------------------------------
 
@@ -170,21 +170,19 @@ export const CUISINE_TYPE_MAP: Record<string, string> = {
   steak_house: "steakhouse",
   seafood_restaurant: "seafood",
   barbecue_restaurant: "bbq",
-  brunch_restaurant: "brunch",
-  breakfast_restaurant: "brunch",
   vegan_restaurant: "healthy",
   vegetarian_restaurant: "healthy",
   ice_cream_shop: "dessert",
   dessert_restaurant: "dessert",
   acai_shop: "healthy",
-  donut_shop: "bakery",
-  bagel_shop: "bakery",
-  bakery: "bakery",
-  coffee_shop: "café",
-  cafe: "café",
-  wine_bar: "bar",
-  pub: "bar",
-  bar: "bar",
+  donut_shop: "dessert",
+  // brunch_restaurant, breakfast_restaurant, bakery, bagel_shop, coffee_shop,
+  // cafe, wine_bar, pub and bar used to map here. Every one of them answers
+  // "what kind of place", not "what food", and this map is the reason 361 of
+  // 1043 live rows carried a format in cuisine_type — the LLM was picking
+  // between its own answer and this one, so fixing the prompt alone would not
+  // have stopped it. They are all handled by inferFormatClassWithConfidence
+  // below; brunch is a meal time and is already an occasion tag.
 };
 
 export function inferCuisineFromTypes(types: string[]): string | null {
@@ -199,7 +197,7 @@ export function inferCuisineFromTypesWithConfidence(types: string[]): [string | 
   for (const t of types) {
     const c = CUISINE_TYPE_MAP[t];
     if (!c) continue;
-    const isSpecific = t.endsWith("_restaurant") || t.endsWith("_shop") || t === "steak_house" || t === "bakery";
+    const isSpecific = t.endsWith("_restaurant") || t.endsWith("_shop") || t === "steak_house";
     return [c, isSpecific ? 0.95 : 0.65];
   }
   return [null, 0];
@@ -363,8 +361,11 @@ export const SUBREGION_TO_CUISINE: Record<string, string> = {
   ethiopian: "african", nigerian: "african", senegalese: "african",
   american_diner: "american", deli_jewish: "american",
   breakfast_diner: "american", burger: "american", bodega_food: "american",
-  wine_bar_food: "bar", steakhouse: "steakhouse", seafood_house: "seafood",
-  brunch_modern: "brunch", "café": "café",
+  steakhouse: "steakhouse", seafood_house: "seafood",
+  // wine_bar_food, brunch_modern and café deliberately map to nothing. A
+  // subregion is allowed to describe a format (that is what "café" is doing in
+  // the subregion vocabulary); turning it back into a cuisine here reintroduced
+  // exactly what CUISINE_TYPE_MAP above stopped doing.
 };
 
 export function inferFormatClass(types: string[], priceLevel: number | null): string {
@@ -381,6 +382,12 @@ export function inferFormatClassWithConfidence(
   if (types.includes("bar") || types.includes("pub")) return ["bar", 0.95];
   if (types.includes("wine_bar")) return ["wine_bar", 0.95];
   if (types.includes("coffee_shop") || types.includes("cafe")) return ["café", 0.95];
+  // Added when bakery stopped being a cuisine. Without this a bakery fell
+  // through to the price-derived guesses and ended up "fast_casual", which is
+  // where the format information would have gone instead of being kept.
+  if (types.includes("bakery") || types.includes("bagel_shop") || types.includes("donut_shop")) {
+    return ["bakery", 0.9];
+  }
   if (types.includes("meal_delivery")) return ["ghost_kitchen", 0.9];
   if (types.includes("meal_takeaway")) return ["quick_service", 0.85];
   if (types.includes("fast_food_restaurant")) return ["quick_service", 0.9];
