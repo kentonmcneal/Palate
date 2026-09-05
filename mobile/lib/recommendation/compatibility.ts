@@ -255,9 +255,13 @@ function computePersonalDelta(g: TasteGraph, r: RestaurantInput): number {
   // What "Not interested" taught. Dampened by how much of this cuisine the
   // person has actually eaten: one dismissed taqueria does not outweigh forty
   // taco visits. The place itself never gets here; it is excluded upstream.
-  const share = r.cuisine_subregion
-    ? shareOf(g.cuisinesSubregion, r.cuisine_subregion)
-    : r.cuisine_region ? shareOf(g.cuisines, r.cuisine_region) : 0;
+  // Keyed on cuisine_type, the same field the lesson is keyed on. Subregion
+  // and region are fallbacks for rows that carry one and not the other.
+  const share = r.cuisine_type && shareOf(g.cuisineTypes, r.cuisine_type) > 0
+    ? shareOf(g.cuisineTypes, r.cuisine_type)
+    : r.cuisine_subregion
+      ? shareOf(g.cuisinesSubregion, r.cuisine_subregion)
+      : r.cuisine_region ? shareOf(g.cuisines, r.cuisine_region) : 0;
   d -= dislikePenalty(g.dislikes, r, Math.round(share * g.totalVisits));
 
   // Negative events

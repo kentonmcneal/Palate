@@ -25,6 +25,8 @@ export type TasteVector = {
   // Cuisine
   cuisineRegion: WeightMap;
   cuisineSubregion: WeightMap;
+  /** By cuisine_type — the field the mood chips and "Not interested" use. */
+  cuisineType: WeightMap;
   cuisineRegionAspirational: WeightMap;
   cuisineSubregionAspirational: WeightMap;
 
@@ -207,6 +209,7 @@ export function aggregate(visits: VisitRow[], wishlist: WishlistRow[]): TasteVec
 
     addWeight(v.cuisineRegion, r.cuisine_region, w);
     addWeight(v.cuisineSubregion, r.cuisine_subregion, w);
+    addWeight(v.cuisineType, r.cuisine_type, w);
     addWeight(v.formatClass, r.format_class, w);
     addWeight(v.chainType, r.chain_type, w);
     if (r.price_level != null) {
@@ -300,6 +303,7 @@ function emptyVector(): TasteVector {
     wishlistCount: 0,
     cuisineRegion: {},
     cuisineSubregion: {},
+    cuisineType: {},
     cuisineRegionAspirational: {},
     cuisineSubregionAspirational: {},
     formatClass: {},

@@ -57,4 +57,11 @@ describe("not interested", () => {
     const p = buildDislikeProfile([row({ google_place_id: "gone" })]);
     expect(p.placeIds.has("gone")).toBe(true);
   });
+
+  it("repeated noes earn their weight back against a long history", () => {
+    const once = buildDislikeProfile([row({ google_place_id: "a", reason: "food", cuisine_type: "mexican" })]);
+    const five = buildDislikeProfile(Array.from({ length: 5 }, (_, i) => row({ google_place_id: `a${i}`, reason: "food", cuisine_type: "mexican" })));
+    const c = { google_place_id: "z", cuisine_type: "mexican" };
+    expect(dislikePenalty(five, c, 40)).toBeGreaterThan(dislikePenalty(once, c, 40) * 2);
+  });
 });

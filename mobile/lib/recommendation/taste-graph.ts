@@ -25,6 +25,7 @@ export type TasteGraph = {
   // Weighted relationships (sorted high→low within each map)
   cuisines: Record<string, number>;
   cuisinesSubregion: Record<string, number>;
+  cuisineTypes: Record<string, number>;
   formats: Record<string, number>;
   occasions: Record<string, number>;
   flavors: Record<string, number>;
@@ -75,6 +76,7 @@ export function assembleGraph(vector: TasteVector | null, personal: PersonalSign
   return {
     cuisines: v.cuisineRegion,
     cuisinesSubregion: v.cuisineSubregion,
+    cuisineTypes: v.cuisineType ?? {},
     formats: v.formatClass,
     occasions: v.occasion,
     flavors: v.flavor,
@@ -125,7 +127,7 @@ export function topKey(map: Record<string, number>): string | null {
 export function emptyVector(): TasteVector {
   return {
     visitCount: 0, wishlistCount: 0,
-    cuisineRegion: {}, cuisineSubregion: {},
+    cuisineRegion: {}, cuisineSubregion: {}, cuisineType: {},
     cuisineRegionAspirational: {}, cuisineSubregionAspirational: {},
     formatClass: {}, priceTier: {}, chainType: {}, occasion: {}, flavor: {},
     culturalContext: {},

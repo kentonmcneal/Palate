@@ -56,7 +56,10 @@ export const EMPTY_DISLIKES: DislikeProfile = {
 // thing counts fully; the others count a little, because a person who says
 // "just this place" three times about steakhouses is telling you something.
 const REASON_WEIGHT: Record<DislikeReason, Record<keyof Omit<DislikeProfile, "placeIds">, number>> = {
-  place: { cuisines: 0.35, subregions: 0.35, formats: 0.25, dishes: 0.35, priceTiers: 0.15, neighborhoods: 0.1 },
+  // "Just this place" says least about format and price: those buckets are
+  // coarse (fast_casual is a third of the catalogue), so a leak there would
+  // colour most of the map from one no.
+  place: { cuisines: 0.35, subregions: 0.35, formats: 0.1, dishes: 0.35, priceTiers: 0.05, neighborhoods: 0.1 },
   food:  { cuisines: 1.0,  subregions: 1.2,  formats: 0.1,  dishes: 1.0,  priceTiers: 0.0,  neighborhoods: 0.0 },
   price: { cuisines: 0.1,  subregions: 0.1,  formats: 0.2,  dishes: 0.0,  priceTiers: 1.2,  neighborhoods: 0.0 },
   vibe:  { cuisines: 0.1,  subregions: 0.1,  formats: 1.2,  dishes: 0.1,  priceTiers: 0.2,  neighborhoods: 0.2 },
@@ -125,8 +128,12 @@ export function dislikePenalty(
   if (r.price_level != null) pts += 6 * saturate(profile.priceTiers[String(r.price_level)] ?? 0);
   pts += 3 * saturate(profile.neighborhoods[key(r.neighborhood)] ?? 0);
 
-  // Forty taco visits versus one dismissed taqueria: the visits win.
-  const damp = 1 / (1 + positiveVisits / 5);
+  // Forty taco visits versus one dismissed taqueria: the visits win. But
+  // repeated explicit answers earn their weight back — five noes about the
+  // same cuisine are not erased by a history of eating it; they are the
+  // person changing their mind.
+  const noes = Math.max(1, profile.cuisines[key(r.cuisine_type)] ?? 0, dishMax);
+  const damp = 1 / (1 + positiveVisits / (5 * noes));
   return Math.round(Math.min(30, pts * damp));
 }
 
