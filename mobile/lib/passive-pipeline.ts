@@ -443,11 +443,16 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
   const cached = await getCachedNearby(raw.lat, raw.lng, radius);
   let places: Restaurant[];
   let cacheHit: boolean;
+  // Resolved once, before the branch. This ran catalogueCandidates twice — once
+  // in the condition and again in the body — which is two identical round trips
+  // for one answer.
+  const fromCatalogue = cached ? [] : await catalogueCandidates(raw, radius);
+
   if (cached) {
     places = cached;
     cacheHit = true;
     void breadcrumb("passive: candidates from cache", { count: cached.length, radius });
-  } else if ((await catalogueCandidates(raw, radius)).length > 0) {
+  } else if (fromCatalogue.length > 0) {
     // OUR OWN CATALOGUE, BEFORE GOOGLE.
     //
     // This path is the largest per-user cost in the product. Every stop that
@@ -463,7 +468,7 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
     //
     // Same question, same radius, cheaper source. Google is still there for
     // the genuinely new place, which is the case worth paying for.
-    places = await catalogueCandidates(raw, radius);
+    places = fromCatalogue;
     cacheHit = true;
     void track("visit_resolved_from_catalogue", { count: places.length });
     void breadcrumb("passive: candidates from catalogue", { count: places.length, radius });

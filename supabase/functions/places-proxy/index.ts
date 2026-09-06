@@ -221,22 +221,44 @@ async function handleNearby(
   // worse than an expensive right one.
   const latCell = cellOf(lat);
   const lngCell = cellOf(lng);
-  const { data: region } = await admin
+  // ANY coverage at this cell whose radius is at least the one being asked
+  // for. A fetch at 3000m already put every restaurant within 75m of this cell
+  // into public.restaurants, so it answers the 75m question too — this table
+  // records coverage, not places, and the read below serves from restaurants
+  // by bounding box.
+  //
+  // Matching on `.eq("radius_m", radius)` meant a cell fetched at 3000m did not
+  // answer the same cell at 75m, and one Home mount bought the same cell at
+  // 2500 and 3000 eight milliseconds apart. Smallest covering radius first, so
+  // we lean on the tightest guarantee we hold rather than the widest.
+  const { data: regions } = await admin
     .from("nearby_cache_regions")
-    .select("fetched_at, result_count")
+    .select("fetched_at, result_count, raw_count, radius_m")
     .eq("lat_bucket", latCell)
     .eq("lng_bucket", lngCell)
-    .eq("radius_m", radius)
-    .maybeSingle();
+    .gte("radius_m", radius)
+    .order("radius_m", { ascending: true })
+    .limit(4);
 
-  const fresh =
-    region &&
-    Date.now() - new Date(region.fetched_at as string).getTime() < CACHE_TTL_MS &&
-    (region.result_count as number) >= CACHE_MIN_RESULTS;
+  const region = (regions ?? []).find((r) => {
+    if (Date.now() - new Date(r.fetched_at as string).getTime() >= CACHE_TTL_MS) return false;
+    const raw = r.raw_count as number | null;
+    // COMPLETE: Google returned fewer than its maximum, so we saw everything
+    // inside that radius. Three results is a complete answer. So is zero.
+    if (raw !== null && raw < NEARBY_MAX_RESULTS) return true;
+    // POSSIBLY TRUNCATED, or written before raw_count existed: fall back to
+    // the density test this always used.
+    return (r.result_count as number) >= CACHE_MIN_RESULTS;
+  });
 
-  if (fresh) {
+  if (region) {
     const places = await degradedNearby(admin, lat, lng, radius);
-    if (places.length >= CACHE_MIN_RESULTS) {
+    const raw = region.raw_count as number | null;
+    const complete = raw !== null && raw < NEARBY_MAX_RESULTS;
+    // A complete answer is trusted at whatever size it is — including empty,
+    // which is the correct answer for a 75m circle in a residential street.
+    // A truncated one still has to reproduce its claimed density.
+    if (complete || places.length >= CACHE_MIN_RESULTS) {
       await recordUsage(admin, `nearby:${radius}`, "cache");
       return json({ places, cached: true });
     }
@@ -296,6 +318,10 @@ async function handleNearby(
       lng_bucket: lngCell,
       radius_m: radius,
       fetched_at: new Date().toISOString(),
+      // What Google returned, before any filtering. Under NEARBY_MAX_RESULTS
+      // means the answer was complete at this radius, which is the only
+      // honest test of whether the cache can be trusted at a small radius.
+      raw_count: rows.length,
       // Count what the READ will actually return, not what Google sent.
       //
       // This recorded rows.length — Google's raw count, unfiltered — while
@@ -597,7 +623,22 @@ async function classifyAndBuildRow(
     editorial_summary: editorialSummary,
     review_snippets: reviewSnippets.length ? reviewSnippets : null,
     reviews_refreshed_at: opts.useLLM ? new Date().toISOString() : null,
-    google_raw: place,
+    // Only what we cannot re-derive.
+    //
+    // This stored Google's whole place object, and every key in it except one
+    // already has a typed column on this table: types, location, displayName,
+    // id, formattedAddress, primaryType, rating, userRatingCount, priceLevel,
+    // regularOpeningHours, businessStatus. Keeping a second copy in jsonb cost
+    // ~1 kB a row — 796 kB across 749 rows, 14% of the table — to duplicate
+    // data we already had in queryable form.
+    //
+    // addressComponents is the exception and the reason this column exists at
+    // all: nothing else can reconstruct a neighbourhood, and 52 rows were
+    // measured whose stored neighborhood was WORSE than the addressComponents
+    // sitting in their own google_raw. That stays.
+    google_raw: (place as { addressComponents?: unknown })?.addressComponents
+      ? { addressComponents: (place as { addressComponents?: unknown }).addressComponents }
+      : null,
   };
 }
 
