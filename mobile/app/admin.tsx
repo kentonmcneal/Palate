@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import { isAdmin, listPendingUsers, setApproval, type PendingUser } from "../lib/waitlist";
+import { observabilityStatus, sendTestEvent } from "../lib/observability";
 import { listFeedback, markFeedbackTriaged, type FeedbackRow } from "../lib/feedback-admin";
 import { loadRecFunnel, summarize, type RecFunnelRow } from "../lib/rec-funnel";
 
@@ -31,6 +32,7 @@ export default function AdminWaitlistScreen() {
   // revoked permission, Expo down. This is the route that cannot.
   const [feedback, setFeedback] = useState<FeedbackRow[]>([]);
   const [funnel, setFunnel] = useState<RecFunnelRow[] | null>(null);
+  const [testing, setTesting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,6 +139,45 @@ export default function AdminWaitlistScreen() {
             ))}
           </View>
         )}
+
+        {/* Crash reporting, stated rather than assumed. A no-op error reporter
+            looks exactly like an app that never errors, which is how a DSN
+            sitting in the EAS environment was reported as missing for a day.
+            The test button is the only way to know the pipe works without
+            waiting for a real crash. */}
+        {!loading && allowed && (() => {
+          const obs = observabilityStatus();
+          return (
+            <View style={[styles.card, { marginBottom: 12 }]}>
+              <Text style={type.subtitle}>Crash reporting</Text>
+              <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
+                {obs.hasDsn
+                  ? `On, reporting to ${obs.host}. ${obs.initialized ? "Started this session." : "Not started yet this session."}`
+                  : "Off. No DSN reached this build, so every error is being swallowed. Check that the build profile names an EAS environment that has EXPO_PUBLIC_SENTRY_DSN."}
+              </Text>
+              {obs.hasDsn && (
+                <Pressable
+                  onPress={() => {
+                    setTesting(true);
+                    void sendTestEvent()
+                      .then((sent) => Alert.alert(
+                        sent ? "Test event sent" : "Nothing sent",
+                        sent
+                          ? "It should appear in Sentry within a minute, titled 'Palate test event from the Admin screen'."
+                          : "Reporting is not running, so nothing left the device.",
+                      ))
+                      .finally(() => setTesting(false));
+                  }}
+                  disabled={testing}
+                  style={[styles.approve, { marginTop: 12, alignSelf: "flex-start" }]}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.approveText}>{testing ? "…" : "Send a test event"}</Text>
+                </Pressable>
+              )}
+            </View>
+          );
+        })()}
 
         {!loading && allowed && serverPush !== null && (
           <View style={styles.card}>
