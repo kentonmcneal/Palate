@@ -313,6 +313,12 @@ export default function RootLayout() {
         router.push(`/profile/${String(data.user_id ?? "")}` as never);
         return;
       }
+      // A new follower. Their profile, because the action the notification is
+      // asking for — follow back — lives there, on the button.
+      if (data?.type === "new_follower" && data.user_id) {
+        router.push(`/profile/${String(data.user_id)}` as never);
+        return;
+      }
 
       // Weekly discovery nudge — deep-link straight to what it promised.
       if (data?.type === "discovery_ping") {
