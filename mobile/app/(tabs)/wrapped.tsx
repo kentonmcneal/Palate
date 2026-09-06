@@ -26,7 +26,6 @@ import { computeTasteVector, type TasteVector } from "../../lib/taste-vector";
 import { getSessionStage, type SessionStage } from "../../lib/session-stage";
 import { loadPersonalSignal } from "../../lib/personal-signal";
 import { assembleGraph, composeWrapped, type WrappedSummary } from "../../lib/recommendation";
-import { getAreaPalates, type AreaPalateSummary } from "../../lib/area-palates";
 import {
   getProfileFromVector, IDENTITY_BLURB, composeEgoHook,
   type PalateProfile,
@@ -65,7 +64,6 @@ export default function WrappedTab() {
   // Area palates is the only "deep" surface that still renders on the tab —
   // identity / signals / behavior / dishes / percentile / cohort / next era
   // all moved into the Wrapped Story (app/wrapped-story.tsx).
-  const [areaPalates, setAreaPalates] = useState<AreaPalateSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [confettiKey, setConfettiKey] = useState(0);
   const [error, setError] = useState<unknown>(null);
@@ -119,10 +117,10 @@ export default function WrappedTab() {
         if (p) setAllTimeProfile(p);
       }
 
-      // Area palates still renders on the tab. Everything else (percentile,
-      // cohort, aspirational, top dishes) moved to the Wrapped Story.
-      const ar = await getAreaPalates().catch(() => null);
-      setAreaPalates(ar);
+      // Top Palates in <city> is off the tab (founder's call, 2026-09-05).
+      // At 14 testers it read "preview" over a distribution of four accounts,
+      // which is a claim about a city made from almost nobody. The idea is
+      // parked in docs/IDEAS.md with the number that would earn it back.
       setError(null);
     } catch (e: any) {
       // A Wrapped that failed to load used to render the sample card under
@@ -374,22 +372,6 @@ export default function WrappedTab() {
 
             {/* Interactive charts — tap-to-focus donut + day-of-week bars */}
             <WrappedCharts />
-
-            {/* Top palates in your area */}
-            {areaPalates && areaPalates.palates.length > 0 && (
-              <View style={styles.insightCard}>
-                <Text style={styles.insightEyebrow}>
-                  TOP PALATES IN {areaPalates.area.toUpperCase()}
-                  {areaPalates.source === "preview" ? " · preview" : ""}
-                </Text>
-                {areaPalates.palates.map((p, i) => (
-                  <View key={p.label} style={styles.rankRow}>
-                    <Text style={styles.rankPct}>{i + 1}. {p.label}</Text>
-                    <Text style={styles.rankBody}>{Math.round(p.share * 100)}%</Text>
-                  </View>
-                ))}
-              </View>
-            )}
 
             {/* What are Palates? — explainer block with axis graph + share CTA */}
             {profile && <WhatArePalates profile={profile} onShare={sharePalate} />}
