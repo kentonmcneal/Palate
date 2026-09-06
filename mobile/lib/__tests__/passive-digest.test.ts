@@ -1,6 +1,6 @@
 import {
   buildDigest, bandFor, entriesForDigest, isDigestWorthSending,
-  digestNotificationBody, allowsRealtimePrompt,
+  digestNotificationBody, digestNotificationTitle, isLowOnlyDigest, allowsRealtimePrompt,
 } from "../passive-digest";
 import type { InboxEntry } from "../passive-confirm";
 
@@ -112,24 +112,40 @@ describe("isDigestWorthSending", () => {
     expect(isDigestWorthSending(buildDigest([], DAY))).toBe(false);
   });
 
-  it("stays silent when only Low entries exist", () => {
-    // Low is collapsed behind "Anything else?" — not worth spending the day's
-    // single notification on.
-    expect(isDigestWorthSending(buildDigest([
-      entry({ id: "a", detectedAt: at(12), confidenceBand: "low" }),
-    ], DAY))).toBe(false);
+  it("speaks up on a low-only day, because silence is the worse failure", () => {
+    // This assertion used to be `false`. A day made entirely of low-confidence
+    // stops said nothing at all, which is exactly what the founder reported:
+    // "I am not getting sent notifications to log food." Low band is where the
+    // ambiguous stops are, so it asks a softer question rather than none.
+    const d = buildDigest([entry({ id: "a", detectedAt: at(12), confidenceBand: "low" })], DAY);
+    expect(isDigestWorthSending(d)).toBe(true);
+    expect(isLowOnlyDigest(d)).toBe(true);
+    expect(digestNotificationTitle(d)).toBe("Were you out today?");
   });
 });
 
 describe("digestNotificationBody", () => {
   const fmt = (ms: number) => new Date(ms).getHours() + ":00";
 
-  it("is declarative, not interrogative", () => {
-    const body = digestNotificationBody(buildDigest([
+  it("names the place and asks, rather than announcing a task", () => {
+    // The founder read "2 places to confirm" as a chore. It is a question now.
+    // The name still has to appear somewhere — it is the recall scaffold —
+    // but for a single place it belongs in the title, where iOS shows it bold.
+    const d = buildDigest([entry({ id: "Chipotle", detectedAt: at(12), confidenceBand: "high" })], DAY);
+    const title = digestNotificationTitle(d);
+    const body = digestNotificationBody(d, fmt);
+    expect(title).toBe("Did you eat at Chipotle?");
+    expect(`${title} ${body}`).toContain("Chipotle");
+    expect(body).toMatch(/no need to open the app/i);
+  });
+
+  it("asks about several places in the founder's own words", () => {
+    const d = buildDigest([
       entry({ id: "Chipotle", detectedAt: at(12), confidenceBand: "high" }),
-    ], DAY), fmt);
-    expect(body).toContain("Chipotle");
-    expect(body).not.toMatch(/did you|\?/i);
+      entry({ id: "Ruby's", detectedAt: at(19), confidenceBand: "medium" }),
+    ], DAY);
+    expect(digestNotificationTitle(d)).toBe("Looks like you ate at 2 places today");
+    expect(digestNotificationBody(d, fmt)).toMatch(/can you confirm/i);
   });
 
   it("summarises rather than listing everything", () => {

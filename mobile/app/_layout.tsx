@@ -7,6 +7,7 @@ import {
   confirmVisitById,
   declineVisitById,
   drainConfirmQueue,
+  rescheduleDigest,
 } from "../lib/passive-confirm";
 import { refreshDiscoveryPings } from "../lib/notification-schedule";
 import { recordHeartbeat } from "../lib/heartbeat";
@@ -248,18 +249,30 @@ export default function RootLayout() {
     if (!session?.user) return;
     void refreshDiscoveryPings().catch(() => {});
   }, [session?.user?.id]);
+  // Keyed on the id, for the same reason as the effect above: `session.user`
+  // is a new object on INITIAL_SESSION, SIGNED_IN and TOKEN_REFRESHED.
   useEffect(() => {
     if (!session?.user) return;
     void recordHeartbeat(true).catch(() => {});
     void drainConfirmQueue().catch(() => {});
+    // Self-heal. The digest is scheduled when a visit lands and rewritten when
+    // one is confirmed, and both of those need JS to have been running. If the
+    // app was killed when a capture arrived, or a schedule failed, nothing
+    // retried and the inbox sat there with nobody ever asked about it — which
+    // is the "I am not getting notifications" case. Reconciling on every
+    // foreground makes a miss self-correcting: rescheduleDigest cancels and
+    // rewrites from the current inbox, so it is safe to run any number of
+    // times and schedules nothing when there is nothing to ask about.
+    void rescheduleDigest().catch(() => {});
     const sub = AppState.addEventListener("change", (st) => {
       if (st === "active") {
         void recordHeartbeat().catch(() => {});
         void drainConfirmQueue().catch(() => {});
+        void rescheduleDigest().catch(() => {});
       }
     });
     return () => sub.remove();
-  }, [session?.user]);
+  }, [session?.user?.id]);
 
   // Handle a passive-capture confirmation notification. Three outcomes:
   //   confirm_yes / confirm_no — answered from the lock screen, app stays shut
@@ -306,11 +319,20 @@ export default function RootLayout() {
         router.push(`/restaurant/${String(data.place_id)}` as never);
         return;
       }
+      // A one-place digest carries the Yes/No buttons, because one place IS a
+      // yes/no question. Answering from the lock screen must not fall through
+      // to "open the digest" — that is the opposite of the point.
       if (data?.kind === "passive_digest") {
-        router.push("/digest" as never);
+        const answered = response?.actionIdentifier === "confirm_yes"
+          || response?.actionIdentifier === "confirm_no";
+        if (!answered || !data.place_id) {
+          router.push("/digest" as never);
+          return;
+        }
+        // fall through to the shared confirm/decline handling below
+      } else if (data?.kind !== "passive_confirm") {
         return;
       }
-      if (data?.kind !== "passive_confirm") return;
 
       const placeId = String(data.place_id ?? "");
       const name = String(data.name ?? "");

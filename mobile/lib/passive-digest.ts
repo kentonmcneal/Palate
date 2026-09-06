@@ -35,6 +35,38 @@ export type Digest = {
   total: number;
 };
 
+/**
+ * The notification category carrying the Yes/No buttons.
+ *
+ * This and confirmParamsFor live HERE rather than in passive-confirm, which is
+ * where they read more naturally, because passive-confirm already imports from
+ * this module. Importing back created a cycle: the dynamically-imported
+ * passive-digest saw CONFIRM_CATEGORY as undefined, scheduleDigest threw, and
+ * the caller's try/catch swallowed it — so the nightly digest silently stopped
+ * being scheduled at all. Dependencies point one way.
+ */
+export const CONFIRM_CATEGORY = "passive_confirm";
+
+/** Params for the shared /confirm-visit screen, from an inbox entry. */
+export function confirmParamsFor(entry: InboxEntry) {
+  return {
+    place_id: entry.place_id,
+    name: entry.name,
+    address: entry.address,
+    alternates: JSON.stringify(entry.alternates),
+    confidence: (entry.confidenceBand ?? "high") as "high" | "medium" | "low",
+    inbox_id: entry.id,
+    // Threaded through so the outcome event can report what the detection
+    // looked like. Strings: expo-router params are strings either way.
+    dwell_min: String(Math.round(entry.dwellMin)),
+    accuracy_m: entry.accuracyM == null ? "" : String(Math.round(entry.accuracyM)),
+    detect_source: entry.source ?? "",
+    confidence_score: entry.confidence == null ? "" : entry.confidence.toFixed(3),
+    candidate_count: String(entry.candidateCount ?? 0),
+    cluster: entry.cluster ? "1" : "",
+  };
+}
+
 /** More than one plausible venue in range makes yes/no the wrong question. */
 export const AMBIGUOUS_CANDIDATE_COUNT = 2;
 
@@ -121,28 +153,61 @@ export function buildDigest(entries: InboxEntry[], now = new Date()): Digest {
   };
 }
 
-/** Nothing to confirm and nothing to show — do not send a notification. */
+/** Nothing at all in the window — do not send a notification.
+ *
+ *  This used to require a high- or medium-band entry, which meant a day made
+ *  entirely of low-confidence stops said NOTHING. The founder's report was
+ *  exactly that: "I am not getting sent notifications to log food." A low-only
+ *  day is the case where the app most needs a human, because low band is where
+ *  the ambiguous stops are — it just has to ask a softer question. */
 export function isDigestWorthSending(digest: Digest): boolean {
-  return digest.high.length + digest.medium.length > 0;
+  return digest.total > 0;
+}
+
+/** True when the digest has nothing it is confident about — the question
+ *  becomes "were you out?" rather than "confirm these". */
+export function isLowOnlyDigest(digest: Digest): boolean {
+  return digest.high.length + digest.medium.length === 0 && digest.low.length > 0;
 }
 
 /**
- * Notification copy. Declarative, not interrogative: "Chipotle, 12:40pm", never
- * "Did you eat at Chipotle?". Confirmation is far cheaper cognitively than
- * input, and the phrasing is what makes it feel like confirming rather than
- * being interrogated.
+ * Notification copy.
+ *
+ * It used to read "2 places to confirm" / "Chipotle, Ruby's. Tap to confirm."
+ * — accurate, and it sounds like a task queue. The founder's note: it should
+ * read "Looks like you ate at 2 places today, can you confirm this?" That is
+ * the same information asked as a question, and a question is answerable.
+ *
+ * The place and the time still lead the body, because they are the recall
+ * scaffold — you remember the day by what you did, not by a count.
  */
+export function digestNotificationTitle(digest: Digest): string {
+  if (isLowOnlyDigest(digest)) return "Were you out today?";
+  const n = digest.high.length + digest.medium.length;
+  if (n === 1) {
+    const one = [...digest.high, ...digest.medium][0];
+    return `Did you eat at ${one.name}?`;
+  }
+  return `Looks like you ate at ${n} places today`;
+}
+
 export function digestNotificationBody(digest: Digest, formatTime: (ms: number) => string): string {
+  if (isLowOnlyDigest(digest)) {
+    const near = digest.low[0];
+    return near
+      ? `We think you were near ${near.name}. Tap to say where you actually ate.`
+      : "Tap to log anything you ate out.";
+  }
   const shown = [...digest.high, ...digest.medium];
   if (!shown.length) return "";
   if (shown.length === 1) {
-    return `${shown[0].name}, ${formatTime(shown[0].detectedAt)}. Tap to confirm.`;
+    return `${formatTime(shown[0].detectedAt)} today. Yes or No — no need to open the app.`;
   }
-  const names = shown.slice(0, 2).map((e) => e.name).join(", ");
+  const names = shown.slice(0, 2).map((e) => e.name).join(" and ");
   const rest = shown.length - 2;
   return rest > 0
-    ? `${names} and ${rest} more. Tap to confirm.`
-    : `${names}. Tap to confirm.`;
+    ? `${names} and ${rest} more. Can you confirm?`
+    : `${names}. Can you confirm?`;
 }
 
 /**
@@ -258,11 +323,22 @@ export async function scheduleDigest(
     new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
   );
 
+  // One confident place is a yes/no question, so it gets the Yes/No buttons
+  // the realtime prompt already registers — that is the "verify without
+  // opening the app" the founder asked for, and it costs nothing extra
+  // because the category is already registered at launch. Two or more places
+  // is not a yes/no question, so those still open the digest.
+  const confident = [...digest.high, ...digest.medium];
+  const single = confident.length === 1 ? confident[0] : null;
+
   const id = await Notifications.scheduleNotificationAsync({
     content: {
-      title: digest.total === 1 ? "One place to confirm" : `${digest.high.length + digest.medium.length} places to confirm`,
+      title: digestNotificationTitle(digest),
       body,
-      data: { kind: DIGEST_KIND, date: digest.date },
+      ...(single ? { categoryIdentifier: CONFIRM_CATEGORY } : {}),
+      data: single
+        ? { kind: DIGEST_KIND, date: digest.date, ...confirmParamsFor(single) }
+        : { kind: DIGEST_KIND, date: digest.date },
     },
     trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when },
   });

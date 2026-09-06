@@ -13,8 +13,15 @@ import * as Notifications from "expo-notifications";
 import type { Restaurant } from "./places";
 import type { ResolvedVisit } from "./passive-pipeline";
 import { track } from "./analytics";
+import { captureError } from "./observability";
 import { recentlyPrompted } from "./visits";
-import { allowsRealtimePrompt } from "./passive-digest";
+import {
+  allowsRealtimePrompt, CONFIRM_CATEGORY, confirmParamsFor,
+  scheduleDigest, DIGEST_NOTIF_ID_STORAGE_KEY,
+} from "./passive-digest";
+// Re-exported so the screens keep their existing import path.
+export { CONFIRM_CATEGORY, confirmParamsFor } from "./passive-digest";
+import { serialize } from "./notification-dedupe";
 
 // Quiet hours (local): default ~9pm–8am. Suppressed visits go to the inbox.
 const QUIET_START_HOUR = 21;
@@ -50,7 +57,7 @@ const LAST_NOTIF_KEY = "palate.passive.lastNotifAt";
 export const MIN_NOTIF_GAP_MIN = 15;
 
 /** Notification category carrying the Yes/No lock-screen actions. */
-export const CONFIRM_CATEGORY = "passive_confirm";
+
 
 /**
  * Real-time per-visit prompts. OFF: confirmation happens in the nightly digest.
@@ -256,26 +263,17 @@ export async function seedDigestFixtures(): Promise<number> {
 export async function removeFromInbox(id: string): Promise<void> {
   const existing = await getInbox();
   await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(existing.filter((e) => e.id !== id)));
-}
-
-/** Params for the shared /confirm-visit screen, from an inbox entry. */
-export function confirmParamsFor(entry: InboxEntry) {
-  return {
-    place_id: entry.place_id,
-    name: entry.name,
-    address: entry.address,
-    alternates: JSON.stringify(entry.alternates),
-    confidence: (entry.confidenceBand ?? "high") as "high" | "medium" | "low",
-    inbox_id: entry.id,
-    // Threaded through so the outcome event can report what the detection
-    // looked like. Strings: expo-router params are strings either way.
-    dwell_min: String(Math.round(entry.dwellMin)),
-    accuracy_m: entry.accuracyM == null ? "" : String(Math.round(entry.accuracyM)),
-    detect_source: entry.source ?? "",
-    confidence_score: entry.confidence == null ? "" : entry.confidence.toFixed(3),
-    candidate_count: String(entry.candidateCount ?? 0),
-    cluster: entry.cluster ? "1" : "",
-  };
+  // AND rewrite tonight's digest.
+  //
+  // This line is the whole of the founder's "it fires even though I already
+  // filled it out". rescheduleDigest was called in exactly two places, both on
+  // ADD. Every removal — confirming from the digest, confirming from the
+  // notification, declining, answering the single-visit screen — took the
+  // entry out of the inbox and left the 9pm notification armed with copy
+  // about places already dealt with. Rescheduling on removal cancels it when
+  // the inbox empties, because scheduleDigest schedules nothing for an empty
+  // digest.
+  await rescheduleDigest();
 }
 
 // ----------------------------------------------------------------------------
@@ -328,10 +326,19 @@ async function scheduleConfirmNotification(entry: InboxEntry): Promise<void> {
   });
 }
 
-/** Rewrite tonight's digest to include everything captured so far today. */
-async function rescheduleDigest(): Promise<void> {
+/**
+ * Rewrite tonight's digest from the current inbox.
+ *
+ * SERIALIZED. scheduleDigest cancels the previous notification and then
+ * schedules a new one; two of those interleaving means both cancel the same
+ * old id and then both schedule, which is a person getting the same digest
+ * twice. The discovery pings were fixed this way and this path was missed.
+ */
+export const rescheduleDigest = serialize(async (): Promise<void> => {
   try {
-    const { scheduleDigest, DIGEST_NOTIF_ID_STORAGE_KEY } = await import("./passive-digest");
+    // Static import. This was a dynamic import to dodge the passive-confirm ->
+    // passive-digest -> passive-confirm cycle; the cycle is gone, so the
+    // indirection is too.
     await scheduleDigest(
       await getInbox(),
       () => AsyncStorage.getItem(DIGEST_NOTIF_ID_STORAGE_KEY),
@@ -340,10 +347,15 @@ async function rescheduleDigest(): Promise<void> {
         else await AsyncStorage.removeItem(DIGEST_NOTIF_ID_STORAGE_KEY);
       },
     );
-  } catch {
-    // Scheduling is best-effort; the entry is already safely in the inbox.
+  } catch (e) {
+    // Best-effort, but NOT silent. This catch swallowed a circular-import
+    // failure that stopped the nightly digest being scheduled at all, and
+    // because it said nothing, the only symptom was the founder reporting he
+    // was not getting notifications. A scheduling failure is now visible.
+    void track("digest_schedule_failed", { message: (e as Error)?.message ?? String(e) });
+    void captureError(e, { at: "passive:rescheduleDigest" });
   }
-}
+});
 
 export type NotifyResult =
   | "notified"
