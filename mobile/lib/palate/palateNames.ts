@@ -34,6 +34,21 @@ export function identityName(id: PrimaryIdentity | null | undefined): string {
   return id ? (IDENTITY_NAME[id] ?? id) : "Warming Up";
 }
 
+/** "a Tastemaker" / "an Explorer". Lowercase article, for mid-sentence. */
+export function indefinite(name: string): string {
+  return `${/^[AEIOU]/i.test(name) ? "an" : "a"} ${name}`;
+}
+
+/** "A Tastemaker" / "An Explorer". Capitalised, for the start of a sentence.
+ *
+ *  These exist because the rename broke grammar the old names hid: every one
+ *  of Curator, Forager, Steward and Anchor starts with a consonant, so the
+ *  prose said "A Forager" everywhere and read fine. "A Explorer" does not. */
+export function Indefinite(name: string): string {
+  const a = indefinite(name);
+  return a[0].toUpperCase() + a.slice(1);
+}
+
 /** With its article, for a badge: "You are an Explorer". */
 export function identityWithArticle(id: PrimaryIdentity | null | undefined): string {
   const n = identityName(id);

@@ -115,7 +115,7 @@ export function nextStep(s: ActivationState): NextStep | null {
     return {
       key: "friends",
       title: "Follow someone who eats like you",
-      body: "The feed and the group picks both need one other person before they do anything. No request to send — just follow.",
+      body: "The feed and the group picks both need one other person before they do anything. No request to send, just follow.",
       cta: "Browse people",
       route: "/people",
     };

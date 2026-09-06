@@ -289,8 +289,8 @@ export default function EditProfileScreen() {
             onPress={() => router.push("/curate-profile" as never)}
           />
           <Note>
-            Your history stays complete either way — this only controls which visits
-            appear on your profile.
+            Your history stays complete either way. This only controls which
+            visits appear on your profile.
           </Note>
           <Spacer />
           <Note>

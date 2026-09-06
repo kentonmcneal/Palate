@@ -174,7 +174,7 @@ export default function WishlistTab() {
             <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
               When your weekly Wrapped suggests places to try, tap{" "}
               <Text style={{ fontWeight: "700", color: colors.red }}>Save</Text> on any of
-              them — they'll show up here.
+              them. They'll show up here.
             </Text>
           </View>
         )}

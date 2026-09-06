@@ -109,7 +109,7 @@ export default function FollowsScreen() {
             <Text style={styles.emptyBody}>
               {tab === "friends"
                 ? "A friend is someone you follow who follows you back."
-                : "Find people in People — no request, no waiting."}
+                : "Find people in People. No request, no waiting."}
             </Text>
             <Spacer />
             <Pressable onPress={() => router.push("/people" as never)}>

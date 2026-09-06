@@ -62,7 +62,7 @@ export function WeeklyPalateInsights({ weekStart, weekEnd, fallbackAnchor }: Pro
         <View style={styles.warmingCard}>
           <Text style={type.subtitle}>Your Palate is still warming up.</Text>
           <Text style={[type.small, { marginTop: 6 }]}>
-            Visit a few more spots to unlock your identity.
+            A few more visits and your Palate takes shape.
           </Text>
         </View>
       )}
@@ -114,7 +114,7 @@ function ReadyView({
 
       {lowConfidence && (
         <Text style={[type.small, { marginTop: 12, fontStyle: "italic" }]}>
-          (Early read — your Palate sharpens with more visits.)
+          (Early read. Your Palate sharpens with more visits.)
         </Text>
       )}
 

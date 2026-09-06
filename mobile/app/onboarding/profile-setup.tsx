@@ -108,7 +108,7 @@ export default function ProfileSetup() {
         <Spacer size={8} />
         <Text style={styles.p}>
           Pick a handle so friends can find you. A name and a photo are
-          optional — set those now or later.
+          optional, so set those now or later.
         </Text>
 
         <Spacer size={28} />

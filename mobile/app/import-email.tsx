@@ -47,7 +47,7 @@ export default function ImportEmail() {
         <Spacer size={10} />
         <Text style={styles.p}>
           Reservation and delivery confirmations already sitting in your inbox
-          become visits — so Palate knows your taste before you log anything.
+          become visits, so Palate knows your taste before you log anything.
         </Text>
 
         <Spacer size={24} />
@@ -57,7 +57,7 @@ export default function ImportEmail() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>What we read, and what we don't</Text>
           <Text style={styles.cardBody}>
-            Read-only, and only messages from restaurant platforms — OpenTable,
+            Read-only, and only messages from restaurant platforms: OpenTable,
             Resy, Toast, Square, DoorDash and a dozen more. We look for the
             restaurant and the date. Nothing else is read, nothing is stored
             except the visit, and you see everything before it is saved.

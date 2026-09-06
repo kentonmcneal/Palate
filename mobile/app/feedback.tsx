@@ -95,7 +95,7 @@ export default function Feedback() {
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <Text style={type.title}>Share feedback</Text>
           <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
-            Bugs, ideas, anything confusing. It comes straight to the team — no public post.
+            Bugs, ideas, anything confusing. It comes straight to the team, and nothing is posted publicly.
           </Text>
 
           <Text style={[type.micro, { marginTop: spacing.xl }]}>What kind?</Text>

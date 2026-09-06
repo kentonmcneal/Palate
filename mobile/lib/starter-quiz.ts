@@ -230,7 +230,7 @@ export const STARTER_PERSONAS: Record<StarterPersonaKey, StarterPersona> = {
       "Regular café is your second living room",
     ],
     recs: ["Blue Bottle", "Joe & The Juice", "the local coffee shop"],
-    stretch: { name: "Devoción", reason: "Same morning, elevated." },
+    stretch: { name: "Devoción", reason: "Same morning, a step up." },
   },
   comfort_connoisseur: {
     key: "comfort_connoisseur",

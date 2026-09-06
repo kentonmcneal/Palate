@@ -802,7 +802,7 @@ function SearchSuggestionPanel({
         <ActivityIndicator color={colors.red} />
       ) : cityList.length === 0 ? (
         <Text style={[type.small, { lineHeight: 20 }]}>
-          No places indexed yet in this area — start logging visits to fill the map.
+          No places indexed yet in this area. Start logging visits to fill the map.
         </Text>
       ) : (
         cityList.map((r) => (
@@ -1184,7 +1184,7 @@ function buildTrendingGroups(
 
   return {
     groups: [{ title: "Popular near you", items: ranked.slice(0, TOP_PER_TAB) }],
-    fallbackNote: "Strong picks nearby. Category shelves unlock as more people log in your area.",
+    fallbackNote: "Strong picks nearby. More categories appear as people log visits around you.",
   };
 }
 

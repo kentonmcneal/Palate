@@ -317,7 +317,7 @@ export default function Settings() {
             onPress={() => router.push({ pathname: "/feedback", params: { category: "bug" } })}
           />
           <Note>
-            Goes straight to the team — no public post. Screenshots welcome.
+            Goes straight to the team, and nothing is posted publicly. Screenshots welcome.
           </Note>
         </CollapsibleSection>
 
@@ -334,7 +334,7 @@ export default function Settings() {
             onPress={() => Linking.openURL("https://palate-zm29.vercel.app/terms")}
           />
           <Note>
-            Palate v0.1 — no ads, we don't sell your data, you control what's
+            Palate v0.1. No ads, we don't sell your data, and you control what's
             public. Questions? hello@palate.app.
           </Note>
           {/* Which bundle is actually running. Two OTAs on the same runtime
@@ -383,7 +383,7 @@ function AdminEntry() {
       <Button title="Waitlist approvals" onPress={() => router.push("/admin" as never)} />
       <Note>Approve or deny people waiting to join.</Note>
       <Button title="Passive capture (debug)" onPress={() => router.push("/debug-visits" as never)} />
-      <Note>Phase 1 visit detection — inject a test visit and watch the raw queue.</Note>
+      <Note>Phase 1 visit detection. Inject a test visit and watch the raw queue.</Note>
     </CollapsibleSection>
   );
 }

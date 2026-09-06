@@ -31,7 +31,7 @@ export function GettingStarted() {
       <View style={styles.personasCard}>
         <Text style={type.micro}>NINE WAYS YOUR PALATE COULD READ</Text>
         <Text style={[type.small, { marginTop: 4, marginBottom: 14, lineHeight: 20 }]}>
-          By Sunday, your week will fall into one of these — based on what you
+          By Sunday, your week will fall into one of these, based on what you
           actually eat, not what you say you like.
         </Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>

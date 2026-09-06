@@ -92,7 +92,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
         Something went wrong
       </Text>
       <Text style={{ fontSize: 14, color: colors.mute, textAlign: "center", marginBottom: 20, lineHeight: 20 }}>
-        The app hit an unexpected error. Tap to try again — your data is safe.
+        The app hit an unexpected error. Your data is safe. Tap to try again.
       </Text>
       <Pressable
         onPress={retry}

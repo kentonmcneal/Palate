@@ -495,7 +495,7 @@ function similarReason(persona: PalatePersona, p: RestaurantProfile): string {
   switch (persona.recommendationStrategy) {
     case "convenience": return "Fast and reliable, like the spots you keep going back to";
     case "flavor_loyal": return `Same craving lane: ${p.flavorSignature}`;
-    case "premium":     return "Same elevated lane as your usual";
+    case "premium":     return "Same kind of room as your usual";
     case "explore":     return "Different cuisine, similar vibe. Worth a try.";
     case "morning":     return "Café energy, like your usual mornings";
     case "wellness":    return "Bright and intentional. Fits how you eat.";

@@ -76,7 +76,7 @@ export default function TastePreferencesScreen() {
         <Spacer size={8} />
         <Text style={styles.p}>
           Pick {MIN_SELECTION}–{MAX_SELECTION} cuisines you find yourself going back to.
-          We'll use them to seed your first recommendations — refined later by what
+          We'll use them to seed your first recommendations, refined later by what
           you actually eat.
         </Text>
       </View>

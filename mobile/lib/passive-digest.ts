@@ -219,7 +219,7 @@ export function digestNotificationBody(digest: Digest, formatTime: (ms: number) 
   const shown = [...digest.high, ...digest.medium];
   if (!shown.length) return "";
   if (shown.length === 1) {
-    return `${formatTime(shown[0].detectedAt)} today. Yes or No — no need to open the app.`;
+    return `${formatTime(shown[0].detectedAt)} today. Answer here, no need to open the app.`;
   }
   const names = shown.slice(0, 2).map((e) => e.name).join(" and ");
   const rest = shown.length - 2;

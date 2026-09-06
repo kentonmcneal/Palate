@@ -96,7 +96,7 @@ export function rewardCopy(totalVisits: number): { title: string; message: strin
   }
   if (totalVisits === VISITS_BEFORE_WRAPPED) {
     return {
-      title: "Weekly Palate unlocked 🔓",
+      title: "Your Weekly Palate is ready",
       message: "Open the Wrapped tab to see what your week is starting to say.",
     };
   }

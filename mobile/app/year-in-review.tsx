@@ -33,7 +33,7 @@ export default function YearInReviewPlaceholder() {
             Your Year in <Text style={styles.accent}>Palate</Text>.
           </Text>
           <Text style={styles.lede}>
-            Every visit you log this year becomes part of one beautiful card —
+            Every visit you log this year becomes part of one card,
             your year in restaurants, dishes, neighborhoods, and the
             personality you turned out to be.
           </Text>

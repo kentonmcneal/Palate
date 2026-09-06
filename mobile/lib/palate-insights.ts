@@ -211,7 +211,7 @@ const TRAIT_DISPLAY: Record<PalateTrait, string> = {
 
 function buildHeadline(i: PalateInsight): string {
   if (i.isLowData) {
-    return "Your Palate is still warming up. Visit a few more spots this week to unlock sharper recommendations.";
+    return "Your Palate is still warming up. A few more visits this week and the recommendations sharpen.";
   }
   const cuisine = i.primaryCuisine ? CUISINE_DISPLAY[i.primaryCuisine] ?? i.primaryCuisine : "everything";
   const dom = i.dominantTrait ? TRAIT_DISPLAY[i.dominantTrait] : null;

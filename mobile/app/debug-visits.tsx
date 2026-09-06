@@ -138,7 +138,7 @@ export default function DebugVisitsScreen() {
         {!isVisitMonitorAvailable && (
           <View style={[styles.card, styles.warn]}>
             <Text style={styles.warnText}>
-              Native visit monitor not in this binary — needs a dev/production build. The queue + pipeline
+              Native visit monitor not in this binary. It needs a dev or production build. The queue + pipeline
               still render.
             </Text>
           </View>
@@ -296,7 +296,7 @@ export default function DebugVisitsScreen() {
             </Pressable>
           </View>
           {misses.length === 0 ? (
-            <Text style={type.small}>No misses recorded — every detection produced a prompt.</Text>
+            <Text style={type.small}>No misses recorded. Every detection produced a prompt.</Text>
           ) : (
             misses.map((m, i) => (
               <View key={`${m.at}-${i}`} style={{ marginBottom: 8 }}>

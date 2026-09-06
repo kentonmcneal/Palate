@@ -5,6 +5,7 @@
 // Uses soft language for users near the threshold.
 // ============================================================================
 
+import { IDENTITY_NAME, indefinite, Indefinite } from "./palateNames";
 import type {
   PrimaryIdentity, UserWeeklyData, PalateProfile,
 } from "./palateTypes";
@@ -19,22 +20,22 @@ import type {
 export const IDENTITY_BLURB: Record<PrimaryIdentity, { tagline: string; description: string; shareDescriptor: string }> = {
   Curator: {
     tagline: "New places, but only the ones worth a reservation.",
-    description: "You go somewhere new most weeks and you research it first. A Forager would walk into the next door down; you would not. A Steward would go back to last month's find; you already have the next one booked.",
+    description: `You go somewhere new most weeks and you research it first. ${Indefinite(IDENTITY_NAME.Forager)} would walk into the next door down; you would not. ${Indefinite(IDENTITY_NAME.Steward)} would go back to last month's find; you already have the next one booked.`,
     shareDescriptor: "New places, chosen on purpose.",
   },
   Forager: {
     tagline: "Anywhere new. Bonus points if nobody has heard of it.",
-    description: "Variety is the whole point. You repeat almost nothing, you do not need the room to be nice, and the counter with three stools beats the place with the wait list. A Curator would check the reviews. You are already inside.",
+    description: `Variety is the whole point. You repeat almost nothing, you do not need the room to be nice, and the counter with three stools beats the place with the wait list. ${Indefinite(IDENTITY_NAME.Curator)} would check the reviews. You are already inside.`,
     shareDescriptor: "Never the same place twice.",
   },
   Steward: {
     tagline: "A short list, and you keep it sharp.",
-    description: "You have found your places and you go back, deliberately. Not out of habit, out of judgement: a new spot has to beat the list to get on it, and most do not. Anchors return for comfort. You return because you were right.",
+    description: `You have found your places and you go back, deliberately. Not out of habit, out of judgement: a new spot has to beat the list to get on it, and most do not. ${IDENTITY_NAME.Anchor}s return for comfort. You return because you were right.`,
     shareDescriptor: "Returns to the right places.",
   },
   Anchor: {
     tagline: "The regulars know your order.",
-    description: "Same few spots, casual, dependable, and you would not have it any other way. The point of dinner is not the search. A Forager finds this baffling. You find the Forager exhausting.",
+    description: `Same few spots, casual, dependable, and you would not have it any other way. The point of dinner is not the search. ${Indefinite(IDENTITY_NAME.Forager)} finds this baffling. You find the ${IDENTITY_NAME.Forager} exhausting.`,
     shareDescriptor: "Rooted in the trusted few.",
   },
   Learning: {
@@ -129,7 +130,7 @@ export function composeBehaviorSignals(d: UserWeeklyData): string[] {
     out.push("Several picks felt like the occasion.");
   }
   if (d.elevatedCategorySignal >= 0.3) {
-    out.push("You leaned into more elevated formats.");
+    out.push("You went somewhere nicer more often.");
   }
 
   return out.slice(0, 4);
@@ -173,7 +174,7 @@ export function composeMovement(
     }
   } else {
     if (dP > SIGNIFICANT) {
-      return { summary: "Leaning more elevated than last week.", direction: "more_premium" };
+      return { summary: "Nicer rooms than last week.", direction: "more_premium" };
     }
     if (dP < -SIGNIFICANT) {
       return { summary: "More casual than last week.", direction: "more_casual" };
@@ -216,8 +217,8 @@ export function composeEgoHook(profile: PalateProfile): string {
     if (n <= 0.35) return "You stuck close to your favorites this week.";
   } else {
     if (p >= 0.85) return "You went upscale this week.";
-    if (p >= 0.75) return "Some elevated picks this week.";
-    if (p >= 0.65) return "A few elevated picks this week.";
+    if (p >= 0.75) return "You picked some nice rooms this week.";
+    if (p >= 0.65) return "A few nicer places this week.";
     if (p <= 0.15) return "All casual this week.";
     if (p <= 0.25) return "Mostly casual this week.";
   }
@@ -241,27 +242,27 @@ export function composeNextEra(
   switch (movement.direction) {
     case "more_novel":
       return current === "Anchor"
-        ? "You're moving toward Forager: exploring more, repeating less."
+        ? `You're moving toward ${IDENTITY_NAME.Forager}: exploring more, repeating less.`
         : current === "Steward"
-        ? "You're moving toward Curator: keeping the bar high, widening the search."
+        ? `You're moving toward ${IDENTITY_NAME.Curator}: keeping the bar high, widening the search.`
         : `You're stretching past ${current}: more new spots, fewer repeats.`;
     case "more_consistent":
       return current === "Forager"
-        ? "You're moving toward Anchor: fewer new picks, more comfort."
+        ? `You're moving toward ${IDENTITY_NAME.Anchor}: fewer new picks, more comfort.`
         : current === "Curator"
-        ? "You're moving toward Steward, refining a short list."
+        ? `You're moving toward ${IDENTITY_NAME.Steward}, refining a short list.`
         : `You're settling deeper into ${current}.`;
     case "more_premium":
       return current === "Forager"
-        ? "You're moving toward Curator: same exploration, more elevated picks."
+        ? `You're moving toward ${IDENTITY_NAME.Curator}: same exploration, nicer rooms.`
         : current === "Anchor"
-        ? "You're moving toward Steward, quietly raising the bar."
-        : `You're leaning more elevated than your usual ${current} pattern.`;
+        ? `You're moving toward ${IDENTITY_NAME.Steward}, quietly raising the bar.`
+        : `You're leaning nicer than your usual ${current} pattern.`;
     case "more_casual":
       return current === "Curator"
-        ? "You're moving toward Forager: same hunger to explore, less formality."
+        ? `You're moving toward ${IDENTITY_NAME.Forager}: same hunger to explore, less formality.`
         : current === "Steward"
-        ? "You're moving toward Anchor, easing into the trusted few."
+        ? `You're moving toward ${IDENTITY_NAME.Anchor}, easing into the trusted few.`
         : `You're easing off the formality this week.`;
     default:
       return `You're holding the ${current} pattern.`;

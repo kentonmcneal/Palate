@@ -74,7 +74,7 @@ export default function Permission() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Why "Always"</Text>
           <Text style={styles.cardBody}>
-            Palate logs where you eat without you doing anything — but your phone
+            Palate logs where you eat without you doing anything. But your phone
             is in your pocket while you eat, so the app is in the background.
             "While Using the App" means it can only see somewhere you were
             standing with Palate open, which is almost never.

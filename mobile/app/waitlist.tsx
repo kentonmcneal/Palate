@@ -32,7 +32,7 @@ export default function WaitlistScreen() {
         <Text style={styles.emoji}>✨</Text>
         <Text style={styles.title}>You're on the list</Text>
         <Text style={styles.copy}>
-          Palate is invite-only right now — we're letting people in a few at a
+          Palate is invite-only right now. We're letting people in a few at a
           time. You'll get access soon. Thanks for your patience.
         </Text>
 
@@ -45,7 +45,7 @@ export default function WaitlistScreen() {
         </Pressable>
         {stillPending && (
           <Text style={styles.pending}>
-            Not approved yet — hang tight, we'll let you in soon.
+            Not approved yet. Hang tight, we'll let you in soon.
           </Text>
         )}
 

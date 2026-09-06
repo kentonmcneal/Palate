@@ -19,7 +19,7 @@ export default function PrivacyScreen() {
         <Spacer />
         <Text style={styles.p}>
           You decide what's public. Profile visibility, your friends list, what
-          shows up in any feed — all your call. We don't sell your data and we
+          shows up in any feed. All your call. We don't sell your data and we
           don't show ads.
         </Text>
         <Spacer size={32} />
