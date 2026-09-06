@@ -1,8 +1,9 @@
+import React from "react";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { View, StyleSheet, Pressable, ActivityIndicator, Alert, Image } from "react-native";
 import { Text } from "./Text";
-import { colors, spacing, type, card, shadow } from "../theme";
-import { cuisineHue } from "./PlaceArt";
+import { colors, spacing, type, card, shadow, categoryColors } from "../theme";
+import { cuisineHue, initialsOf } from "./PlaceArt";
 import { loadPlacePhotos, cachedPlacePhoto } from "../lib/place-photos";
 import { isoWeekStart } from "../lib/wrapped";
 import {
@@ -414,10 +415,11 @@ export function RecommendationsCard({
         ? <Text style={styles.moodNote}>Looking further out for {moodLabel(mood)}…</Text>
         : !!moodNote && <Text style={styles.moodNote}>{moodNote}</Text>}
       <View style={{ marginTop: earlyEstimate ? 14 : 2 }}>
-        {recs.map((rec) => (
+        {recs.map((rec, i) => (
           <RecRow
             key={rec.google_place_id}
             rec={rec}
+            first={i === 0}
             photo={photos.get(rec.google_place_id) ?? null}
             onHide={() => hidePlace(rec.google_place_id)}
           />
@@ -427,7 +429,21 @@ export function RecommendationsCard({
   );
 }
 
-function RecRow({ rec, photo, onHide }: { rec: RestaurantRecommendation; photo: string | null; onHide: () => void }) {
+/** "★ 4.6 · Thai · 1.2 km" with each piece keeping its own colour. Returns
+ *  null when there is nothing to say, so the caller can fall back. */
+function dotJoin(parts: Array<React.ReactNode | null>): React.ReactNode[] | null {
+  const kept = parts.filter((p) => p != null && p !== "");
+  if (kept.length === 0) return null;
+  const out: React.ReactNode[] = [];
+  kept.forEach((p, i) => {
+    if (i > 0) out.push(<Text key={`dot${i}`} style={styles.sub}> · </Text>);
+    out.push(p);
+  });
+  return out;
+}
+
+function RecRow({ rec, photo, first, onHide }: { rec: RestaurantRecommendation; photo: string | null; first?: boolean; onHide: () => void }) {
+  const hue = cuisineHue(rec.cuisine, rec.google_place_id);
   const router = useRouter();
   // At large accessibility sizes [name | match | Save] compresses the name to
   // an ellipsis and the buttons to slivers. Past the threshold the row becomes
@@ -466,7 +482,7 @@ function RecRow({ rec, photo, onHide }: { rec: RestaurantRecommendation; photo: 
   }
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, first && styles.rowFirst]}>
       {/* The name gets the full width. It used to share the line with the
           match badge AND a stacked ✕/Save column, which squeezed it to about
           half the screen: "Huey's Southwind" wrapped to two lines and "Waffle
@@ -481,7 +497,16 @@ function RecRow({ rec, photo, onHide }: { rec: RestaurantRecommendation; photo: 
               licensed one: place-photos.ts reads visits.photo_url, which is
               free, batched and cached. No photo is the common case and the row
               simply reads as it always did. */}
-          {!!photo && <Image source={{ uri: photo }} style={styles.thumb} />}
+          {photo ? (
+            <Image source={{ uri: photo }} style={styles.thumb} />
+          ) : (
+            // No photo is the common case, and three grey rows of text is what
+            // "bland" meant. A monogram in the cuisine's own hue gives each
+            // pick a face without buying a licensed photo for it.
+            <View style={[styles.thumb, styles.mono, { backgroundColor: hue }]}>
+              <Text style={styles.monoText} maxFontSizeMultiplier={FONT_CAP.badge}>{initialsOf(rec.name)}</Text>
+            </View>
+          )}
           <Text style={styles.name} numberOfLines={stack ? 4 : 2}>{rec.name}</Text>
           <Pressable
             onPress={(e) => {
@@ -498,10 +523,6 @@ function RecRow({ rec, photo, onHide }: { rec: RestaurantRecommendation; photo: 
         </View>
 
         <View style={styles.metaRow}>
-          {/* Three picks used to be three grey rows. The dot is the cuisine's
-              own hue — the same one PlaceArt paints behind that place — so the
-              card carries colour without carrying a photo it may not have. */}
-          <View style={[styles.cuisineDot, { backgroundColor: cuisineHue(rec.cuisine, rec.google_place_id) }]} />
           {rec.matchScore != null && (
             <View style={[
               styles.matchBadge,
@@ -517,10 +538,11 @@ function RecRow({ rec, photo, onHide }: { rec: RestaurantRecommendation; photo: 
             </View>
           )}
           <Text style={styles.sub} numberOfLines={1}>
-            {[
-              rec.cuisine ? capitalize(rec.cuisine) : null,
+            {dotJoin([
+              rec.rating != null ? <Text key="r" style={styles.star}>★ {rec.rating.toFixed(1)}</Text> : null,
+              rec.cuisine ? <Text key="c" style={[styles.cuisineText, { color: hue }]}>{capitalize(rec.cuisine)}</Text> : null,
               rec.distanceKm != null ? formatDistance(rec.distanceKm) : null,
-            ].filter(Boolean).join(" · ") || "Nearby"}
+            ]) ?? "Nearby"}
           </Text>
         </View>
 
@@ -619,13 +641,22 @@ const styles = StyleSheet.create({
     borderTopColor: colors.line,
     borderTopWidth: 1,
   },
+  // The divider belongs BETWEEN picks. On the first one it sat directly under
+  // the heading as a stray rule — the "topline" the founder asked to lose.
+  rowFirst: {
+    borderTopWidth: 0,
+    paddingTop: 6,
+  },
   titleRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
   actionRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
   actionRowStacked: { flexDirection: "column", alignItems: "stretch", gap: 8 },
   name: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.ink, letterSpacing: -0.3 },
-  cuisineDot: { width: 8, height: 8, borderRadius: 4 },
   thumb: { width: 44, height: 44, borderRadius: 10, marginRight: 10, backgroundColor: colors.wash },
+  mono: { alignItems: "center", justifyContent: "center" },
+  monoText: { color: "#fff", fontSize: 15, fontWeight: "800", letterSpacing: 0.5 },
+  star: { color: categoryColors.saffron, fontWeight: "700" },
+  cuisineText: { fontWeight: "700" },
   matchBadge: {
     paddingHorizontal: 8, paddingVertical: 4,
     borderRadius: 999,

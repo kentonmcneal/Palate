@@ -1,8 +1,9 @@
+import React from "react";
 import { useEffect, useRef, useState } from "react";
 import { View, StyleSheet, Pressable, Alert, Animated, Easing } from "react-native";
 import { Text } from "./Text";
 import { useRouter } from "expo-router";
-import { colors, spacing, type, card, shadow } from "../theme";
+import { colors, spacing, type, card, shadow, categoryColors } from "../theme";
 import type { RankedRestaurant } from "../lib/recommendation/types";
 import { addToWishlist } from "../lib/palate-insights";
 import { triggerHapticSuccess, triggerHapticSelection } from "../lib/haptics";
@@ -14,7 +15,7 @@ import { formatDistance, matchScoreColor, matchBand } from "../lib/match-score";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { SaveBurst } from "./SaveBurst";
 import { TapCard } from "./TapCard";
-import { PlaceArt } from "./PlaceArt";
+import { PlaceArt, cuisineHue } from "./PlaceArt";
 import { cachedPlacePhoto } from "../lib/place-photos";
 
 // ============================================================================
@@ -97,11 +98,20 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
     onDismissed?.();
   }
 
-  const subline = [
-    restaurant.cuisine_type ? cap(restaurant.cuisine_type) : null,
-    restaurant.neighborhood,
+  const hue = cuisineHue(restaurant.cuisine_type, restaurant.google_place_id);
+  // Google's rating leads. It is the one number every diner already reads,
+  // and hiding it made the card look like it was withholding something.
+  const sublineParts: React.ReactNode[] = [
+    restaurant.rating != null ? <Text key="r" style={styles.star}>★ {restaurant.rating.toFixed(1)}</Text> : null,
+    restaurant.cuisine_type ? <Text key="c" style={[styles.cuisineText, { color: hue }]}>{cap(restaurant.cuisine_type)}</Text> : null,
+    restaurant.neighborhood || null,
     restaurant.distanceKm != null ? formatDistance(restaurant.distanceKm) : null,
-  ].filter(Boolean).join(" · ");
+  ].filter((p) => p != null && p !== "");
+  const subline: React.ReactNode[] = [];
+  sublineParts.forEach((p, i) => {
+    if (i > 0) subline.push(<Text key={`d${i}`}> · </Text>);
+    subline.push(p);
+  });
 
   function showLessLikeThis() {
     askNotInterested(
@@ -126,11 +136,15 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
           photoUrl={photo}
         />
       )}
+      {/* A rail in the cuisine's hue down the card's edge. The list was a
+          column of identical white cards; this is the cheapest way to make
+          five of them read as five different places. */}
+      <View style={[styles.rail, { backgroundColor: hue }]} />
       <View style={styles.body}>
       <View style={styles.head}>
         <View style={{ flex: 1 }}>
           <Text style={styles.name} numberOfLines={2}>{restaurant.name}</Text>
-          <Text style={styles.sub}>{subline || "Nearby"}</Text>
+          <Text style={styles.sub}>{subline.length ? subline : "Nearby"}</Text>
         </View>
         <View style={styles.scoreCol}>
           {m.confidence === "low" ? (
@@ -286,7 +300,9 @@ const styles = StyleSheet.create({
   },
   tagText: { fontSize: 10, fontWeight: "700", color: colors.ink },
 
-  rating: { fontSize: 12, color: colors.mute, marginTop: 8, fontWeight: "600" },
+  rail: { position: "absolute", left: 0, top: 0, bottom: 0, width: 4 },
+  star: { color: categoryColors.saffron, fontWeight: "700" },
+  cuisineText: { fontWeight: "700" },
 
   actions: { marginTop: 12, flexDirection: "row", gap: 6, flexWrap: "wrap" },
   btnPrimary: {

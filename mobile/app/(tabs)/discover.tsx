@@ -313,12 +313,26 @@ export default function DiscoverTab() {
   // concludes the app has nothing.
   const visibleRanked = allRanked;
 
-  // Nearby tab — strict distance sort.
+  // Nearby tab — strict distance sort, with the same mood chips as Most
+  // Compatible. The mood is filtered BEFORE the cut to TOP_PER_TAB: cutting
+  // first and then asking for Thai would answer from the thirty closest
+  // places, not the closest Thai. No catalogue fallback here on purpose —
+  // "nearby" is the whole promise of the tab.
   const nearbyList = useMemo(() => {
-    return [...visibleRanked]
+    const sorted = [...visibleRanked]
       .sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999))
-      .slice(0, TOP_PER_TAB);
-  }, [visibleRanked]);
+      .map((r) => ({
+        ...r,
+        cuisine: (r as any).cuisine_type ?? null,
+        format_class: (r as any).format_class ?? null,
+        dish_family: (r as any).dish_family ?? null,
+      }));
+    const { items, matched } = applyMood(sorted, mood, []);
+    return {
+      items: items.slice(0, TOP_PER_TAB),
+      note: mood && !matched ? moodFallbackNote(mood) : null,
+    };
+  }, [visibleRanked, mood]);
 
   // Stretch — genuinely outside the pattern, and genuinely connected to it.
   //
@@ -644,7 +658,14 @@ export default function DiscoverTab() {
                     </Text>
                   )
                 )}
-                {tab === "nearby"   && <List items={nearbyList} onHide={hideId} surface="discover_shelf" emptyMsg="Nothing nearby." />}
+                {tab === "nearby" && (
+                  <>
+                    <MoodRow chips={moodChips} value={mood} onChange={setMood} />
+                    {!!nearbyList.note && <Text style={styles.moodNote}>{nearbyList.note}</Text>}
+                    <Spacer size={10} />
+                    <List items={nearbyList.items} onHide={hideId} surface="discover_shelf" emptyMsg="Nothing nearby." />
+                  </>
+                )}
               </>
             )}
           </>
@@ -949,7 +970,7 @@ const styles = StyleSheet.create({
     shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 },
   },
   tabText: { fontSize: 13, fontWeight: "600", color: colors.mute },
-  tabTextActive: { color: colors.ink },
+  tabTextActive: { color: colors.redText },
 
   searchHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   clear: { color: colors.redText, fontSize: 13, fontWeight: "700" },
