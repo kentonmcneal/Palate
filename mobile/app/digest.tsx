@@ -24,6 +24,11 @@ import type { Restaurant } from "../lib/places";
 // row better while making the day as a whole harder to verify. Someone who only
 // ever touches the top section still ends up with an accurate ledger.
 
+// Said twice on the screen, once under the title and once beside the button,
+// because a full day scrolls the title away and the button is where the answer
+// is given. One string so the two cannot drift.
+const WHY_IT_MATTERS = "Every answer teaches Palate when and where you eat, so the next guess is better.";
+
 function timeOf(ms: number): string {
   return new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
@@ -155,7 +160,8 @@ export default function DigestScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.h1}>Your day</Text>
-        <Text style={styles.sub}>Tap to untick anything you didn't eat.</Text>
+        <Text style={styles.sub}>Tick the places you ate at and untick any you didn't.</Text>
+        <Text style={styles.why}>{WHY_IT_MATTERS}</Text>
 
         {nothing && (
           <View style={styles.card}>
@@ -208,6 +214,9 @@ export default function DigestScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
+        {/* Skipped when nothing was captured: the title then sits right above
+            this button and the sentence is already on screen. */}
+        {!nothing && <Text style={styles.footerWhy}>{WHY_IT_MATTERS}</Text>}
         <Button
           title={nothing ? "Close" : `Confirm ${checked.size}`}
           onPress={nothing ? () => router.back() : confirmAll}
@@ -280,6 +289,8 @@ const styles = StyleSheet.create({
   emoji: { fontSize: 40, marginBottom: spacing.md },
   h1: { ...type.display, color: colors.ink },
   sub: { ...type.body, color: colors.mute, marginTop: 6 },
+  why: { ...type.small, color: colors.mute, marginTop: 4 },
+  footerWhy: { ...type.small, color: colors.mute, textAlign: "center", marginBottom: 12 },
   payoff: { ...type.body, color: colors.mute, marginTop: spacing.md, textAlign: "center" },
   card: {
     borderColor: colors.line, borderWidth: 1, borderRadius: 18,

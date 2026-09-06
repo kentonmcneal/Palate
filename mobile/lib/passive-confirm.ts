@@ -14,7 +14,7 @@ import type { Restaurant } from "./places";
 import type { ResolvedVisit } from "./passive-pipeline";
 import { track } from "./analytics";
 import { captureError } from "./observability";
-import { recentlyPrompted } from "./visits";
+import { recentlyPrompted, placeRefusals, shouldDemote } from "./visits";
 import {
   allowsRealtimePrompt, CONFIRM_CATEGORY, confirmParamsFor,
   scheduleDigest, DIGEST_NOTIF_ID_STORAGE_KEY,
@@ -39,6 +39,10 @@ export const MAX_NOTIFS_PER_DAY = 6;
  *  dinner at the same place both get asked about; long enough that walking
  *  back past somewhere you just rejected stays quiet. */
 export const REPROMPT_SUPPRESSION_MIN = 180;
+/** Confidence cap for an entry whose place the user has refused before. Just
+ *  under MEDIUM_BAND_MIN (0.4), so an entry that has its band recomputed from
+ *  the score, rather than read from confidenceBand, still comes out Low. */
+export const DEMOTED_CONFIDENCE_CAP = 0.39;
 // Inbox entries older than this are dropped so the list never becomes a chore.
 // 48, not 24. The digest for a Monday 21:10 dinner fires Tuesday 21:00 and
 // names the place; at 24h the entry was purged five minutes after that
@@ -425,6 +429,19 @@ export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): 
     return "suppressed-recent";
   }
 
+  // A place this person has already refused is demoted BEFORE it is stored,
+  // because the inbox entry is what the digest reads. Demoted means Low: the
+  // digest lists it unticked under "Anything else?" instead of as a pre-ticked
+  // guess, and it never earns a real-time buzz. shouldDemote explains why two
+  // refusals is the line. A failed read counts as no refusals, so an offline
+  // detection is stored exactly as it would have been before this existed.
+  const refusals = await placeRefusals(entry.place_id).catch(() => 0);
+  const demoted = shouldDemote(refusals);
+  if (demoted) {
+    entry.confidence = Math.min(entry.confidence ?? 0, DEMOTED_CONFIDENCE_CAP);
+    entry.confidenceBand = "low";
+  }
+
   // Always land in the inbox so a prompt we couldn't deliver is never lost.
   const isNew = await addToInbox(entry);
   void track("visit_resolved", {
@@ -447,6 +464,17 @@ export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): 
   if (!isNew) {
     void track("confirm_notif_suppressed", { reason: "duplicate_recent", place_id: entry.place_id });
     return "suppressed-duplicate";
+  }
+
+  // Refused before: the inbox has it and tonight's digest will list it under
+  // "Anything else?", and that is all it gets. This sits above the digest-only
+  // flag so the suppression is recorded whichever mode is on. With real-time
+  // prompts off it is the only evidence in analytics that the demotion fired,
+  // and that count is how the two-refusal line gets tuned.
+  if (demoted) {
+    void track("confirm_notif_suppressed", { reason: "refused_before", place_id: entry.place_id });
+    await rescheduleDigest();
+    return "inboxed-digest";
   }
 
   // Digest-only: the entry is captured, and tonight's digest is rewritten to

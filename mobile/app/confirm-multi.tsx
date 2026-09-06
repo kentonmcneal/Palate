@@ -145,7 +145,7 @@ export default function ConfirmMulti() {
         <Spacer size={6} />
         <Text style={styles.h1}>Where'd you eat?</Text>
         <Text style={[type.body, { color: colors.mute, marginTop: 8, lineHeight: 21 }]}>
-          Check every place you ate at. More than one is fine.
+          Tick every place you ate at. None of these is a good answer too.
         </Text>
 
         <Spacer size={24} />

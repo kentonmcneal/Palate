@@ -3,6 +3,7 @@ import { getRestaurantIdByPlaceId, type Restaurant } from "./places";
 import { track } from "./analytics";
 import { triggerHapticSuccess } from "./haptics";
 import { invalidatePersonalSignal } from "./personal-signal";
+import { captureError } from "./observability";
 
 export type Visit = {
   id: string;
@@ -385,7 +386,9 @@ export async function deleteVisitWithUndo(id: string): Promise<{ undo: () => Pro
 
 /** Was the user already prompted for this place recently? Used to suppress
  *  repeats. The "skip_today" outcome — fired by the "Don't ask again today"
- *  button — is honored for a full 24h regardless of `withinMinutes`. */
+ *  button — is honored for a full 24h regardless of `withinMinutes`. That
+ *  branch could never fire before migration 0138: the enum lacked the value,
+ *  so the button's insert failed and no row ever carried it. */
 export async function recentlyPrompted(googlePlaceId: string, withinMinutes = 360) {
   const skipCutoff = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
   const recentCutoff = new Date(Date.now() - withinMinutes * 60_000).toISOString();
@@ -408,11 +411,70 @@ export async function recordPromptDecision(
 ) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
-  await supabase.from("prompt_decisions").insert({
+  const { error } = await supabase.from("prompt_decisions").insert({
     user_id: user.id,
     google_place_id: googlePlaceId,
     outcome,
   });
+  if (error) {
+    // Reported, not thrown. The callers are the Yes, Not here and Don't ask
+    // again handlers, and a failed bookkeeping row must not block the answer
+    // or the visit behind it. It must not be silent either: this insert
+    // dropped its result for as long as it existed, and in that time the
+    // "Don't ask again today" button wrote a value the prompt_outcome enum did
+    // not have, so every one of those taps failed and nothing said so. Now a
+    // failed decision is a Sentry event and an analytics row.
+    void track("prompt_decision_failed", {
+      outcome,
+      place_id: googlePlaceId,
+      code: error.code ?? null,
+      message: error.message,
+    });
+    void captureError(error, {
+      at: "visits:recordPromptDecision",
+      outcome,
+      google_place_id: googlePlaceId,
+    });
+  }
+}
+
+/**
+ * How many times, within the window, this person has answered a prompt about
+ * this place with "not here" or "wrong place". Own rows only: RLS scopes
+ * prompt_decisions to the caller, so there is no user_id filter to get wrong.
+ * Any failure counts as zero, because a failed read must never demote a place;
+ * the worst case is then the behaviour that existed before this did.
+ */
+export async function placeRefusals(googlePlaceId: string, days = 90): Promise<number> {
+  try {
+    const since = new Date(Date.now() - days * 24 * 60 * 60_000).toISOString();
+    const { count, error } = await supabase
+      .from("prompt_decisions")
+      .select("id", { count: "exact", head: true })
+      .eq("google_place_id", googlePlaceId)
+      .in("outcome", ["dismissed", "wrong_place"])
+      .gte("decided_at", since);
+    if (error) return 0;
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Refusals at or above this count demote the place. */
+export const DEMOTE_AFTER_REFUSALS = 2;
+
+/**
+ * Should a place the user keeps refusing stop being presented as a likely
+ * visit? A place answered "not here" twice is almost always home, work, or the
+ * shop next door: the phone keeps seeing a long dwell there, and nothing about
+ * that dwell will change. Asking a third time is nagging, and nagging is how
+ * people turn passive capture off. A demoted place still lands in the inbox,
+ * under "Anything else?", so a real meal there is never lost; it just stops
+ * being a pre-ticked guess and never earns a real-time buzz.
+ */
+export function shouldDemote(refusals: number): boolean {
+  return refusals >= DEMOTE_AFTER_REFUSALS;
 }
 
 

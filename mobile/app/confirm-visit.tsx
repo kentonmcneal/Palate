@@ -225,6 +225,12 @@ export default function ConfirmVisit() {
         </View>
         <Spacer />
         <Button title="Not here" variant="ghost" onPress={handleNotNow} />
+        <Spacer size={8} />
+        {/* Both answers are data. Someone who only ever taps Yes, or only ever
+            closes the prompt, teaches the scorer nothing about its misses. */}
+        <Text style={[type.small, { color: colors.mute, textAlign: "center" }]}>
+          Yes or no, your answer makes Palate more accurate.
+        </Text>
         <Spacer />
         <Button title="Wrong restaurant" variant="ghost" onPress={handleWrong} />
         <Spacer />

@@ -8,6 +8,8 @@ jest.mock("expo-notifications", () => ({
 }));
 jest.mock("../visits", () => ({
   recentlyPrompted: jest.fn().mockResolvedValue(false),
+  placeRefusals: jest.fn().mockResolvedValue(0),
+  shouldDemote: jest.requireActual("../visits").shouldDemote,
 }));
 
 import * as Notifications from "expo-notifications";

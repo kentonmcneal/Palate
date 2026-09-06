@@ -1,0 +1,23 @@
+-- ============================================================================
+-- 0138 — prompt_outcome gains 'skip_today'.
+-- ----------------------------------------------------------------------------
+-- The confirm screen's "Don't ask again today for this place" button has
+-- written outcome = 'skip_today' since it shipped, and recentlyPrompted() in
+-- the app honours that outcome for 24 hours. The enum was created in 0001 with
+-- four values ('confirmed', 'dismissed', 'wrong_place', 'ignored') and never
+-- grew, so every one of those inserts failed with "invalid input value for
+-- enum prompt_outcome" and the client, which did not read the insert result,
+-- dropped the error on the floor. Measured 2026-09-06 against the founder's
+-- 66 prompt_decisions rows: 28 confirmed, 35 dismissed, 5 wrong_place, and
+-- zero skip_today. The button was a no-op for its whole life, and the 24-hour
+-- suppression it promised never once fired.
+--
+-- The client now reads the insert result (lib/visits.ts recordPromptDecision)
+-- so the next mismatch of this kind surfaces in Sentry instead of hiding.
+--
+-- No do-block asserts the new value here on purpose: Postgres refuses to use
+-- an enum value added in the same transaction, and every migration runs as
+-- one. Verify after deploy with a fresh statement, for example
+--   select 'skip_today'::public.prompt_outcome;
+-- ============================================================================
+alter type public.prompt_outcome add value if not exists 'skip_today';

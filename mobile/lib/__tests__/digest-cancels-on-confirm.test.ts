@@ -9,7 +9,11 @@ jest.mock("expo-notifications", () => ({
   getAllScheduledNotificationsAsync: jest.fn().mockResolvedValue([]),
   SchedulableTriggerInputTypes: { DATE: "date", WEEKLY: "weekly" },
 }));
-jest.mock("../visits", () => ({ recentlyPrompted: jest.fn().mockResolvedValue(false) }));
+jest.mock("../visits", () => ({
+  recentlyPrompted: jest.fn().mockResolvedValue(false),
+  placeRefusals: jest.fn().mockResolvedValue(0),
+  shouldDemote: jest.requireActual("../visits").shouldDemote,
+}));
 
 import * as Notifications from "expo-notifications";
 import { getInbox, removeFromInbox, notifyOrInbox } from "../passive-confirm";
