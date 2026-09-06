@@ -13,6 +13,7 @@
 import { supabase } from "./supabase";
 import { applyPersonaPrior } from "./persona-prior";
 import type { StarterPersonaKey } from "./starter-quiz";
+import { buildEatingPattern, saveEatingPattern } from "./eating-pattern";
 
 export type WeightMap = Record<string, number>;
 
@@ -149,6 +150,21 @@ export async function computeTasteVector(
   }
   const v = aggregate((visitsData ?? []) as unknown as VisitRow[],
     (wishData ?? []) as unknown as WishlistRow[], { knownBefore });
+
+  // Leave the person's eating hours behind for the passive pipeline, which
+  // runs in the background without network and needs "when does this person
+  // eat?" answered from local storage. The full-history vector is the right
+  // basis and the only one written: a 7-day window is computed alongside it
+  // on the insights screens, and letting that overwrite the pattern would
+  // shrink a year of dinners to a week's worth whenever the two raced.
+  // Fire-and-forget, and nothing here can throw into the caller.
+  if (!since) {
+    try {
+      void saveEatingPattern(buildEatingPattern(v.hourly, v.dowCounts));
+    } catch {
+      // The pattern is a refinement; the vector must still be returned.
+    }
+  }
 
   // Cold-start: until the user has a few real visits, seed the vector from
   // their onboarding quiz persona so session-one recommendations are already

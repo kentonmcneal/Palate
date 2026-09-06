@@ -118,14 +118,39 @@ export type ConfidenceInput = {
    * we have identified. undefined means unknown and is not penalised.
    */
   venueOpen?: boolean | null;
+  /**
+   * How much this hour looks like a meal for THIS person, 0..1, from
+   * lib/eating-pattern. null or undefined means we do not know them well
+   * enough yet, and the generic meal window stands on its own.
+   */
+  patternFit?: number | null;
 };
+
+/**
+ * The meal-fit term, generic and personal halves.
+ *
+ * The generic window says "restaurants at 7pm"; the personal one says "YOU at
+ * 7pm". They disagree in exactly the cases that matter: a stop at 3pm for
+ * someone who never eats at 3pm should read weaker than the window alone
+ * allows, and a stop at 3pm for someone whose lunches always run late should
+ * read stronger. Half and half rather than a replacement, because the
+ * personal histogram is built from confirmed visits and the generic window
+ * is the only thing standing between a thin histogram and a self-fulfilling
+ * one: if we only believed the hours we had already confirmed, we would stop
+ * noticing the hours we had not.
+ */
+export function blendedMealFit(place: Restaurant, hour: number, patternFit?: number | null): number {
+  const generic = mealFitScore(place, hour);
+  if (patternFit == null) return generic;
+  return 0.5 * generic + 0.5 * clamp01(patternFit);
+}
 
 export function confidenceScore(input: ConfidenceInput): number {
   const w = CONFIDENCE_WEIGHTS;
   const evidence =
     w.dwell * dwellScore(input.dwellMin) +
     w.accuracy * accuracyScore(input.accuracyM) +
-    w.mealFit * mealFitScore(input.place, input.hour) +
+    w.mealFit * blendedMealFit(input.place, input.hour, input.patternFit) +
     w.priorVisits * priorVisitScore(input.visitedBefore) +
     w.category * categoryScore(input.place);
 

@@ -18,6 +18,7 @@ import { supabase } from "./supabase";
 import { nearbyRestaurantsDetailed, nearbyRestaurants } from "./places";
 import { getCachedNearby, setCachedNearby } from "./nearby-cache";
 import { confidenceScore, confidenceBand, type ConfidenceBand } from "./passive-confidence";
+import { loadEatingPattern, patternFit } from "./eating-pattern";
 import { venueOpenAt } from "./opening-hours";
 import { recordMiss } from "./passive-misses";
 import { restaurantsNear } from "./cuisine-catalogue";
@@ -490,11 +491,15 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
   }
   void bumpCacheStats(cacheHit);
 
-  const hour = new Date(raw.departureAt ?? raw.capturedAt).getHours();
+  // When the stop ended, in device-local time. Departure when we have it,
+  // otherwise the capture moment; the same instant feeds the meal window,
+  // the opening-hours check, and the personal eating pattern below.
+  const endedAt = new Date(raw.departureAt ?? raw.capturedAt);
+  const hour = endedAt.getHours();
   const eligible = places.filter(isLoggableVenue);
   const ranked = rankCandidates(raw, eligible, {
     hour,
-    at: new Date(raw.departureAt ?? raw.capturedAt),
+    at: endedAt,
     visitedPlaceIds: await visitedPlaceIdsAmong(eligible.map((p) => p.google_place_id)),
   });
 
@@ -530,6 +535,12 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
   // Score the top candidate. candidateCount is the ambiguity measure — how many
   // plausible venues were in range, not how many we chose to show.
   const visited = await visitedPlaceIdsAmong([ranked[0].google_place_id]);
+  // This person's own eating hours, read once per stop from AsyncStorage.
+  // This path runs from background wakes, where a network read is both slow
+  // and a cost, so the pattern is whatever the last taste-vector computation
+  // left behind. Null until they have enough visits for it to mean anything,
+  // and then the scorer leans on the generic meal window alone.
+  const pattern = await loadEatingPattern();
   const confidence = confidenceScore({
     dwellMin: dwellMinutes(raw) ?? 0,
     accuracyM: raw.horizontalAccuracy,
@@ -539,7 +550,8 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
     visitedBefore: visited.has(ranked[0].google_place_id),
     // The strongest cheap veto in the table. Null when we have no hours, which
     // the scorer treats as unknown rather than closed.
-    venueOpen: venueOpenAt(ranked[0].regular_opening_hours, new Date(raw.departureAt ?? raw.capturedAt)),
+    venueOpen: venueOpenAt(ranked[0].regular_opening_hours, endedAt),
+    patternFit: patternFit(pattern, hour, endedAt.getDay()),
   });
 
   return { raw, candidates: ranked, cacheHit, confidence, confidenceBand: confidenceBand(confidence) };

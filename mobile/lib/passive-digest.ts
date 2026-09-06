@@ -13,11 +13,21 @@
 // Resolution: BAND first, CHRONOLOGICAL within band. A user who only ever
 // touches the High section still ends up with an accurate ledger; Medium and
 // Low are upside, not obligation.
+//
+// WHEN it fires is personal. The weekday table below is the default for an
+// account we do not know yet; once a person has ten confirmed visits the
+// digest fires an hour after THIS person is usually done eating (see
+// lib/eating-pattern). Someone who always eats at six is asked at eight, not
+// left waiting until nine; someone who eats at ten is asked at eleven, not
+// interrupted mid-meal. Every function that reads the hour takes the pattern
+// as an optional last argument so the notification, its window, and the Home
+// copy all move together.
 // ============================================================================
 
 import type { InboxEntry } from "./passive-confirm";
 import type { ConfidenceBand } from "./passive-confidence";
 import { confidenceBand, HIGH_BAND_MIN } from "./passive-confidence";
+import { loadEatingPattern, personalDigestHour, type EatingPattern } from "./eating-pattern";
 
 export type DigestEntry = InboxEntry & {
   band: ConfidenceBand;
@@ -119,11 +129,11 @@ const byTime = (a: DigestEntry, b: DigestEntry) => a.detectedAt - b.detectedAt;
  * again at 11pm shows the same set, instead of items falling off the top as the
  * clock moves.
  */
-export function digestWindowStart(now: Date): Date {
+export function digestWindowStart(now: Date, pattern?: EatingPattern | null): Date {
   // The most recent digest moment at or before `now` — today's if it has
   // passed, otherwise yesterday's.
   let anchorDay = new Date(now);
-  if (digestMomentOn(anchorDay).getTime() > now.getTime()) {
+  if (digestMomentOn(anchorDay, pattern).getTime() > now.getTime()) {
     anchorDay.setDate(anchorDay.getDate() - 1);
   }
   // The window opens at the digest BEFORE that one, so it always spans a full
@@ -132,12 +142,16 @@ export function digestWindowStart(now: Date): Date {
   // 11pm opened Friday at 9pm, and that is 26 hours, not 24.
   const prevDay = new Date(anchorDay);
   prevDay.setDate(prevDay.getDate() - 1);
-  return digestMomentOn(prevDay);
+  return digestMomentOn(prevDay, pattern);
 }
 
 /** Entries detected within the current digest window. */
-export function entriesForDigest(entries: InboxEntry[], now: Date): InboxEntry[] {
-  const start = digestWindowStart(now).getTime();
+export function entriesForDigest(
+  entries: InboxEntry[],
+  now: Date,
+  pattern?: EatingPattern | null,
+): InboxEntry[] {
+  const start = digestWindowStart(now, pattern).getTime();
   const end = now.getTime();
   return entries.filter((e) => e.detectedAt > start && e.detectedAt <= end);
 }
@@ -157,10 +171,10 @@ export function entriesForDigest(entries: InboxEntry[], now: Date): InboxEntry[]
 export function buildDigest(
   entries: InboxEntry[],
   now = new Date(),
-  opts: { windowed?: boolean } = {},
+  opts: { windowed?: boolean; pattern?: EatingPattern | null } = {},
 ): Digest {
   const windowed = opts.windowed ?? true;
-  const source = windowed ? entriesForDigest(entries, now) : entries;
+  const source = windowed ? entriesForDigest(entries, now, opts.pattern) : entries;
   const pending = source.map(toDigestEntry);
   return {
     date: now.toISOString().slice(0, 10),
@@ -260,6 +274,10 @@ import { track } from "./analytics";
 // not. One table, so moving a night is a one-line change and every consumer —
 // the scheduler, the window, and the Home copy — moves with it.
 //
+// This table is the DEFAULT. It answers for an account with fewer than ten
+// visits; past that, digestHourOn asks the person's own eating pattern first
+// and only falls back here when the pattern has nothing to say.
+//
 // Index is JS getDay(): 0 = Sunday.
 export const DIGEST_HOUR_BY_WEEKDAY: readonly number[] = [
   21, // Sun
@@ -272,14 +290,20 @@ export const DIGEST_HOUR_BY_WEEKDAY: readonly number[] = [
 ];
 export const DIGEST_MINUTE = 0;
 
-export function digestHourOn(day: Date): number {
-  return DIGEST_HOUR_BY_WEEKDAY[day.getDay()];
+/**
+ * The hour the digest fires on `day`: this person's own hour when we know
+ * them, the weekday default when we do not. Callers without a pattern to hand
+ * (or with null, meaning "none stored") get the default, so nothing that
+ * compiled before this parameter existed changes behaviour.
+ */
+export function digestHourOn(day: Date, pattern?: EatingPattern | null): number {
+  return personalDigestHour(pattern ?? null, day, DIGEST_HOUR_BY_WEEKDAY[day.getDay()]);
 }
 
 /** The digest moment on the calendar day `day` falls in. */
-export function digestMomentOn(day: Date): Date {
+export function digestMomentOn(day: Date, pattern?: EatingPattern | null): Date {
   const at = new Date(day);
-  at.setHours(digestHourOn(day), DIGEST_MINUTE, 0, 0);
+  at.setHours(digestHourOn(day, pattern), DIGEST_MINUTE, 0, 0);
   return at;
 }
 export const DIGEST_KIND = "passive_digest";
@@ -291,8 +315,8 @@ const DIGEST_NOTIF_ID_KEY = "palate.passive.digestNotifId";
  * A capture at 11pm does not get a digest — it rolls into tomorrow's, which is
  * better than buzzing someone at midnight about dinner.
  */
-export function digestTimeFor(now: Date): Date {
-  const at = digestMomentOn(now);
+export function digestTimeFor(now: Date, pattern?: EatingPattern | null): Date {
+  const at = digestMomentOn(now, pattern);
   // Past tonight's slot, roll to tomorrow's rather than returning null.
   //
   // Returning null meant a visit detected AFTER 8:30 — a late dinner, the
@@ -309,7 +333,7 @@ export function digestTimeFor(now: Date): Date {
   // than carrying today's forward.
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  return digestMomentOn(tomorrow);
+  return digestMomentOn(tomorrow, pattern);
 }
 
 /**
@@ -323,8 +347,13 @@ export async function scheduleDigest(
   setStoredId: (id: string | null) => Promise<void>,
   now = new Date(),
 ): Promise<string | null> {
-  const digest = buildDigest(entries, now);
-  const when = digestTimeFor(now);
+  // Read once and threaded through both the window and the fire time, so the
+  // set of visits the notification describes is the set that fell between
+  // this person's last digest and this one. AsyncStorage only: this is
+  // called from the passive pipeline, which may be running in the background.
+  const pattern = await loadEatingPattern();
+  const digest = buildDigest(entries, now, { pattern });
+  const when = digestTimeFor(now, pattern);
 
   const previous = await getStoredId();
   if (previous) {

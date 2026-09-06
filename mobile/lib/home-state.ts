@@ -16,6 +16,7 @@
 
 import { nextStep, type ActivationState, type NextStep } from "./next-step";
 import { digestMomentOn, digestHourOn, DIGEST_MINUTE } from "./passive-digest";
+import type { EatingPattern } from "./eating-pattern";
 
 export type HomeState =
   /** Detected visits are waiting. Nothing else on Home competes with this. */
@@ -33,12 +34,18 @@ export type HomeInputs = {
   activation: ActivationState;
   /** Whether passive capture is actually running (opted in AND permitted). */
   trackingOn: boolean;
+  /**
+   * This person's eating hours, when stored. The digest fires an hour after
+   * they are usually done eating, so Home has to read the same pattern the
+   * scheduler does or "ready at 9pm" is wrong for someone asked at 8.
+   */
+  pattern?: EatingPattern | null;
 };
 
 /** Tonight's digest time, in words. Reads the schedule so the copy on Home can
  *  never drift from when the notification actually fires. */
-function digestTimeLabel(now: Date): string {
-  const hour = digestHourOn(now);
+function digestTimeLabel(now: Date, pattern?: EatingPattern | null): string {
+  const hour = digestHourOn(now, pattern);
   const minute: number = DIGEST_MINUTE;
   const h = hour % 12 === 0 ? 12 : hour % 12;
   const suffix = hour >= 12 ? "pm" : "am";
@@ -67,7 +74,7 @@ function listNames(names: string[]): string {
 }
 
 export function homeState(input: HomeInputs, now = new Date()): HomeState {
-  const { pending, activation, trackingOn } = input;
+  const { pending, activation, trackingOn, pattern } = input;
 
   // 1. Confirmations first. Everything else on the app is downstream of a
   //    confirmed visit, and this is the only thing here the user can finish.
@@ -102,13 +109,13 @@ export function homeState(input: HomeInputs, now = new Date()): HomeState {
 
   // 3. Tracking is on and tonight's digest has not fired yet. Say so plainly
   //    and ask for nothing — a screen with no task should not invent one.
-  const digestFired = now.getTime() >= digestMomentOn(now).getTime();
+  const digestFired = now.getTime() >= digestMomentOn(now, pattern).getTime();
 
   if (trackingOn && !digestFired) {
     return {
       kind: "waiting",
       headline: "Nothing to confirm\nyet.",
-      body: `Tonight's visits will be ready at ${digestTimeLabel(now)}.`,
+      body: `Tonight's visits will be ready at ${digestTimeLabel(now, pattern)}.`,
     };
   }
 

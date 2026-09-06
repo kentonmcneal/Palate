@@ -1,5 +1,6 @@
 import { buildDigest, digestWindowStart, entriesForDigest } from "../passive-digest";
 import type { InboxEntry } from "../passive-confirm";
+import { buildEatingPattern } from "../eating-pattern";
 
 function entry(id: string, detectedAt: Date): InboxEntry {
   return {
@@ -144,5 +145,82 @@ describe("weekday schedule", () => {
       prevDay.setDate(prevDay.getDate() - 1);
       expect(digestWindowStart(fire).getTime()).toBe(digestMomentOn(prevDay).getTime());
     }
+  });
+});
+
+// The founder asked whether we gather people's eating times so passive
+// tracking can be tailored to them. For the digest that means: fire when THIS
+// person is usually done eating, not at the hour the table guesses for
+// everyone. 2026-09-03 is a Thursday, a 9pm night by default.
+describe("personal digest hour", () => {
+  const { digestHourOn, digestTimeFor, digestMomentOn } = require("../passive-digest");
+
+  function eater(hour: number, visits: number) {
+    const hourly: number[] = new Array(24).fill(0);
+    hourly[hour] = visits;
+    return buildEatingPattern(hourly, new Array(7).fill(0));
+  }
+  const early = eater(18, 30);
+  const late = eater(22, 30);
+
+  it("asks an early eater at 8pm instead of 9", () => {
+    expect(digestHourOn(new Date("2026-09-03T12:00:00"), early)).toBe(20);
+  });
+
+  it("asks a late eater at 11pm", () => {
+    expect(digestHourOn(new Date("2026-09-03T12:00:00"), late)).toBe(23);
+  });
+
+  it("keeps the weekday default without a pattern, or with a thin one", () => {
+    const thu = new Date("2026-09-03T12:00:00");
+    expect(digestHourOn(thu)).toBe(21);
+    expect(digestHourOn(thu, null)).toBe(21);
+    expect(digestHourOn(thu, eater(18, 9))).toBe(21);
+  });
+
+  it("leaves the moment and the fire time unchanged for callers with no pattern", () => {
+    // Every pre-existing caller passes nothing. An explicit null (nothing
+    // stored) has to land on the same instant, on both a 9pm and an 11pm night.
+    for (const iso of ["2026-09-03T14:00:00", "2026-09-05T21:30:00", "2026-09-05T23:30:00"]) {
+      const now = new Date(iso);
+      expect(digestMomentOn(now, null).getTime()).toBe(digestMomentOn(now).getTime());
+      expect(digestMomentOn(now, undefined).getTime()).toBe(digestMomentOn(now).getTime());
+      expect(digestTimeFor(now, null).getTime()).toBe(digestTimeFor(now).getTime());
+      expect(digestTimeFor(now, undefined).getTime()).toBe(digestTimeFor(now).getTime());
+    }
+    expect(digestMomentOn(new Date("2026-09-03T14:00:00")).getHours()).toBe(21);
+    expect(digestTimeFor(new Date("2026-09-05T23:30:00")).getHours()).toBe(21);
+  });
+
+  it("schedules tonight at the personal hour and rolls past it correctly", () => {
+    const when = digestTimeFor(new Date("2026-09-03T14:00:00"), early);
+    expect(when.getDate()).toBe(3);
+    expect(when.getHours()).toBe(20);
+    // 8:30pm is past an early eater's 8pm digest, so it rolls to tomorrow
+    // even though the default 9pm slot has not arrived yet.
+    const rolled = digestTimeFor(new Date("2026-09-03T20:30:00"), early);
+    expect(rolled.getDate()).toBe(4);
+    expect(rolled.getHours()).toBe(20);
+  });
+
+  it("moves the window with the hour, so nothing falls between digests", () => {
+    // An 8pm digest on Thursday reaches back to Wednesday's 8pm digest.
+    const start = digestWindowStart(new Date("2026-09-03T20:30:00"), early);
+    expect(start.getDate()).toBe(2);
+    expect(start.getHours()).toBe(20);
+    for (let d = 1; d <= 14; d++) {
+      const fire = digestMomentOn(new Date(2026, 8, d, 12, 0), early);
+      const prevDay = new Date(fire);
+      prevDay.setDate(prevDay.getDate() - 1);
+      expect(digestWindowStart(fire, early).getTime()).toBe(digestMomentOn(prevDay, early).getTime());
+    }
+  });
+
+  it("counts a visit landed after the personal digest into tomorrow's", () => {
+    // Detected 8:30pm Thursday, after an early eater's 8pm digest fired. The
+    // Friday 8pm digest must still show it.
+    const dinner = entry("late", new Date("2026-09-03T20:30:00"));
+    const friday = new Date("2026-09-04T20:00:00");
+    expect(buildDigest([dinner], friday, { pattern: early }).total).toBe(1);
   });
 });

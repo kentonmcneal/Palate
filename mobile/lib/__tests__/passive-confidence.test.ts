@@ -1,6 +1,6 @@
 import {
   confidenceScore, confidenceBand, dwellScore, accuracyScore, densityCeiling,
-  HIGH_BAND_MIN, MEDIUM_BAND_MIN,
+  blendedMealFit, HIGH_BAND_MIN, MEDIUM_BAND_MIN,
 } from "../passive-confidence";
 import type { Restaurant } from "../places";
 
@@ -97,6 +97,44 @@ describe("confidenceScore", () => {
       expect(s).toBeGreaterThanOrEqual(0);
       expect(s).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+// The generic meal window says "restaurants at 7pm"; the personal pattern
+// says "YOU at 7pm". 3pm sits outside every generic window, so the window
+// alone reads a 3pm stop as weak. For someone whose lunches always run late
+// it should read stronger, and for someone who never eats at 3pm, weaker.
+describe("personal eating pattern", () => {
+  const threePm = { ...IDEAL, hour: 15 };
+
+  it("reads the same 3pm stop stronger when this person eats at 3pm", () => {
+    expect(confidenceScore({ ...threePm, patternFit: 1 }))
+      .toBeGreaterThan(confidenceScore(threePm));
+  });
+
+  it("reads it weaker when they never do", () => {
+    expect(confidenceScore({ ...threePm, patternFit: 0 }))
+      .toBeLessThan(confidenceScore(threePm));
+  });
+
+  it("changes nothing when there is no pattern yet", () => {
+    expect(confidenceScore({ ...threePm, patternFit: null })).toBe(confidenceScore(threePm));
+    expect(confidenceScore({ ...threePm, patternFit: undefined })).toBe(confidenceScore(threePm));
+  });
+
+  it("blends with the generic window rather than replacing it", () => {
+    // Off-window is 0.25 on its own; half of that plus half of a perfect
+    // personal fit is 0.625, not 1. A thin histogram must not be allowed to
+    // overrule the window outright.
+    expect(blendedMealFit(place(), 15, null)).toBe(0.25);
+    expect(blendedMealFit(place(), 15, 1)).toBeCloseTo(0.625, 6);
+    expect(blendedMealFit(place(), 15, 0)).toBeCloseTo(0.125, 6);
+  });
+
+  it("keeps the weights summing to one, so the score stays inside 0-1", () => {
+    expect(confidenceScore({ ...IDEAL, patternFit: 1 })).toBeLessThanOrEqual(1);
+    expect(confidenceScore({ ...IDEAL, patternFit: 7 })).toBeLessThanOrEqual(1);
+    expect(confidenceScore({ ...IDEAL, patternFit: -3 })).toBeGreaterThanOrEqual(0);
   });
 });
 

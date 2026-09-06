@@ -32,6 +32,7 @@ import { Spacer } from "../../components/Button";
 import { buildDishChips, palateRead, SURPRISE, type Mood, type MoodChip } from "../../lib/mood";
 import { dishesNear, type DishCount } from "../../lib/cuisine-catalogue";
 import { homeState, type HomeState } from "../../lib/home-state";
+import { loadEatingPattern } from "../../lib/eating-pattern";
 import { getInbox } from "../../lib/passive-confirm";
 import { isPassiveOptedIn } from "../../lib/passive-capture";
 import { hasAlways, currentPermissionState } from "../../lib/passive-permissions";
@@ -135,7 +136,7 @@ export default function Home() {
   }, [moodParam]);
 
   const loadHomeState = useCallback(async (visitCount: number, friends: number) => {
-    const [inbox, perms, gmail, optedIn, notifsOn] = await Promise.all([
+    const [inbox, perms, gmail, optedIn, notifsOn, pattern] = await Promise.all([
       getInbox().catch(() => []),
       currentPermissionState().catch(() => ({ whenInUse: false, always: false })),
       getGmailStatus().catch(() => ({
@@ -143,6 +144,9 @@ export default function Home() {
       })),
       isPassiveOptedIn().catch(() => false),
       notificationsGranted().catch(() => true), // fail closed on the NUDGE, not on the user
+      // The hour the hero quotes has to be the hour the digest actually fires
+      // for this person, so Home reads the same stored pattern the scheduler does.
+      loadEatingPattern().catch(() => null),
     ]);
     const always = perms.always || (await hasAlways().catch(() => false));
     const on = optedIn && always;
@@ -165,6 +169,7 @@ export default function Home() {
         friendCount: friends,
       },
       trackingOn: on,
+      pattern,
     }));
   }, []);
 

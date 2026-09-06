@@ -4,6 +4,7 @@ jest.mock("expo-notifications", () => ({
 }));
 
 import { homeState, whenLabel, type HomeInputs } from "../home-state";
+import { buildEatingPattern } from "../eating-pattern";
 
 const healthy = {
   locationAlways: true, locationWhenInUse: true, notificationsGranted: true,
@@ -90,6 +91,31 @@ describe("homeState priority", () => {
         expect(text).not.toContain(banned);
       }
     }
+  });
+});
+
+// The hour Home quotes has to be the hour the digest actually fires for this
+// person. An early eater is asked at eight, so "ready at 9pm" would be a lie.
+describe("personal digest hour on Home", () => {
+  const hourly: number[] = new Array(24).fill(0);
+  hourly[18] = 30;
+  const earlyEater = buildEatingPattern(hourly, new Array(7).fill(0));
+
+  it("quotes this person's hour, not the default", () => {
+    const s = homeState(inputs({ pattern: earlyEater }), at(14));
+    expect(s.kind).toBe("waiting");
+    if (s.kind === "waiting") expect(s.body).toContain("8pm");
+  });
+
+  it("switches out of waiting at that hour", () => {
+    expect(homeState(inputs({ pattern: earlyEater }), at(19, 59)).kind).toBe("waiting");
+    expect(homeState(inputs({ pattern: earlyEater }), at(20, 0)).kind).toBe("steady");
+  });
+
+  it("keeps the default when no pattern is stored", () => {
+    const s = homeState(inputs({ pattern: null }), at(14));
+    if (s.kind === "waiting") expect(s.body).toContain("9pm");
+    expect(homeState(inputs({ pattern: null }), at(20, 30)).kind).toBe("waiting");
   });
 });
 
