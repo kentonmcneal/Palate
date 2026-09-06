@@ -142,8 +142,26 @@ export function entriesForDigest(entries: InboxEntry[], now: Date): InboxEntry[]
   return entries.filter((e) => e.detectedAt > start && e.detectedAt <= end);
 }
 
-export function buildDigest(entries: InboxEntry[], now = new Date()): Digest {
-  const pending = entriesForDigest(entries, now).map(toDigestEntry);
+/**
+ * `windowed` is the difference between the notification and the screen.
+ *
+ * The notification is about tonight, so it is windowed — that is what keeps
+ * the list stable while somebody works through it. The SCREEN must not be:
+ * getInbox keeps entries for 48 hours and the digest window spans about 26, so
+ * an entry aged thirty hours was counted by Home ("1 visit is waiting for
+ * you") and by the Visits banner, and then did not appear on the digest you
+ * opened to clear it. There was no way to answer it; it just asked until it
+ * silently expired. That is the founder's "I hit Visits and it's asking for
+ * the same info".
+ */
+export function buildDigest(
+  entries: InboxEntry[],
+  now = new Date(),
+  opts: { windowed?: boolean } = {},
+): Digest {
+  const windowed = opts.windowed ?? true;
+  const source = windowed ? entriesForDigest(entries, now) : entries;
+  const pending = source.map(toDigestEntry);
   return {
     date: now.toISOString().slice(0, 10),
     high: pending.filter((e) => e.band === "high").sort(byTime),

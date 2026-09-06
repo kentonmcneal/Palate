@@ -83,6 +83,13 @@ function baseColor(seed: string, cuisine?: string | null): string {
   }
   return PALETTE[hash(seed) % PALETTE.length];
 }
+/** The hue this cuisine gets, for callers that want the colour without the
+ *  art. Same mapping PlaceArt uses, so a dot on a Home row and the card art
+ *  behind that same place are one colour, not two. */
+export function cuisineHue(cuisine?: string | null, seed = ""): string {
+  return baseColor(seed, cuisine);
+}
+
 
 /** Darken a hex colour toward black by `amount` (0..1), for the gradient's
  *  far end. Keeps the two stops obviously related rather than two hues. */

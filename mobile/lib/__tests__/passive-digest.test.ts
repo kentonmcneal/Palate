@@ -170,3 +170,60 @@ describe("allowsRealtimePrompt", () => {
   });
 });
 
+
+// ============================================================================
+// The count and the screen must agree.
+// ----------------------------------------------------------------------------
+// getInbox keeps 48 hours; the digest window spans about 26. An entry in
+// between was counted by Home and by the Visits banner and shown by neither
+// the digest nor anything else, so it asked forever and could not be answered.
+// ============================================================================
+describe("the digest screen shows everything the inbox counts", () => {
+  const thirtyHoursAgo = DAY.getTime() - 30 * 3_600_000;
+
+  it("windows for the notification", () => {
+    const d = buildDigest([entry({ id: "old", detectedAt: thirtyHoursAgo, confidenceBand: "high" })], DAY);
+    expect(d.total).toBe(0);
+  });
+
+  it("but shows the same entry on the screen, where it can be answered", () => {
+    const d = buildDigest(
+      [entry({ id: "old", detectedAt: thirtyHoursAgo, confidenceBand: "high" })],
+      DAY,
+      { windowed: false },
+    );
+    expect(d.total).toBe(1);
+    expect(d.high).toHaveLength(1);
+  });
+});
+
+// ============================================================================
+// The notification must never promise more than the screen can show.
+// ----------------------------------------------------------------------------
+// The notification's copy is baked when it is scheduled; the screen is built
+// when you open it, and the digest window moves in between. So the two can
+// disagree, and the direction of the disagreement is what matters. A
+// notification saying "3 places" that opens onto one answerable row is the
+// founder's "it's asking for the same info" — you cannot clear what you cannot
+// see. The reverse is harmless: the screen showing more than the notification
+// mentioned is just more you can do.
+//
+// The screen is unwindowed and the notification is a windowed subset of the
+// same inbox, so this holds by construction. The test is here to keep it that
+// way.
+// ============================================================================
+describe("notification vs screen", () => {
+  it("the screen always offers at least as much as the notification claimed", () => {
+    const entries = [
+      entry({ id: "old", detectedAt: DAY.getTime() - 30 * 3_600_000, confidenceBand: "high" }),
+      entry({ id: "lunch", detectedAt: DAY.getTime() - 8 * 3_600_000, confidenceBand: "high" }),
+      entry({ id: "dinner", detectedAt: DAY.getTime() - 1 * 3_600_000, confidenceBand: "medium" }),
+    ];
+    const notified = buildDigest(entries, DAY);
+    const onScreen = buildDigest(entries, DAY, { windowed: false });
+    const promised = notified.high.length + notified.medium.length;
+    const answerable = onScreen.high.length + onScreen.medium.length + onScreen.low.length;
+    expect(answerable).toBeGreaterThanOrEqual(promised);
+    expect(onScreen.total).toBe(3);
+  });
+});

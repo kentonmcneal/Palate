@@ -1,7 +1,9 @@
-import { useEffect, useState, useCallback, useRef } from "react";
-import { View, StyleSheet, Pressable, ActivityIndicator, Alert } from "react-native";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { View, StyleSheet, Pressable, ActivityIndicator, Alert, Image } from "react-native";
 import { Text } from "./Text";
 import { colors, spacing, type, card, shadow } from "../theme";
+import { cuisineHue } from "./PlaceArt";
+import { loadPlacePhotos, cachedPlacePhoto } from "../lib/place-photos";
 import { isoWeekStart } from "../lib/wrapped";
 import {
   generateWeeklyPalatePersona,
@@ -120,6 +122,8 @@ export function RecommendationsCard({
   onCuisinesAvailable?: (pool: Array<{ cuisine_type?: string | null }>) => void;
 } = {}) {
   const [recs, setRecs] = useState<RestaurantRecommendation[] | null>(null);
+  // Bumped when photos land, so the rows re-render on top of the module cache.
+  const [photoTick, setPhotoTick] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [earlyEstimate, setEarlyEstimate] = useState(false);
@@ -184,6 +188,12 @@ export function RecommendationsCard({
       setAllRecs(enriched);
       scoringRef.current = { graph, here, personal };
       setRecs(enriched.slice(0, 3));
+      // Real photos, from our own users' visits — the free source. One batched
+      // query, cached at module level. The cards render on the text
+      // immediately and upgrade when this lands; a failure is silent.
+      void loadPlacePhotos(enriched.slice(0, 12).map((r) => r.google_place_id))
+        .then(() => setPhotoTick((t) => t + 1))
+        .catch(() => {});
 
       // The chips offered above are the union of what is in this pool and what
       // exists in the catalogue within reach. The pool is a 3km Google fetch,
@@ -306,6 +316,11 @@ export function RecommendationsCard({
 
   // Hide the card entirely until we know if we have anything to show — keeps
   // the Home tab from flashing a useless block on first load.
+  const photos = useMemo(
+    () => new Map((recs ?? []).map((r) => [r.google_place_id, cachedPlacePhoto(r.google_place_id)])),
+    [recs, photoTick],
+  );
+
   if (loading) return null;
   // Home's main retention surface used to vanish on any throw and never come
   // back (error was never reset). It says so and offers Retry now.
@@ -348,14 +363,19 @@ export function RecommendationsCard({
         : !!moodNote && <Text style={styles.moodNote}>{moodNote}</Text>}
       <View style={{ marginTop: earlyEstimate ? 14 : 2 }}>
         {recs.map((rec) => (
-          <RecRow key={rec.google_place_id} rec={rec} onHide={() => hidePlace(rec.google_place_id)} />
+          <RecRow
+            key={rec.google_place_id}
+            rec={rec}
+            photo={photos.get(rec.google_place_id) ?? null}
+            onHide={() => hidePlace(rec.google_place_id)}
+          />
         ))}
       </View>
     </View>
   );
 }
 
-function RecRow({ rec, onHide }: { rec: RestaurantRecommendation; onHide: () => void }) {
+function RecRow({ rec, photo, onHide }: { rec: RestaurantRecommendation; photo: string | null; onHide: () => void }) {
   const router = useRouter();
   // At large accessibility sizes [name | match | Save] compresses the name to
   // an ellipsis and the buttons to slivers. Past the threshold the row becomes
@@ -405,6 +425,11 @@ function RecRow({ rec, onHide }: { rec: RestaurantRecommendation; onHide: () => 
         accessibilityLabel={`${rec.name}. Open place details.`}
       >
         <View style={styles.titleRow}>
+          {/* A real photograph when one of our own users took one. Never a
+              licensed one: place-photos.ts reads visits.photo_url, which is
+              free, batched and cached. No photo is the common case and the row
+              simply reads as it always did. */}
+          {!!photo && <Image source={{ uri: photo }} style={styles.thumb} />}
           <Text style={styles.name} numberOfLines={stack ? 4 : 2}>{rec.name}</Text>
           <Pressable
             onPress={(e) => {
@@ -421,6 +446,10 @@ function RecRow({ rec, onHide }: { rec: RestaurantRecommendation; onHide: () => 
         </View>
 
         <View style={styles.metaRow}>
+          {/* Three picks used to be three grey rows. The dot is the cuisine's
+              own hue — the same one PlaceArt paints behind that place — so the
+              card carries colour without carrying a photo it may not have. */}
+          <View style={[styles.cuisineDot, { backgroundColor: cuisineHue(rec.cuisine, rec.google_place_id) }]} />
           {rec.matchScore != null && (
             <View style={[
               styles.matchBadge,
@@ -511,6 +540,8 @@ const styles = StyleSheet.create({
     // No top margin — the parent section header controls spacing now.
     padding: card.padding,
     borderRadius: card.radius,
+    // Stays WHITE. The whole light re-skin rests on a white card popping off
+    // the grey page; `wash` here would collapse the two into one flat field.
     backgroundColor: colors.faint,
     ...shadow.card,
   },
@@ -522,7 +553,7 @@ const styles = StyleSheet.create({
     marginTop: 8, alignSelf: "flex-start",
     paddingHorizontal: 8, paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: colors.faint,
+    backgroundColor: colors.wash,
     borderWidth: 1, borderColor: colors.line,
   },
   earlyBadgeText: { fontSize: 10, fontWeight: "700", color: colors.mute, letterSpacing: 0.5 },
@@ -541,6 +572,8 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
   actionRowStacked: { flexDirection: "column", alignItems: "stretch", gap: 8 },
   name: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.ink, letterSpacing: -0.3 },
+  cuisineDot: { width: 8, height: 8, borderRadius: 4 },
+  thumb: { width: 44, height: 44, borderRadius: 10, marginRight: 10, backgroundColor: colors.wash },
   matchBadge: {
     paddingHorizontal: 8, paddingVertical: 4,
     borderRadius: 999,
@@ -553,7 +586,7 @@ const styles = StyleSheet.create({
 
   mapsBtn: {
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
-    backgroundColor: colors.faint,
+    backgroundColor: colors.wash,
     borderWidth: 1, borderColor: colors.line,
   },
   mapsBtnText: { fontSize: 11, fontWeight: "700", color: colors.ink },
@@ -564,11 +597,11 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   saveBtnDone: {
-    backgroundColor: colors.faint,
+    backgroundColor: colors.wash,
     borderWidth: 1, borderColor: colors.line,
   },
   saveText: { color: "#fff", fontSize: 13, fontWeight: "700" },
-  hideBtn: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line },
+  hideBtn: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.wash, borderWidth: 1, borderColor: colors.line },
   hideText: { fontSize: 12, fontWeight: "800", color: colors.mute },
   saveTextDone: { color: colors.mute },
 });

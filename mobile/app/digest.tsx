@@ -39,7 +39,9 @@ export default function DigestScreen() {
   const [done, setDone] = useState(false);
 
   const load = useCallback(async () => {
-    const d = buildDigest(await getInbox());
+    // Unwindowed: this screen exists to CLEAR the inbox, so it must show
+      // everything the inbox holds. Anything it hides is unanswerable.
+      const d = buildDigest(await getInbox(), new Date(), { windowed: false });
     setDigest(d);
     // Everything the digest presents as a likely visit arrives ticked, so the
     // common case — "yes, all of these" — is one tap. Driven off preChecked

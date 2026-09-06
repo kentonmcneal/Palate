@@ -16,6 +16,7 @@ import { matchHeadline, type PalateMatch } from "../lib/recommendation/palate-ma
 import { followUser, unfollowUser } from "../lib/friends";
 import { displayStoredPersona } from "../lib/palate";
 import { ProfileColumns } from "./ProfileColumns";
+import { InstagramGlyph, TikTokGlyph } from "./SocialGlyph";
 import { reportContent, blockUser, unblockUser, isBlocked, REPORT_REASONS } from "../lib/moderation";
 
 /**
@@ -270,22 +271,32 @@ export function ProfileBody({ targetId }: { targetId: string }) {
               )}
               {!!(snapshot.instagram_handle || snapshot.tiktok_handle) && (
                 <View style={styles.socialRow}>
+                  {/* The mark, then the handle. "Instagram" as a word told you
+                      which app; the glyph tells you that faster and the handle
+                      tells you WHOSE account you are about to open, which the
+                      old chip never did. */}
                   {!!snapshot.instagram_handle && (
                     <Pressable
                       onPress={() => void openInstagram(snapshot.instagram_handle!)}
                       style={styles.socialChip}
+                      hitSlop={8}
                       accessibilityRole="link"
+                      accessibilityLabel={`Instagram, @${snapshot.instagram_handle}`}
                     >
-                      <Text style={styles.socialChipText}>Instagram</Text>
+                      <InstagramGlyph size={15} color={colors.ink} />
+                      <Text style={styles.socialChipText}>@{snapshot.instagram_handle}</Text>
                     </Pressable>
                   )}
                   {!!snapshot.tiktok_handle && (
                     <Pressable
                       onPress={() => void openTikTok(snapshot.tiktok_handle!)}
                       style={styles.socialChip}
+                      hitSlop={8}
                       accessibilityRole="link"
+                      accessibilityLabel={`TikTok, @${snapshot.tiktok_handle}`}
                     >
-                      <Text style={styles.socialChipText}>TikTok</Text>
+                      <TikTokGlyph size={15} color={colors.ink} />
+                      <Text style={styles.socialChipText}>@{snapshot.tiktok_handle}</Text>
                     </Pressable>
                   )}
                 </View>
@@ -728,6 +739,7 @@ const styles = StyleSheet.create({
   meta: { ...type.small, marginTop: 6 },
   socialRow: { flexDirection: "row", gap: 8, marginTop: 12 },
   socialChip: {
+    flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
     backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line,
   },

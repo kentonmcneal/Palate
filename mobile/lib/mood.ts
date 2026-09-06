@@ -49,8 +49,23 @@ const DISH_LABEL: Record<string, string> = {
   wings: "Wings", tacos: "Tacos", bbq: "BBQ", steak: "Steak", seafood: "Seafood", sushi: "Sushi",
   ramen: "Ramen", noodles: "Noodles", dumplings: "Dumplings", salads: "Salads", brunch: "Brunch",
   bagels: "Bagels", donuts: "Donuts", ice_cream: "Ice cream", dessert: "Dessert", pastries: "Pastries",
-  coffee: "Coffee", tea: "Tea", juice: "Juice", wine: "Wine", cocktails: "Cocktails", beer: "Beer",
+  coffee: "Coffee", tea: "Tea", juice: "Juice", wine: "Wine", cocktails: "Cocktail bars", beer: "Beer",
 };
+
+// Cocktail bars are the exception, on the founder's call — going out for a
+// drink IS the plan some evenings, in a way that going out for a coffee
+// mostly is not.
+//
+// It rides the DISH axis rather than a new format filter because `cocktails`
+// already IS `types @> {cocktail_bar}`: migration 0099 maps that one Google
+// type to this family, backfilled every row, and keeps new rows current by
+// trigger. So restaurants_by_dish already answers this chip, through the same
+// eligibility gate as every other chip, with no new SQL and no spend.
+//
+// Appended AFTER the food dishes rather than sorted in among them, so it can
+// never take one of the eight dish slots from an actual meal — and only when
+// there is somewhere to send you.
+const DRINK_CHIP = "cocktails";
 export function dishLabel(dish: string): string {
   return DISH_LABEL[dish] ?? cuisineLabel(dish);
 }
@@ -238,6 +253,7 @@ export function moodFallbackNote(mood: Mood): string {
   if (mood === QUICK) return "Nothing quick nearby right now. Here's the regular list.";
   if (mood === SIT_DOWN) return "Nowhere to sit down nearby right now. Here's the regular list.";
   if (mood === SOMEWHERE_NEW) return "You've been to everything good nearby. Here's the regular list.";
+  if (mood === dishMood(DRINK_CHIP)) return "No cocktail bars nearby tonight. Closest picks instead.";
   if (isDishMood(mood)) return `Nowhere for ${dishLabel(dishOf(mood) ?? "").toLowerCase()} nearby tonight. Closest picks instead.`;
   return `Nothing great nearby for ${cuisineLabel(String(mood))} tonight. Closest picks instead.`;
 }
@@ -330,6 +346,10 @@ export function buildCuisineChips(
  */
 export function moodContextNote(mood: Mood, topScore: number | null): string | null {
   if (!mood || isIntentMood(mood) || isSurprise(mood)) return null;
+  // A bar is not a cuisine you do or do not "go in for", and the compatibility
+  // score was never trained on one. Saying nothing is the honest answer; the
+  // list itself is the answer.
+  if (mood === dishMood(DRINK_CHIP)) return null;
   if (topScore == null) return null;
 
   const label = moodLabel(mood);
@@ -352,6 +372,8 @@ export type DishCount = { dish: string; place_count: number };
 // the mood row is about what to eat.
 const NOT_A_MEAL = new Set(["coffee", "tea", "juice", "wine", "cocktails", "beer"]);
 
+
+
 export function buildDishChips(
   breakdown: CuisineSlice[],
   pool: Array<{ cuisine_type?: string | null }>,
@@ -364,6 +386,11 @@ export function buildDishChips(
     .filter((d) => d.dish && !NOT_A_MEAL.has(d.dish) && d.place_count > 0)
     .slice(0, dishLimit)
     .map((d) => ({ key: dishMood(d.dish), label: dishLabel(d.dish) }));
+
+  const drinks = dishes.find((d) => d.dish === DRINK_CHIP && d.place_count > 0);
+  if (drinks) {
+    dishChips.push({ key: dishMood(DRINK_CHIP), label: dishLabel(DRINK_CHIP) });
+  }
 
   const cuisineRow = buildCuisineChips(breakdown, pool, { totalLimit });
   const surprise = cuisineRow.find((c) => c.key === SURPRISE);

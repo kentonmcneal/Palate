@@ -1,4 +1,4 @@
-import { buildDishChips, applyMood, dishMood, isDishMood, moodLabel, moodFallbackNote } from "../mood";
+import { buildDishChips, applyMood, dishMood, isDishMood, moodLabel, moodFallbackNote, moodContextNote } from "../mood";
 
 // Nobody is in the mood for "Latin American". They want tacos.
 describe("dish moods", () => {
@@ -76,5 +76,56 @@ describe("a chip must change the list", () => {
     const { items, matched } = applyMood(list, dishMood("ramen"), []);
     expect(matched).toBe(false);
     expect(items).toHaveLength(2); // unchanged list, but matched:false is the signal
+  });
+});
+
+// ============================================================================
+// Cocktail bars — the founder asked for them by name.
+// ----------------------------------------------------------------------------
+// Every other drink stays out of the mood row: going out for a coffee is not
+// a plan. Going out for a drink is.
+// ============================================================================
+describe("the cocktail bars chip", () => {
+  const breakdown = [{ cuisine: "american", count: 4, pct: 50 }] as any;
+  const pool = [{ cuisine_type: "american" }];
+
+  it("appears when there are cocktail bars nearby, and the other drinks do not", () => {
+    const labels = buildDishChips(breakdown, pool, [
+      { dish: "coffee", place_count: 15 },
+      { dish: "tacos", place_count: 20 },
+      { dish: "wine", place_count: 5 },
+      { dish: "beer", place_count: 4 },
+      { dish: "cocktails", place_count: 3 },
+    ]).map((c) => c.label);
+    expect(labels).toContain("Cocktail bars");
+    expect(labels).not.toContain("Coffee");
+    expect(labels).not.toContain("Wine");
+    expect(labels).not.toContain("Beer");
+  });
+
+  it("stays out of the eight dish slots — it is appended, never sorted in", () => {
+    // Nine real dishes plus cocktails. The dish limit is 8, and all eight
+    // should still be meals.
+    const many = Array.from({ length: 9 }, (_, i) => ({ dish: `d${i}`, place_count: 20 - i }));
+    const chips = buildDishChips(breakdown, pool, [...many, { dish: "cocktails", place_count: 3 }]);
+    const labels = chips.map((c) => c.label);
+    expect(labels).toContain("Cocktail bars");
+    // d0..d7 are the eight; d8 fell off. Cocktails did not take a slot.
+    expect(labels).toContain("D7");
+    expect(labels).not.toContain("D8");
+  });
+
+  it("says nothing at all when there is nowhere to go", () => {
+    const labels = buildDishChips(breakdown, pool, [
+      { dish: "tacos", place_count: 20 },
+      { dish: "cocktails", place_count: 0 },
+    ]).map((c) => c.label);
+    expect(labels).not.toContain("Cocktail bars");
+  });
+
+  it("does not claim a bar is or is not your pattern", () => {
+    // The compatibility score was never trained on a bar. Silence is honest.
+    expect(moodContextNote(dishMood("cocktails"), 20)).toBeNull();
+    expect(moodContextNote(dishMood("tacos"), 20)).not.toBeNull();
   });
 });

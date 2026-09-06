@@ -24,6 +24,12 @@ export const colors = {
   line: "#EBEBEB",    // hairline border, used sparingly (rely on shadow + space)
   inkDim: "#3A3A3A",
   faint: "#FFFFFF",   // white CARD surface — pops off the grey page
+  // Tonal fill for controls that sit ON a white card. `faint` became pure
+  // white in the re-skin, so every chip still using it as a FILL — the Maps
+  // buttons, the dismiss ✕, a saved Save — is white on white and reads as an
+  // outline only. This is the ground those controls were drawn against. It is
+  // a large part of what "aesthetically bland" actually looks like.
+  wash: "#F1F1F1",
   // Live-status green. Used ONLY for "we have a real GPS fix" on the location
   // pill — a status light, never a brand accent. Muted enough to sit beside
   // the ember red without competing with it.
