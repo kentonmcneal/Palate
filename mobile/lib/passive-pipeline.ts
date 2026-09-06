@@ -419,7 +419,18 @@ export function rankCandidates(
  */
 async function catalogueCandidates(raw: RawVisit, radius: number): Promise<Restaurant[]> {
   try {
-    const rows = await restaurantsNear({ lat: raw.lat, lng: raw.lng }, { radiusM: radius, limit: 20 });
+    // recommendableOnly: false is load-bearing. restaurants_near defaults to
+    // filtering recommendation_eligibility > 0, which is right for a
+    // suggestion and wrong here: 258 chain rows sit at 0, including
+    // Chick-fil-A, which is the founder's most-visited restaurant. Without
+    // this flag a stop there returns nothing — or worse, returns an eligible
+    // NEIGHBOUR inside the 75m radius, and we ask him about the wrong place
+    // without ever consulting Google. isLoggableVenue below is the gate that
+    // belongs on this path, and it admits chains deliberately.
+    const rows = await restaurantsNear(
+      { lat: raw.lat, lng: raw.lng },
+      { radiusM: radius, limit: 20, recommendableOnly: false },
+    );
     return rows.filter(isLoggableVenue);
   } catch {
     return [];

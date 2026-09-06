@@ -153,10 +153,19 @@ export async function dishCandidates(
  */
 export async function restaurantsNear(
   here: { lat: number; lng: number },
-  opts: { radiusM?: number; limit?: number } = {},
+  opts: {
+    radiusM?: number;
+    limit?: number;
+    /** Pass false ONLY from passive capture. The eligibility gate answers
+     *  "should we recommend this?", which is a different question from "did
+     *  you eat here?" — 258 chain rows carry eligibility 0, including the
+     *  founder's most-visited restaurant. */
+    recommendableOnly?: boolean;
+  } = {},
 ): Promise<Restaurant[]> {
   const { data, error } = await supabase.rpc("restaurants_near", {
     p_lat: here.lat, p_lng: here.lng, p_radius_m: opts.radiusM ?? 5000, p_limit: opts.limit ?? 150,
+    p_recommendable_only: opts.recommendableOnly ?? true,
   });
   if (error) throw error;
   return (data ?? []) as Restaurant[];
