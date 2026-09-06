@@ -141,16 +141,39 @@ function scoreTaste(g: TasteGraph, r: RestaurantInput): Dim {
   let score = 0;
   let weight = 0;
 
+  // How much to trust the maps at all. affinityOf normalises by the person's
+  // own top bucket, so three visits to three cuisines gave each of them 1.0
+  // and everything else exactly 0: a wall, built from three data points,
+  // that put those cuisines in the 80s and every other place in the 30s for
+  // as long as it took to log more. Shrink toward neutral by how much
+  // evidence there is: at 3 visits a match reads 0.69 and a miss 0.31, at 35
+  // (the founder) 0.94 and 0.06, so the harness barely moves and the
+  // ordering good > unknown (0.35) > poor holds at every size. Affine and
+  // monotone, so nothing reorders within the taste term. A quiz-seeded
+  // 0-visit graph counts as one visit's worth.
+  const m = Math.max(1, g.totalVisits);
+  const trust = m / (m + 5);
+  // Tried and reverted, 2026-09-06: a "novelty floor" that read never-eaten
+  // as neutral for a person whose history spans many cuisines. The held-out
+  // harness had put Josephine Estelle (Italian, eaten twice) at 178 of 200
+  // once its own visits were removed. The floor lifted every never-eaten
+  // cuisine together, so the held-out ranks did not move (168 vs 178), and it
+  // put never-eaten above unclassified on the real pool, breaking the
+  // good > unknown > poor ordering this block exists to produce. The finding
+  // stands and is measured in held-out.test.ts; the fix is not a constant.
+  const shrunk = (map: Record<string, number>, key: string) =>
+    trust * affinityOf(map, key) + (1 - trust) * 0.5;
+
   // Each dimension counts only when the PERSON has a map for it. A quiz
   // seeds regions but never subregions, so a perfect region match used to be
   // averaged with a subregion term the quiz-taker could not possibly satisfy,
   // capping taste at 37 — below the 50 a quiz-skipper gets.
   if (r.cuisine_subregion && hasEntries(g.cuisinesSubregion)) {
-    const aff = affinityOf(g.cuisinesSubregion, r.cuisine_subregion);
+    const aff = shrunk(g.cuisinesSubregion, r.cuisine_subregion);
     score += aff * 0.5; weight += 0.5;
   }
   if (r.cuisine_region && hasEntries(g.cuisines)) {
-    const aff = affinityOf(g.cuisines, r.cuisine_region);
+    const aff = shrunk(g.cuisines, r.cuisine_region);
     score += aff * 0.25; weight += 0.25;
   }
   // cuisine_type, the field this block did not read for its whole existence.
@@ -172,7 +195,7 @@ function scoreTaste(g: TasteGraph, r: RestaurantInput): Dim {
   // direction. Region drops 0.30 -> 0.25 so the three cuisine signals do not
   // collectively drown the behaviour and quality terms.
   if (r.cuisine_type && hasEntries(g.cuisineTypes)) {
-    const aff = affinityOf(g.cuisineTypes, r.cuisine_type);
+    const aff = shrunk(g.cuisineTypes, r.cuisine_type);
     score += aff * 0.35; weight += 0.35;
   }
   if (FLAVOR_WEIGHT > 0 && r.flavor_tags?.length) {
@@ -347,6 +370,7 @@ function affinityOf(map: Record<string, number>, key: string): number {
   const m = maxValue(map);
   return m > 0 ? Math.min(1, (map[key] ?? 0) / m) : 0;
 }
+
 function sumAffinity(map: Record<string, number>, keys: string[]): number {
   let s = 0;
   for (const k of keys) s += affinityOf(map, k);
