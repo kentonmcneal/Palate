@@ -587,6 +587,13 @@ export async function addToWishlist(
     .eq("google_place_id", googlePlaceId)
     .single();
   if (lookupErr) throw lookupErr;
+  // PostgREST answers .single() with data null and NO error when the row is
+  // there but the caller may not read it back, so `rest.id` threw "Cannot
+  // read property 'id' of null" on a real device rather than saying what was
+  // wrong. Saving a place is one of the most tapped actions in the app.
+  if (!rest?.id) {
+    throw new Error(`Could not find that restaurant to save (${googlePlaceId})`);
+  }
 
   const source = opts.source ?? "recommendation";
   const tags = opts.aspirationTags ?? [];

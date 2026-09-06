@@ -42,13 +42,55 @@ export async function initObservability(): Promise<void> {
   initialized = true;
 }
 
+/**
+ * Anything that is not an Error becomes one, keeping its own fields as context.
+ *
+ * Sentry titles an issue from an Error's name and message. Hand it a plain
+ * object and it has nothing to title with, so it files everything under
+ * "Object captured as exception with keys: ..." and the actual failure is
+ * invisible. That is not hypothetical: two of the three people who have ever
+ * used this app spent four days inside exactly that issue, and neither the
+ * founder nor I could tell what had broken.
+ *
+ * Supabase is the reason it happens. Its client rejects with a plain
+ * { code, details, hint, message } object rather than an Error, so every
+ * unhandled Supabase rejection lands in the same unreadable bucket. The
+ * message becomes the title; code, details and hint are kept beside it.
+ */
+export function toError(err: unknown): { error: Error; extra: Record<string, unknown> } {
+  if (err instanceof Error) return { error: err, extra: {} };
+
+  if (err && typeof err === "object") {
+    const o = err as Record<string, unknown>;
+    const message = typeof o.message === "string" && o.message
+      ? o.message
+      : `Non-Error thrown with keys: ${Object.keys(o).sort().join(", ") || "none"}`;
+    const error = new Error(message);
+    // A Postgres error code is the single most identifying field Supabase
+    // gives, so it goes in the name and Sentry groups by it.
+    if (typeof o.code === "string" && o.code) error.name = `SupabaseError ${o.code}`;
+    const extra: Record<string, unknown> = {};
+    for (const k of ["code", "details", "hint", "status", "statusCode"]) {
+      if (o[k] !== undefined) extra[`thrown_${k}`] = o[k];
+    }
+    return { error, extra };
+  }
+
+  return {
+    error: new Error(typeof err === "string" && err ? err : `Non-Error thrown: ${String(err)}`),
+    extra: { thrown_type: typeof err },
+  };
+}
+
 export async function captureError(err: unknown, context?: Record<string, unknown>): Promise<void> {
   if (!initialized || !DSN) return;
   const Sentry = await loadSentry();
   if (!Sentry) return;
+  const { error, extra } = toError(err);
   Sentry.withScope((scope) => {
     if (context) scope.setExtras(context);
-    Sentry.captureException(err);
+    if (Object.keys(extra).length > 0) scope.setExtras(extra);
+    Sentry.captureException(error);
   });
 }
 

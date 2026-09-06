@@ -165,9 +165,15 @@ export async function postMilestoneAndNotify(streakDays: number): Promise<void> 
     payload: { streak_days: streakDays },
   }).select("id").single();
   if (error) throw error;
-  void supabase.functions.invoke("notify-feed-post", {
-    body: { feed_event_id: data.id },
-  });
+  // Same trap as addToWishlist: an insert the INSERT policy allows, followed
+  // by a select the SELECT policy does not, comes back as data null with no
+  // error. The post itself is written either way, so a missing id costs a
+  // notification, not the post, and must not throw here.
+  if (data?.id) {
+    void supabase.functions.invoke("notify-feed-post", {
+      body: { feed_event_id: data.id },
+    });
+  }
 }
 
 export async function postMilestone(streakDays: number): Promise<void> {
