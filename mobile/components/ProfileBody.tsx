@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Share } from "react-native";
+import { InviteCard } from "./InviteCard";
 import { Text } from "./Text";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Avatar } from "./Avatar";
@@ -606,6 +607,12 @@ export function ProfileBody({ targetId }: { targetId: string }) {
             )}
           </>
         )}
+
+        {/* Your own profile only, and last: the invite is an ask, and an ask
+            belongs after the person has seen what they have built rather than
+            above it. Palate ranks partly on the people you follow and had no
+            way to gain any, so this is the one place in the app that says so. */}
+        {mine && <InviteCard displayName={displayName} />}
       </ScrollView>
 
       {/* Off-screen render target for the share capture. Positioned far off
