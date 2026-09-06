@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
   axisHorizontal: { left: 0,              top: SIZE / 2 - 0.5, width: SIZE, height: 1 },
   qLabel: {
     position: "absolute",
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "700",
     color: colors.mute,
     letterSpacing: 0.4,

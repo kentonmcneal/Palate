@@ -173,14 +173,14 @@ const styles = StyleSheet.create({
   weekText: { color: ON_DARK.secondary, fontSize: 13 },
   youAre: {
     color: ON_DARK.label,
-    fontSize: 12,
+    fontSize: 13,
     letterSpacing: 1.5,
     textTransform: "uppercase",
     marginTop: 24,
   },
   persona: {
     color: colors.red,
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: "800",
     letterSpacing: -0.7,
     lineHeight: 40,
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
   },
   personaDescription: {
     color: ON_DARK.secondary,
-    fontSize: 14,
+    fontSize: 13,
     lineHeight: 20,
     marginTop: 8,
     fontWeight: "500",
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 14,
   },
-  statValue: { color: colors.ink, fontSize: 26, fontWeight: "800" },
+  statValue: { color: colors.ink, fontSize: 28, fontWeight: "800" },
   statLabel: {
     color: colors.mute,
     fontSize: 11,
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
   },
   topLabel: {
     color: ON_DARK.label,
-    fontSize: 12,
+    fontSize: 13,
     letterSpacing: 1.5,
     textTransform: "uppercase",
     marginTop: 24,
@@ -224,10 +224,10 @@ const styles = StyleSheet.create({
     borderBottomColor: ON_DARK.hairline,
     borderBottomWidth: 1,
   },
-  topName: { color: ON_DARK.primary, fontSize: 15 },
+  topName: { color: ON_DARK.primary, fontSize: 16 },
   topRank: { color: ON_DARK.label },
   topCount: { color: ON_DARK.secondary },
-  brand: { color: ON_DARK.faintLabel, marginTop: 24, fontSize: 12 },
+  brand: { color: ON_DARK.faintLabel, marginTop: 24, fontSize: 13 },
 
   cuisineRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
   cuisineChip: {
@@ -237,6 +237,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.redTint,
     borderWidth: 1, borderColor: colors.redTintBorder,
   },
-  cuisineChipText: { color: colors.redText, fontSize: 12, fontWeight: "700" },
+  cuisineChipText: { color: colors.redText, fontSize: 13, fontWeight: "700" },
   cuisineChipPct: { color: colors.mute, fontSize: 11, fontWeight: "700" },
 });

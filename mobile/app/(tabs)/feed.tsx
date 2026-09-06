@@ -541,7 +541,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 10,
     borderRadius: 999, backgroundColor: colors.red,
   },
-  emptyCtaText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  emptyCtaText: { color: "#fff", fontWeight: "700", fontSize: 13 },
 
   // White card on the grey page, carried by shadow rather than a border. The
   // cards used to be paper on paper with a hairline, which is why the feed
@@ -563,7 +563,7 @@ const styles = StyleSheet.create({
   rowMain: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 },
   menuBtn: { paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start" },
   menuDots: { color: colors.mute, fontSize: 16, fontWeight: "800", letterSpacing: 1 },
-  name: { fontSize: 15, fontWeight: "700", color: colors.ink },
+  name: { fontSize: 16, fontWeight: "700", color: colors.ink },
   when: { ...type.small, marginTop: 2 },
 
   bodyText: { marginTop: 12, fontSize: 16, color: colors.ink, lineHeight: 22 },
@@ -579,7 +579,7 @@ const styles = StyleSheet.create({
   },
   wrappedEyebrowRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   wrappedEyebrow: { color: "rgba(255,255,255,0.6)", fontSize: 10, fontWeight: "700", letterSpacing: 1.5 },
-  wrappedPersona: { color: colors.red, fontSize: 22, fontWeight: "800", letterSpacing: -0.5, marginTop: 4 },
+  wrappedPersona: { color: colors.red, fontSize: 24, fontWeight: "800", letterSpacing: -0.5, marginTop: 4 },
   wrappedTagline: { color: "rgba(255,255,255,0.85)", fontSize: 13, fontStyle: "italic", marginTop: 2 },
   wrappedStats: { flexDirection: "row", gap: 10, marginTop: 14 },
   wrappedStat: {
@@ -600,7 +600,7 @@ const styles = StyleSheet.create({
   // instead of squeezing it.
   chipLine: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 6 },
   cuisinePill: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999 },
-  cuisinePillText: { fontSize: 12, fontWeight: "700" },
+  cuisinePillText: { fontSize: 13, fontWeight: "700" },
   chips: { ...type.small, flexShrink: 1 },
   photo: { marginTop: 12, width: "100%", aspectRatio: 16 / 10, borderRadius: 12, backgroundColor: colors.wash },
   stats: { flexDirection: "row", gap: 8, marginTop: 14 },
@@ -611,7 +611,7 @@ const styles = StyleSheet.create({
     flex: 1, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 12,
     backgroundColor: colors.wash, borderWidth: 1, borderColor: colors.wash,
   },
-  statV: { fontSize: 15, fontWeight: "800", color: colors.ink },
+  statV: { fontSize: 16, fontWeight: "800", color: colors.ink },
   statOrdinal: { color: categoryColors.plum },
   statL: { ...type.micro, marginTop: 3, fontSize: 10 },
 

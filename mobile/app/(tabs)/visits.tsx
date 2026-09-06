@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg, paddingHorizontal: 20, paddingVertical: 12,
     borderRadius: 999, backgroundColor: colors.red,
   },
-  emptyCtaText: { color: "#fff", fontSize: 15, fontWeight: "800" },
+  emptyCtaText: { color: "#fff", fontSize: 16, fontWeight: "800" },
 
   pending: {
     marginHorizontal: spacing.lg, marginTop: spacing.sm,
@@ -221,14 +221,14 @@ const styles = StyleSheet.create({
     borderRadius: 16, backgroundColor: colors.red,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
   },
-  pendingText: { color: "#fff", fontSize: 15, fontWeight: "800", flex: 1 },
+  pendingText: { color: "#fff", fontSize: 16, fontWeight: "800", flex: 1 },
   pendingChev: { color: "#fff", fontSize: 16, fontWeight: "800" },
 
   searchWrap: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   search: {
     height: 44, borderRadius: 12, paddingHorizontal: 14,
     backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
-    color: colors.ink, fontSize: 15,
+    color: colors.ink, fontSize: 16,
   },
 
   dayLabel: {
@@ -250,5 +250,5 @@ const styles = StyleSheet.create({
   chev: { color: colors.mute, fontSize: 20, fontWeight: "600" },
 
   addRow: { paddingVertical: 22, alignItems: "center" },
-  addRowText: { fontSize: 14, fontWeight: "700", color: colors.red },
+  addRowText: { fontSize: 13, fontWeight: "700", color: colors.red },
 });

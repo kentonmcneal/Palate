@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { View, StyleSheet, Pressable, ActivityIndicator, Alert, Image } from "react-native";
 import { Text } from "./Text";
 import { colors, spacing, type, card, shadow, categoryColors } from "../theme";
-import { cuisineHue, initialsOf } from "./PlaceArt";
+import { cuisineHue, initialsOf, PlaceTile } from "./PlaceArt";
 import { trackRecEvent, trackImpression, rememberRecTouch, newRequestId, type RecEventContext } from "../lib/recommendation-events";
 import { Impression } from "./Impressions";
 import { loadPlacePhotos, cachedPlacePhoto } from "../lib/place-photos";
@@ -598,9 +598,13 @@ function RecRow({ rec, photo, rank, requestId, mood, onHide }: {
             // No photo is the common case, and three grey rows of text is what
             // "bland" meant. A monogram in the cuisine's own hue gives each
             // pick a face without buying a licensed photo for it.
-            <View style={[styles.thumb, styles.mono, { backgroundColor: hue }]}>
-              <Text style={styles.monoText} maxFontSizeMultiplier={FONT_CAP.badge}>{initialsOf(rec.name)}</Text>
-            </View>
+            <PlaceTile
+              seed={rec.google_place_id}
+              name={rec.name}
+              cuisine={rec.cuisine}
+              size={56}
+              style={styles.thumb}
+            />
           )}
           <Text style={styles.name} numberOfLines={stack ? 4 : 2}>{rec.name}</Text>
           <Pressable
@@ -724,7 +728,7 @@ function formatReviewCount(n: number): string {
 }
 
 const styles = StyleSheet.create({
-  moodNote: { fontSize: 12, color: colors.mute, marginTop: 10, lineHeight: 17 },
+  moodNote: { fontSize: 13, color: colors.mute, marginTop: 10, lineHeight: 17 },
   moodHead: { ...type.micro, marginTop: 4 },
   card: {
     // Only the empty state uses this now; the picks are separate cards
@@ -751,7 +755,7 @@ const styles = StyleSheet.create({
   emptyCard: { backgroundColor: colors.faint, borderColor: colors.line },
   emptyText: { ...type.small },
   emptyState: { alignItems: "center", paddingVertical: spacing.lg, gap: 6 },
-  emptyGlyph: { fontSize: 22, color: colors.line },
+  emptyGlyph: { fontSize: 24, color: colors.line },
 
   // The picks sit on the page, not in a shared container, so there is nothing
   // to draw between the chips and the first name. The gap does the dividing.
@@ -776,10 +780,8 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
   actionRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
   actionRowStacked: { flexDirection: "column", alignItems: "stretch", gap: 8 },
-  name: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.ink, letterSpacing: -0.3 },
-  thumb: { width: 44, height: 44, borderRadius: 10, marginRight: 10, backgroundColor: colors.wash },
-  mono: { alignItems: "center", justifyContent: "center" },
-  monoText: { color: "#fff", fontSize: 15, fontWeight: "800", letterSpacing: 0.5 },
+  name: { flex: 1, fontSize: 18, fontWeight: "700", color: colors.ink, letterSpacing: -0.3 },
+  thumb: { width: 56, height: 56, borderRadius: 12, marginRight: 12, backgroundColor: colors.wash },
   star: { color: categoryColors.saffron, fontWeight: "700" },
   cuisineText: { fontWeight: "700" },
   matchBadge: {
@@ -810,6 +812,6 @@ const styles = StyleSheet.create({
   },
   saveText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   hideBtn: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.wash, borderWidth: 1, borderColor: colors.line },
-  hideText: { fontSize: 12, fontWeight: "800", color: colors.mute },
+  hideText: { fontSize: 13, fontWeight: "800", color: colors.mute },
   saveTextDone: { color: colors.mute },
 });

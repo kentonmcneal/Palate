@@ -16,7 +16,7 @@ import { formatDistance, matchScoreColor, matchBand } from "../lib/match-score";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { SaveBurst } from "./SaveBurst";
 import { TapCard } from "./TapCard";
-import { PlaceArt, cuisineHue } from "./PlaceArt";
+import { PlaceArt, PlaceTile, cuisineHue } from "./PlaceArt";
 import { cachedPlacePhoto } from "../lib/place-photos";
 
 // ============================================================================
@@ -162,6 +162,18 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
       <View style={[styles.rail, { backgroundColor: hue }]} />
       <View style={styles.body}>
       <View style={styles.head}>
+        {/* No photo used to mean no picture at all here: a card of grey text.
+            The tile is the same gradient the full-width art would have used,
+            at row scale, so the card has a face either way. */}
+        {!photo && (
+          <PlaceTile
+            seed={restaurant.google_place_id}
+            name={restaurant.name}
+            cuisine={restaurant.cuisine_type}
+            size={56}
+            style={styles.tile}
+          />
+        )}
         <View style={{ flex: 1 }}>
           <Text style={styles.name} numberOfLines={2}>{restaurant.name}</Text>
           <Text style={styles.sub}>{subline.length ? subline : "Nearby"}</Text>
@@ -330,7 +342,7 @@ const styles = StyleSheet.create({
   cardClip: { borderRadius: card.radius, overflow: "hidden" },
   head: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   // Name is the primary visual element on the card.
-  name: { fontSize: 19, fontWeight: "800", color: colors.ink, letterSpacing: -0.3, lineHeight: 24 },
+  name: { fontSize: 20, fontWeight: "800", color: colors.ink, letterSpacing: -0.3, lineHeight: 24 },
   sub: { ...type.small, marginTop: 4 },
   // Score is highlighted but smaller than the name so it never out-competes
   // the restaurant identity itself.
@@ -340,10 +352,10 @@ const styles = StyleSheet.create({
     fontSize: 10, fontWeight: "700", color: colors.mute, letterSpacing: 0.3,
     marginTop: 2, textAlign: "right",
   },
-  confLow: { fontSize: 9, fontWeight: "700", color: colors.mute, marginTop: 4 },
-  newBadge: { fontSize: 15, fontWeight: "800", color: colors.mute, letterSpacing: 1 },
+  confLow: { fontSize: 10, fontWeight: "700", color: colors.mute, marginTop: 4 },
+  newBadge: { fontSize: 16, fontWeight: "800", color: colors.mute, letterSpacing: 1 },
 
-  reason: { marginTop: 10, fontSize: 14, color: colors.ink, fontStyle: "italic", lineHeight: 20 },
+  reason: { marginTop: 10, fontSize: 13, color: colors.ink, fontStyle: "italic", lineHeight: 20 },
 
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
   tag: {
@@ -353,6 +365,7 @@ const styles = StyleSheet.create({
   tagText: { fontSize: 10, fontWeight: "700", color: colors.ink },
 
   rail: { position: "absolute", left: 0, top: 0, bottom: 0, width: 4 },
+  tile: { marginRight: 12 },
   star: { color: categoryColors.saffron, fontWeight: "700" },
   cuisineText: { fontWeight: "700" },
 
@@ -361,16 +374,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
     backgroundColor: colors.red,
   },
-  btnPrimaryText: { color: "#fff", fontSize: 12, fontWeight: "800" },
+  btnPrimaryText: { color: "#fff", fontSize: 13, fontWeight: "800" },
   btnDone: { backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line },
   btnDoneText: { color: colors.mute },
   btnGhost: {
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999,
     backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
   },
-  btnGhostText: { fontSize: 12, fontWeight: "700", color: colors.ink },
+  btnGhostText: { fontSize: 13, fontWeight: "700", color: colors.ink },
   btnSubtle: { paddingHorizontal: 10, paddingVertical: 8, marginLeft: "auto" },
   btnSubtleText: { fontSize: 11, fontWeight: "600", color: colors.mute },
   hideBtn: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line },
-  hideText: { fontSize: 12, fontWeight: "800", color: colors.mute },
+  hideText: { fontSize: 13, fontWeight: "800", color: colors.mute },
 });

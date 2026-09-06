@@ -14,7 +14,7 @@ import { matchScoreColor, matchScoreTint } from "../lib/match-score";
 import { assembleGraph, computeRightNow, type RightNowPick as StretchPickType } from "../lib/recommendation";
 import { toInput as toCandidateInput } from "../lib/recommendation/candidates";
 import { filterRecommendable } from "../lib/recommendation/eligibility";
-import { cuisineHue } from "./PlaceArt";
+import { cuisineHue, PlaceTile } from "./PlaceArt";
 import { FONT_CAP } from "../lib/a11y";
 
 // ============================================================================
@@ -106,7 +106,12 @@ export function StretchPick() {
           <Text style={[styles.scoreText, { color: matchScoreColor(score) }]}>{score}</Text>
         </View>
       </View>
-      <Text style={styles.name} numberOfLines={2}>{r.name}</Text>
+      {/* The same tile the list cards carry, so the stretch pick reads as
+          one more place and not as an advertisement for one. */}
+      <View style={styles.nameRow}>
+        <PlaceTile seed={r.google_place_id} name={r.name} cuisine={r.cuisine_type} size={48} style={styles.tile} />
+        <Text style={[styles.name, { flex: 1 }]} numberOfLines={2}>{r.name}</Text>
+      </View>
       {/* Star in saffron, cuisine in its hue: the same subline grammar as the
           list cards, so the eye does not have to learn a second one here. */}
       {(r.rating != null || sub.length > 0) && (
@@ -140,6 +145,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     padding: spacing.md,
   },
+  nameRow: { flexDirection: "row", alignItems: "center" },
+  tile: { marginRight: 12 },
   rail: { position: "absolute", left: 0, top: 0, bottom: 0, width: 4 },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   // Pine is the colour of "outside your pattern" across the app: Home's
@@ -151,7 +158,7 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
     borderWidth: 1,
   },
-  scoreText: { fontSize: 12, fontWeight: "800" },
+  scoreText: { fontSize: 13, fontWeight: "800" },
 
   name: { fontSize: 20, fontWeight: "800", color: colors.ink, letterSpacing: -0.4, marginTop: 8, lineHeight: 24 },
   sub: { ...type.small, marginTop: 2 },
@@ -159,6 +166,6 @@ const styles = StyleSheet.create({
   cuisineText: { fontWeight: "700" },
 
   reasonRow: { marginTop: 10 },
-  reason: { fontSize: 14, color: colors.ink, fontWeight: "600", lineHeight: 20 },
-  status: { fontSize: 12, color: colors.mute, marginTop: 6, fontWeight: "700", letterSpacing: 0.2 },
+  reason: { fontSize: 13, color: colors.ink, fontWeight: "600", lineHeight: 20 },
+  status: { fontSize: 13, color: colors.mute, marginTop: 6, fontWeight: "700", letterSpacing: 0.2 },
 });

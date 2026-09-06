@@ -91,15 +91,15 @@ const styles = StyleSheet.create({
   },
   headline: {
     ...type.display,
-    fontSize: 30, lineHeight: 35, color: colors.ink, letterSpacing: -0.8,
+    fontSize: 32, lineHeight: 35, color: colors.ink, letterSpacing: -0.8,
   },
-  body: { ...type.small, marginTop: 8, lineHeight: 20, fontSize: 14 },
+  body: { ...type.small, marginTop: 8, lineHeight: 20, fontSize: 13 },
   cta: {
     marginTop: spacing.md,
     backgroundColor: colors.red,
     borderRadius: 14, paddingVertical: 15, alignItems: "center",
   },
-  ctaText: { color: "#fff", fontSize: 15, fontWeight: "800", letterSpacing: -0.1 },
+  ctaText: { color: "#fff", fontSize: 16, fontWeight: "800", letterSpacing: -0.1 },
 
   // No hairline. The founder asked for no lines on Home; the gap does the
   // separating.
@@ -117,5 +117,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.redTint,
     borderWidth: 1, borderColor: colors.redTintBorder,
   },
-  fixText: { fontSize: 12, fontWeight: "800", color: colors.redText },
+  fixText: { fontSize: 13, fontWeight: "800", color: colors.redText },
 });

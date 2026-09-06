@@ -108,9 +108,28 @@ export const fonts = {
 // iOS versions.
 export const type = {
   display: { fontFamily: fonts.display, fontSize: 32, letterSpacing: -0.9, lineHeight: 37 },
+  stat: { fontFamily: fonts.display, fontSize: 24, letterSpacing: -0.6, lineHeight: 28 },
   title: { fontFamily: fonts.displaySemi, fontSize: 20, letterSpacing: -0.4, lineHeight: 25 },
+  cardTitle: { fontFamily: fonts.bold, fontSize: 18, letterSpacing: -0.3, lineHeight: 23 },
   subtitle: { fontFamily: fonts.semibold, fontSize: 16, letterSpacing: -0.2, lineHeight: 21 },
   body: { fontFamily: fonts.regular, fontSize: 16, lineHeight: 23 },
   small: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, color: colors.mute },
   micro: { fontFamily: fonts.medium, fontSize: 11, letterSpacing: 0.9, textTransform: "uppercase" as const, color: colors.mute },
+  badge: { fontFamily: fonts.bold, fontSize: 10, letterSpacing: 0.4 },
 };
+
+/**
+ * The only sizes any screen may set.
+ *
+ * The scale above defines seven roles, and the app had grown twenty-five
+ * distinct font sizes on top of them: 12 and 14 either side of small, 15 and
+ * 17 either side of body, 19, 21 and 22 around title. None of it was a
+ * decision, it was each screen guessing, and it is why the tabs did not look
+ * like one app. Anything not on this ladder now fails a test
+ * (lib/__tests__/type-scale.test.ts), so the next size is a deliberate step
+ * added here rather than a number typed into a stylesheet.
+ *
+ * The Wrapped story is exempt: it is full-bleed typography where the number
+ * IS the design, and its heroes run to 92.
+ */
+export const TYPE_SCALE = [10, 11, 13, 16, 18, 20, 24, 28, 32] as const;

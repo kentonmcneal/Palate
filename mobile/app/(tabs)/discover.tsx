@@ -968,7 +968,7 @@ const styles = StyleSheet.create({
   // that idea before the words are read.
   stretchHeadAccent: { width: 4, height: 16, borderRadius: 2, backgroundColor: categoryColors.pine },
   stretchHead: {
-    fontSize: 17, fontWeight: "800", color: colors.ink,
+    fontSize: 18, fontWeight: "800", color: colors.ink,
     letterSpacing: -0.3,
   },
   filterBar: {
@@ -991,7 +991,7 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     marginBottom: spacing.md,
   },
-  sheetDone: { fontSize: 15, fontWeight: "800", color: colors.red },
+  sheetDone: { fontSize: 16, fontWeight: "800", color: colors.red },
   sheetLabel: { ...type.micro, marginTop: spacing.md, marginBottom: 8 },
   sheetRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   sheetChip: {
@@ -1007,7 +1007,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.line, alignItems: "center",
   },
   sheetClear: { marginTop: spacing.md, paddingVertical: 10, alignItems: "center" },
-  sheetClearText: { fontSize: 14, fontWeight: "700", color: colors.mute },
+  sheetClearText: { fontSize: 13, fontWeight: "700", color: colors.mute },
   safe: { flex: 1, backgroundColor: colors.paper },
   body: { padding: spacing.lg, paddingBottom: 100 },
 
@@ -1024,7 +1024,7 @@ const styles = StyleSheet.create({
   searchGlyph: { fontSize: 18, lineHeight: 22, color: colors.mute },
   searchInput: {
     flex: 1, alignSelf: "stretch", paddingVertical: 0, paddingRight: 14,
-    fontSize: 15, color: colors.ink, textAlignVertical: "center",
+    fontSize: 16, color: colors.ink, textAlignVertical: "center",
   },
   mapPill: {
     paddingHorizontal: 16,
@@ -1063,7 +1063,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.line,
   },
 
-  groupHead: { fontSize: 17, fontWeight: "800", color: colors.ink, letterSpacing: -0.3 },
+  groupHead: { fontSize: 18, fontWeight: "800", color: colors.ink, letterSpacing: -0.3 },
   titleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
 
   sortRow: { gap: 8, paddingRight: spacing.lg },
@@ -1074,7 +1074,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.line,
   },
   sortChipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
-  sortChipText: { fontSize: 12, fontWeight: "700", color: colors.ink },
+  sortChipText: { fontSize: 13, fontWeight: "700", color: colors.ink },
   sortChipTextActive: { color: "#fff" },
   filterDivider: { width: 1, alignSelf: "stretch", marginVertical: 4, backgroundColor: colors.line },
 
@@ -1088,7 +1088,7 @@ const styles = StyleSheet.create({
     alignItems: "center", gap: 6,
     ...shadow.card,
   },
-  emptyGlyph: { fontSize: 22, lineHeight: 26 },
+  emptyGlyph: { fontSize: 24, lineHeight: 26 },
   emptyListText: { ...type.small, lineHeight: 20, textAlign: "center" },
   suggestRow: {
     flexDirection: "row", alignItems: "center",
@@ -1096,7 +1096,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.line,
   },
-  suggestName: { fontSize: 15, fontWeight: "600", color: colors.ink, letterSpacing: -0.2 },
-  suggestSub: { fontSize: 12, color: colors.mute, marginTop: 2 },
+  suggestName: { fontSize: 16, fontWeight: "600", color: colors.ink, letterSpacing: -0.2 },
+  suggestSub: { fontSize: 13, color: colors.mute, marginTop: 2 },
   suggestArrow: { fontSize: 20, color: colors.mute, marginLeft: 12 },
 });

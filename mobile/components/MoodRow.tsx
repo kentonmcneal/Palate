@@ -60,13 +60,27 @@ export function MoodRow({
                 void triggerHapticSelection();
                 onChange(c.key);
               }}
-              style={[styles.chip, active && { backgroundColor: hue, borderColor: hue }]}
+              style={[
+                styles.chip,
+                // Every chip wears its cuisine's colour, not just the chosen
+                // one. A row of grey pills above three white cards was most of
+                // what "bland" meant on Home: the chips are the widest band of
+                // anything on the screen, so they are where colour pays most.
+                c.key == null
+                  ? { backgroundColor: colors.faint, borderColor: colors.line }
+                  : { backgroundColor: `${hue}1A`, borderColor: `${hue}55` },
+                active && { backgroundColor: hue, borderColor: hue },
+              ]}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
               accessibilityLabel={`Show ${c.label}`}
             >
-              {c.key != null && !active && <View style={[styles.dot, { backgroundColor: hue }]} />}
-              <Text style={[styles.chipText, active && styles.chipTextActive]} maxFontSizeMultiplier={FONT_CAP.chrome}>{c.label}</Text>
+              <Text
+                style={[styles.chipText, c.key != null && { color: hue }, active && styles.chipTextActive]}
+                maxFontSizeMultiplier={FONT_CAP.chrome}
+              >
+                {c.label}
+              </Text>
             </Pressable>
           );
         })}
@@ -85,8 +99,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.faint,
     borderWidth: 1, borderColor: colors.line,
   },
-  dot: { width: 7, height: 7, borderRadius: 4 },
   chipText: { fontSize: 13, fontWeight: "700", color: colors.ink },
   chipTextActive: { color: "#fff" },
-  note: { fontSize: 12, color: colors.mute, marginBottom: 4, lineHeight: 17 },
+  note: { fontSize: 13, color: colors.mute, marginBottom: 4, lineHeight: 17 },
 });

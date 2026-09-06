@@ -1,4 +1,4 @@
-import { View, StyleSheet, Image } from "react-native";
+import { View, StyleSheet, Image, type StyleProp, type ViewStyle } from "react-native";
 import { Text } from "./Text";
 import { LinearGradient } from "expo-linear-gradient";
 import { categoryColors, radius } from "../theme";
@@ -173,6 +173,50 @@ export function PlaceArt({
         <Image source={{ uri: photoUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
       ) : (
         <Text style={styles.initials} allowFontScaling={false}>
+          {initialsOf(name)}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+/**
+ * The same gradient, square and small, for a row rather than a card top.
+ *
+ * A photo-less pick used to be a flat swatch of one colour, or on Discover
+ * nothing at all: the card was a paragraph of grey text. This gives every
+ * place a face at list scale, in the hue its cuisine already owns everywhere
+ * else, so a column of picks reads as a column of different places before a
+ * word of it is read.
+ */
+export function PlaceTile({
+  seed, name, cuisine, photoUrl, size = 56, style,
+}: {
+  seed: string;
+  name: string;
+  cuisine?: string | null;
+  photoUrl?: string | null;
+  size?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const base = baseColor(seed, cuisine);
+  const flip = hash(seed) % 2 === 0;
+  return (
+    <View
+      style={[{ width: size, height: size, borderRadius: Math.round(size / 4.5), overflow: "hidden" }, styles.wrap, style]}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <LinearGradient
+        colors={[base, shade(base, 0.45)]}
+        start={flip ? { x: 0, y: 0 } : { x: 1, y: 0 }}
+        end={flip ? { x: 1, y: 1 } : { x: 0, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {photoUrl ? (
+        <Image source={{ uri: photoUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      ) : (
+        <Text style={[styles.initials, { fontSize: Math.round(size / 2.8) }]} allowFontScaling={false}>
           {initialsOf(name)}
         </Text>
       )}

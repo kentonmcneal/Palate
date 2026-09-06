@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   modalEyebrow: { ...type.micro, color: colors.mute },
-  modalTitle: { fontSize: 22, fontWeight: "800", color: colors.ink, letterSpacing: -0.4, marginTop: 6 },
+  modalTitle: { fontSize: 24, fontWeight: "800", color: colors.ink, letterSpacing: -0.4, marginTop: 6 },
   modalBody: { ...type.small, marginTop: 6, lineHeight: 20 },
   tagGrid: {
     flexDirection: "row",
@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paper,
   },
   tagChipActive: { borderColor: colors.red, backgroundColor: colors.redTint },
-  tagEmoji: { fontSize: 14 },
+  tagEmoji: { fontSize: 13 },
   tagLabel: { fontSize: 13, fontWeight: "600", color: colors.ink },
   tagLabelActive: { color: colors.red },
   modalRow: { flexDirection: "row", gap: 10, marginTop: 18 },
@@ -512,10 +512,10 @@ const styles = StyleSheet.create({
     flex: 1, paddingVertical: 12, borderRadius: 14,
     backgroundColor: colors.faint, alignItems: "center",
   },
-  modalCancelText: { fontSize: 14, fontWeight: "700", color: colors.mute },
+  modalCancelText: { fontSize: 13, fontWeight: "700", color: colors.mute },
   modalSave: {
     flex: 1, paddingVertical: 12, borderRadius: 14,
     backgroundColor: colors.red, alignItems: "center",
   },
-  modalSaveText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  modalSaveText: { color: "#fff", fontSize: 13, fontWeight: "700" },
 });

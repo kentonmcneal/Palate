@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     borderRadius: 60,
   },
   headRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  clearLink: { fontSize: 12, fontWeight: "700", color: colors.red },
+  clearLink: { fontSize: 13, fontWeight: "700", color: colors.red },
   donutRow: {
     flexDirection: "row",
     alignItems: "center",

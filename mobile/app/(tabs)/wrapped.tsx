@@ -567,7 +567,7 @@ const styles = StyleSheet.create({
   weekRange: { ...type.small, marginTop: 2 },
   weekStats: { flexDirection: "row", gap: 16, marginTop: 14 },
   weekStat: { flex: 1 },
-  weekStatValue: { fontSize: 22, fontWeight: "800", color: colors.ink, letterSpacing: -0.6 },
+  weekStatValue: { fontSize: 24, fontWeight: "800", color: colors.ink, letterSpacing: -0.6 },
   weekStatLabel: { ...type.small, marginTop: 2 },
   safe: { flex: 1, backgroundColor: colors.paper },
   container: { padding: spacing.lg, paddingBottom: 100 },
@@ -587,7 +587,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.faint,
     borderWidth: 1, borderColor: colors.line,
   },
-  replayBtnText: { fontSize: 12, fontWeight: "700", color: colors.ink },
+  replayBtnText: { fontSize: 13, fontWeight: "700", color: colors.ink },
 
   identityCard: {
     padding: spacing.lg,
@@ -600,7 +600,7 @@ const styles = StyleSheet.create({
   identityEyebrow: { color: colors.mute, fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
   identityName: {
     color: colors.red,
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: "800",
     letterSpacing: -0.7,
     lineHeight: 38,
@@ -623,7 +623,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   statValue: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: "800",
     color: colors.ink,
     letterSpacing: -0.5,
@@ -646,17 +646,17 @@ const styles = StyleSheet.create({
   },
   // Was italic. No Inter italic face is loaded, so iOS answered that with the
   // system font and this one line on Wrapped sat in a different typeface.
-  insightText: { fontSize: 15, color: colors.ink, lineHeight: 21, fontWeight: "500" },
+  insightText: { fontSize: 16, color: colors.ink, lineHeight: 21, fontWeight: "500" },
   insightEyebrow: { ...type.micro, color: colors.mute },
   insightTitle: { fontSize: 18, fontWeight: "800", color: colors.ink, marginTop: 8, letterSpacing: -0.3, lineHeight: 24 },
-  insightBody: { fontSize: 14, color: colors.ink, marginTop: 6, lineHeight: 20 },
+  insightBody: { fontSize: 13, color: colors.ink, marginTop: 6, lineHeight: 20 },
   darkCard: { backgroundColor: colors.ink, borderColor: colors.ink },
   rankRow: {
     flexDirection: "row", justifyContent: "space-between",
     paddingVertical: 8,
     borderTopColor: colors.line, borderTopWidth: 1,
   },
-  rankPct: { flex: 1, fontSize: 14, fontWeight: "700", color: colors.ink },
+  rankPct: { flex: 1, fontSize: 13, fontWeight: "700", color: colors.ink },
   rankBody: { fontSize: 13, color: colors.mute, marginLeft: 12 },
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
   darkChip: {
@@ -674,7 +674,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.faint,
     borderWidth: 1, borderColor: colors.line,
   },
-  tagChipText: { color: colors.ink, fontSize: 12, fontWeight: "700" },
+  tagChipText: { color: colors.ink, fontSize: 13, fontWeight: "700" },
   // Dominant (first) tag gets the headline treatment per design bible.
   dominantTag: {
     color: colors.ink,
@@ -705,14 +705,14 @@ const styles = StyleSheet.create({
     borderTopColor: colors.line, borderTopWidth: 1,
   },
   dishHeart: { color: colors.red, fontSize: 18, fontWeight: "800" },
-  dishName: { fontSize: 14, fontWeight: "700", color: colors.ink },
-  dishWhere: { fontSize: 12, color: colors.mute, marginTop: 2 },
+  dishName: { fontSize: 13, fontWeight: "700", color: colors.ink },
+  dishWhere: { fontSize: 13, color: colors.mute, marginTop: 2 },
 
   deepLink: {
     paddingVertical: 12,
     alignItems: "center",
   },
-  deepLinkText: { color: colors.red, fontSize: 14, fontWeight: "700" },
+  deepLinkText: { color: colors.red, fontSize: 13, fontWeight: "700" },
 
   preWaitPill: {
     marginTop: spacing.md,
@@ -721,7 +721,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.faint,
     borderWidth: 1, borderColor: colors.line,
   },
-  preWaitText: { color: colors.ink, fontSize: 12, fontWeight: "700" },
+  preWaitText: { color: colors.ink, fontSize: 13, fontWeight: "700" },
 
   empty: {
     borderRadius: 18,

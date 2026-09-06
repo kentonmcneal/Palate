@@ -455,10 +455,10 @@ function prettyType(t: string) {
 }
 
 const styles = StyleSheet.create({
-  moodHead: {
-    ...type.title, fontSize: 21, lineHeight: 25,
-    color: colors.ink, letterSpacing: -0.4, marginBottom: 4,
-  },
+  // Straight off the scale. This carried its own fontSize 21 and lineHeight,
+  // one point adrift of every other screen's title: the kind of drift nobody
+  // can name and everybody can see.
+  moodHead: { ...type.title, color: colors.ink, marginBottom: 4 },
   palateRead: { ...type.small, marginBottom: 10, lineHeight: 18 },
   moodAccent: {
     width: 28, height: 3, borderRadius: 2,
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink,
     alignItems: "center", justifyContent: "center",
   },
-  addBtnText: { color: "#fff", fontSize: 22, fontWeight: "800", marginTop: -2 },
+  addBtnText: { color: "#fff", fontSize: 24, fontWeight: "800", marginTop: -2 },
   streakChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -495,8 +495,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paper,
     borderColor: colors.line,
   },
-  streakEmoji: { fontSize: 14 },
-  streakText: { color: colors.ink, fontWeight: "800", fontSize: 14 },
+  streakEmoji: { fontSize: 13 },
+  streakText: { color: colors.ink, fontWeight: "800", fontSize: 13 },
   streakTextAtRisk: { color: colors.mute },
   weekCard: {
     marginBottom: spacing.xl,
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
   weekCountdown: {
     marginTop: 12,
     color: colors.mute,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "600",
     letterSpacing: 0.5,
   },
@@ -546,5 +546,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
     backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
   },
-  visitMapsBtnText: { fontSize: 12, fontWeight: "700", color: colors.ink },
+  visitMapsBtnText: { fontSize: 13, fontWeight: "700", color: colors.ink },
 });

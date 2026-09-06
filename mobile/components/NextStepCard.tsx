@@ -102,10 +102,10 @@ const styles = StyleSheet.create({
   },
   eyebrow: { ...type.micro, color: colors.redText },
   title: {
-    fontSize: 19, fontWeight: "800", color: colors.ink,
+    fontSize: 20, fontWeight: "800", color: colors.ink,
     marginTop: 6, letterSpacing: -0.3, lineHeight: 24,
   },
   body: { ...type.small, marginTop: 6, lineHeight: 20 },
   cta: { marginTop: 12 },
-  ctaText: { fontSize: 15, fontWeight: "800", color: colors.redText },
+  ctaText: { fontSize: 16, fontWeight: "800", color: colors.redText },
 });

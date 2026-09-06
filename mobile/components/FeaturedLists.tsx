@@ -114,12 +114,12 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.18)",
     alignItems: "center", justifyContent: "center",
   },
-  glyphText: { color: "#fff", fontWeight: "800", fontSize: 14, letterSpacing: -0.3 },
+  glyphText: { color: "#fff", fontWeight: "800", fontSize: 13, letterSpacing: -0.3 },
 
   cardBottom: { gap: 4 },
   title: { color: "#fff", fontSize: 18, fontWeight: "800", letterSpacing: -0.3, lineHeight: 22 },
-  sub: { color: "rgba(255,255,255,0.72)", fontSize: 12, fontWeight: "600" },
+  sub: { color: "rgba(255,255,255,0.72)", fontSize: 13, fontWeight: "600" },
   progressRow: { marginTop: 8 },
-  progress: { color: "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: "700" },
+  progress: { color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: "700" },
   progressCount: { color: "#fff", fontWeight: "800", fontSize: 13 },
 });

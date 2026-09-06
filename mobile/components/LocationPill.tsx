@@ -119,5 +119,5 @@ const styles = StyleSheet.create({
   dotOverride: { backgroundColor: colors.red },
   text: { fontSize: 13, fontWeight: "700", color: colors.ink, maxWidth: 180 },
   textActive: { color: "#fff" },
-  chev: { fontSize: 12, color: colors.mute, fontWeight: "800" },
+  chev: { fontSize: 13, color: colors.mute, fontWeight: "800" },
 });
