@@ -309,6 +309,11 @@ export default function Home() {
         <View style={styles.homeRule} />
 
         <Text style={styles.moodHead}>What are you in the mood for?</Text>
+        {/* Directly under the question, above the chips and the picks, on the
+            founder's call. It reads better than I expected: the heading asks
+            what you fancy, and these are the answers a city is known for —
+            Top 10 Pizza, Best Brunch — before the personalised three. */}
+        <FeaturedLists here={here} city={null} />
         {!!palateLine && <Text style={styles.palateRead}>{palateLine}</Text>}
         <MoodRow chips={moodChips} value={mood} onChange={setMood} />
         <RecommendationsCard
@@ -317,15 +322,6 @@ export default function Home() {
           excludePlaceIds={[]}
           onCuisinesAvailable={setNearbyPool}
         />
-
-        {/* Curated city lists, under the mood picks rather than buried on
-            Discover. The two belong together: the mood row answers "what do I
-            want", and these answer "what is this city good at" — which is the
-            same question asked from the other end, and the one a visitor asks
-            first. Placed AFTER the picks, not between the chips and the
-            picks, because splitting a control from its own results would
-            make the mood row look broken. */}
-        <FeaturedLists here={here} city={null} />
 
         {/* All time, under the picks: visits, cuisines as bars, who you are,
             and the three palates closest to yours. */}

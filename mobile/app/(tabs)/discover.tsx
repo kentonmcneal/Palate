@@ -30,6 +30,7 @@ import { computeTasteVector, type TasteVector } from "../../lib/taste-vector";
 import { distanceKm, formatDistance } from "../../lib/match-score";
 import { trackImpressions } from "../../lib/recommendation-events";
 import { filterRecommendable } from "../../lib/recommendation/eligibility";
+import { isStretch } from "../../lib/recommendation";
 import { dedupeVenues } from "../../lib/recommendation/dedupe";
 import { loadPlacePhotos } from "../../lib/place-photos";
 import { RestaurantCompatibilityCard } from "../../components/RestaurantCompatibilityCard";
@@ -43,7 +44,7 @@ import {
 // ============================================================================
 // Discover — three sub-tabs:
 //   • Most Compatible — ranked high → low by palate fit
-//   • Trending        — Beli-style grouped category lists ("Top 10 Burgers"…)
+//   • Stretch         — places outside your pattern that still connect to it
 //   • Nearby          — sorted by distance
 // Search bar at top. Map lives behind the "Map" pill.
 // ============================================================================
@@ -53,41 +54,16 @@ const TOP_PER_TAB = 12;
 const TOP_PER_CATEGORY = 10;
 const MIN_PER_CATEGORY = 3;
 
-type SubTab = "most_compatible" | "trending" | "nearby";
+type SubTab = "most_compatible" | "stretch" | "nearby";
 // "compat_low" is gone. A control that asks for the restaurants you will like
 // LEAST is not a sort anybody wants; it read as a debug affordance that escaped
 // into the product.
-type SortKey = "compat_high" | "distance" | "stretch";
-type FormatFilter = "all" | "casual" | "boutique";
 
-const FILTER_LABEL: Record<FormatFilter, string> = {
-  all: "Anything",
-  casual: "Casual",
-  // Was "Boutique", which is a menu word rather than a filter word — nobody
-  // browsing for dinner thinks "I want boutique tonight".
-  boutique: "Upscale",
-};
 
 // Casual = fast/quick-service or cheap; Boutique = upscale/fine-dining or
 // pricey. Applied as a visibility filter over the ranked list — it does not
 // change the underlying compatibility scores.
-function matchesFormatFilter(r: RankedRestaurant, filter: FormatFilter): boolean {
-  if (filter === "all") return true;
-  const fmt = (r as any).format_class as string | null | undefined;
-  const price = (r as any).price_level as number | null | undefined;
-  if (filter === "casual") {
-    return fmt === "quick_service" || fmt === "fast_casual" || (price != null && price <= 2);
-  }
-  return fmt === "fine_dining" || fmt === "casual_dining" || (price != null && price >= 3);
-}
 
-const SORT_LABEL: Record<SortKey, string> = {
-  compat_high: "Best match",
-  distance: "Closest",
-  // Was "Stretch", which never said what it stretched. It means deliberately
-  // outside your usual pattern, so it should say that.
-  stretch: "Something different",
-};
 
 export default function DiscoverTab() {
   const router = useRouter();
@@ -104,8 +80,6 @@ export default function DiscoverTab() {
     router.setParams({ list: undefined } as never);
   }, [deepLinkList, router]);
   const [tab, setTab] = useState<SubTab>("most_compatible");
-  const [sort, setSort] = useState<SortKey>("compat_high");
-  const [filtersOpen, setFiltersOpen] = useState(false);
   // Same control as Home. Asking "what are you in the mood for" belongs on the
   // browse surface too — Discover could sort by fit and distance but had no way
   // to say "Thai, tonight".
@@ -118,10 +92,8 @@ export default function DiscoverTab() {
       .catch(() => {});
     return () => { alive = false; };
   }, []);
-  const [formatFilter, setFormatFilter] = useState<FormatFilter>("all");
   // When true, the taste vector is rebuilt from saved (wishlist) restaurants
   // only — recommendations reflect what you've saved, not where you've been.
-  const [savesOnly, setSavesOnly] = useState(false);
   const [browsingCity] = useBrowsingCity();
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<RankedRestaurant[] | null>(null);
@@ -241,11 +213,11 @@ export default function DiscoverTab() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const vec = await computeTasteVector({ savesOnly }).catch(() => null);
+      const vec = await computeTasteVector().catch(() => null);
       if (!cancelled) setVector(vec);
     })();
     return () => { cancelled = true; };
-  }, [savesOnly]);
+  }, []);
 
   // ---- Search (debounced via submit, not keystroke — keeps it fast) ----
   async function runSearch() {
@@ -335,12 +307,11 @@ export default function DiscoverTab() {
       .map((r) => buildRankedRestaurant(graph, r, { here, now: new Date(), mode: "browsing" }));
   }, [allNearby, graph, here, hiddenIds, personal]);
 
-  // Apply the Casual/Boutique visibility filter once; all three tabs read
-  // from this filtered list so the toggle affects every view consistently.
-  const visibleRanked = useMemo(
-    () => allRanked.filter((r) => matchesFormatFilter(r, formatFilter)),
-    [allRanked, formatFilter],
-  );
+  // Was filtered by a Casual/Boutique toggle. The filters are gone: three
+  // tabs already say what each list is, and a filter somebody has forgotten
+  // about is how a browse surface quietly stops showing things and the user
+  // concludes the app has nothing.
+  const visibleRanked = allRanked;
 
   // Nearby tab — strict distance sort.
   const nearbyList = useMemo(() => {
@@ -349,12 +320,26 @@ export default function DiscoverTab() {
       .slice(0, TOP_PER_TAB);
   }, [visibleRanked]);
 
-  // Trending: grouped into Beli-style category shelves ("Top 10 Burgers"…),
-  // plus a fallback shelf when category coverage is sparse.
-  const trending = useMemo(
-    () => buildTrendingGroups(visibleRanked, vector),
-    [visibleRanked, vector],
-  );
+  // Stretch — genuinely outside the pattern, and genuinely connected to it.
+  //
+  // This replaced Trending, which was category shelves ("Top 10 Burgers")
+  // built from the same ranked list as every other tab: a relabelling of what
+  // Most Compatible already showed. Stretch sources differently. isStretch
+  // (lib/recommendation/candidates.ts) is the SAME predicate the candidate
+  // pools use, exported rather than reimplemented, because two definitions of
+  // "stretch" that drift apart is how a tab ends up showing something else
+  // under a new label.
+  //
+  // Ordered by compatibility WITHIN the stretch set, so it is the best of the
+  // unfamiliar rather than the most unfamiliar — the point is somewhere you
+  // would enjoy and would not have chosen, not somewhere random.
+  const stretchList = useMemo(() => {
+    if (!graph) return [];
+    return visibleRanked
+      .filter((r) => isStretch(graph, r as never))
+      .sort((a, b) => b.score.compatibilityScore - a.score.compatibilityScore)
+      .slice(0, TOP_PER_TAB);
+  }, [visibleRanked, graph]);
 
   // Most Compatible — sort by canonical compatibilityScore (per spec, NOT
   // finalScore), with a small time-of-day boost so brunch spots rise on
@@ -367,24 +352,12 @@ export default function DiscoverTab() {
       r.score.compatibilityScore + timeOfDayBoost(r.occasion_tags ?? null, occs);
 
     const arr = visibleRanked.map((r) => ({ item: r, sortKey: keyFor(r) }));
-    if (sort === "compat_high") {
-      arr.sort((a, b) => b.sortKey - a.sortKey);
-    } else if (sort === "distance") {
-      arr.sort((a, b) => (a.item.distanceKm ?? 999) - (b.item.distanceKm ?? 999));
-    } else if (sort === "stretch") {
-      // Stretch slot — prefer high-novelty picks adjacent to user pattern.
-      arr.sort((a, b) => {
-        const aStretch = a.item.score.recommendationType === "stretch" ? 1 : 0;
-        const bStretch = b.item.score.recommendationType === "stretch" ? 1 : 0;
-        if (aStretch !== bStretch) return bStretch - aStretch;
-        return b.sortKey - a.sortKey;
-      });
-    }
+    arr.sort((a, b) => b.sortKey - a.sortKey);
     // Sorted but NOT sliced. Slicing here meant a mood filtered the top twelve
     // rather than the whole ranked pool, so a cuisine that existed nearby but
     // sat at rank 20 reported "nothing matched" and showed the unfiltered list.
     return arr.map((x) => x.item);
-  }, [visibleRanked, sort]);
+  }, [visibleRanked]);
 
   const mostCompatibleList = useMemo(
     () => mostCompatibleSorted.slice(0, TOP_PER_TAB),
@@ -595,10 +568,10 @@ export default function DiscoverTab() {
             {/* (Wishlist rail + "Based on your saves" moved to Home page.
                 Discover stays a pure browse/search surface.) */}
 
-            {/* Sub-tabs — order: Most Compatible → Trending → Nearby */}
+            {/* Sub-tabs — order: Most Compatible → Stretch → Nearby */}
             <View style={styles.tabs}>
               <SubTabBtn label="Most Compatible" active={tab === "most_compatible"} onPress={() => setTab("most_compatible")} />
-              <SubTabBtn label="Trending"        active={tab === "trending"}        onPress={() => setTab("trending")} />
+              <SubTabBtn label="Stretch"         active={tab === "stretch"}         onPress={() => setTab("stretch")} />
               <SubTabBtn label="Nearby"          active={tab === "nearby"}          onPress={() => setTab("nearby")} />
             </View>
 
@@ -610,13 +583,6 @@ export default function DiscoverTab() {
                 The sub-tabs are the one contextual row worth keeping visible;
                 everything else is behind a single Filters button that says how
                 many are on. */}
-            <FilterBar
-              filter={formatFilter}
-              sort={sort}
-              savesOnly={savesOnly}
-              onOpen={() => setFiltersOpen(true)}
-            />
-
             <Spacer size={16} />
 
             {error && (
@@ -661,7 +627,23 @@ export default function DiscoverTab() {
                     <StretchPick />
                   </>
                 )}
-                {tab === "trending" && <TrendingGroups groups={trending.groups} fallbackNote={trending.fallbackNote} />}
+                {tab === "stretch" && (
+                  stretchList.length > 0 ? (
+                    <>
+                      <Text style={styles.stretchNote}>
+                        Outside what you usually pick, but close enough to something you
+                        already like that it should land.
+                      </Text>
+                      <List items={stretchList} onHide={hideId} surface="discover_stretch"
+                        emptyMsg="Nothing here yet." />
+                    </>
+                  ) : (
+                    <Text style={styles.emptyListText}>
+                      Log a few more visits. Stretch needs to know your pattern before it can
+                      step outside it.
+                    </Text>
+                  )
+                )}
                 {tab === "nearby"   && <List items={nearbyList} onHide={hideId} surface="discover_shelf" emptyMsg="Nothing nearby." />}
               </>
             )}
@@ -669,16 +651,6 @@ export default function DiscoverTab() {
         )}
       </ScrollView>
 
-      <FiltersSheet
-        visible={filtersOpen}
-        onClose={() => setFiltersOpen(false)}
-        filter={formatFilter}
-        onFilter={setFormatFilter}
-        sort={sort}
-        onSort={setSort}
-        savesOnly={savesOnly}
-        onSavesOnly={setSavesOnly}
-      />
     </SafeAreaView>
   );
 }
@@ -689,6 +661,14 @@ export default function DiscoverTab() {
 
 // Returns the occasion_tag values most relevant to the current time. Tags
 // match the controlled vocabulary in classifier.ts.
+function SubTabBtn({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={[styles.tabBtn, active && styles.tabBtnActive]}>
+      <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function currentOccasions(now: Date): string[] {
   const h = now.getHours();
   const day = now.getDay(); // 0=Sun, 6=Sat
@@ -853,123 +833,6 @@ async function loadVisitedPlaceIds(userId: string): Promise<Set<string>> {
     return new Set<string>();
   }
 }
-
-function SubTabBtn({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={[styles.tabBtn, active && styles.tabBtnActive]}>
-      <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-// One control instead of two rows of chips. It states how many filters are on,
-// because a filter you have forgotten about is how a browse surface quietly
-// stops showing you things and you conclude the app has nothing.
-function FilterBar({
-  filter, sort, savesOnly, onOpen,
-}: {
-  filter: FormatFilter;
-  sort: SortKey;
-  savesOnly: boolean;
-  onOpen: () => void;
-}) {
-  const active =
-    (filter !== "all" ? 1 : 0) + (savesOnly ? 1 : 0) + (sort !== "compat_high" ? 1 : 0);
-  return (
-    <View style={styles.filterBar}>
-      <Text style={styles.filterSummary} numberOfLines={1}>
-        {SORT_LABEL[sort]}
-        {filter !== "all" ? ` · ${FILTER_LABEL[filter]}` : ""}
-        {savesOnly ? " · Saved" : ""}
-      </Text>
-      <Pressable onPress={onOpen} style={styles.filterBtn} accessibilityRole="button">
-        <Text style={styles.filterBtnText}>
-          {active > 0 ? `Filters · ${active}` : "Filters"}
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
-
-function FiltersSheet({
-  visible, onClose, filter, onFilter, sort, onSort, savesOnly, onSavesOnly,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  filter: FormatFilter;
-  onFilter: (f: FormatFilter) => void;
-  sort: SortKey;
-  onSort: (s: SortKey) => void;
-  savesOnly: boolean;
-  onSavesOnly: (v: boolean) => void;
-}) {
-  const formats: FormatFilter[] = ["all", "casual", "boutique"];
-  const sorts: SortKey[] = ["compat_high", "distance", "stretch"];
-  const anyOn = filter !== "all" || savesOnly || sort !== "compat_high";
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.sheetScrim} onPress={onClose} accessibilityLabel="Close filters" />
-      <View style={styles.sheet}>
-        <View style={styles.sheetHead}>
-          <Text style={type.title}>Filters</Text>
-          <Pressable onPress={onClose} hitSlop={10}>
-            <Text style={styles.sheetDone}>Done</Text>
-          </Pressable>
-        </View>
-
-        <Text style={styles.sheetLabel}>SORT BY</Text>
-        <View style={styles.sheetRow}>
-          {sorts.map((k) => (
-            <Pressable
-              key={k}
-              onPress={() => onSort(k)}
-              style={[styles.sheetChip, k === sort && styles.sheetChipActive]}
-            >
-              <Text style={[styles.sheetChipText, k === sort && styles.sheetChipTextActive]}>
-                {SORT_LABEL[k]}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Text style={styles.sheetLabel}>KIND OF PLACE</Text>
-        <View style={styles.sheetRow}>
-          {formats.map((k) => (
-            <Pressable
-              key={k}
-              onPress={() => onFilter(k)}
-              style={[styles.sheetChip, k === filter && styles.sheetChipActive]}
-            >
-              <Text style={[styles.sheetChipText, k === filter && styles.sheetChipTextActive]}>
-                {FILTER_LABEL[k]}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Pressable
-          onPress={() => onSavesOnly(!savesOnly)}
-          style={[styles.sheetToggle, savesOnly && styles.sheetChipActive]}
-        >
-          <Text style={[styles.sheetChipText, savesOnly && styles.sheetChipTextActive]}>
-            Only places I've saved
-          </Text>
-        </Pressable>
-
-        {anyOn && (
-          <Pressable
-            onPress={() => { onFilter("all"); onSort("compat_high"); onSavesOnly(false); }}
-            style={styles.sheetClear}
-          >
-            <Text style={styles.sheetClearText}>Clear filters</Text>
-          </Pressable>
-        )}
-      </View>
-    </Modal>
-  );
-}
-
 function List({ items, surface, emptyMsg, onHide }: {
   items: RankedRestaurant[]; surface: any; emptyMsg: string; onHide?: (id: string) => void;
 }) {
@@ -988,38 +851,6 @@ function List({ items, surface, emptyMsg, onHide }: {
     </View>
   );
 }
-
-function TrendingGroups({ groups, fallbackNote }: { groups: TrendingGroup[]; fallbackNote?: string | null }) {
-  if (groups.length === 0) {
-    return (
-      <View style={styles.emptyList}>
-        <Text style={styles.emptyListText}>Trending near you is still warming up.</Text>
-      </View>
-    );
-  }
-  return (
-    <View>
-      {fallbackNote && (
-        <Text style={[type.small, { color: colors.mute, marginBottom: 10, lineHeight: 18 }]}>
-          {fallbackNote}
-        </Text>
-      )}
-      {groups.map((g) => (
-        <View key={g.title} style={{ marginBottom: spacing.xl }}>
-          <Text style={styles.groupHead}>{g.title}</Text>
-          <Spacer size={10} />
-          {g.items.map((r) => (
-            <RestaurantCompatibilityCard key={r.google_place_id} restaurant={r} surface="discover_shelf" />
-          ))}
-        </View>
-      ))}
-    </View>
-  );
-}
-
-// ----------------------------------------------------------------------------
-// Helpers
-// ----------------------------------------------------------------------------
 function toInput(p: Restaurant): RestaurantInput {
   return {
     dish_family: (p as any).dish_family ?? null,
@@ -1041,172 +872,11 @@ function toInput(p: Restaurant): RestaurantInput {
   };
 }
 
-// ----------------------------------------------------------------------------
-// Trending categorization — Beli-style grouped lists.
-// ----------------------------------------------------------------------------
-
-type TrendingGroup = { title: string; items: RankedRestaurant[] };
-
-type CategoryDef = {
-  title: string;                              // "Top 10 Burgers"
-  match: (r: RestaurantInput) => boolean;
-  // Which taste-vector keys imply the user has affinity for this category.
-  // Used by hideIrrelevantCategories — once the user has a few visits/saves,
-  // shelves with zero weight in any of these keys get suppressed. Optional;
-  // a category with no `affinity` is always shown.
-  affinity?: {
-    regions?: string[];
-    subregions?: string[];
-    formats?: string[];
-    occasions?: string[];
-  };
-};
-
-// Order matters — first matching category wins (a place is shelved into
-// exactly one bucket so the same name doesn't appear under multiple headers).
-const CATEGORIES: CategoryDef[] = [
-  { title: "Top 10 Burgers",      match: (r) => hasAny(r, ["burger", "burgers"]),
-    affinity: { subregions: ["burger"] } },
-  { title: "Top 10 Pizza",        match: (r) => hasAny(r, ["pizza", "pizzeria", "italian_pizzeria", "italian_neapolitan", "pizza_nyc", "pizza_chicago"]),
-    affinity: { subregions: ["italian_pizzeria", "italian_neapolitan", "pizza_nyc", "pizza_chicago"], regions: ["italian"] } },
-  { title: "Top 10 Tacos",        match: (r) => hasAny(r, ["taco", "tacos", "taqueria", "mexican_taqueria", "mexican_regional", "mexican"]),
-    affinity: { subregions: ["mexican_taqueria", "mexican_regional", "mexican"], regions: ["latin_american"] } },
-  { title: "Top 10 Sushi",        match: (r) => hasAny(r, ["sushi", "japanese_sushi"]),
-    affinity: { subregions: ["japanese_sushi"] } },
-  { title: "Top 10 Ramen",        match: (r) => hasAny(r, ["ramen", "japanese_ramen"]),
-    affinity: { subregions: ["japanese_ramen"] } },
-  { title: "Top 10 BBQ",          match: (r) => hasAny(r, ["bbq", "barbecue", "memphis_bbq", "texas_bbq", "kc_bbq"]),
-    affinity: { subregions: ["memphis_bbq", "texas_bbq", "kc_bbq", "bbq_general"], regions: ["southern_us"] } },
-  { title: "Top 10 Steakhouses",  match: (r) => hasAny(r, ["steak", "steakhouse"]),
-    affinity: { subregions: ["steakhouse"] } },
-  { title: "Top Cafés",           match: (r) => r.format_class === "café" || hasAny(r, ["café", "cafe", "coffee"]),
-    affinity: { formats: ["café"], regions: ["café_culture"] } },
-  { title: "Top Wine Bars",       match: (r) => r.format_class === "wine_bar" || hasAny(r, ["wine_bar", "wine bar"]),
-    affinity: { formats: ["wine_bar"], subregions: ["wine_bar_food"] } },
-  { title: "Top 10 Thai",         match: (r) => hasAny(r, ["thai"]),
-    affinity: { subregions: ["thai"] } },
-  { title: "Top 10 Korean",       match: (r) => hasAny(r, ["korean", "korean_bbq"]),
-    affinity: { subregions: ["korean", "korean_bbq"] } },
-  { title: "Top 10 Indian",       match: (r) => hasAny(r, ["indian", "indian_north", "indian_south"]),
-    affinity: { subregions: ["indian_north", "indian_south", "pakistani"], regions: ["south_asian"] } },
-  { title: "Top 10 Mediterranean", match: (r) => hasAny(r, ["mediterranean", "greek", "turkish", "lebanese", "israeli", "moroccan"]),
-    affinity: { subregions: ["greek", "turkish", "lebanese", "israeli", "moroccan", "mediterranean_general"], regions: ["mediterranean", "middle_eastern"] } },
-  { title: "Top 10 Brunch",       match: (r) => hasOccasion(r, "brunch") || hasAny(r, ["brunch_modern", "breakfast_diner"]),
-    affinity: { subregions: ["brunch_modern", "breakfast_diner"], occasions: ["brunch", "weekend_anchor"] } },
-];
-
-// Once a user has logged enough activity, suppress trending shelves they
-// have zero recorded affinity for. Below the threshold we show everything
-// (cold-start users get the full smörgåsbord). The "objective consensus
-// ordering inside each shelf is unchanged — this only trims WHICH shelves
-// the user sees.
-const TRENDING_AFFINITY_MIN_ACTIVITY = 5;
-
-function hasCategoryAffinity(cat: CategoryDef, v: TasteVector | null): boolean {
-  if (!cat.affinity) return true;
-  if (!v) return true;
-  if ((v.visitCount + v.wishlistCount) < TRENDING_AFFINITY_MIN_ACTIVITY) return true;
-  const a = cat.affinity;
-  const sum = (keys: string[] | undefined, weights: Record<string, number>) =>
-    (keys ?? []).reduce((s, k) => s + (weights[k] ?? 0), 0);
-  const total =
-    sum(a.regions,    v.cuisineRegion)
-    + sum(a.subregions, v.cuisineSubregion)
-    + sum(a.formats,    v.formatClass)
-    + sum(a.occasions,  v.occasion);
-  return total > 0;
-}
-
-function hasAny(r: RestaurantInput, needles: string[]): boolean {
-  // Include the restaurant name as a fallback — Google Places cuisine tags
-  // are missing on many spots, so "Joe's Burgers" should still hit Burgers.
-  const fields = [
-    r.cuisine_type, r.cuisine_subregion, r.cuisine_region,
-    r.format_class, (r as any).name,
-  ].filter(Boolean) as string[];
-  const hay = fields.join(" ").toLowerCase();
-  return needles.some((n) => hay.includes(n.toLowerCase()));
-}
-
-function hasOccasion(r: RestaurantInput, tag: string): boolean {
-  return Array.isArray(r.occasion_tags) && r.occasion_tags.includes(tag);
-}
-
-type TrendingResult = { groups: TrendingGroup[]; fallbackNote: string | null };
-
-function buildTrendingGroups(
-  allRanked: RankedRestaurant[],
-  vector: TasteVector | null,
-): TrendingResult {
-  // Try real category trending first (Beli-style shelves). Only filter on
-  // user_rating_count when we actually have ratings — Google sometimes returns
-  // places with null counts.
-  const popular = allRanked.filter((r) => (r.user_rating_count ?? 0) >= 25);
-
-  const buckets = new Map<string, RankedRestaurant[]>();
-  for (const r of popular) {
-    const cat = CATEGORIES.find((c) => c.match(r));
-    if (!cat) continue;
-    const arr = buckets.get(cat.title) ?? [];
-    arr.push(r);
-    buckets.set(cat.title, arr);
-  }
-
-  const groups: TrendingGroup[] = [];
-  for (const cat of CATEGORIES) {
-    const items = buckets.get(cat.title) ?? [];
-    if (items.length < 2) continue;
-    // Past cold-start, drop shelves the user has zero recorded affinity for.
-    // The shelf's INTERNAL ranking is unchanged — this only filters whether
-    // the shelf appears at all.
-    if (!hasCategoryAffinity(cat, vector)) continue;
-    items.sort((a, b) => {
-      const aRev = a.user_rating_count ?? 0;
-      const bRev = b.user_rating_count ?? 0;
-      const popDiff = Math.log10(1 + bRev) - Math.log10(1 + aRev);
-      const compatDiff = (b.score.compatibilityScore - a.score.compatibilityScore) / 100;
-      return popDiff * 0.6 + compatDiff * 0.4;
-    });
-    groups.push({ title: cat.title, items: items.slice(0, TOP_PER_CATEGORY) });
-  }
-
-  if (groups.length > 0) return { groups, fallbackNote: null };
-
-  // Fallback: not enough category coverage. Show a single "Trending Near You"
-  // shelf ranked by review-weighted quality + open-now + proximity, so the
-  // tab is never empty when there are nearby places.
-  const ranked = rankFallbackTrending(allRanked);
-  if (ranked.length === 0) return { groups: [], fallbackNote: null };
-
-  return {
-    groups: [{ title: "Popular near you", items: ranked.slice(0, TOP_PER_TAB) }],
-    fallbackNote: "Strong picks nearby. More categories appear as people log visits around you.",
-  };
-}
-
-function rankFallbackTrending(items: RankedRestaurant[]): RankedRestaurant[] {
-  // Quality-first ranking when category trending is empty:
-  //   • rating
-  //   • review count (log-scaled — popular places trump tiny ones)
-  //   • open-now (small bonus — only when known)
-  //   • distance (small penalty for being far)
-  return [...items]
-    .filter((r) => (r.rating ?? 0) > 0 || (r.user_rating_count ?? 0) > 0 || r.distanceKm != null)
-    .sort((a, b) => fallbackScore(b) - fallbackScore(a));
-}
-
-function fallbackScore(r: RankedRestaurant): number {
-  const rating = r.rating ?? 0;
-  const reviews = Math.log10(1 + (r.user_rating_count ?? 0));
-  const dist = r.distanceKm ?? 5;
-  const open = (r as any).isOpenNow === true ? 0.3 : 0;
-  // Rating is the dominant axis. Reviews ground it. Distance only barely
-  // de-prioritizes — the user is ALREADY scoped to nearby radius.
-  return rating * 1.0 + reviews * 0.5 + open - Math.min(dist, 3) * 0.05;
-}
-
 const styles = StyleSheet.create({
   moodNote: { ...type.small, marginTop: 10, lineHeight: 17 },
+  stretchNote: {
+    fontSize: 13, color: colors.mute, lineHeight: 19, marginBottom: 12,
+  },
   stretchHead: {
     fontSize: 17, fontWeight: "800", color: colors.ink,
     letterSpacing: -0.3, marginBottom: 10,

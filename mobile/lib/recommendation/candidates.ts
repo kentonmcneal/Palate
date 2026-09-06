@@ -45,6 +45,28 @@ export type GenerateOptions = {
   preFetched?: RestaurantInput[];
 };
 
+/**
+ * A stretch is a deliberate step outside the pattern, not a random one.
+ *
+ * The rule, and the "not random" part is the whole point: the cuisine must NOT
+ * already be in your subregion history — otherwise it is just another
+ * recommendation — but it must connect to you SOMEHOW, through a region you
+ * already explore, a flavour you already like, or a format you already choose.
+ * Somewhere you would plausibly enjoy and would not have picked yourself.
+ *
+ * Exported because Discover's Stretch tab and the candidate pools must mean
+ * the same thing by construction. Two definitions of "stretch" that drift
+ * apart is how a tab ends up showing something else under a new label.
+ */
+export function isStretch(graph: TasteGraph, r: RestaurantInput): boolean {
+  const inSubregion = r.cuisine_subregion && shareOf(graph.cuisinesSubregion, r.cuisine_subregion) > 0;
+  if (inSubregion) return false;
+  const adjacentRegion = r.cuisine_region && shareOf(graph.cuisines, r.cuisine_region) > 0;
+  const matchingFlavor = r.flavor_tags?.some((f) => (graph.flavors[f] ?? 0) > 0);
+  const matchingFormat = r.format_class && shareOf(graph.formats, r.format_class) >= 0.1;
+  return Boolean(adjacentRegion || matchingFlavor || matchingFormat);
+}
+
 export async function generateCandidates(opts: GenerateOptions): Promise<Candidate[]> {
   const radius = opts.radiusM ?? 2500;
   const nearby = opts.preFetched
@@ -75,14 +97,7 @@ export async function generateCandidates(opts: GenerateOptions): Promise<Candida
 
   // Pool C — stretch_adjacent: cuisine NOT in pattern, but matches user's
   // explored region or shares a flavor/format the user already likes.
-  const stretchSet = poolBy(eligible, (r) => {
-    const inSubregion = r.cuisine_subregion && shareOf(opts.graph.cuisinesSubregion, r.cuisine_subregion) > 0;
-    if (inSubregion) return false; // not stretch — already in pattern
-    const adjacentRegion = r.cuisine_region && shareOf(opts.graph.cuisines, r.cuisine_region) > 0;
-    const matchingFlavor = r.flavor_tags?.some((f) => (opts.graph.flavors[f] ?? 0) > 0);
-    const matchingFormat = r.format_class && shareOf(opts.graph.formats, r.format_class) >= 0.1;
-    return Boolean(adjacentRegion || matchingFlavor || matchingFormat);
-  });
+  const stretchSet = poolBy(eligible, (r) => isStretch(opts.graph, r));
 
   // Pool D — social_trend: friend-visited OR high local popularity.
   const socialSet = poolBy(eligible, (r) => {
