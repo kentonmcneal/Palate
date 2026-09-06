@@ -7,6 +7,7 @@ import { useRouter, Stack } from "expo-router";
 import { colors, spacing, type, card, shadow } from "../theme";
 import { Avatar } from "../components/Avatar";
 import { Spacer } from "../components/Button";
+import { useSuggestions } from "../lib/use-suggestions";
 import {
   BOARD_CATEGORIES, loadBoard, loadRegulars,
   type BoardCategory, type BoardScope, type BoardWindow, type BoardRow, type RegularRow,
@@ -39,8 +40,12 @@ export default function BoardScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const [q, setQ] = useState("");
-  const [regulars, setRegulars] = useState<RegularRow[] | null>(null);
-  const [searching, setSearching] = useState(false);
+  // restaurant_regulars is a plain aggregate over visits — free — so this can
+  // simply run as you type. Nothing here touches Google.
+  const { suggestions: regulars, loading: searching } = useSuggestions<RegularRow>(
+    q,
+    useCallback((query: string) => loadRegulars(query), []),
+  );
 
   const meta = BOARD_CATEGORIES.find((c) => c.key === cat)!;
 
@@ -57,14 +62,6 @@ export default function BoardScreen() {
   }, [cat, scope, win]);
 
   useEffect(() => { void load(); }, [load]);
-
-  async function search() {
-    if (q.trim().length < 2) { setRegulars(null); return; }
-    setSearching(true);
-    try { setRegulars(await loadRegulars(q)); }
-    catch { setRegulars([]); }
-    finally { setSearching(false); }
-  }
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
@@ -123,22 +120,19 @@ export default function BoardScreen() {
             <TextInput
               value={q}
               onChangeText={setQ}
-              onSubmitEditing={search}
               returnKeyType="search"
               placeholder="Restaurant name"
               placeholderTextColor={colors.mute}
               style={styles.input}
               autoCapitalize="words"
+              autoCorrect={false}
             />
-            <Pressable onPress={search} style={styles.searchBtn}>
-              <Text style={styles.searchBtnText}>{searching ? "…" : "Go"}</Text>
-            </Pressable>
           </View>
 
-          {regulars !== null && regulars.length === 0 && !searching && (
+          {q.trim().length >= 2 && regulars.length === 0 && !searching && (
             <Text style={styles.emptyLine}>Nobody here has logged a place by that name.</Text>
           )}
-          {regulars?.map((r, i) => (
+          {regulars.map((r, i) => (
             <Row
               key={r.user_id}
               rank={i + 1}
@@ -208,12 +202,10 @@ const styles = StyleSheet.create({
   },
   searchHead: { ...type.micro, fontSize: 10 },
   searchBlurb: { ...type.small, marginTop: 4 },
-  searchRow: { flexDirection: "row", gap: 8, marginTop: 10, alignItems: "center" },
+  searchRow: { marginTop: 10 },
   input: {
     flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 12,
     paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, color: colors.ink,
     backgroundColor: colors.paper,
   },
-  searchBtn: { paddingVertical: 11, paddingHorizontal: 16, borderRadius: 12, backgroundColor: colors.ink },
-  searchBtnText: { fontSize: 13, fontWeight: "800", color: "#fff" },
 });

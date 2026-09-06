@@ -52,6 +52,32 @@ export async function nearbyRestaurantsDetailed(lat: number, lng: number, radius
   return { places: res.places, degraded: res.degraded === true };
 }
 
+/**
+ * Suggestions from the catalogue we already hold. FREE — one Postgres query,
+ * no Google, no proxy, no meter.
+ *
+ * This exists so a search bar can respond to every keystroke. `searchRestaurants`
+ * below cannot: it goes through places-proxy to Google Places Text Search and
+ * bills per call, so firing it per keystroke would multiply the cost of the
+ * most-used path in the app. Local first, Google on submit.
+ */
+export async function searchRestaurantsLocal(
+  query: string,
+  near?: { lat: number; lng: number },
+  limit = 8,
+): Promise<Restaurant[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const { data, error } = await supabase.rpc("search_restaurants_local", {
+    p_query: q,
+    p_lat: near?.lat ?? null,
+    p_lng: near?.lng ?? null,
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return (data ?? []) as Restaurant[];
+}
+
 export async function searchRestaurants(query: string, near?: { lat: number; lng: number }) {
   const { places } = await callProxy<{ places: Restaurant[] }>({
     action: "search",

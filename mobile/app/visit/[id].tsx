@@ -29,7 +29,8 @@ import {
   attachPhotoToVisit,
   type Visit,
 } from "../../lib/visits";
-import { searchRestaurants, type Restaurant } from "../../lib/places";
+import { searchRestaurants, searchRestaurantsLocal, type Restaurant } from "../../lib/places";
+import { useSuggestions } from "../../lib/use-suggestions";
 import { openInAppleMaps, openInGoogleMaps } from "../../lib/maps";
 import { VisitShareCard } from "../../components/VisitShareCard";
 import { computeTasteVector } from "../../lib/taste-vector";
@@ -392,6 +393,14 @@ function PlaceSearchSheet({
   const [results, setResults] = useState<Restaurant[]>([]);
   const [searching, setSearching] = useState(false);
 
+  // Suggestions from the catalogue as you type. Free. The Google search stays
+  // on the button, where spending is a decision rather than a keystroke.
+  const { suggestions, loading: suggesting } = useSuggestions<Restaurant>(
+    query,
+    useCallback((q: string) => searchRestaurantsLocal(q, undefined, 8), []),
+  );
+  const showing = results.length > 0 ? results : suggestions;
+
   async function doSearch() {
     if (!query.trim()) return;
     setSearching(true);
@@ -416,7 +425,7 @@ function PlaceSearchSheet({
       <View style={{ padding: spacing.lg }}>
         <TextInput
           value={query}
-          onChangeText={setQuery}
+          onChangeText={(t: string) => { setQuery(t); if (results.length) setResults([]); }}
           placeholder="Search restaurants…"
           placeholderTextColor={colors.mute}
           style={styles.searchInput}
@@ -426,9 +435,14 @@ function PlaceSearchSheet({
           autoCapitalize="words"
         />
         <Spacer size={10} />
-        <Button title={searching ? "Searching…" : "Search"} onPress={doSearch} loading={searching} />
+        <Button
+          title={searching ? "Searching…" : showing.length > 0 ? "Search everywhere" : "Search"}
+          onPress={doSearch}
+          loading={searching}
+        />
         <Spacer />
-        {results.map((p) => (
+        {suggesting && showing.length === 0 && <Text style={type.small}>Looking…</Text>}
+        {showing.map((p) => (
           <Pressable key={p.google_place_id} onPress={() => onPick(p)} style={styles.resultRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.placeName}>{p.name}</Text>

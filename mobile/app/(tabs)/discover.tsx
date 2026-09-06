@@ -6,7 +6,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
-import { nearbyRestaurants, searchRestaurants, type Restaurant } from "../../lib/places";
+import { nearbyRestaurants, searchRestaurants, searchRestaurantsLocal, type Restaurant } from "../../lib/places";
+import { useSuggestions } from "../../lib/use-suggestions";
 import { getOrFetchNearby } from "../../lib/nearby-cache";
 import { StretchPick } from "../../components/StretchPick";
 import { MoodRow } from "../../components/MoodRow";
@@ -313,6 +314,20 @@ export default function DiscoverTab() {
   // so filtering here removes the place everywhere at once; the personal
   // signal carries it permanently from the next load.
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+
+  // Suggestions as you type, from the catalogue we already hold. FREE — one
+  // Postgres query. runSearch below goes to Google and bills per call, so it
+  // stays on the explicit submit; a keystroke is not a decision to spend.
+  const suggestLocal = useCallback(
+    async (q: string) => {
+      const rows = await searchRestaurantsLocal(q, here ?? undefined, 8);
+      return rows
+        .filter((p) => !personal?.dislikes.placeIds.has(p.google_place_id) && !hiddenIds.has(p.google_place_id))
+        .map((p) => buildRankedRestaurant(graph, toInput(p), { here: here ?? undefined, now: new Date() }));
+    },
+    [here?.lat, here?.lng, graph, personal, hiddenIds],
+  );
+  const { suggestions, loading: suggesting } = useSuggestions<RankedRestaurant>(query, suggestLocal);
   const hideId = useCallback((id: string) => setHiddenIds((s) => new Set(s).add(id)), []);
   const allRanked = useMemo(() => {
     if (!here) return [];
@@ -486,7 +501,7 @@ export default function DiscoverTab() {
         <View style={styles.searchRow}>
           <TextInput
             value={query}
-            onChangeText={setQuery}
+            onChangeText={(t: string) => { setQuery(t); if (searchResults) setSearchResults(null); }}
             placeholder="Search restaurants…"
             placeholderTextColor={colors.mute}
             style={styles.searchInput}
@@ -506,6 +521,43 @@ export default function DiscoverTab() {
             </Pressable>
           )}
         </View>
+
+        {/* Suggestions fill in as you type, from what we already know. They
+            are replaced by the Google results once a search is submitted. */}
+        {searchResults === null && query.trim().length >= 2 && (
+          <View style={{ marginTop: spacing.lg }}>
+            <View style={styles.searchHead}>
+              <Text style={type.subtitle}>{suggestions.length > 0 ? "In your area" : "Looking…"}</Text>
+              {suggestions.length > 0 && (
+                <Pressable onPress={runSearch}>
+                  <Text style={styles.clear}>Search everywhere</Text>
+                </Pressable>
+              )}
+            </View>
+            <Spacer size={10} />
+            {suggestions.map((r) => (
+              <RestaurantCompatibilityCard
+                key={r.google_place_id}
+                restaurant={r}
+                surface="search"
+                onDismissed={() => hideId(r.google_place_id)}
+              />
+            ))}
+            {!suggesting && suggestions.length === 0 && (
+              <Text style={[type.small, { lineHeight: 20 }]}>
+                Nothing by that name nearby yet. Tap Search everywhere to look it up.
+              </Text>
+            )}
+            {!suggesting && suggestions.length === 0 && (
+              <>
+                <Spacer size={10} />
+                <Pressable onPress={runSearch}>
+                  <Text style={styles.clear}>Search everywhere</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        )}
 
         {/* Search results take over the page when query has been submitted */}
         {searchResults !== null ? (

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { View, StyleSheet, FlatList, Pressable, Alert } from "react-native";
 import { TextInput } from "../../components/TextInput";
 import { Text } from "../../components/Text";
@@ -6,7 +6,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Button, Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
-import { searchRestaurants, type Restaurant } from "../../lib/places";
+import { searchRestaurants, searchRestaurantsLocal, type Restaurant } from "../../lib/places";
+import { useSuggestions } from "../../lib/use-suggestions";
 import { saveVisit, rewardCopy } from "../../lib/visits";
 import { getCurrentLocation } from "../../lib/location";
 import { FirstVisitCelebration } from "../../components/FirstVisitCelebration";
@@ -23,6 +24,26 @@ export default function AddTab() {
   // Synchronous guard: React state updates aren't immediate, so a fast
   // double-tap could pass an `if (saving)` check twice. A ref flips now.
   const savingRef = useRef(false);
+  // Where the user is, resolved once, so suggestions can be ordered by
+  // distance. Absent is fine — the lookup falls back to a plain name search.
+  const [near, setNear] = useState<{ lat: number; lng: number } | undefined>();
+  useEffect(() => {
+    void getCurrentLocation()
+      .then((l) => setNear({ lat: l.lat, lng: l.lng }))
+      .catch(() => {});
+  }, []);
+
+  // Suggestions as you type, from the catalogue we already hold. FREE.
+  // The Google search below stays on the explicit submit, because it bills
+  // per call and a keystroke is not a decision to spend money.
+  const suggest = useCallback(
+    (q: string) => searchRestaurantsLocal(q, near, 8),
+    [near?.lat, near?.lng],
+  );
+  const { suggestions, loading: suggesting } = useSuggestions<Restaurant>(query, suggest);
+  // Once a paid search has run, its results are the better answer and stay put
+  // until the query changes again.
+  const showing = results.length > 0 ? results : suggestions;
 
   async function handleSearch() {
     if (!query.trim()) return;
@@ -80,8 +101,9 @@ export default function AddTab() {
         <View style={styles.searchRow}>
           <TextInput
             value={query}
-            onChangeText={setQuery}
+            onChangeText={(t: string) => { setQuery(t); if (results.length) setResults([]); }}
             placeholder="Search restaurants, cafés…"
+            autoCorrect={false}
             placeholderTextColor={colors.mute}
             style={styles.input}
             returnKeyType="search"
@@ -90,10 +112,25 @@ export default function AddTab() {
           />
         </View>
         <Spacer />
-        <Button title={loading ? "Searching…" : "Search"} onPress={handleSearch} loading={loading} />
+        {/* The button now means "look further than we already know", because
+            the list below fills in as you type. It is also the only thing on
+            this screen that spends money. */}
+        <Button
+          title={loading ? "Searching…" : showing.length > 0 ? "Search everywhere" : "Search"}
+          onPress={handleSearch}
+          loading={loading}
+        />
         <Spacer size={20} />
+        {suggesting && showing.length === 0 && (
+          <Text style={type.small}>Looking…</Text>
+        )}
+        {!suggesting && !loading && query.trim().length >= 2 && showing.length === 0 && (
+          <Text style={type.small}>
+            Nothing by that name in our list yet. Tap Search to look it up.
+          </Text>
+        )}
         <FlatList
-          data={results}
+          data={showing}
           keyExtractor={(item) => item.google_place_id}
           renderItem={({ item }) => (
             <Pressable
