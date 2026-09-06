@@ -13,7 +13,9 @@ import { captureRef } from "react-native-view-shot";
 import { loadSharedPlaces, openInstagram, openTikTok, type SharedPlace } from "../lib/social";
 import { loadPalateMatch } from "../lib/palate/pairCompatibility";
 import { matchHeadline, type PalateMatch } from "../lib/recommendation/palate-match";
-import { requestFriendship, unfriend, acceptFriendship } from "../lib/friends";
+import { followUser, unfollowUser } from "../lib/friends";
+import { displayStoredPersona } from "../lib/palate";
+import { ProfileColumns } from "./ProfileColumns";
 import { reportContent, blockUser, unblockUser, isBlocked, REPORT_REASONS } from "../lib/moderation";
 
 /**
@@ -99,25 +101,13 @@ export function ProfileBody({ targetId }: { targetId: string }) {
     }
   }
 
-  async function handleAddFriend() {
+  async function handleFollow() {
     setActing(true);
     try {
-      await requestFriendship(targetId);
+      await followUser(targetId);
       await load();
     } catch (e: any) {
-      Alert.alert("Couldn't add friend", e.message ?? "Try again");
-    } finally {
-      setActing(false);
-    }
-  }
-
-  async function handleAcceptFriend() {
-    setActing(true);
-    try {
-      await acceptFriendship(targetId);
-      await load();
-    } catch (e: any) {
-      Alert.alert("Couldn't accept", e.message ?? "Try again");
+      Alert.alert("Couldn't follow", e.message ?? "Try again");
     } finally {
       setActing(false);
     }
@@ -127,26 +117,33 @@ export function ProfileBody({ targetId }: { targetId: string }) {
   const displayName = snapshot?.display_name
     || (snapshot?.username ? `@${snapshot.username}` : "this person");
 
-  function handleUnfriend() {
+  // Unfollowing is not a negotiation either — but it is the one tap that can
+  // undo a friendship, so it asks once.
+  function handleUnfollow() {
     if (!snapshot) return;
-    Alert.alert("Remove friend?", displayName, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Remove", style: "destructive",
-        onPress: async () => {
-          setActing(true);
-          try { await unfriend(targetId); await load(); }
-          catch (e: any) { Alert.alert("Couldn't remove", e.message ?? "Try again"); }
-          finally { setActing(false); }
+    const mutual = snapshot.follow_state === "mutual";
+    Alert.alert(
+      mutual ? "Unfollow?" : "Unfollow " + displayName + "?",
+      mutual ? `You and ${displayName} will no longer be friends.` : undefined,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Unfollow", style: "destructive",
+          onPress: async () => {
+            setActing(true);
+            try { await unfollowUser(targetId); await load(); }
+            catch (e: any) { Alert.alert("Couldn't unfollow", e.message ?? "Try again"); }
+            finally { setActing(false); }
+          },
         },
-      },
-    ]);
+      ],
+    );
   }
 
   function handleBlock() {
     Alert.alert(
       `Block ${displayName}?`,
-      "You won't see their posts, and you'll be removed as friends.",
+      "You won't see their posts, and you'll stop following each other.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -187,6 +184,12 @@ export function ProfileBody({ targetId }: { targetId: string }) {
   // answer is no, so asking the data beats re-deriving the rule here and
   // getting a different answer than the server did.
   const canSee = mine || (snapshot != null && snapshot.total_visits !== null);
+
+  // Rows written before 0118 carry one of the server's five legacy names, so
+  // the stored value is mapped onto the identity the app actually uses. The
+  // tagline is whatever the client wrote, and nothing when it wrote nothing.
+  const personaLabel = displayStoredPersona(snapshot?.persona_label);
+  const personaTagline = snapshot?.persona_tagline?.trim() || null;
   // Twelve of fourteen accounts have logged nothing. Those profiles rendered
   // "No persona yet" stacked above a stats card reading 0 and 0 — two cards
   // agreeing that there is nothing, which is worse than one saying so.
@@ -225,6 +228,36 @@ export function ProfileBody({ targetId }: { targetId: string }) {
                   <Text style={styles.friendBadgeText}>✓ Friends</Text>
                 </View>
               )}
+
+              {/* Followers, following, friends — tappable, the way they are
+                  everywhere else. Friends is the reciprocal count, so it is
+                  always the smallest of the three and never needs explaining. */}
+              <View style={styles.followRow}>
+                <Pressable
+                  style={styles.followStat}
+                  onPress={() => router.push({ pathname: "/follows", params: { user: targetId, tab: "followers" } } as never)}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.followN}>{snapshot.followers_count ?? 0}</Text>
+                  <Text style={styles.followL}>followers</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.followStat}
+                  onPress={() => router.push({ pathname: "/follows", params: { user: targetId, tab: "following" } } as never)}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.followN}>{snapshot.following_count ?? 0}</Text>
+                  <Text style={styles.followL}>following</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.followStat}
+                  onPress={() => router.push({ pathname: "/follows", params: { user: targetId, tab: "friends" } } as never)}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.followN}>{snapshot.friends_count ?? 0}</Text>
+                  <Text style={styles.followL}>friends</Text>
+                </Pressable>
+              </View>
 
               {/* Profile content. The RPC returns these as null for a private
                   profile and for a friends-only profile seen by a non-friend,
@@ -298,8 +331,8 @@ export function ProfileBody({ targetId }: { targetId: string }) {
                   <Text style={type.subtitle}>This profile is private.</Text>
                   <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
                     {snapshot.profile_visibility === "private"
-                      ? "They've set their profile to private. You can still send a friend request."
-                      : "Add them as a friend to see their persona, top spots, and more."}
+                      ? "They've set their profile to private. You can still follow them."
+                      : "Follow each other to see their persona, top spots, and more."}
                   </Text>
                 </View>
               )
@@ -318,12 +351,42 @@ export function ProfileBody({ targetId }: { targetId: string }) {
               </View>
             )}
 
-            {!noHistory && snapshot.persona_label && (
+            {/* Three columns: where you go, what you eat, who eats like you.
+                Own profile only — the compatibility column is computed against
+                the viewer, so on someone else's page it would be their matches
+                shown under your name. */}
+            {mine && <ProfileColumns />}
+
+            {/* Eating together moved here from the feed. It is a thing you do
+                WITH the people on your profile, not a filter on a timeline. */}
+            {mine && (
+              <Pressable
+                onPress={() => router.push("/group" as never)}
+                style={styles.eatTogether}
+                accessibilityRole="button"
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.eatTitle}>Eat together</Text>
+                  <Text style={styles.eatBody}>
+                    Pick up to 12 people and find the place that works for whoever
+                    would like it least.
+                  </Text>
+                </View>
+                <Text style={styles.eatArrow}>→</Text>
+              </Pressable>
+            )}
+
+            {/* The label and the tagline used to be the same string — the RPC
+                read `personality_label` for both, so the profile printed the
+                name and then printed it again in quotation marks. 0118 gave
+                the tagline its own column; when it is absent, nothing renders
+                where the repeat used to be. */}
+            {!noHistory && personaLabel && (
               <View style={styles.personaCard}>
                 <Text style={styles.personaEyebrow}>LATEST PERSONA</Text>
-                <Text style={styles.personaLabel}>{snapshot.persona_label}</Text>
-                {snapshot.persona_tagline && (
-                  <Text style={styles.personaTagline}>"{snapshot.persona_tagline}"</Text>
+                <Text style={styles.personaLabel}>{personaLabel}</Text>
+                {!!personaTagline && personaTagline !== personaLabel && (
+                  <Text style={styles.personaTagline}>{personaTagline}</Text>
                 )}
               </View>
             )}
@@ -467,29 +530,25 @@ export function ProfileBody({ targetId }: { targetId: string }) {
             {/* Actions */}
             {!mine && (
               <View style={{ marginTop: spacing.xl, gap: 12 }}>
-                {/* Four states, not two. A request you have SENT used to render
-                    the same "Add friend" button as one you had never sent,
-                    because is_friend only ever meant accepted — so the tap
-                    looked like it had done nothing, and the obvious response
-                    is to tap it again. */}
+                {/* Four states, and the button says which one you are in.
+                    "Follows you" is the one that earns a filled button: it is
+                    a friendship one tap away. */}
                 {!blocked && (
-                  snapshot.friend_state === "accepted" ? (
-                    <Pressable onPress={handleUnfriend} disabled={acting} style={styles.btnGhost}>
-                      <Text style={styles.btnGhostText}>{acting ? "…" : "Remove friend"}</Text>
+                  snapshot.follow_state === "mutual" ? (
+                    <Pressable onPress={handleUnfollow} disabled={acting} style={styles.btnGhost}>
+                      <Text style={styles.btnGhostText}>{acting ? "…" : "Friends ✓"}</Text>
                     </Pressable>
-                  ) : snapshot.friend_state === "pending_in" ? (
-                    <Pressable onPress={handleAcceptFriend} disabled={acting} style={styles.btnPrimary}>
-                      <Text style={styles.btnPrimaryText}>
-                        {acting ? "…" : `Accept ${snapshot.display_name || "request"}`}
-                      </Text>
+                  ) : snapshot.follow_state === "following" ? (
+                    <Pressable onPress={handleUnfollow} disabled={acting} style={styles.btnGhost}>
+                      <Text style={styles.btnGhostText}>{acting ? "…" : "Following"}</Text>
                     </Pressable>
-                  ) : snapshot.friend_state === "pending_out" ? (
-                    <View style={styles.btnGhost}>
-                      <Text style={styles.btnGhostText}>Request sent</Text>
-                    </View>
+                  ) : snapshot.follow_state === "follows_you" ? (
+                    <Pressable onPress={handleFollow} disabled={acting} style={styles.btnPrimary}>
+                      <Text style={styles.btnPrimaryText}>{acting ? "…" : "Follow back"}</Text>
+                    </Pressable>
                   ) : (
-                    <Pressable onPress={handleAddFriend} disabled={acting} style={styles.btnPrimary}>
-                      <Text style={styles.btnPrimaryText}>{acting ? "…" : "Add friend"}</Text>
+                    <Pressable onPress={handleFollow} disabled={acting} style={styles.btnPrimary}>
+                      <Text style={styles.btnPrimaryText}>{acting ? "…" : "Follow"}</Text>
                     </Pressable>
                   )
                 )}
@@ -560,6 +619,18 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.line,
   },
   name: { fontSize: 24, fontWeight: "800", color: colors.ink, marginTop: 14, letterSpacing: -0.4 },
+  eatTogether: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    marginTop: spacing.lg, padding: card.padding, borderRadius: card.radius,
+    borderWidth: 1, borderColor: colors.line,
+  },
+  eatTitle: { ...type.subtitle, color: colors.ink },
+  eatBody: { ...type.small, marginTop: 3, lineHeight: 18 },
+  eatArrow: { fontSize: 18, fontWeight: "700", color: colors.red },
+  followRow: { flexDirection: "row", gap: 22, marginTop: 12 },
+  followStat: { alignItems: "center" },
+  followN: { fontSize: 17, fontWeight: "800", color: colors.ink, letterSpacing: -0.3 },
+  followL: { fontSize: 11, fontWeight: "600", color: colors.mute, marginTop: 1 },
   friendBadge: {
     marginTop: 12,
     paddingHorizontal: 12, paddingVertical: 4,

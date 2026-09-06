@@ -30,6 +30,8 @@ import {
   getProfileFromVector, IDENTITY_BLURB, composeEgoHook,
   type PalateProfile,
 } from "../../lib/palate";
+import { identityName, displayStoredPersona } from "../../lib/palate";
+import { supabase } from "../../lib/supabase";
 import { WhatArePalates } from "../../components/WhatArePalates";
 import { SharePalateCard, type ShareStat } from "../../components/SharePalateCard";
 import ViewShot, { captureRef } from "react-native-view-shot";
@@ -108,6 +110,19 @@ export default function WrappedTab() {
           thisWeekIso: isoWeekStart(),
         });
         setProfile(newProfile);
+
+        // Tell the server which identity this actually is. Until 0118 the
+        // server minted its own five names from a CASE statement, so Wrapped
+        // said "Explorer" and the profile said "The Fast Casual Regular" about
+        // the same week. This is the write that makes them agree — best
+        // effort, and never allowed to take the tab down.
+        if (latest?.week_start && newProfile.primaryIdentity !== "Learning") {
+          void supabase.rpc("set_palate_identity", {
+            p_week_start: latest.week_start,
+            p_identity: identityName(newProfile.primaryIdentity),
+            p_tagline: IDENTITY_BLURB[newProfile.primaryIdentity].tagline,
+          }).then(() => {}, () => {});
+        }
       }
       // The hero identity, from the whole history. A week vector of two visits
       // resolves to "Learning" however long you have been using the app, which
@@ -250,16 +265,19 @@ export default function WrappedTab() {
 
   /** The hero's identity: all-time, falling back to the week if unavailable. */
   function allTimeIdentityLabel(): string {
-    if (allTimeProfile) return allTimeProfile.primaryIdentity;
+    if (allTimeProfile) return identityName(allTimeProfile.primaryIdentity);
     return identityLabel();
   }
 
   function identityLabel(): string {
-    // New Palate identity (Curator/Forager/Steward/Anchor/Learning) wins
-    // when available — single source of truth.
-    if (profile) return profile.primaryIdentity;
-    if (data?.personality_label) return data.personality_label;
-    return "Learning";
+    // The client-side Palate identity wins when available — single source of
+    // truth. `personality_label` is what the server wrote, which for rows
+    // older than 0118 is one of five names this app no longer uses, so it is
+    // mapped home rather than shown raw.
+    if (profile) return identityName(profile.primaryIdentity);
+    const stored = displayStoredPersona(data?.personality_label);
+    if (stored) return stored;
+    return identityName("Learning");
   }
 
   function insightLine(): string {

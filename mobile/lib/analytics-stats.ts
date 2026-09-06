@@ -22,7 +22,9 @@ export type TimeRange = "week" | "month" | "quarter" | "year" | "all";
 export type CuisineSlice  = { cuisine: string;  count: number; pct: number };
 export type FormatSlice   = { format: RestaurantFormat; count: number; pct: number };
 export type MealTimeSlice = { meal: "breakfast" | "lunch" | "dinner" | "snack"; count: number };
-export type TopSpot       = { name: string; count: number; cuisine: string | null };
+/** `lastVisitMs` exists to break ties. Two places you have been three times
+ *  each are not equally yours — the one you were at last week is. */
+export type TopSpot       = { name: string; count: number; cuisine: string | null; lastVisitMs: number };
 
 export type HourlyPattern =
   | "late_night"        // ≥30% of visits after 9pm
@@ -160,7 +162,7 @@ export function aggregate(
   const tierCounts: Record<BrandTier, number> = {
     value: 0, mainstream: 0, premium_fast_casual: 0, upscale: 0, luxury: 0,
   };
-  const restaurantCounts = new Map<string, { name: string; count: number; cuisine: string | null }>();
+  const restaurantCounts = new Map<string, TopSpot>();
 
   let earliestMs = Infinity;
   let latestMs = -Infinity;
@@ -169,6 +171,7 @@ export function aggregate(
     if (!v.restaurant) continue;
     const profile = deriveRestaurantProfile(v.restaurant);
     const cuisine = profile.cuisineTypes[0] ?? "other";
+    const d = new Date(v.visited_at);
 
     cuisineCounts.set(cuisine, (cuisineCounts.get(cuisine) ?? 0) + 1);
     formatCounts.set(profile.format, (formatCounts.get(profile.format) ?? 0) + 1);
@@ -177,15 +180,18 @@ export function aggregate(
     // Restaurant rollup
     const rkey = profile.name.toLowerCase();
     const existing = restaurantCounts.get(rkey);
-    if (existing) existing.count++;
-    else restaurantCounts.set(rkey, { name: profile.name, count: 1, cuisine });
+    if (existing) {
+      existing.count++;
+      existing.lastVisitMs = Math.max(existing.lastVisitMs, d.getTime());
+    } else {
+      restaurantCounts.set(rkey, { name: profile.name, count: 1, cuisine, lastVisitMs: d.getTime() });
+    }
 
     // Meal time
     const meal = (v.meal_type ?? "snack") as MealTimeSlice["meal"];
     if (meal in mealCounts) mealCounts[meal]++;
 
     // Day-of-week + hour-of-day (local time)
-    const d = new Date(v.visited_at);
     dowCounts[d.getDay()]++;
     hourlyCounts[d.getHours()]++;
 
@@ -204,7 +210,7 @@ export function aggregate(
   const mealTimeBreakdown = (Object.entries(mealCounts) as Array<[MealTimeSlice["meal"], number]>)
     .map(([meal, count]) => ({ meal, count }));
   const topSpots = [...restaurantCounts.values()]
-    .sort((a, b) => b.count - a.count)
+    .sort((a, b) => b.count - a.count || b.lastVisitMs - a.lastVisitMs)
     .slice(0, 8);
 
   const uniqueRestaurants = restaurantCounts.size;

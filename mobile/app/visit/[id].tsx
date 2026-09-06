@@ -34,6 +34,7 @@ import { openInAppleMaps, openInGoogleMaps } from "../../lib/maps";
 import { VisitShareCard } from "../../components/VisitShareCard";
 import { computeTasteVector } from "../../lib/taste-vector";
 import { getProfileFromVector } from "../../lib/palate";
+import { identityName } from "../../lib/palate";
 
 export default function VisitDetailScreen() {
   const router = useRouter();
@@ -59,7 +60,7 @@ export default function VisitDetailScreen() {
       const v = await computeTasteVector().catch(() => null);
       if (!v) return;
       const p = await getProfileFromVector(v).catch(() => null);
-      if (p && p.primaryIdentity !== "Learning") setIdentityLabel(p.primaryIdentity);
+      if (p && p.primaryIdentity !== "Learning") setIdentityLabel(identityName(p.primaryIdentity));
     })();
   }, []);
 

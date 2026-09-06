@@ -11,6 +11,7 @@ import {
   getProfileFromVector, IDENTITY_BLURB, vectorToWeeklyData, composeEgoHook,
   composeNextEra, type PalateProfile, type UserWeeklyData,
 } from "../lib/palate";
+import { identityName, identityTitle } from "../lib/palate";
 import { isoWeekStart } from "../lib/wrapped";
 import { triggerHapticSelection } from "../lib/haptics";
 import { palateGradients, palateColors } from "../lib/theme/palateTheme";
@@ -215,14 +216,14 @@ function buildCards(
   const card1: StoryCard = id === "Learning"
     ? {
         eyebrow: "YOUR PALATE THIS WEEK",
-        headline: "Learning",
+        headline: identityName("Learning"),
         body: "Log a few more visits and your Palate will surface.",
         gradient: palateGradients.storyDark,
         hero: true,
       }
     : {
         eyebrow: "YOUR PALATE THIS WEEK",
-        headline: id,
+        headline: identityTitle(id),
         body: IDENTITY_BLURB[id].tagline,
         gradient: palateGradients.storyRed,
         hero: true,

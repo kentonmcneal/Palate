@@ -1,25 +1,26 @@
 // ============================================================================
-// friends.ts — friend request flow + friends list + search.
+// friends.ts — following, and what "friend" means now.
 // ----------------------------------------------------------------------------
-// Mutual + approval-required model:
-//   request -> friendship row with status 'pending'
-//   accept  -> status 'accepted'
-//   decline -> row deleted
-//   unfriend -> row deleted (either party)
+// The old model was mutual-accept: you asked, they approved, and only then did
+// anything happen. Across fourteen accounts it produced one accepted friendship
+// and two requests nobody ever answered. Asking permission to look at where
+// somebody ate was too much ceremony for the size of the favour.
+//
+// Now it is Instagram's shape:
+//   follow      -> one row, immediate, no approval
+//   they follow back -> the two rows together are a friendship
+//   unfollow    -> your row goes; theirs is theirs to remove
+//
+// "Friends" is therefore not a state anyone sets. It is reciprocity, computed.
+// Everything that used to gate on an accepted friendship now gates on either a
+// public profile (most surfaces) or a MUTUAL follow (a friends-only profile) —
+// following someone must never be a way into a private life.
 // ============================================================================
 
 import { supabase } from "./supabase";
 
-export type FriendshipStatus = "pending" | "accepted" | "blocked";
-
-export type Friendship = {
-  id: string;
-  requester_id: string;
-  addressee_id: string;
-  status: FriendshipStatus;
-  created_at: string;
-  accepted_at: string | null;
-};
+/** Where you stand with one other person. */
+export type FollowState = "none" | "following" | "follows_you" | "mutual";
 
 export type FriendProfile = {
   id: string;
@@ -30,14 +31,31 @@ export type FriendProfile = {
   profile_visibility: "private" | "friends" | "public";
 };
 
-// ----------------------------------------------------------------------------
-// Helpers
-// ----------------------------------------------------------------------------
+export type FollowListItem = {
+  friend: FriendProfile;
+  followsYou: boolean;
+  youFollow: boolean;
+  since: string | null;
+};
 
-async function currentUserId(): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not signed in");
-  return user.id;
+/** Kept as an alias so the group/eat-together screens read unchanged. */
+export type FriendListItem = FollowListItem;
+
+export function followStateOf(item: { followsYou: boolean; youFollow: boolean }): FollowState {
+  if (item.youFollow && item.followsYou) return "mutual";
+  if (item.youFollow) return "following";
+  if (item.followsYou) return "follows_you";
+  return "none";
+}
+
+/** The word for the button, given where you stand. */
+export function followLabel(state: FollowState): string {
+  switch (state) {
+    case "mutual": return "Friends";
+    case "following": return "Following";
+    case "follows_you": return "Follow back";
+    default: return "Follow";
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -53,146 +71,76 @@ export async function searchUsers(query: string): Promise<FriendProfile[]> {
 }
 
 // ----------------------------------------------------------------------------
-// Request / accept / decline / unfriend
+// Follow / unfollow
 // ----------------------------------------------------------------------------
 
-export async function requestFriendship(targetId: string): Promise<void> {
-  const me = await currentUserId();
-  if (targetId === me) throw new Error("Can't friend yourself");
-
-  // If a row already exists in either direction, normalize:
-  // - if accepted: no-op
-  // - if pending you sent: no-op
-  // - if pending they sent: auto-accept (treat second request as acceptance)
-  const existing = await findFriendshipBetween(me, targetId);
-  if (existing) {
-    if (existing.status === "accepted") return;
-    if (existing.requester_id === targetId && existing.status === "pending") {
-      await acceptFriendship(existing.requester_id);
-      return;
-    }
-    return; // pending I already sent
-  }
-
-  const { error } = await supabase.from("friendships").insert({
-    requester_id: me,
-    addressee_id: targetId,
-    status: "pending",
-  });
+/** Follow someone. No approval, no pending state. Returns where you now stand. */
+export async function followUser(targetId: string): Promise<FollowState> {
+  const { data, error } = await supabase.rpc("follow_user", { target: targetId });
   if (error) throw error;
   void (async () => {
     const { track } = await import("./analytics");
-    track("friend_requested");
+    track("user_followed", { became_friends: data === "mutual" });
   })();
+  return (data as FollowState) ?? "following";
 }
 
-export async function acceptFriendship(requesterId: string): Promise<void> {
-  const me = await currentUserId();
-  const { error } = await supabase
-    .from("friendships")
-    .update({ status: "accepted", accepted_at: new Date().toISOString() })
-    .eq("requester_id", requesterId)
-    .eq("addressee_id", me);
+/** Stop following. Their follow of you, if any, is theirs to remove. */
+export async function unfollowUser(targetId: string): Promise<FollowState> {
+  const { data, error } = await supabase.rpc("unfollow_user", { target: targetId });
   if (error) throw error;
-  void (async () => {
-    const { track } = await import("./analytics");
-    track("friend_accepted");
-  })();
-}
-
-export async function declineFriendship(requesterId: string): Promise<void> {
-  const me = await currentUserId();
-  const { error } = await supabase
-    .from("friendships")
-    .delete()
-    .eq("requester_id", requesterId)
-    .eq("addressee_id", me);
-  if (error) throw error;
-}
-
-export async function unfriend(otherUserId: string): Promise<void> {
-  const me = await currentUserId();
-  const f = await findFriendshipBetween(me, otherUserId);
-  if (!f) return;
-  const { error } = await supabase.from("friendships").delete().eq("id", f.id);
-  if (error) throw error;
-}
-
-async function findFriendshipBetween(a: string, b: string): Promise<Friendship | null> {
-  // limit(1) instead of maybeSingle(): maybeSingle() *errors* when >1 row
-  // matches (which a duplicate friendship would produce), and we were
-  // discarding that error → returning null → inserting a third row / failing to
-  // unfriend. Take the first row instead. (0036 also adds a unique-pair index.)
-  const { data } = await supabase
-    .from("friendships")
-    .select("*")
-    .or(
-      `and(requester_id.eq.${a},addressee_id.eq.${b}),and(requester_id.eq.${b},addressee_id.eq.${a})`,
-    )
-    .limit(1);
-  return ((data ?? [])[0] as Friendship | undefined) ?? null;
+  return (data as FollowState) ?? "none";
 }
 
 // ----------------------------------------------------------------------------
-// Lists
+// Lists — one definer RPC (0116), never a PostgREST embed.
 // ----------------------------------------------------------------------------
-
-export type FriendListItem = {
-  friendship: Friendship;
-  /** The other user (not me) in the friendship. */
-  friend: FriendProfile;
-};
-
-// ----------------------------------------------------------------------------
-// Friend lists — one definer RPC (0102), never a PostgREST embed.
-// ----------------------------------------------------------------------------
-// The embed through profiles came back with the OTHER person null, because
-// the only SELECT policy on profiles is own-row. friends.tsx ran f.friend.id
-// on that and the whole app fell into the error boundary ("the Board crash").
-// The RPC returns exactly what the screen needs, and no email.
-function rowToItem(row: any): FriendListItem {
+// The embed through profiles came back with the OTHER person null, because the
+// only SELECT policy on profiles is own-row. A screen ran `.id` on that and the
+// whole app fell into the error boundary (the Board crash). The RPC returns
+// exactly what the screens need, and no email.
+function rowToItem(row: any): FollowListItem {
   return {
-    friendship: {
-      id: row.friendship_id,
-      requester_id: row.requester_id,
-      addressee_id: row.addressee_id,
-      status: row.status,
-      created_at: row.created_at,
-      accepted_at: row.accepted_at,
-    },
     friend: {
-      id: row.other_id,
+      id: row.id,
       email: null,
-      display_name: row.other_display_name ?? null,
-      username: row.other_username ?? null,
-      avatar_url: row.other_avatar_url ?? null,
-      profile_visibility: row.other_visibility ?? "friends",
+      display_name: row.display_name ?? null,
+      username: row.username ?? null,
+      avatar_url: row.avatar_url ?? null,
+      profile_visibility: row.profile_visibility ?? "public",
     },
+    followsYou: !!row.follows_you,
+    youFollow: !!row.you_follow,
+    since: row.since ?? null,
   };
 }
 
-async function listFriendships(kind: "accepted" | "pending_in" | "pending_out"): Promise<FriendListItem[]> {
-  const { data, error } = await supabase.rpc("list_friendships", { p_kind: kind });
+async function listFollows(kind: "following" | "followers" | "friends"): Promise<FollowListItem[]> {
+  const { data, error } = await supabase.rpc("list_follows", { p_kind: kind });
   if (error) throw error;
-  // Belt and braces: a row with no other party is not a friend you can render.
-  return ((data ?? []) as any[]).filter((r) => r.other_id).map(rowToItem);
+  return ((data ?? []) as any[]).filter((r) => r.id).map(rowToItem);
 }
 
-export async function listFriends(): Promise<FriendListItem[]> {
-  return listFriendships("accepted");
-}
+export const listFollowing = () => listFollows("following");
+export const listFollowers = () => listFollows("followers");
+/** Reciprocal follows only — the people the app calls friends. */
+export const listFriends = () => listFollows("friends");
 
-export async function listIncomingRequests(): Promise<FriendListItem[]> {
-  return listFriendships("pending_in");
-}
+export type FollowCounts = { followers: number; following: number; friends: number };
 
-export async function listOutgoingRequests(): Promise<FriendListItem[]> {
-  return listFriendships("pending_out");
+export async function followCounts(userId: string): Promise<FollowCounts> {
+  const { data, error } = await supabase.rpc("follow_counts", { target: userId });
+  if (error) throw error;
+  const row = (data ?? [])[0] as any;
+  return {
+    followers: row?.followers ?? 0,
+    following: row?.following ?? 0,
+    friends: row?.friends ?? 0,
+  };
 }
 
 // ----------------------------------------------------------------------------
-// Friends leaderboard — pulls a single RPC that returns visit + persona stats
-// for every accepted friend (gated by their visibility setting).
+// Leaderboard — the people you follow, ranked.
 // ----------------------------------------------------------------------------
 export type LeaderboardEntry = {
   user_id: string;
@@ -210,4 +158,3 @@ export async function loadFriendsLeaderboard(): Promise<LeaderboardEntry[]> {
   if (error) throw error;
   return (data ?? []) as LeaderboardEntry[];
 }
-

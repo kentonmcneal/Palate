@@ -48,3 +48,13 @@ export {
 export {
   compareProfiles,
 } from "./palateCompatibility";
+
+// Display names for the identities. The keys above are the identifiers; these
+// are the words a person reads.
+export {
+  IDENTITY_NAME,
+  identityName,
+  identityWithArticle,
+  identityTitle,
+  displayStoredPersona,
+} from "./palateNames";

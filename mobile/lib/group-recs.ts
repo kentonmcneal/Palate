@@ -38,6 +38,8 @@ export async function loadGroupRecs(input: {
   lat: number;
   lng: number;
   radiusM?: number;
+  /** Narrow the candidate pool to one cuisine. Null means anything. */
+  cuisine?: string | null;
 }): Promise<GroupResult> {
   const { data, error } = await supabase.functions.invoke("group-recs", {
     body: {
@@ -45,6 +47,7 @@ export async function loadGroupRecs(input: {
       lat: input.lat,
       lng: input.lng,
       radius_m: input.radiusM ?? 3000,
+      cuisine: input.cuisine ?? null,
     },
   });
   if (error) throw error;
@@ -56,6 +59,8 @@ export function groupEmptyReason(reason: string | null | undefined): string {
   switch (reason) {
     case "no_cached_coverage":
       return "We haven't explored this area yet. Open Discover here first, then try again.";
+    case "no_cuisine_coverage":
+      return "No place of that kind nearby that we know about. Try another cuisine, or widen the area.";
     case "all_vetoed":
       return "Nothing nearby works for everyone. Try a wider area or a smaller group.";
     default:

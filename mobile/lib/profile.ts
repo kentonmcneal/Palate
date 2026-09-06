@@ -136,10 +136,13 @@ export type FriendProfileSnapshot = {
   // login address is not an identifier and must never appear on someone
   // else's screen.
   username: string | null;
-  /** 'self' | 'accepted' | 'pending_out' | 'pending_in' | 'none'.
-   *  is_friend only ever meant 'accepted', so a request you had just sent
-   *  rendered identically to one you had never sent. */
-  friend_state: "self" | "accepted" | "pending_out" | "pending_in" | "none";
+  /** The four ways two people can point at each other. There is no pending
+   *  state any more: following is immediate, and 'mutual' is what the app
+   *  calls a friendship. */
+  follow_state: "self" | "mutual" | "following" | "follows_you" | "none";
+  followers_count: number;
+  following_count: number;
+  friends_count: number;
 };
 
 export async function getFriendProfileSnapshot(targetId: string): Promise<FriendProfileSnapshot | null> {

@@ -114,10 +114,10 @@ export function nextStep(s: ActivationState): NextStep | null {
   if (s.friendCount === 0 && s.visitCount >= 3) {
     return {
       key: "friends",
-      title: "Add someone who eats like you",
-      body: "The feed and the group picks both need one other person before they do anything.",
-      cta: "Find friends",
-      route: "/friends",
+      title: "Follow someone who eats like you",
+      body: "The feed and the group picks both need one other person before they do anything. No request to send — just follow.",
+      cta: "Browse people",
+      route: "/people",
     };
   }
 

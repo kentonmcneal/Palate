@@ -25,7 +25,7 @@ import {
   setDiscoveryPingsEnabled,
 } from "../lib/notification-schedule";
 import { isFriendActivityPushEnabled, setFriendActivityPushEnabled } from "../lib/friend-push";
-import { listIncomingRequests } from "../lib/friends";
+
 import { generateInviteLink, inviteShareMessage, getMyReferralCount } from "../lib/referrals";
 import { GmailImportCard } from "../components/GmailImportCard";
 import { isFlagEnabled } from "../lib/flags";
@@ -53,7 +53,6 @@ export default function Settings() {
   const [screenshotPrompt, setScreenshotPrompt] = useState(true);
   const [discoveryPings, setDiscoveryPings] = useState(true);
   const [friendPush, setFriendPush] = useState(true);
-  const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const [referralCount, setReferralCount] = useState(0);
 
   useEffect(() => {
@@ -63,7 +62,6 @@ export default function Settings() {
     isScreenshotPromptEnabled().then(setScreenshotPrompt);
     areDiscoveryPingsEnabled().then(setDiscoveryPings);
     isFriendActivityPushEnabled().then(setFriendPush);
-    listIncomingRequests().then((rs) => setPendingRequestCount(rs.length)).catch(() => {});
     getMyReferralCount().then(setReferralCount).catch(() => {});
   }, []);
 
@@ -195,12 +193,12 @@ export default function Settings() {
         <Section title="Friends">
           <Button
             title="Leaderboard"
-            onPress={() => router.push({ pathname: "/friends", params: { tab: "leaderboard" } })}
+            onPress={() => router.push("/board")}
           />
           <Spacer />
           <Button
-            title={`Manage friends${pendingRequestCount > 0 ? ` · ${pendingRequestCount} request${pendingRequestCount === 1 ? "" : "s"}` : ""}`}
-            onPress={() => router.push("/friends")}
+            title="Following"
+            onPress={() => router.push({ pathname: "/follows", params: { tab: "following" } })}
             variant="ghost"
           />
           <Spacer />

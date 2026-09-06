@@ -26,7 +26,6 @@ import { Spacer } from "../../components/Button";
 import { Avatar } from "../../components/Avatar";
 import { colors, spacing, type } from "../../theme";
 import { listFeed, toggleLike, type FeedEvent } from "../../lib/feed";
-import { listIncomingRequests } from "../../lib/friends";
 import { loadView } from "../../lib/load-state";
 import { LoadError } from "../../components/LoadError";
 import { reportContent, blockUser, REPORT_REASONS } from "../../lib/moderation";
@@ -35,7 +34,6 @@ import { supabase } from "../../lib/supabase";
 export default function FeedTab() {
   const router = useRouter();
   const [events, setEvents] = useState<FeedEvent[]>([]);
-  const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [myId, setMyId] = useState<string | null>(null);
@@ -48,19 +46,11 @@ export default function FeedTab() {
 
   const load = useCallback(async () => {
     try {
-      // The pending-request count is a badge on a button. It must not be able
-      // to take the feed down with it: listIncomingRequests answered 400 for
-      // its whole life (its embed pointed at auth.users, fixed in 0092), and
-      // because it sat in this Promise.all the feed reported that failure as
-      // its own. The Friends screen shows that call's errors; this one only
-      // needs a number.
-      const [feed, requests, { data: auth }] = await Promise.all([
+      const [feed, { data: auth }] = await Promise.all([
         listFeed(60),
-        listIncomingRequests().catch(() => []),
         supabase.auth.getUser(),
       ]);
       setEvents(feed);
-      setPendingCount(requests.length);
       setMyId(auth.user?.id ?? null);
       setError(null);
       void Promise.all([
@@ -146,19 +136,11 @@ export default function FeedTab() {
           contentContainerStyle={styles.chipRow}
         >
           <View style={{ flexDirection: "row", gap: 6 }}>
-            <Pressable onPress={() => router.push({ pathname: "/friends", params: { tab: "leaderboard" } })} style={styles.friendsBtn}>
+            <Pressable onPress={() => router.push("/board")} style={styles.friendsBtn}>
               <Text style={styles.friendsBtnText}>Board</Text>
-            </Pressable>
-            <Pressable onPress={() => router.push("/group")} style={styles.friendsBtn}>
-              <Text style={styles.friendsBtnText}>Eat together</Text>
             </Pressable>
             <Pressable onPress={() => router.push("/people")} style={styles.friendsBtn}>
               <Text style={styles.friendsBtnText}>People</Text>
-            </Pressable>
-            <Pressable onPress={() => router.push("/friends")} style={styles.friendsBtn}>
-              <Text style={styles.friendsBtnText}>
-                Friends{pendingCount > 0 ? ` · ${pendingCount}` : ""}
-              </Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -244,7 +226,7 @@ function FeedRow({
   function doBlock() {
     Alert.alert(
       `Block ${name}?`,
-      "You won't see their posts anymore, and you'll be removed as friends.",
+      "You won't see their posts anymore, and you'll stop following each other.",
       [
         { text: "Cancel", style: "cancel" },
         {

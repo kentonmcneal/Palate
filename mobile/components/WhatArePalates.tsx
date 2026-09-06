@@ -2,7 +2,7 @@ import { Pressable, View, StyleSheet } from "react-native";
 import { Text } from "./Text";
 import { colors, spacing, type } from "../theme";
 import { PalateAxisGraph } from "./PalateAxisGraph";
-import { IDENTITY_BLURB, WHAT_ARE_PALATES, type PalateProfile, type PrimaryIdentity } from "../lib/palate";
+import { IDENTITY_BLURB, WHAT_ARE_PALATES, identityName, type PalateProfile, type PrimaryIdentity } from "../lib/palate";
 
 // ============================================================================
 // WhatArePalates — explainer block. Renders below Wrapped.
@@ -30,7 +30,7 @@ export function WhatArePalates({ profile, onShare }: { profile: PalateProfile; o
           const blurb = IDENTITY_BLURB[id];
           return (
             <View key={id} style={[styles.quadrantBlock, isUser && styles.quadrantBlockActive]}>
-              <Text style={[styles.qName, isUser && styles.qNameActive]}>{id}</Text>
+              <Text style={[styles.qName, isUser && styles.qNameActive]}>{identityName(id)}</Text>
               <Text style={styles.qTagline}>{blurb.tagline}</Text>
               <Text style={styles.qDesc}>{blurb.description}</Text>
             </View>

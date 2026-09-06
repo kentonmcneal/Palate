@@ -12,9 +12,11 @@ import { useRouter } from "expo-router";
 import { Avatar } from "../components/Avatar";
 import { Button, Spacer } from "../components/Button";
 import { colors, spacing, type, card, radius, shadow } from "../theme";
-import { listFriends, type FriendListItem } from "../lib/friends";
+import { listFollowing, type FollowListItem } from "../lib/friends";
 import { loadGroupRecs, groupEmptyReason, type GroupPick } from "../lib/group-recs";
 import { getEffectiveLocation } from "../lib/browsing-location";
+import { cuisinesNear } from "../lib/cuisine-catalogue";
+import { cuisineLabel } from "../lib/mood";
 import { triggerHapticSelection } from "../lib/haptics";
 import { captureError } from "../lib/observability";
 import { openInAppleMaps } from "../lib/maps";
@@ -36,11 +38,23 @@ import { openInAppleMaps } from "../lib/maps";
 // calls Google, so an unexplored area honestly returns nothing.
 // ============================================================================
 
-const MAX_OTHERS = 3; // plus you = 4
+const MAX_OTHERS = 12; // plus you = 13
+
+// Two ways to narrow the search, because a group argument is usually about one
+// or the other: how far are we willing to go, and what are we in the mood for.
+const AREAS: { key: string; label: string; radiusM: number }[] = [
+  { key: "walk", label: "Walkable", radiusM: 1200 },
+  { key: "near", label: "Nearby", radiusM: 3000 },
+  { key: "city", label: "Across town", radiusM: 12000 },
+];
 
 export default function GroupScreen() {
   const router = useRouter();
-  const [friends, setFriends] = useState<FriendListItem[] | null>(null);
+  const [friends, setFriends] = useState<FollowListItem[] | null>(null);
+  const [mode, setMode] = useState<"area" | "cuisine">("area");
+  const [area, setArea] = useState("near");
+  const [cuisine, setCuisine] = useState<string | null>(null);
+  const [cuisineOpts, setCuisineOpts] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [picks, setPicks] = useState<GroupPick[] | null>(null);
   const [reason, setReason] = useState<string | null>(null);
@@ -49,9 +63,18 @@ export default function GroupScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void listFriends()
+    // Anyone you follow can be in your group; the server re-checks that you
+    // may actually read each one's history, so this list is a convenience,
+    // not the authorization.
+    void listFollowing()
       .then(setFriends)
       .catch((e) => { void captureError(e, { at: "group:friends" }); setFriends([]); });
+    void (async () => {
+      const here = await getEffectiveLocation().catch(() => null);
+      if (!here) return;
+      const cs = await cuisinesNear(here.lat, here.lng).catch(() => []);
+      setCuisineOpts(cs.map((c) => c.cuisine).filter(Boolean).slice(0, 14));
+    })();
   }, []);
 
   const nameFor = useCallback((id: string) => {
@@ -84,6 +107,8 @@ export default function GroupScreen() {
         memberIds: [...selected],
         lat: here.lat,
         lng: here.lng,
+        radiusM: mode === "area" ? (AREAS.find((a) => a.key === area)?.radiusM ?? 3000) : 8000,
+        cuisine: mode === "cuisine" ? cuisine : null,
       });
       setPicks(res.picks);
       setReason(res.reason ?? null);
@@ -108,7 +133,7 @@ export default function GroupScreen() {
 
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.lead}>
-          Pick up to {MAX_OTHERS} friends. We&apos;ll find the place that works
+          Pick up to {MAX_OTHERS} people. We&apos;ll find the place that works
           best for whoever would like it least.
         </Text>
 
@@ -117,7 +142,7 @@ export default function GroupScreen() {
         {friends?.length === 0 && (
           <View style={styles.empty}>
             <Text style={styles.emptyGlyph}>◎</Text>
-            <Text style={styles.emptyLine}>Add a friend first. This needs at least two palates.</Text>
+            <Text style={styles.emptyLine}>Follow someone first. This needs at least two palates.</Text>
           </View>
         )}
 
@@ -147,7 +172,38 @@ export default function GroupScreen() {
 
         {selected.size > 0 && (
           <>
-            <Spacer size={16} />
+            <Spacer size={18} />
+            <View style={styles.modeRow}>
+              {(["area", "cuisine"] as const).map((m) => (
+                <Pressable
+                  key={m}
+                  onPress={() => { setMode(m); setPicks(null); }}
+                  style={[styles.modeBtn, mode === m && styles.modeBtnOn]}
+                >
+                  <Text style={[styles.modeText, mode === m && styles.modeTextOn]}>
+                    {m === "area" ? "By area" : "By cuisine"}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.optRow}>
+              {mode === "area"
+                ? AREAS.map((a) => (
+                    <Pressable key={a.key} onPress={() => { setArea(a.key); setPicks(null); }} style={[styles.opt, area === a.key && styles.optOn]}>
+                      <Text style={[styles.optText, area === a.key && styles.optTextOn]}>{a.label}</Text>
+                    </Pressable>
+                  ))
+                : cuisineOpts.length === 0
+                  ? <Text style={styles.optEmpty}>Still learning what&apos;s around you.</Text>
+                  : cuisineOpts.map((c) => (
+                      <Pressable key={c} onPress={() => { setCuisine(cuisine === c ? null : c); setPicks(null); }} style={[styles.opt, cuisine === c && styles.optOn]}>
+                        <Text style={[styles.optText, cuisine === c && styles.optTextOn]}>{cuisineLabel(c)}</Text>
+                      </Pressable>
+                    ))}
+            </ScrollView>
+
+            <Spacer size={14} />
             <Button
               title={busy ? "Working it out…" : `Find somewhere for ${selected.size + 1}`}
               onPress={find}
@@ -265,6 +321,17 @@ const styles = StyleSheet.create({
     padding: card.padding, borderRadius: card.radius,
     backgroundColor: colors.faint, marginBottom: 10, ...shadow.card,
   },
+  modeRow: { flexDirection: "row", gap: 6 },
+  modeBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: colors.faint },
+  modeBtnOn: { backgroundColor: colors.ink },
+  modeText: { fontSize: 13, fontWeight: "700", color: colors.mute },
+  modeTextOn: { color: "#fff" },
+  optRow: { gap: 6, paddingVertical: 10, paddingRight: spacing.lg },
+  opt: { paddingVertical: 7, paddingHorizontal: 13, borderRadius: 999, borderWidth: 1, borderColor: colors.line },
+  optOn: { backgroundColor: colors.red, borderColor: colors.red },
+  optText: { fontSize: 13, fontWeight: "600", color: colors.ink },
+  optTextOn: { color: "#fff" },
+  optEmpty: { fontSize: 13, fontWeight: "500", color: colors.mute, paddingVertical: 8 },
   pickHead: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   rank: { ...type.title, color: colors.mute, minWidth: 22, textAlign: "center" },
   pickName: { fontSize: 16, fontWeight: "800", color: colors.ink },

@@ -4,7 +4,7 @@ import { Text } from "./Text";
 import Svg, { Defs, Marker, Path } from "react-native-svg";
 import { colors, spacing } from "../theme";
 import { palateColors, palateMotion } from "../lib/theme/palateTheme";
-import type { PalateProfile } from "../lib/palate";
+import { IDENTITY_NAME, type PalateProfile } from "../lib/palate";
 import { FONT_CAP } from "../lib/a11y";
 
 // ============================================================================
@@ -105,10 +105,10 @@ export function PalateAxisGraph({ profile }: { profile: PalateProfile }) {
         <View style={[styles.axisLine, styles.axisHorizontal]} />
 
         {/* Quadrant labels — current is red, others muted gray. */}
-        <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.qLabel, styles.qLabelTopLeft,  isActive("Steward") && styles.qLabelActive]}>Steward</Text>
-        <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.qLabel, styles.qLabelTopRight, isActive("Curator") && styles.qLabelActive]}>Curator</Text>
+        <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.qLabel, styles.qLabelTopLeft,  isActive("Steward") && styles.qLabelActive]}>{IDENTITY_NAME.Steward}</Text>
+        <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.qLabel, styles.qLabelTopRight, isActive("Curator") && styles.qLabelActive]}>{IDENTITY_NAME.Curator}</Text>
         <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.qLabel, styles.qLabelBotLeft,  isActive("Anchor")  && styles.qLabelActive]}>Anchor</Text>
-        <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.qLabel, styles.qLabelBotRight, isActive("Forager") && styles.qLabelActive]}>Forager</Text>
+        <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.qLabel, styles.qLabelBotRight, isActive("Forager") && styles.qLabelActive]}>{IDENTITY_NAME.Forager}</Text>
 
         {/* Movement arrow (prior week → now). Drawn on top of the quadrants
             but UNDER the user dot so the dot reads as the destination. */}

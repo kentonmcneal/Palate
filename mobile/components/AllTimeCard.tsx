@@ -9,6 +9,7 @@ import { onPersonalSignalInvalidate } from "../lib/personal-signal";
 import { getProfileFromVector } from "../lib/palate/palateScoring";
 import { IDENTITY_BLURB } from "../lib/palate/palateCopy";
 import type { PrimaryIdentity } from "../lib/palate/palateTypes";
+import { identityName, identityWithArticle } from "../lib/palate";
 import { loadCompatiblePeople, compatibilityLine, type CompatiblePerson } from "../lib/social";
 import { cuisineLabel } from "../lib/mood";
 import { Avatar } from "./Avatar";
@@ -122,7 +123,10 @@ export function AllTimeCard() {
 
       {identity && identity !== "Learning" && (
         <View style={styles.identity}>
-          <Text style={styles.youAre}>You are {/^[AEIOU]/.test(identity) ? "an" : "a"} <Text style={styles.identityName}>{identity}</Text></Text>
+          <Text style={styles.youAre}>
+            You are {identityWithArticle(identity).split(" ")[0]}{" "}
+            <Text style={styles.identityName}>{identityName(identity)}</Text>
+          </Text>
           {blurb && <Text style={styles.tagline}>{blurb.tagline}</Text>}
         </View>
       )}

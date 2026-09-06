@@ -28,7 +28,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const MAX_MEMBERS = 4;
+const MAX_MEMBERS = 13; // you plus twelve
 /** Below this for ANY member, a place is vetoed regardless of the others. */
 const VETO_FLOOR = 30;
 const MAX_CANDIDATES = 200;
@@ -80,7 +80,12 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const lat = Number(body.lat);
     const lng = Number(body.lng);
-    const radius = Math.min(Number(body.radius_m) || 3000, 8000);
+    const radius = Math.min(Number(body.radius_m) || 3000, 30_000);
+    // Optional narrowing to one cuisine. Applied to the candidate pool, not to
+    // the scores — a group that wants Thai should get the Thai place that is
+    // best for its least-happy member, not a highly-scored ramen bar.
+    const cuisine = typeof body.cuisine === "string" && body.cuisine.trim()
+      ? body.cuisine.trim().toLowerCase() : null;
     const requested: string[] = Array.isArray(body.member_ids) ? body.member_ids : [];
 
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
@@ -92,21 +97,38 @@ serve(async (req) => {
     if (others.length === 0) return json({ error: "no_members" }, 400);
     if (others.length > MAX_MEMBERS - 1) return json({ error: "too_many_members" }, 400);
 
-    // --- authorization: every member must be an ACCEPTED friend of the caller.
-    // Checked here, per member, rather than trusted from the request. Without
-    // this the endpoint would read any user's history for anyone who guessed
-    // an id.
-    const { data: friendRows } = await admin
-      .from("friendships")
-      .select("requester_id, addressee_id")
-      .eq("status", "accepted")
-      .or(`requester_id.eq.${callerId},addressee_id.eq.${callerId}`);
+    // --- authorization. This endpoint reads each member's eating history to
+    // build their taste profile, so membership must clear the same bar as
+    // opening their profile — checked here, per member, never trusted from the
+    // request. Two conditions, both required:
+    //
+    //   1. the caller FOLLOWS them (you cannot conscript a stranger into your
+    //      dinner group by guessing an id), and
+    //   2. their profile is one the caller may read: public, or friends-only
+    //      with the follow returned. A one-way follow of a friends-only
+    //      account must not become a way to read its history.
+    const [{ data: iFollowRows }, { data: followsMeRows }] = await Promise.all([
+      admin.from("follows").select("followee_id").eq("follower_id", callerId),
+      admin.from("follows").select("follower_id").eq("followee_id", callerId),
+    ]);
+    const iFollow = new Set((iFollowRows ?? []).map((r: { followee_id: string }) => r.followee_id));
+    const followsMe = new Set((followsMeRows ?? []).map((r: { follower_id: string }) => r.follower_id));
 
-    const friends = new Set<string>();
-    for (const f of (friendRows ?? []) as { requester_id: string; addressee_id: string }[]) {
-      friends.add(f.requester_id === callerId ? f.addressee_id : f.requester_id);
-    }
-    const unauthorized = others.filter((id) => !friends.has(id));
+    const { data: visRows } = await admin
+      .from("profiles")
+      .select("id, profile_visibility")
+      .in("id", others);
+    const visibility = new Map(
+      (visRows ?? []).map((r: { id: string; profile_visibility: string }) => [r.id, r.profile_visibility]),
+    );
+
+    const unauthorized = others.filter((id) => {
+      if (!iFollow.has(id)) return true;
+      const vis = visibility.get(id);
+      if (vis === "public") return false;
+      if (vis === "friends") return !followsMe.has(id); // needs reciprocity
+      return true; // private, or a profile that does not exist
+    });
     if (unauthorized.length > 0) return json({ error: "not_friends" }, 403);
 
     const memberIds = [callerId, ...others];
@@ -121,14 +143,16 @@ serve(async (req) => {
     // --- candidates: CACHE ONLY. No Google, ever, from this path.
     const dLat = radius / 111_000;
     const dLng = radius / ((111_000 * Math.cos((lat * Math.PI) / 180)) || 111_000);
-    const { data: places } = await admin
+    let query = admin
       .from("restaurants_resolved")
       .select(
         "google_place_id, name, cuisine_region, cuisine_subregion, cuisine_type:resolved_cuisine_type, format_class:resolved_format_class, price_level, rating, user_rating_count, neighborhood, latitude, longitude, chain_name, is_chain_brand, recommendation_eligibility, primary_type, types",
       )
       .gte("latitude", lat - dLat).lte("latitude", lat + dLat)
       .gte("longitude", lng - dLng).lte("longitude", lng + dLng)
-      .or("recommendation_eligibility.is.null,recommendation_eligibility.gt.0")
+      .or("recommendation_eligibility.is.null,recommendation_eligibility.gt.0");
+    if (cuisine) query = query.eq("resolved_cuisine_type", cuisine);
+    const { data: places } = await query
       .order("user_rating_count", { ascending: false, nullsFirst: false })
       .limit(MAX_CANDIDATES);
 
@@ -146,7 +170,11 @@ serve(async (req) => {
 
     if (candidates.length === 0) {
       // Honest, specific, and NOT a silent fallback to a paid lookup.
-      return json({ picks: [], reason: "no_cached_coverage", thin_members: thin });
+      return json({
+        picks: [],
+        reason: cuisine ? "no_cuisine_coverage" : "no_cached_coverage",
+        thin_members: thin,
+      });
     }
 
     // --- score, veto, rank
