@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import { isAdmin, listPendingUsers, setApproval, type PendingUser } from "../lib/waitlist";
+import { listFeedback, markFeedbackTriaged, type FeedbackRow } from "../lib/feedback-admin";
 
 export default function AdminWaitlistScreen() {
   const router = useRouter();
@@ -25,6 +26,9 @@ export default function AdminWaitlistScreen() {
   // is_admin, on a screen nobody else can open.
   const [serverPush, setServerPush] = useState<boolean | null>(null);
   const [flipping, setFlipping] = useState(false);
+  // Tester reports. The push is the fast route and it can fail — no token, a
+  // revoked permission, Expo down. This is the route that cannot.
+  const [feedback, setFeedback] = useState<FeedbackRow[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -33,6 +37,7 @@ export default function AdminWaitlistScreen() {
       setAllowed(admin);
       if (admin) {
         setPending(await listPendingUsers());
+        setFeedback(await listFeedback(50).catch(() => []));
         const { data } = await supabase
           .from("feature_flags").select("enabled").eq("key", "server_push").maybeSingle();
         setServerPush(Boolean(data?.enabled));
@@ -95,6 +100,38 @@ export default function AdminWaitlistScreen() {
         {!loading && allowed === false && (
           <View style={styles.card}>
             <Text style={type.subtitle}>Not authorized.</Text>
+          </View>
+        )}
+
+        {!loading && allowed && feedback.length > 0 && (
+          <View style={styles.card}>
+            <Text style={type.subtitle}>
+              {feedback.filter((f) => f.status === "new").length > 0
+                ? `${feedback.filter((f) => f.status === "new").length} new from testers`
+                : "Tester reports"}
+            </Text>
+            {feedback.slice(0, 12).map((f) => (
+              <View key={f.id} style={styles.report}>
+                <Text style={styles.reportMeta}>
+                  {f.category} · {f.reporter ?? "Someone"}
+                  {f.platform ? ` · ${f.platform}` : ""}
+                  {f.app_version ? ` · ${f.app_version}` : ""}
+                  {f.screenshot_path ? " · 📎" : ""}
+                </Text>
+                <Text style={styles.reportBody}>{f.message}</Text>
+                {f.status === "new" && (
+                  <Pressable
+                    onPress={async () => {
+                      await markFeedbackTriaged(f.id).catch(() => {});
+                      void load();
+                    }}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.reportAction}>Mark read</Text>
+                  </Pressable>
+                )}
+              </View>
+            ))}
           </View>
         )}
 
@@ -170,6 +207,10 @@ export default function AdminWaitlistScreen() {
 }
 
 const styles = StyleSheet.create({
+  report: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.line },
+  reportMeta: { ...type.micro, fontSize: 10 },
+  reportBody: { fontSize: 14, color: colors.ink, marginTop: 5, lineHeight: 20 },
+  reportAction: { fontSize: 12, fontWeight: "700", color: colors.red, marginTop: 7 },
   safe: { flex: 1, backgroundColor: colors.paper },
   header: {
     flexDirection: "row",
