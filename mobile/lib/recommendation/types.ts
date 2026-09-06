@@ -38,6 +38,9 @@ export type RestaurantInput = {
    *  lib/opening-hours.ts. Absent means "we do not know", which is NOT the
    *  same as closed and must never be scored as if it were. */
   regular_opening_hours?: unknown;
+  /** Google's OPERATIONAL / CLOSED_TEMPORARILY / CLOSED_PERMANENTLY, or null
+   *  when it did not say. Null is NOT closed. */
+  business_status?: string | null;
   cultural_context?: string | null;
   // Free-form classifier tags (e.g. "michelin", "hidden-gem", "tourist-heavy")
   // used for discovery-signal score adjustment.

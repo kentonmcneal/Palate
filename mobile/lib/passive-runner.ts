@@ -13,6 +13,7 @@ import { qualifyVisit, resolveVenue, recordForClustering } from "./passive-pipel
 import { notifyOrInbox } from "./passive-confirm";
 import { readFlag, isFlagEnabled } from "./flags";
 import { track } from "./analytics";
+import { breadcrumb } from "./observability";
 import { logDetectorNote } from "../modules/palate-visit-monitor";
 
 const PROCESSED_KEY = "palate.passive.processedIds";
@@ -83,6 +84,16 @@ export function retryLater(reason: string): Error & { retryLater: true } {
 }
 
 export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
+  // Breadcrumbs, alongside the analytics. They answer a different question:
+  // track() tells us the RATE at which stops fail, and this tells us where a
+  // SPECIFIC one died when a Sentry event arrives attached to it. The passive
+  // pipeline is the only place in the app worth this, because it is five
+  // stages deep and every stage can drop a meal silently.
+  void breadcrumb("passive: detected", {
+    source: raw.source ?? "visit",
+    accuracy_m: Math.round(raw.horizontalAccuracy),
+    simulated: raw.simulated,
+  });
   void track("visit_detected", {
     simulated: raw.simulated,
     source: raw.source ?? "visit",
@@ -95,10 +106,12 @@ export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
 
   if (!q.ok) {
     if (q.reason === "home-work-suppressed") {
+      void breadcrumb("passive: suppressed", { reason: q.reason });
       void track("visit_suppressed", { reason: q.reason });
       logDetectorNote("miss", "home/work suppressed");
       return { id: raw.id, stage: "suppressed", detail: q.reason };
     }
+    void breadcrumb("passive: unqualified", { reason: q.reason });
     void track("visit_unqualified", {
       reason: q.reason,
       source: raw.source ?? "visit",
@@ -107,6 +120,7 @@ export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
     logDetectorNote("miss", `unqualified: ${q.reason}`);
     return { id: raw.id, stage: "unqualified", detail: q.reason };
   }
+  void breadcrumb("passive: qualified", { dwell_min: Math.round(q.dwellMin) });
   void track("visit_qualified", {
     dwell_min: Math.round(q.dwellMin),
     source: raw.source ?? "visit",
@@ -127,6 +141,7 @@ export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
   if (!resolved) {
     // The single most important miss to surface: the stop was real and
     // qualified, and we simply could not name anywhere you might have eaten.
+    void breadcrumb("passive: unresolved", { reason: "no-venue-found" });
     void track("visit_unresolved", {
       reason: "no-venue-found",
       source: raw.source ?? "visit",
@@ -149,6 +164,7 @@ export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
   } else {
     // Not a failure, but from the user's seat it looks identical to one: no
     // notification appeared.
+    void breadcrumb("passive: not notified", { reason: result });
     void track("visit_unresolved", { reason: result, source: raw.source ?? "visit" });
     logDetectorNote("miss", `${result}: ${resolved.candidates[0].name}`);
   }

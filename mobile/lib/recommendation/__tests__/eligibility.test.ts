@@ -108,3 +108,38 @@ describe("filterRecommendable", () => {
     expect(filterRecommendable(rows)[0].address).toBe("1 Main St");
   });
 });
+
+// ============================================================================
+// Closed restaurants.
+// ----------------------------------------------------------------------------
+// business_status appeared nowhere in the repo until 0127: no field mask asked
+// for it, no column held it, nothing filtered on it. The app could send
+// somebody to a restaurant that shut months ago and had no mechanism to ever
+// find out.
+// ============================================================================
+describe("permanently closed", () => {
+  const open = { google_place_id: "a", name: "A", format_class: "casual_dining" } as never;
+
+  it("never recommends a permanently closed restaurant", () => {
+    expect(isRecommendable({ ...(open as object), business_status: "CLOSED_PERMANENTLY" } as never))
+      .toBe(false);
+  });
+
+  it("treats an unknown status as open, because most of the catalogue is null", () => {
+    // Reading absence as closure would empty the app on the day it shipped.
+    expect(isRecommendable({ ...(open as object), business_status: null } as never)).toBe(true);
+    expect(isRecommendable(open)).toBe(true);
+  });
+
+  it("still allows a temporary closure", () => {
+    // "Shut for a refurb" is a different claim from "gone", and Google is slow
+    // to clear it. Hiding these would lose real restaurants for months.
+    expect(isRecommendable({ ...(open as object), business_status: "CLOSED_TEMPORARILY" } as never))
+      .toBe(true);
+  });
+
+  it("passes an operational one through", () => {
+    expect(isRecommendable({ ...(open as object), business_status: "OPERATIONAL" } as never))
+      .toBe(true);
+  });
+});

@@ -208,7 +208,7 @@ async function handleNearby(
   // from the cached restaurants instead of calling Google.
   if (await isTripped(admin)) {
     const places = await degradedNearby(admin, lat, lng, radius);
-    await recordUsage(admin, "nearby", "cache");
+    await recordUsage(admin, `nearby:${radius}`, "cache");
     return json({ places, degraded: true });
   }
 
@@ -237,7 +237,7 @@ async function handleNearby(
   if (fresh) {
     const places = await degradedNearby(admin, lat, lng, radius);
     if (places.length >= CACHE_MIN_RESULTS) {
-      await recordUsage(admin, "nearby", "cache");
+      await recordUsage(admin, `nearby:${radius}`, "cache");
       return json({ places, cached: true });
     }
     // Coverage claimed density we can no longer reproduce (rows deleted, or the
@@ -255,7 +255,7 @@ async function handleNearby(
         "Content-Type": "application/json",
         "X-Goog-Api-Key": GOOGLE_KEY,
         "X-Goog-FieldMask":
-          "places.id,places.displayName,places.formattedAddress,places.shortFormattedAddress,places.addressComponents,places.location,places.primaryType,places.types,places.priceLevel,places.rating,places.userRatingCount,places.regularOpeningHours",
+          "places.id,places.displayName,places.formattedAddress,places.shortFormattedAddress,places.addressComponents,places.location,places.primaryType,places.types,places.priceLevel,places.rating,places.userRatingCount,places.regularOpeningHours,places.businessStatus",
       },
       body: JSON.stringify({
         includedTypes: RESTAURANT_TYPES,
@@ -296,12 +296,24 @@ async function handleNearby(
       lng_bucket: lngCell,
       radius_m: radius,
       fetched_at: new Date().toISOString(),
-      result_count: rows.length,
+      // Count what the READ will actually return, not what Google sent.
+      //
+      // This recorded rows.length — Google's raw count, unfiltered — while
+      // degradedNearby reads back through the recommendation-eligibility
+      // filter, which strips roughly 45% of stored rows. So a cell would write
+      // result_count 20, satisfy the >= 15 coverage test on the next request,
+      // read back 8 eligible rows, fail the same threshold, pay Google again,
+      // and write 20 again. A permanent miss loop that bills every time.
+      result_count: rows.filter((r) =>
+        r.recommendation_eligibility === null ||
+        r.recommendation_eligibility === undefined ||
+        (r.recommendation_eligibility as number) > 0
+      ).length,
     },
     { onConflict: "lat_bucket,lng_bucket,radius_m" },
   );
 
-  await recordUsage(admin, "nearby", "google");
+  await recordUsage(admin, `nearby:${radius}`, "google");
   await countUserCall(admin, userId, "nearby");
   return json({ places: rows });
 }
@@ -350,7 +362,7 @@ async function handleDetails(
     headers: {
       "X-Goog-Api-Key": GOOGLE_KEY,
       "X-Goog-FieldMask":
-        "id,displayName,formattedAddress,shortFormattedAddress,addressComponents,location,primaryType,types,priceLevel,rating,userRatingCount,regularOpeningHours,editorialSummary,reviews,goodForGroups,goodForChildren,menuForChildren,goodForWatchingSports,liveMusic,reservable,outdoorSeating,servesBreakfast,servesBrunch,servesLunch,servesDinner,servesBeer,servesWine,servesCocktails,servesVegetarianFood,servesDessert,allowsDogs,delivery,takeout,dineIn",
+        "id,displayName,formattedAddress,shortFormattedAddress,addressComponents,location,primaryType,types,priceLevel,rating,userRatingCount,regularOpeningHours,businessStatus,editorialSummary,reviews,goodForGroups,goodForChildren,menuForChildren,goodForWatchingSports,liveMusic,reservable,outdoorSeating,servesBreakfast,servesBrunch,servesLunch,servesDinner,servesBeer,servesWine,servesCocktails,servesVegetarianFood,servesDessert,allowsDogs,delivery,takeout,dineIn",
     },
   });
   if (!resp.ok) {
@@ -387,7 +399,7 @@ async function handleSearch(
       "Content-Type": "application/json",
       "X-Goog-Api-Key": GOOGLE_KEY,
       "X-Goog-FieldMask":
-        "places.id,places.displayName,places.formattedAddress,places.shortFormattedAddress,places.addressComponents,places.location,places.primaryType,places.types,places.priceLevel,places.rating,places.userRatingCount,places.regularOpeningHours",
+        "places.id,places.displayName,places.formattedAddress,places.shortFormattedAddress,places.addressComponents,places.location,places.primaryType,places.types,places.priceLevel,places.rating,places.userRatingCount,places.regularOpeningHours,places.businessStatus",
     },
     body: JSON.stringify({
       textQuery: body.query,

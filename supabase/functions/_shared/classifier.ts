@@ -1176,6 +1176,12 @@ export function googleToRestaurantRow(
   return {
     google_place_id: p.id,
     name,
+    // Google's own word on whether the place still exists. It rides the same
+    // field-mask tier we already pay for, so capturing it costs nothing and
+    // not capturing it means we can send somebody to a restaurant that shut.
+    // OPERATIONAL / CLOSED_TEMPORARILY / CLOSED_PERMANENTLY, or null when
+    // Google did not say — and null must never be read as closed.
+    business_status: (p as { businessStatus?: string }).businessStatus ?? null,
     chain_name: d.chain_name,
     address: p.shortFormattedAddress ?? p.formattedAddress ?? null,
     latitude: p.location?.latitude ?? null,

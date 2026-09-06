@@ -52,6 +52,19 @@ export function isRecommendable(
   if (opts.hidden && r.google_place_id && opts.hidden.has(r.google_place_id)) return false;
   const input = r as RestaurantInput;
 
+  // A restaurant that has closed down is the most obviously wrong thing this
+  // app can suggest, and until now nothing anywhere checked. Google reports
+  // business_status on the same responses we already pay for (0127).
+  //
+  // NULL IS NOT CLOSED. Almost every row is null today and will be until it
+  // next refreshes, so reading absence as closure would empty the app. Only
+  // the explicit permanent value gates; CLOSED_TEMPORARILY is deliberately
+  // allowed through, because "shut for a refurb" is a different claim from
+  // "gone", and Google is slow to clear it.
+  if ((input as { business_status?: string | null }).business_status === "CLOSED_PERMANENTLY") {
+    return false;
+  }
+
   // Hard gate — format class, Google fast-food types, classifier chain_name,
   // national-brand name match, DB chain-shape flag, classifier downrank.
   if (isRecIneligible(input)) return false;

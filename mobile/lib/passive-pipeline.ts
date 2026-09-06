@@ -22,6 +22,7 @@ import { venueOpenAt } from "./opening-hours";
 import { recordMiss } from "./passive-misses";
 import { restaurantsNear } from "./cuisine-catalogue";
 import { track } from "./analytics";
+import { breadcrumb } from "./observability";
 
 // Qualifying thresholds (spec Phase 3).
 // Five minutes. A sit-down meal and a Shake Shack counter order are both real
@@ -445,6 +446,7 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
   if (cached) {
     places = cached;
     cacheHit = true;
+    void breadcrumb("passive: candidates from cache", { count: cached.length, radius });
   } else if ((await catalogueCandidates(raw, radius)).length > 0) {
     // OUR OWN CATALOGUE, BEFORE GOOGLE.
     //
@@ -464,10 +466,14 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
     places = await catalogueCandidates(raw, radius);
     cacheHit = true;
     void track("visit_resolved_from_catalogue", { count: places.length });
+    void breadcrumb("passive: candidates from catalogue", { count: places.length, radius });
   } else {
     const res = await nearbyRestaurantsDetailed(raw.lat, raw.lng, radius);
     places = res.places;
     cacheHit = false;
+    void breadcrumb("passive: candidates from google", {
+      count: places.length, radius, degraded: res.degraded,
+    });
     // A degraded answer (Google budget tripped) is not evidence about the
     // place. Cache nothing from it, and if it finds nothing, retry later
     // rather than recording a miss and consuming the visit.
