@@ -337,16 +337,29 @@ async function refreshCity(
         if (eligibleRows.length >= TOP_N || !nextPageToken) break;
         pageToken = nextPageToken;
       }
-      if (eligibleRows.length === 0) continue;
+      // KEEP EVERYTHING WE PAID FOR, before deciding what to show.
+      //
+      // This stored only `eligibleRows` and, worse, `continue`d past the
+      // upsert entirely when none were eligible — so a category that returned
+      // twenty chain outlets was billed for and then discarded in full, and
+      // billed again on the next rebuild. Eligibility is a decision about what
+      // to RECOMMEND; it has nothing to do with whether a row is worth
+      // keeping. An ineligible row still answers "where did I eat on Tuesday",
+      // still fills the catalogue that passive capture now resolves against,
+      // and still spares a future Google call.
+      const keepAll = filterByCategorySlug([...rawById.values()], cat.slug)
+        .map((p) => googleToRestaurantRow(p as unknown as ClassifierPlace));
+      if (keepAll.length > 0) {
+        // google_raw is stripped to keep the upsert payload reasonable.
+        const restaurantRows = keepAll.map(({ google_raw: _r, ...rest }) => rest);
+        // NB: `void builder` never executed — postgrest-js only sends the
+        // request when the builder is awaited. Found by an earlier review.
+        await admin.from("restaurants").upsert(restaurantRows, {
+          onConflict: "google_place_id",
+        });
+      }
 
-      // Side-effect: keep `restaurants` warm with the full classified row.
-      // Stripping google_raw to keep upsert payload reasonable.
-      const restaurantRows = eligibleRows.map(({ google_raw: _r, ...rest }) => rest);
-      // `void builder` never executed: postgrest-js only sends the request
-      // when the builder is awaited. Found by the code review.
-      await admin.from("restaurants").upsert(restaurantRows, {
-        onConflict: "google_place_id",
-      });
+      if (eligibleRows.length === 0) continue;
 
       const ranked = rankAndTrimClassified(eligibleRows, lat, lng).slice(0, TOP_N);
 
@@ -417,7 +430,14 @@ async function googleTextSearch(
         // regularOpeningHours added so we can filter by time-of-day per
         // category (late-night needs to actually be open late, etc.);
         // nextPageToken so we can paginate short lists up to TOP_N.
-        "nextPageToken,places.id,places.displayName,places.formattedAddress,places.shortFormattedAddress,places.location,places.primaryType,places.types,places.priceLevel,places.rating,places.userRatingCount,places.regularOpeningHours",
+        // addressComponents is load-bearing and was missing. Without it
+        // neighborhoodFromPlace falls back to parsing formattedAddress, which
+        // yields a coarser neighbourhood — and because the preserve trigger
+        // only guards against NULL, that coarser value OVERWRITES a better one
+        // already in the row. Measured live: 52 rows whose stored neighborhood
+        // is worse than the addressComponents sitting in their own google_raw.
+        // It is in the same field-mask tier we already pay for.
+        "nextPageToken,places.id,places.displayName,places.formattedAddress,places.shortFormattedAddress,places.addressComponents,places.location,places.primaryType,places.types,places.priceLevel,places.rating,places.userRatingCount,places.regularOpeningHours,places.businessStatus",
     },
     body: JSON.stringify({
       textQuery: query,
