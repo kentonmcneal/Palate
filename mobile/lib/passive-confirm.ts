@@ -22,6 +22,7 @@ import {
 // Re-exported so the screens keep their existing import path.
 export { CONFIRM_CATEGORY, confirmParamsFor } from "./passive-digest";
 import { serialize } from "./notification-dedupe";
+import { mirrorInbox, hydrateInboxIfEmpty } from "./passive-inbox-sync";
 
 // Quiet hours (local): default ~9pm–8am. Suppressed visits go to the inbox.
 const QUIET_START_HOUR = 21;
@@ -188,6 +189,7 @@ export async function getInbox(): Promise<InboxEntry[]> {
     const live = all.filter((e) => e.detectedAt >= cutoff);
     if (live.length !== all.length) {
       await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(live));
+      void mirrorInbox(live);
       // An entry that expires unanswered is an IGNORE, and ignores are almost
       // certainly the most common outcome. Dropping them silently would bias
       // calibration upward: "of entries scored High, what fraction get
@@ -218,7 +220,11 @@ async function addToInbox(entry: InboxEntry): Promise<boolean> {
   if (existing.some((e) => e.place_id === entry.place_id && Math.abs(e.detectedAt - entry.detectedAt) < 3_600_000)) {
     return false; // dedupe same place within an hour
   }
-  await AsyncStorage.setItem(INBOX_KEY, JSON.stringify([entry, ...existing]));
+  const next = [entry, ...existing];
+  await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(next));
+  // Mirror it. Best-effort and never awaited into the caller's path: a
+  // detection must land locally whether or not there is a network.
+  void mirrorInbox(next);
   return true;
 }
 
@@ -260,9 +266,34 @@ export async function seedDigestFixtures(): Promise<number> {
   return fixtures.length;
 }
 
+/**
+ * Rebuild the inbox from the server mirror after a reinstall.
+ *
+ * Called on launch. Does nothing unless the local inbox is empty, which is the
+ * only unambiguous signal — merging would let the mirror resurrect an entry
+ * the device deliberately removed, and ask somebody about the same meal twice.
+ */
+export async function restoreInboxFromServer(): Promise<number> {
+  try {
+    const local = await getInbox();
+    const restored = await hydrateInboxIfEmpty(local.length);
+    if (!restored || restored.length === 0) return 0;
+    await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(restored));
+    void track("passive_inbox_restored", { count: restored.length });
+    // The digest that would have announced these was scheduled on a device
+    // that no longer exists.
+    await rescheduleDigest();
+    return restored.length;
+  } catch {
+    return 0;
+  }
+}
+
 export async function removeFromInbox(id: string): Promise<void> {
   const existing = await getInbox();
-  await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(existing.filter((e) => e.id !== id)));
+  const remaining = existing.filter((e) => e.id !== id);
+  await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(remaining));
+  void mirrorInbox(remaining);
   // AND rewrite tonight's digest.
   //
   // This line is the whole of the founder's "it fires even though I already

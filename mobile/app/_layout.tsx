@@ -8,6 +8,7 @@ import {
   declineVisitById,
   drainConfirmQueue,
   rescheduleDigest,
+  restoreInboxFromServer,
 } from "../lib/passive-confirm";
 import { refreshDiscoveryPings } from "../lib/notification-schedule";
 import { recordHeartbeat } from "../lib/heartbeat";
@@ -281,6 +282,9 @@ export default function RootLayout() {
     // rewrites from the current inbox, so it is safe to run any number of
     // times and schedules nothing when there is nothing to ask about.
     void rescheduleDigest().catch(() => {});
+    // After a reinstall the local inbox is empty and the mirror is not. This
+    // is the only place that reads it, and only in that case.
+    void restoreInboxFromServer().catch(() => {});
     const sub = AppState.addEventListener("change", (st) => {
       if (st === "active") {
         void recordHeartbeat().catch(() => {});
