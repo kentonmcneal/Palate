@@ -1,6 +1,9 @@
 import pool from "../__fixtures__/memphis-pool.json";
 import visits from "../__fixtures__/founder-visits.json";
 import { computeCompatibility } from "../compatibility";
+import { scoreRestaurant } from "../scoring";
+import { capByKey } from "../reranking";
+import { venueOpenAt } from "../../opening-hours";
 import type { TasteGraph } from "../taste-graph";
 import type { RestaurantInput } from "../types";
 import { EMPTY_DISLIKES } from "../../dislikes";
@@ -84,6 +87,7 @@ export function poolAsInputs(): RestaurantInput[] {
     primary_type: r.primary_type,
     types: r.types,
     dish_family: r.dish_family,
+    regular_opening_hours: r.regular_opening_hours,
   })) as RestaurantInput[];
 }
 
@@ -170,5 +174,69 @@ describe("good match > unknown > known-poor match", () => {
       cuisine_region: null, cuisine_subregion: null } as never;
     expect(computeCompatibility(g, typedOnly).score)
       .toBeGreaterThan(computeCompatibility(g, nothing).score);
+  });
+});
+
+// ============================================================================
+// The whole chain, on the real pool: finalScore, open-now, and the cap.
+// ============================================================================
+describe("what Home now actually shows", () => {
+  const HERE = { lat: 35.098, lng: -89.841 };
+  // A Tuesday at 7:30pm — dinner, when most places are open and some are not.
+  const NOW = new Date(2026, 8, 8, 19, 30);
+
+  function ranked() {
+    const g = founderGraph();
+    return poolAsInputs()
+      .map((r) => ({
+        r,
+        compat: computeCompatibility(g, r).score,
+        final: scoreRestaurant(g, r, { here: HERE, now: NOW, mode: "browsing" }).finalScore,
+        open: venueOpenAt(r.regular_opening_hours, NOW),
+      }))
+      .sort((a, b) => b.final - a.final);
+  }
+
+  it("prints the shortlist the user would see", () => {
+    const all = ranked();
+    const top = capByKey(all, (t) => t.r.cuisine_type, 2, 3);
+    // eslint-disable-next-line no-console
+    console.log("\nSHORTLIST (Tue 7:30pm):\n" + top.map((t, i) =>
+      `  ${i + 1}. final=${String(t.final).padStart(3)} match=${String(t.compat).padStart(3)} ` +
+      `open=${t.open === null ? "?" : t.open ? "y" : "N"} ${t.r.name?.slice(0, 28).padEnd(29)}${t.r.cuisine_type ?? "-"}`
+    ).join("\n"));
+    expect(top).toHaveLength(3);
+  });
+
+  it("does not put a closed restaurant in the top ten", () => {
+    const all = ranked();
+    const closedInTop = all.slice(0, 10).filter((t) => t.open === false);
+    const closedInPool = all.filter((t) => t.open === false).length;
+    // eslint-disable-next-line no-console
+    console.log(`\n  closed right now in the pool: ${closedInPool}` +
+                `\n  closed inside the top 10:     ${closedInTop.length}` +
+                `\n  best rank of a closed place:  ${all.findIndex((t) => t.open === false) + 1}`);
+    expect(closedInPool).toBeGreaterThan(0);   // the test is meaningless otherwise
+    expect(closedInTop).toHaveLength(0);
+
+    // And prove the gate is what did it, not luck. Ranked the way Home ranked
+    // before today — compatibility alone, no context — closed places reach the
+    // top of the list.
+    const g = founderGraph();
+    const byCompatOnly = poolAsInputs()
+      .map((r) => ({ r, compat: computeCompatibility(g, r).score, open: venueOpenAt(r.regular_opening_hours, NOW) }))
+      .sort((a, b) => b.compat - a.compat);
+    const closedBefore = byCompatOnly.slice(0, 10).filter((t) => t.open === false).length;
+    // eslint-disable-next-line no-console
+    console.log(`  closed in top 10 ranking by compatibility alone: ${closedBefore}`);
+    expect(closedBefore).toBeGreaterThan(0);
+  });
+
+  it("does not hand back three of the same cuisine", () => {
+    const top = capByKey(ranked(), (t) => t.r.cuisine_type, 2, 3);
+    const cuisines = top.map((t) => (t.r.cuisine_type ?? "").toLowerCase());
+    const counts = new Map<string, number>();
+    for (const c of cuisines) if (c) counts.set(c, (counts.get(c) ?? 0) + 1);
+    expect(Math.max(0, ...counts.values())).toBeLessThanOrEqual(2);
   });
 });

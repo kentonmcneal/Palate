@@ -52,6 +52,11 @@ export type RestaurantRecommendation = {
   matchScore?: number | null;
   /** Distance in km from the user's last known location. */
   distanceKm?: number | null;
+  /** What the list is ORDERED by: compatibility blended with context fit and
+   *  confidence, plus the gem and café adjustments. Distinct from matchScore,
+   *  which stays context-free so the % a person reads means the same thing on
+   *  every screen and does not change because they walked two blocks. */
+  finalScore?: number | null;
   latitude?: number | null;
   longitude?: number | null;
 };

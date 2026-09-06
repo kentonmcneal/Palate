@@ -15,6 +15,7 @@ import type { TasteGraph } from "./taste-graph";
 import { shareOf } from "./taste-graph";
 import { computeCompatibility } from "./compatibility";
 import { gemAdjustment } from "./gems";
+import { venueOpenAt } from "../opening-hours";
 
 const FINAL_W = {
   compatibility: 0.60,
@@ -81,6 +82,32 @@ export function scoreContext(r: RestaurantInput, ctx: ScoreContext): number {
     const wanted = SLOT_TO_OCCASIONS[slot];
     const hits = r.occasion_tags.filter((t) => wanted.includes(t)).length;
     score += Math.min(15, hits * 7);
+  }
+
+  // Open now.
+  //
+  // scoring.ts's own header has claimed context covers "distance, time-of-day
+  // and open-now" since it was written, and the open-now half was never
+  // implemented. regular_opening_hours arrived in migration 0070 and
+  // lib/opening-hours.ts has parsed it correctly and been unit-tested the
+  // whole time; nothing read either. 168 of the 200 restaurants in the pool
+  // around Memphis carry usable hours, so this is real coverage, not a
+  // theoretical field.
+  //
+  // Recommending a closed restaurant is the most obviously wrong output a
+  // dining app can produce, so the penalty is large enough to sink a place
+  // below anything open. It is a penalty rather than a hard filter because
+  // hours data is imperfect and a wrong record should cost a place its rank,
+  // not its existence — and because "closes in 20 minutes" is still useful
+  // when you are standing outside.
+  //
+  // NULL is untouched. venueOpenAt returns null for missing or unparseable
+  // hours, and penalising that would punish exactly the small independent
+  // places this product exists to surface.
+  if (ctx.now) {
+    const open = venueOpenAt(r.regular_opening_hours, ctx.now);
+    if (open === false) score -= 40;
+    else if (open === true) score += 6;
   }
 
   // Mode multiplier — "right_now" amplifies context, "browsing" softens it

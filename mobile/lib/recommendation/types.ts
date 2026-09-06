@@ -33,6 +33,11 @@ export type RestaurantInput = {
   /** Dish families from Google types (0099): burgers, tacos, sushi... The
    *  "Not interested" lesson keys on these; strip them and it cannot apply. */
   dish_family?: string[] | null;
+  /** Google's raw opening periods, as stored by migration 0070:
+   *  `[{open:{day,hour,minute}, close:{...}}, ...]`. Parsed by
+   *  lib/opening-hours.ts. Absent means "we do not know", which is NOT the
+   *  same as closed and must never be scored as if it were. */
+  regular_opening_hours?: unknown;
   cultural_context?: string | null;
   // Free-form classifier tags (e.g. "michelin", "hidden-gem", "tourist-heavy")
   // used for discovery-signal score adjustment.

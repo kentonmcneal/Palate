@@ -20,7 +20,10 @@ import { getEffectiveLocation, useBrowsingCity } from "../lib/browsing-location"
 import { loadPersonalSignal, onPersonalSignalInvalidate } from "../lib/personal-signal";
 import { nearbyRestaurants } from "../lib/places";
 import { getOrFetchNearby } from "../lib/nearby-cache";
-import { assembleGraph, getCompatibility } from "../lib/recommendation";
+import { assembleGraph, getCompatibility, scoreRestaurant } from "../lib/recommendation";
+import { restaurantsNear } from "../lib/cuisine-catalogue";
+import { capByKey } from "../lib/recommendation/reranking";
+import { track } from "../lib/analytics";
 import { filterRecommendable } from "../lib/recommendation/eligibility";
 import { triggerHapticSuccess, triggerHapticSelection } from "../lib/haptics";
 import { pickSaveCopy } from "../lib/save-copy";
@@ -55,13 +58,22 @@ import { askNotInterested } from "./notInterested";
 // treatment: a steakhouse fetched because you asked for steakhouses has to be
 // scored on the same graph, or the % match beside it would mean something
 // different from the % match beside everything else on the screen.
+/**
+ * The three shown. Ranked order, but never more than two of one cuisine —
+ * three burger places is the same suggestion three times, and the real pool
+ * around Memphis ranks ten American restaurants in its top ten.
+ */
+function shortlist(items: RestaurantRecommendation[]): RestaurantRecommendation[] {
+  return capByKey(items, (r) => r.cuisine, 2, 3);
+}
+
 function toRecommendation(
   p: any,
   graph: ReturnType<typeof assembleGraph>,
   here: { lat: number; lng: number },
   personal: { visitsByPlaceId: Map<string, number> } | null,
 ): RestaurantRecommendation {
-  const compat = getCompatibility(graph, {
+  const input = {
     google_place_id: p.google_place_id,
     name: p.name,
     cuisine_type: p.cuisine_type ?? null,
@@ -78,7 +90,15 @@ function toRecommendation(
     user_rating_count: p.user_rating_count ?? null,
     latitude: p.latitude ?? null,
     longitude: p.longitude ?? null,
-  });
+    // The field nothing read. scoreContext sinks a closed restaurant by 40.
+    regular_opening_hours: p.regular_opening_hours ?? null,
+  };
+  const compat = getCompatibility(graph, input);
+  // The ranking score. compat.score is the headline % and stays context-free;
+  // this is what the ORDER uses, and it is where distance, time of day,
+  // open-now, the gems boost and the café demotion actually reach the user.
+  // All of that was computed and discarded on this surface until now.
+  const ranked = scoreRestaurant(graph, input, { here, now: new Date(), mode: "browsing" });
   const dKm = (p.latitude != null && p.longitude != null)
     ? distanceKm({ lat: here.lat, lng: here.lng }, { lat: p.latitude, lng: p.longitude })
     : null;
@@ -98,6 +118,7 @@ function toRecommendation(
     longitude: p.longitude ?? null,
     rating: p.rating ?? null,
     matchScore: compat.score,
+    finalScore: ranked.finalScore,
     distanceKm: dKm,
     reason: compat.reasons[0] ?? "Nearby and worth a try.",
   } as RestaurantRecommendation;
@@ -161,7 +182,36 @@ export function RecommendationsCard({
       // CANONICAL PATH — single source of truth. Same scorer Discover and
       // Map use, so the % match shown on Home for a given restaurant is
       // identical to its % match anywhere else.
-      const nearby = await getOrFetchNearby(here.lat, here.lng, 3000, nearbyRestaurants);
+      // CATALOGUE FIRST, then Google only if the catalogue is thin here.
+      //
+      // Home used to build every list from one billed Google Nearby call at
+      // 3km — roughly twenty results, which then had to survive the chain
+      // filter, the dislike filter, the visited-heavy filter and the mood
+      // filter. That is why a chip could come back with almost nothing.
+      // restaurants_near (0109) is a bounding-box scan over rows we already
+      // own: free, and 200 recommendable places inside 8km of Memphis against
+      // Google's twenty.
+      //
+      // The fallback is what keeps this honest. In a city nobody has explored
+      // the catalogue is genuinely empty, and an empty Home is worse than a
+      // billed call, so under the threshold we still ask Google.
+      //
+      // This is only safe because the sort below now uses finalScore, which
+      // carries the distance term. Ranking a 6km pool on compatibility alone
+      // would have put somewhere across the city above somewhere on this
+      // street.
+      const CATALOGUE_FLOOR = 25;
+      let nearby = await restaurantsNear(here, { radiusM: 6000, limit: 150 }).catch(() => []);
+      let poolSource = "catalogue";
+      if (filterRecommendable(nearby, { hidden: null }).length < CATALOGUE_FLOOR) {
+        const fromGoogle = await getOrFetchNearby(here.lat, here.lng, 3000, nearbyRestaurants);
+        // Union, not replacement: the catalogue rows carry classification and
+        // opening hours that a fresh Google row may not.
+        const seen = new Set(nearby.map((p: { google_place_id: string }) => p.google_place_id));
+        nearby = [...nearby, ...fromGoogle.filter((p) => !seen.has(p.google_place_id))];
+        poolSource = "catalogue+google";
+      }
+      void track("rec_pool", { source: poolSource, size: nearby.length });
       const graph = assembleGraph(vector, personal);
 
       // Visited place IDs — used for anti-staleness on the recs feed. We
@@ -181,13 +231,15 @@ export function RecommendationsCard({
         .filter((p) => !excludePlaceIds.includes(p.google_place_id))
         .map((p) => toRecommendation(p, graph, here, personal));
 
-      // Sort by canonical compatibility (high → low). Keep the full ranked
-      // list so a mood can re-slice it without another network round trip —
-      // switching mood should feel instant.
-      enriched.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+      // Ordered by finalScore, not by the headline %. Home sorted on
+      // compatibility alone, which threw away distance, time-of-day, open-now,
+      // the gems-first boost and the café demotion on every render — all of it
+      // computed and discarded. Keep the full ranked list so a mood can
+      // re-slice it without another network round trip.
+      enriched.sort((a, b) => (b.finalScore ?? b.matchScore ?? 0) - (a.finalScore ?? a.matchScore ?? 0));
       setAllRecs(enriched);
       scoringRef.current = { graph, here, personal };
-      setRecs(enriched.slice(0, 3));
+      setRecs(shortlist(enriched));
       // Real photos, from our own users' visits — the free source. One batched
       // query, cached at module level. The cards render on the text
       // immediately and upgrade when this lands; a failure is silent.
@@ -279,12 +331,12 @@ export function RecommendationsCard({
             // Genuinely nothing of that cuisine within reach. That is a real
             // answer and it is not the same as a failed filter, so it gets its
             // own sentence rather than the fallback list.
-            setRecs(items.slice(0, 3));
+            setRecs(shortlist(items));
             setMoodCount(0);
             setMoodNote(moodFallbackNote(mood));
             return;
           }
-          setRecs(scored.slice(0, 3));
+          setRecs(shortlist(scored));
           setMoodCount(scored.length);
           setMoodNote(moodContextNote(mood, scored[0].matchScore ?? null));
         })
@@ -292,7 +344,7 @@ export function RecommendationsCard({
           if (!alive) return;
           // Saying nothing here shows the same three places as "Anything",
           // which is indistinguishable from a chip that does nothing.
-          setRecs(items.slice(0, 3));
+          setRecs(shortlist(items));
           setMoodCount(null);
           setMoodNote(`Couldn't reach ${moodLabel(mood)} nearby. These are the regular picks.`);
         })
@@ -300,7 +352,7 @@ export function RecommendationsCard({
       return () => { alive = false; };
     }
 
-    setRecs(items.slice(0, 3));
+    setRecs(shortlist(items));
     setMoodCount(mood ? (matched ? items.length : 0) : null);
     const top = items.length > 0 ? items[0].matchScore ?? null : null;
     // "Nothing matched" and "these matched and are not your thing" are
