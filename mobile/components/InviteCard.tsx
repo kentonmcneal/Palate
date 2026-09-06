@@ -96,6 +96,11 @@ export function InviteCard({ displayName }: { displayName?: string | null }) {
 
   return (
     <View style={styles.card}>
+      {/* Shadow outside, clip inside: iOS drops a view's own shadow when that
+          view clips its children, so one view cannot both cast the card
+          shadow and cut the rail to the rounded corners. Every other card in
+          the app is built this way. */}
+      <View style={styles.clip}>
       <View style={styles.rail} />
       <View style={styles.body}>
         <Text style={styles.eyebrow} maxFontSizeMultiplier={FONT_CAP.eyebrow}>BRING SOMEONE</Text>
@@ -152,6 +157,7 @@ export function InviteCard({ displayName }: { displayName?: string | null }) {
           </View>
         )}
       </View>
+      </View>
     </View>
   );
 }
@@ -163,8 +169,9 @@ const styles = StyleSheet.create({
     // further than every other card on the screen.
     marginTop: spacing.lg,
     borderRadius: card.radius, backgroundColor: colors.faint,
-    overflow: "hidden", ...shadow.card,
+    ...shadow.card,
   },
+  clip: { borderRadius: card.radius, overflow: "hidden" },
   // The same rail every card in the app wears, in the one hue that is not a
   // cuisine: this card is about people.
   rail: { position: "absolute", left: 0, top: 0, bottom: 0, width: 4, backgroundColor: categoryColors.plum },

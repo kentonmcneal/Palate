@@ -38,6 +38,7 @@ const GUARDED = [
   "components/MoodRow.tsx",
   "components/StretchPick.tsx",
   "components/CaptureWarning.tsx",
+  "components/InviteCard.tsx",
   "components/HomeHero.tsx",
   "components/AllTimeCard.tsx",
   "components/WrappedCard.tsx",
