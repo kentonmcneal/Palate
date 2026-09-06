@@ -166,7 +166,7 @@ export async function buildFeaturedLists(opts: {
     const visited = restaurants.filter((r) => visitedIds.has(r.google_place_id)).length;
     lists.push({
       slug: row.category_slug,
-      title: row.category_title,
+      title: listTitle(row.category_title),
       subtitle,
       visitedCount: visited,
       totalCount: restaurants.length,
@@ -239,4 +239,12 @@ function slugify(s: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+/** "Top 10 Burgers" reads as a promise of ten, and the lists do not all
+ *  have ten. "Top Burgers" is what they are. Applied at read time so the
+ *  rows already cached keep working; the refresh function writes the new
+ *  form from now on. */
+export function listTitle(raw: string): string {
+  return raw.replace(/^Top 10\b\s*/, "Top ");
 }
