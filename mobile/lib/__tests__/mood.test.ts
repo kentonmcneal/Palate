@@ -15,11 +15,11 @@ const breakdown = [
 ];
 
 describe("mood chips", () => {
-  it("offers Anything, Somewhere new, the user's real habits, then Surprise me", () => {
+  it("offers Anything, Somewhere new, then the user's real habits", () => {
     const chips = buildMoodChips(breakdown);
     expect(chips.map((c) => c.label)).toEqual([
       "Anything", "Somewhere new",
-      "American", "Mexican", "Italian", "Surprise me",
+      "American", "Mexican", "Italian",
     ]);
   });
 
@@ -44,7 +44,7 @@ describe("mood chips", () => {
     const labels = buildMoodChips(sparse).map((c) => c.label);
     expect(labels).toEqual([
       "Anything", "Somewhere new",
-      "American", "Bar", "Cafe", "Mediterranean", "Surprise me",
+      "American", "Bar", "Cafe", "Mediterranean",
     ]);
   });
 
@@ -55,8 +55,9 @@ describe("mood chips", () => {
     expect(labels).toEqual(["Anything", "Somewhere new"]);
   });
 
-  it("drops Surprise me until there is a usual to be surprised away from", () => {
+  it("never offers Surprise me any more", () => {
     expect(buildMoodChips([]).map((c) => c.key)).not.toContain("surprise");
+    expect(buildMoodChips(breakdown).map((c) => c.key)).not.toContain("surprise");
   });
 });
 

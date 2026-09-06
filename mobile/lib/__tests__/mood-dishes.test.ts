@@ -11,9 +11,11 @@ describe("dish moods", () => {
 
   it("puts dishes right after the intents, drinks excluded", () => {
     const labels = buildDishChips(breakdown, pool, dishes).map((c) => c.label);
-    expect(labels.slice(0, 5)).toEqual(["Anything", "Somewhere new", "Tacos", "Burgers", "Pizza"]);
+    // Tacos is absent because Mexican is on the row and the founder judged
+    // the pair to be one question asked twice. See the subsumption tests.
+    expect(labels.slice(0, 4)).toEqual(["Anything", "Somewhere new", "Burgers", "Pizza"]);
     expect(labels).not.toContain("Coffee");
-    expect(labels[labels.length - 1]).toBe("Surprise me");
+    expect(labels).not.toContain("Surprise me");
     expect(labels).toContain("Italian");
   });
 
@@ -127,5 +129,47 @@ describe("the cocktail bars chip", () => {
     // The compatibility score was never trained on a bar. Silence is honest.
     expect(moodContextNote(dishMood("cocktails"), 20)).toBeNull();
     expect(moodContextNote(dishMood("tacos"), 20)).not.toBeNull();
+  });
+});
+
+
+// ============================================================================
+// One thing, one chip.
+// ----------------------------------------------------------------------------
+// The Discover row showed "Bbq" and "BBQ" side by side — the same word from a
+// cuisine_type and a dish_family, cased two ways — and "Mexican" beside
+// "Tacos", which is the same ask twice. The founder's call on both.
+// ============================================================================
+describe("no duplicate chips", () => {
+  const pool = [{ cuisine_type: "bbq" }, { cuisine_type: "bbq" }, { cuisine_type: "mexican" }];
+  const breakdown = [
+    { cuisine: "bbq", count: 5, pct: 50 },
+    { cuisine: "mexican", count: 4, pct: 40 },
+  ] as any;
+
+  it("shows BBQ once, not Bbq and BBQ", () => {
+    const labels = buildDishChips(breakdown, pool, [{ dish: "bbq", place_count: 9 }]).map((c) => c.label);
+    expect(labels.filter((l) => l.toLowerCase() === "bbq")).toHaveLength(1);
+    expect(labels).toContain("BBQ");
+    expect(labels).not.toContain("Bbq");
+  });
+
+  it("drops Tacos when Mexican is already on the row", () => {
+    const labels = buildDishChips(breakdown, pool, [{ dish: "tacos", place_count: 9 }]).map((c) => c.label);
+    expect(labels).toContain("Mexican");
+    expect(labels).not.toContain("Tacos");
+  });
+
+  it("keeps Tacos when Mexican is not there to cover it", () => {
+    const noMexican = [{ cuisine: "bbq", count: 5, pct: 100 }] as any;
+    const labels = buildDishChips(noMexican, [{ cuisine_type: "bbq" }], [{ dish: "tacos", place_count: 9 }]).map((c) => c.label);
+    expect(labels).toContain("Tacos");
+  });
+
+  it("does not collapse pizza into Italian — that one is a real mood", () => {
+    const b = [{ cuisine: "italian", count: 5, pct: 100 }] as any;
+    const labels = buildDishChips(b, [{ cuisine_type: "italian" }], [{ dish: "pizza", place_count: 9 }]).map((c) => c.label);
+    expect(labels).toContain("Pizza");
+    expect(labels).toContain("Italian");
   });
 });

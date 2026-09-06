@@ -35,11 +35,13 @@ describe("buildCuisineChips", () => {
     expect(labels.filter((l) => l === "American")).toHaveLength(1);
   });
 
-  it("keeps the intents first and Surprise me last", () => {
+  it("keeps the intents first, and no longer offers Surprise me", () => {
     const chips = buildCuisineChips(breakdown, pool);
     expect(chips[0].label).toBe("Anything");
     expect(chips[1].key).toBe(SOMEWHERE_NEW);
-    expect(chips[chips.length - 1].key).toBe(SURPRISE);
+    // "It doesn't do anything" — the founder. On a thin pool it re-ranked the
+    // same twenty places by unfamiliarity and mostly handed back the same list.
+    expect(chips.some((c) => c.key === SURPRISE)).toBe(false);
   });
 
   it("never offers a cuisine with nowhere to send you", () => {

@@ -99,7 +99,7 @@ describe("buildMoodChips", () => {
     // cuisines now. Somewhere new stays because it needs no history.
     expect(chips.slice(0, 2).map((c) => c.label))
       .toEqual(["Anything", "Somewhere new"]);
-    expect(chips[chips.length - 1].label).toBe("Surprise me");
+    expect(chips.map((c) => c.label)).not.toContain("Surprise me");
   });
 
   it("stays a shortcut rather than a menu", () => {

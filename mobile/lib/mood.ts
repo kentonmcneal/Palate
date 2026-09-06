@@ -66,6 +66,11 @@ const DISH_LABEL: Record<string, string> = {
 // never take one of the eight dish slots from an actual meal — and only when
 // there is somewhere to send you.
 const DRINK_CHIP = "cocktails";
+
+/** Dish families that are, on a chip row, the same ask as their cuisine. */
+const DISH_PARENT: Record<string, string> = {
+  tacos: "mexican",
+};
 export function dishLabel(dish: string): string {
   return DISH_LABEL[dish] ?? cuisineLabel(dish);
 }
@@ -103,12 +108,17 @@ export function isSurprise(mood: Mood): boolean {
 }
 
 /** Title-case a cuisine slug for display: "fast_casual" -> "Fast Casual". */
+// Words that are initialisms, not words. Title-casing "bbq" produces "Bbq",
+// which is how the row ended up showing "Bbq" and "BBQ" side by side — the
+// same thing from two sources, cased two ways.
+const ACRONYMS = new Set(["bbq"]);
+
 export function cuisineLabel(cuisine: string): string {
   return cuisine
     .replace(/_/g, " ")
     .split(" ")
     .filter(Boolean)
-    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .map((w) => (ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1)))
     .join(" ");
 }
 
@@ -140,14 +150,15 @@ export function buildMoodChips(breakdown: CuisineSlice[], limit = 4): MoodChip[]
   // row is for cuisines, "whatever is in the area", and two format chips at
   // the front pushed the cuisines off the screen. applyMood still understands
   // both, so the deep link and the tests keep working.
+  // "Surprise me" is gone from the row. The founder's verdict was "it doesn't
+  // do anything", and on a thin pool that was literally true: it re-ranked by
+  // unfamiliarity, which on twenty candidates mostly returned the same list in
+  // a different order. Stretch on Discover is the honest version of the idea.
+  // applyMood still understands the key so the Thursday deep link keeps working.
   return [
     { key: null, label: "Anything" },
     { key: SOMEWHERE_NEW, label: "Somewhere new" },
     ...top,
-    // "Surprise me" means "outside your usual", which is not a thing that can
-    // be said to somebody with no usual yet — with an empty habit set it would
-    // match everything and duplicate "Anything".
-    ...(top.length > 0 ? [{ key: SURPRISE, label: "Surprise me" }] : []),
   ];
 }
 
@@ -393,14 +404,30 @@ export function buildDishChips(
   }
 
   const cuisineRow = buildCuisineChips(breakdown, pool, { totalLimit });
-  const surprise = cuisineRow.find((c) => c.key === SURPRISE);
   const cuisines = cuisineRow.filter((c) => c.key !== null && c.key !== SURPRISE && !isIntentMood(c.key));
   const intents = cuisineRow.filter((c) => c.key === null || isIntentMood(c.key));
 
-  const out: MoodChip[] = [...intents, ...dishChips];
-  for (const c of cuisines) {
+  // A dish that IS a cuisine in practice, when its parent is on the row too.
+  // "Mexican" and "Tacos" side by side asks the same question twice; the
+  // founder's call was to keep the cuisine. Deliberately short: pizza is a
+  // real mood distinct from Italian, and sushi from Japanese, so those stay.
+  const presentCuisines = new Set(cuisines.map((c) => String(c.key).toLowerCase()));
+  const subsumed = dishChips.filter((d) => {
+    const parent = DISH_PARENT[dishOf(d.key) ?? ""];
+    return !(parent && presentCuisines.has(parent));
+  });
+
+  // And a dish family that shares its name with a cuisine — "bbq" is both a
+  // dish_family and a cuisine_type — is one chip, not two. First wins, and
+  // dishes come first.
+  const seen = new Set<string>();
+  const out: MoodChip[] = [];
+  for (const c of [...intents, ...subsumed, ...cuisines]) {
+    const norm = (dishOf(c.key) ?? String(c.key ?? "anything")).toLowerCase();
+    if (seen.has(norm)) continue;
+    seen.add(norm);
     if (out.length >= totalLimit + intents.length) break;
     out.push(c);
   }
-  return surprise ? [...out, surprise] : out;
+  return out;
 }
