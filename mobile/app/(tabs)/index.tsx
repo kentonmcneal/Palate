@@ -1,6 +1,7 @@
 import { distanceKm } from "../../lib/match-score";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, StyleSheet, Alert, ScrollView, RefreshControl, Pressable, Image, Share } from "react-native";
+import { View, StyleSheet, Alert, RefreshControl, Pressable, Image, Share } from "react-native";
+import { ImpressionScrollView } from "../../components/Impressions";
 import { Text } from "../../components/Text";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -260,7 +261,7 @@ export default function Home() {
   return (
     <SafeAreaView style={styles.safe}>
       <Confetti fire={milestoneConfetti > 0} count={150} />
-      <ScrollView
+      <ImpressionScrollView
         contentContainerStyle={styles.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
       >
@@ -330,7 +331,7 @@ export default function Home() {
         <TrackingLine on={trackingOn} lastCheck={lastCheck} />
 
 
-      </ScrollView>
+      </ImpressionScrollView>
     </SafeAreaView>
   );
 }

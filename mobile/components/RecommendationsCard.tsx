@@ -4,6 +4,8 @@ import { View, StyleSheet, Pressable, ActivityIndicator, Alert, Image } from "re
 import { Text } from "./Text";
 import { colors, spacing, type, card, shadow, categoryColors } from "../theme";
 import { cuisineHue, initialsOf } from "./PlaceArt";
+import { trackRecEvent, trackImpression, rememberRecTouch, newRequestId, type RecEventContext } from "../lib/recommendation-events";
+import { Impression } from "./Impressions";
 import { loadPlacePhotos, cachedPlacePhoto } from "../lib/place-photos";
 import { isoWeekStart } from "../lib/wrapped";
 import {
@@ -164,9 +166,11 @@ export function RecommendationsCard({
     personal: Awaited<ReturnType<typeof loadPersonalSignal>> | null;
   } | null>(null);
 
+  const requestIdRef = useRef(newRequestId());
   const load = useCallback(async () => {
     try {
       setError(false);
+      requestIdRef.current = newRequestId();
       const [vector, here, personal] = await Promise.all([
         computeTasteVector().catch(() => null),
         getEffectiveLocation().catch(() => null),
@@ -420,6 +424,9 @@ export function RecommendationsCard({
             key={rec.google_place_id}
             rec={rec}
             first={i === 0}
+            rank={i}
+            requestId={requestIdRef.current}
+            mood={mood}
             photo={photos.get(rec.google_place_id) ?? null}
             onHide={() => hidePlace(rec.google_place_id)}
           />
@@ -442,8 +449,23 @@ function dotJoin(parts: Array<React.ReactNode | null>): React.ReactNode[] | null
   return out;
 }
 
-function RecRow({ rec, photo, first, onHide }: { rec: RestaurantRecommendation; photo: string | null; first?: boolean; onHide: () => void }) {
+function RecRow({ rec, photo, first, rank, requestId, mood, onHide }: {
+  rec: RestaurantRecommendation; photo: string | null; first?: boolean;
+  rank: number; requestId: string; mood?: string | null; onHide: () => void;
+}) {
   const hue = cuisineHue(rec.cuisine, rec.google_place_id);
+  // Home fired nothing for its whole existence: no impression, no click, no
+  // save, no directions. The surface that ranks on finalScore was the one
+  // surface the ranker could never hear back from.
+  const ctx: RecEventContext = {
+    surface: "home_recs",
+    request_id: requestId,
+    rank,
+    slot: rec.explore ? "explore" : "exploit",
+    mood,
+    matchScore: rec.matchScore ?? undefined,
+    finalScore: rec.finalScore ?? undefined,
+  };
   const router = useRouter();
   // At large accessibility sizes [name | match | Save] compresses the name to
   // an ellipsis and the buttons to slivers. Past the threshold the row becomes
@@ -462,6 +484,7 @@ function RecRow({ rec, photo, first, onHide }: { rec: RestaurantRecommendation; 
         aspirationTags: inferAspirationTags(rec),
       });
       void triggerHapticSuccess();
+      void trackRecEvent("restaurant_saved", rec.google_place_id, ctx);
       setSaved(true);
       setBurstKey((k) => k + 1);
       const c = pickSaveCopy();
@@ -473,16 +496,29 @@ function RecRow({ rec, photo, first, onHide }: { rec: RestaurantRecommendation; 
     }
   }
 
-  function openApple() { openInAppleMaps(rec.name, { lat: rec.latitude, lng: rec.longitude }); }
-  function openGoogle() { openInGoogleMaps(rec.name, { lat: rec.latitude, lng: rec.longitude, placeId: rec.google_place_id }); }
+  function openApple() {
+    void trackRecEvent("maps_opened", rec.google_place_id, { ...ctx, provider: "apple" });
+    openInAppleMaps(rec.name, { lat: rec.latitude, lng: rec.longitude });
+  }
+  function openGoogle() {
+    void trackRecEvent("maps_opened", rec.google_place_id, { ...ctx, provider: "google" });
+    openInGoogleMaps(rec.name, { lat: rec.latitude, lng: rec.longitude, placeId: rec.google_place_id });
+  }
 
   function openDetail() {
     void triggerHapticSelection();
+    rememberRecTouch(rec.google_place_id, ctx);
+    void trackRecEvent("restaurant_clicked", rec.google_place_id, ctx);
     router.push(`/restaurant/${rec.google_place_id}` as any);
   }
 
   return (
-    <View style={[styles.row, first && styles.rowFirst]}>
+    <Impression
+      id={rec.google_place_id}
+      surface="home_recs"
+      onSeen={() => trackImpression(rec.google_place_id, ctx)}
+      style={[styles.row, first && styles.rowFirst]}
+    >
       {/* The name gets the full width. It used to share the line with the
           match badge AND a stacked ✕/Save column, which squeezed it to about
           half the screen: "Huey's Southwind" wrapped to two lines and "Waffle
@@ -576,7 +612,7 @@ function RecRow({ rec, photo, first, onHide }: { rec: RestaurantRecommendation; 
           </View>
         </View>
       </TapCard>
-    </View>
+    </Impression>
   );
 }
 

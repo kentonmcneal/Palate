@@ -20,6 +20,7 @@ import { assembleGraph, getCompatibility } from "../../lib/recommendation";
 import { loadPersonalSignal } from "../../lib/personal-signal";
 import { addToWishlist } from "../../lib/palate-insights";
 import { openInAppleMaps, openInGoogleMaps } from "../../lib/maps";
+import { trackRecEvent, recContextFor } from "../../lib/recommendation-events";
 import { isAdmin, blacklistPlace } from "../../lib/waitlist";
 import { triggerHapticSuccess } from "../../lib/haptics";
 import { pickSaveCopy } from "../../lib/save-copy";
@@ -314,6 +315,9 @@ export default function RestaurantDetailScreen() {
     try {
       await addToWishlist(restaurant.google_place_id, { source: "manual" });
       void triggerHapticSuccess();
+      // Attributed to the recommendation this page was opened from, when it
+      // was; otherwise recorded as a save from the page itself.
+      void trackRecEvent("restaurant_saved", restaurant.google_place_id, recContextFor(restaurant.google_place_id) ?? { surface: "detail" });
       setSaved(true);
       setConfettiKey((k) => k + 1);
       const c = pickSaveCopy();
@@ -463,10 +467,16 @@ export default function RestaurantDetailScreen() {
               {saving ? "…" : showSaved ? "Saved" : "Save"}
             </Text>
           </Pressable>
-          <Pressable onPress={() => openInAppleMaps(r.name, { address: r.address, lat: r.latitude, lng: r.longitude })} style={styles.actionGhost}>
+          <Pressable onPress={() => {
+            void trackRecEvent("maps_opened", r.google_place_id, { ...(recContextFor(r.google_place_id) ?? { surface: "detail" }), provider: "apple" });
+            openInAppleMaps(r.name, { address: r.address, lat: r.latitude, lng: r.longitude });
+          }} style={styles.actionGhost}>
             <Text style={styles.actionGhostText}>Apple Maps</Text>
           </Pressable>
-          <Pressable onPress={() => openInGoogleMaps(r.name, { address: r.address, lat: r.latitude, lng: r.longitude, placeId: r.google_place_id })} style={styles.actionGhost}>
+          <Pressable onPress={() => {
+            void trackRecEvent("maps_opened", r.google_place_id, { ...(recContextFor(r.google_place_id) ?? { surface: "detail" }), provider: "google" });
+            openInGoogleMaps(r.name, { address: r.address, lat: r.latitude, lng: r.longitude, placeId: r.google_place_id });
+          }} style={styles.actionGhost}>
             <Text style={styles.actionGhostText}>Google Maps</Text>
           </Pressable>
         </View>

@@ -59,6 +59,9 @@ export type RestaurantRecommendation = {
   finalScore?: number | null;
   latitude?: number | null;
   longitude?: number | null;
+  /** Shown in the explore slot: a deliberate step outside the pattern, and
+   *  labelled as one. Its events are judged separately from the exploit rows. */
+  explore?: boolean;
 };
 
 export type PalateRecommendations = {

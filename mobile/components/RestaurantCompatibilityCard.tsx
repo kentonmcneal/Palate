@@ -9,7 +9,8 @@ import { addToWishlist } from "../lib/palate-insights";
 import { triggerHapticSuccess, triggerHapticSelection } from "../lib/haptics";
 import { pickSaveCopy } from "../lib/save-copy";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
-import { trackRecEvent, type RecEventContext } from "../lib/recommendation-events";
+import { trackRecEvent, trackImpression, rememberRecTouch, type RecEventContext } from "../lib/recommendation-events";
+import { Impression } from "./Impressions";
 import { askNotInterested } from "./notInterested";
 import { formatDistance, matchScoreColor, matchBand } from "../lib/match-score";
 import { AnimatedNumber } from "./AnimatedNumber";
@@ -34,9 +35,16 @@ type Props = {
    *  facts ("4.6 ★ · 1.2k reviews · $$") instead of misleading "matches your
    *  X pattern" copy on a list that's intentionally not personalized. */
   reasonOverride?: string;
+  /** 0-based position in the list, one id per ranking pass, and whether this
+   *  is the explore slot. Together they make every event on this card
+   *  attributable — see lib/recommendation-events.ts. */
+  rank?: number;
+  requestId?: string;
+  slot?: "exploit" | "explore";
+  mood?: string | null;
 };
 
-export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDismissed, reasonOverride }: Props) {
+export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDismissed, reasonOverride, rank, requestId, slot, mood }: Props) {
   const router = useRouter();
   const photo = cachedPlacePhoto(restaurant.google_place_id);
   const [saving, setSaving] = useState(false);
@@ -44,6 +52,14 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
   const [dismissed, setDismissed] = useState(false);
   const [burstKey, setBurstKey] = useState(0);
   const m = restaurant.match;
+  // One context for every event this card fires, so a click, a save and a
+  // directions tap on the same card are recognisably the same showing.
+  const ctx: RecEventContext = {
+    surface, bucket, rank, slot, mood,
+    request_id: requestId,
+    matchScore: m.score,
+    finalScore: restaurant.score?.finalScore,
+  };
 
   // Spring entrance — fade + slide up the first time the card mounts.
   const enter = useRef(new Animated.Value(0)).current;
@@ -58,13 +74,10 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
   if (dismissed) return null;
 
   function openDetail() {
-    void trackRecEvent("restaurant_clicked", restaurant.google_place_id, {
-      surface, bucket, matchScore: m.score,
-    });
+    rememberRecTouch(restaurant.google_place_id, ctx);
+    void trackRecEvent("restaurant_clicked", restaurant.google_place_id, ctx);
     if (bucket === "stretch") {
-      void trackRecEvent("stretch_pick_clicked", restaurant.google_place_id, {
-        surface, bucket, matchScore: m.score,
-      });
+      void trackRecEvent("stretch_pick_clicked", restaurant.google_place_id, ctx);
     }
     router.push(`/restaurant/${restaurant.google_place_id}` as any);
   }
@@ -75,9 +88,7 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
     try {
       await addToWishlist(restaurant.google_place_id, { source: "recommendation" });
       void triggerHapticSuccess();
-      void trackRecEvent("restaurant_saved", restaurant.google_place_id, {
-        surface, bucket, matchScore: m.score,
-      });
+      void trackRecEvent("restaurant_saved", restaurant.google_place_id, ctx);
       setSaved(true);
       setBurstKey((k) => k + 1);
       const c = pickSaveCopy();
@@ -87,15 +98,6 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
     } finally {
       setSaving(false);
     }
-  }
-
-  function dismiss() {
-    void triggerHapticSelection();
-    void trackRecEvent("recommendation_dismissed", restaurant.google_place_id, {
-      surface, bucket, matchScore: m.score,
-    });
-    setDismissed(true);
-    onDismissed?.();
   }
 
   const hue = cuisineHue(restaurant.cuisine_type, restaurant.google_place_id);
@@ -121,6 +123,11 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
   }
 
   return (
+    <Impression
+      id={restaurant.google_place_id}
+      surface={surface}
+      onSeen={() => trackImpression(restaurant.google_place_id, ctx)}
+    >
     <Animated.View style={enterStyle}>
     <TapCard onPress={openDetail} onLongPress={showLessLikeThis} style={styles.card}>
       {/* Art ONLY when there is a real photo. A gradient with two initials
@@ -203,8 +210,16 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
           <SaveBurst fire={burstKey} />
         </View>
         <Pressable
-          onPress={(e) => { e.stopPropagation(); openInAppleMaps(restaurant.name, { lat: restaurant.latitude, lng: restaurant.longitude }); }}
-          onLongPress={(e) => { e.stopPropagation(); openInGoogleMaps(restaurant.name, { lat: restaurant.latitude, lng: restaurant.longitude, placeId: restaurant.google_place_id }); }}
+          onPress={(e) => {
+            e.stopPropagation();
+            void trackRecEvent("maps_opened", restaurant.google_place_id, { ...ctx, provider: "apple" });
+            openInAppleMaps(restaurant.name, { lat: restaurant.latitude, lng: restaurant.longitude });
+          }}
+          onLongPress={(e) => {
+            e.stopPropagation();
+            void trackRecEvent("maps_opened", restaurant.google_place_id, { ...ctx, provider: "google" });
+            openInGoogleMaps(restaurant.name, { lat: restaurant.latitude, lng: restaurant.longitude, placeId: restaurant.google_place_id });
+          }}
           style={styles.btnGhost}
         >
           <Text style={styles.btnGhostText}>Maps</Text>
@@ -216,6 +231,7 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
       </View>
     </TapCard>
     </Animated.View>
+    </Impression>
   );
 }
 

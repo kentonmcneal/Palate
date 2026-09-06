@@ -1,151 +1,143 @@
 // ============================================================================
-// recommendation-events.ts — TikTok-style feedback loop tracking.
+// recommendation-events.ts — what the ranker is allowed to learn from.
 // ----------------------------------------------------------------------------
-// Every interaction with a restaurant — viewed, clicked, saved, skipped,
-// dismissed, shared — is fired through here, gets a signed weight, and
-// inserts an analytics event AND optionally a `prompt_decisions` row.
+// Every gesture on a recommended place goes through here and lands in
+// analytics_events as `rec_<kind>`, carrying enough context to be attributed
+// later: which surface, which ranking pass (request_id), which slot in that
+// pass (rank), whether it was the explore slot, and the scores the ranker
+// gave it at the time. lib/recommendation/feedback.ts folds those rows back
+// into the ranking; supabase rec_funnel() reads them in aggregate.
 //
-// The taste vector reads from these events via the visit + wishlist
-// rollups already in place. Adding new event kinds is additive — we
-// store the kind + weight in `analytics_events.props` and any future
-// scorer can read them.
+// What this file used to be: a table of "signed weights" written into props
+// and read by nothing, an impression tracker that fired for the whole list
+// the moment the data loaded, and a cross-write into prompt_decisions that
+// made a "Not interested" tap suppress the passive-capture prompt for that
+// place for six hours. None of that survives.
 //
-// Event kind → signed weight (default; callers can override):
-//   restaurant_visited        +5  (highest signal)
-//   restaurant_repeated       +4
-//   restaurant_saved          +3
-//   restaurant_shared         +3
-//   stretch_pick_clicked      +2
-//   restaurant_clicked        +1
-//   restaurant_viewed          0  (impression only — no weight)
-//   restaurant_skipped        -1
-//   recommendation_dismissed  -2
+// Kinds, and what each one is evidence of:
+//   restaurant_viewed         the card was at least half on screen for half a
+//                             second (components/Impressions.tsx). The
+//                             denominator, and on its own a small negative
+//                             once nothing follows it in the same session.
+//   restaurant_clicked        opened the detail page from a rec surface
+//   restaurant_saved          saved to the wishlist from a rec surface
+//   maps_opened               asked for directions — the strongest intent
+//                             short of going
+//   try_another               passed on the hero pick
+//   recommendation_dismissed  "Not interested" (the place is also excluded
+//                             outright via place_dislikes; this is the record)
+//   stretch_pick_clicked      opened the Discover stretch pick
 // ============================================================================
 
+import { AppState } from "react-native";
 import { track } from "./analytics";
-import { supabase } from "./supabase";
 
 export type RecEventKind =
   | "restaurant_viewed"
   | "restaurant_clicked"
   | "restaurant_saved"
-  | "restaurant_skipped"
-  | "restaurant_visited"
-  | "restaurant_repeated"
-  | "restaurant_shared"
+  | "maps_opened"
+  | "try_another"
   | "recommendation_dismissed"
-  | "stretch_pick_clicked"
-  | "wishlist_added";
+  | "stretch_pick_clicked";
 
-export const REC_EVENT_WEIGHT: Record<RecEventKind, number> = {
-  restaurant_viewed: 0,
-  restaurant_clicked: 1,
-  restaurant_saved: 3,
-  restaurant_skipped: -1,
-  restaurant_visited: 5,
-  restaurant_repeated: 4,
-  restaurant_shared: 3,
-  recommendation_dismissed: -2,
-  stretch_pick_clicked: 2,
-  wishlist_added: 3,
-};
+export type RecSurface =
+  | "home_recs" | "home_hero" | "home_stretch"
+  | "discover_for_you" | "discover_stretch" | "discover_shelf" | "discover_map"
+  | "wishlist" | "feed" | "search" | "featured" | "detail" | "digest" | "gate";
 
 export type RecEventContext = {
-  /** Where the interaction happened — discover/feed/recommendations/etc. */
-  surface?: "home_recs" | "discover_for_you" | "discover_shelf" | "discover_map" | "wishlist" | "feed" | "search";
-  /** What the engine thought the match score was (for offline replay). */
+  /** Where the interaction happened. */
+  surface?: RecSurface;
+  /** One id per ranking pass, so "shown together" is recoverable. */
+  request_id?: string;
+  /** 0-based position in the list the user saw. */
+  rank?: number;
+  /** The explore slot is a deliberate step outside the pattern; its outcomes
+   *  are read separately so exploration can be judged on its own results. */
+  slot?: "exploit" | "explore";
+  /** The headline % the card showed. */
   matchScore?: number;
-  /** Was this rec served as a stretch pick? */
+  /** What the list was actually ordered by. */
+  finalScore?: number;
+  /** The mood chip that was active, if any. Context, never a preference. */
+  mood?: string | null;
   bucket?: "safe" | "stretch" | "aspirational" | "trending" | "friends" | null;
   /** Anything else worth keeping. */
   [k: string]: unknown;
 };
 
-/**
- * Fire-and-forget event tracker. Writes to `analytics_events` + bumps the
- * recommendation feedback signal. Never throws into UX.
- */
+// ----------------------------------------------------------------------------
+// Session and request ids
+// ----------------------------------------------------------------------------
+// A session is one foreground stretch of the app. "Seen and not taken" only
+// means something inside a session: the place you scrolled past at lunch and
+// tapped at dinner was not passed over, it was considered.
+
+let sessionId = newId();
+try {
+  AppState.addEventListener("change", (s) => { if (s === "active") sessionId = newId(); });
+} catch {
+  // Not in a React Native runtime (tests). One session is fine.
+}
+
+export function currentSessionId(): string { return sessionId; }
+
+/** Mint an id for one ranking pass. Call it where the list is built. */
+export function newRequestId(): string { return newId(); }
+
+function newId(): string {
+  // Not a UUID and does not need to be: unique enough per user per day.
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+// ----------------------------------------------------------------------------
+// Attribution across screens
+// ----------------------------------------------------------------------------
+// A tap on a Home row opens the detail page, and the directions tap happens
+// THERE. The detail page has no idea it was reached from a recommendation
+// unless something remembers. This does: the last rec context per place,
+// for half an hour.
+
+const TOUCH_TTL_MS = 30 * 60 * 1000;
+const touches = new Map<string, { ctx: RecEventContext; at: number }>();
+
+export function rememberRecTouch(googlePlaceId: string, ctx: RecEventContext): void {
+  touches.set(googlePlaceId, { ctx, at: Date.now() });
+}
+
+/** The rec context a place was last opened from, or null when the user got
+ *  there some other way (search, a friend's visit, the wishlist). */
+export function recContextFor(googlePlaceId: string): RecEventContext | null {
+  const t = touches.get(googlePlaceId);
+  if (!t) return null;
+  if (Date.now() - t.at > TOUCH_TTL_MS) { touches.delete(googlePlaceId); return null; }
+  return t.ctx;
+}
+
+// ----------------------------------------------------------------------------
+// Firing
+// ----------------------------------------------------------------------------
+
+/** Fire-and-forget. Never throws into UX. */
 export async function trackRecEvent(
   kind: RecEventKind,
   googlePlaceId: string,
   context: RecEventContext = {},
 ): Promise<void> {
   try {
-    const weight = REC_EVENT_WEIGHT[kind] ?? 0;
     await track(`rec_${kind}`, {
       google_place_id: googlePlaceId,
-      weight,
+      session_id: sessionId,
       ...context,
     });
-
-    // Negative-signal events also write to prompt_decisions so the existing
-    // skip-nudge surface picks them up.
-    if (kind === "restaurant_skipped" || kind === "recommendation_dismissed") {
-      const outcome = kind === "recommendation_dismissed" ? "dismissed" : "dismissed";
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from("prompt_decisions").insert({
-          user_id: user.id,
-          google_place_id: googlePlaceId,
-          outcome,
-        });
-      }
-    }
   } catch {
     // Silent — analytics never block UX.
   }
 }
 
-/**
- * Batch impression tracker. Use when surfacing a list — fires viewed events
- * for everything visible so the feedback loop knows what was shown vs picked.
- */
-export async function trackImpressions(
-  placeIds: string[],
-  context: RecEventContext = {},
-): Promise<void> {
-  for (const id of placeIds) {
-    void trackRecEvent("restaurant_viewed", id, context);
-  }
-}
-
-/** Pull aggregated rec-event counts per restaurant for a single user. Useful
- *  for the ranker to penalize already-dismissed places. */
-export async function loadUserRecCounters(
-  googlePlaceIds: string[],
-): Promise<Record<string, { saves: number; skips: number; dismisses: number; clicks: number }>> {
-  const out: Record<string, { saves: number; skips: number; dismisses: number; clicks: number }> = {};
-  if (googlePlaceIds.length === 0) return out;
-  try {
-    // Own rows only, and bounded. This had neither: no user filter, because
-    // RLS returned nothing anyway and the bug was invisible, and no limit,
-    // which would have pulled every rec event the account had ever generated
-    // and filtered in JS. Harmless at 55 visits, quadratic later.
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return out;
-    const { data } = await supabase
-      .from("analytics_events")
-      .select("event, props")
-      .eq("user_id", user.id)
-      .in("event", [
-        "rec_restaurant_saved",
-        "rec_restaurant_skipped",
-        "rec_recommendation_dismissed",
-        "rec_restaurant_clicked",
-      ])
-      .order("created_at", { ascending: false })
-      .limit(2000);
-    for (const row of (data ?? []) as Array<{ event: string; props: any }>) {
-      const id = row.props?.google_place_id;
-      if (!id || !googlePlaceIds.includes(id)) continue;
-      if (!out[id]) out[id] = { saves: 0, skips: 0, dismisses: 0, clicks: 0 };
-      if (row.event === "rec_restaurant_saved") out[id].saves++;
-      else if (row.event === "rec_restaurant_skipped") out[id].skips++;
-      else if (row.event === "rec_recommendation_dismissed") out[id].dismisses++;
-      else if (row.event === "rec_restaurant_clicked") out[id].clicks++;
-    }
-  } catch {
-    // ignore
-  }
-  return out;
+/** One verified impression. Called by <Impression> and nothing else, so an
+ *  impression always means "was on screen", never "was in the array". */
+export function trackImpression(googlePlaceId: string, context: RecEventContext): void {
+  void trackRecEvent("restaurant_viewed", googlePlaceId, context);
 }

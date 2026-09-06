@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { View, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { Text } from "./Text";
 import { useRouter } from "expo-router";
+import { trackRecEvent, trackImpression, rememberRecTouch, type RecEventContext } from "../lib/recommendation-events";
+import { Impression } from "./Impressions";
 import { colors, spacing, type, card, shadow } from "../theme";
 import { computeTasteVector } from "../lib/taste-vector";
 import { nearbyRestaurants } from "../lib/places";
@@ -67,12 +69,21 @@ export function StretchPick() {
 
   const r = pick.restaurant;
   const score = r.match?.score ?? 0;
+  const stretchCtx: RecEventContext = {
+    surface: "discover_for_you", bucket: "stretch", slot: "explore",
+    matchScore: score, finalScore: r.score?.finalScore,
+  };
   const sub = r.cuisine_type ? cap(r.cuisine_type) : "";
 
   return (
+    <Impression id={r.google_place_id} surface="discover_for_you" onSeen={() => trackImpression(r.google_place_id, stretchCtx)}>
     <Pressable
       style={styles.card}
-      onPress={() => router.push(`/restaurant/${r.google_place_id}` as any)}
+      onPress={() => {
+        rememberRecTouch(r.google_place_id, stretchCtx);
+        void trackRecEvent("stretch_pick_clicked", r.google_place_id, stretchCtx);
+        router.push(`/restaurant/${r.google_place_id}` as any);
+      }}
     >
       <View style={styles.head}>
         <Text style={styles.eyebrow}>ONE PLACE TO STRETCH YOUR PALATE</Text>
@@ -84,6 +95,7 @@ export function StretchPick() {
       {sub.length > 0 && <Text style={styles.sub}>{sub}</Text>}
       <Text style={styles.status}>{pick.explanation.secondary}</Text>
     </Pressable>
+    </Impression>
   );
 }
 

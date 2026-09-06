@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, StyleSheet, ScrollView, Pressable, RefreshControl, ActivityIndicator, Modal } from "react-native";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { View, StyleSheet, Pressable, RefreshControl, ActivityIndicator, Modal } from "react-native";
 import { TextInput } from "../../components/TextInput";
 import { Text } from "../../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -28,7 +28,8 @@ import { getEffectiveLocation, useBrowsingCity } from "../../lib/browsing-locati
 import { LocationPill } from "../../components/LocationPill";
 import { computeTasteVector, type TasteVector } from "../../lib/taste-vector";
 import { distanceKm, formatDistance } from "../../lib/match-score";
-import { trackImpressions } from "../../lib/recommendation-events";
+import { newRequestId } from "../../lib/recommendation-events";
+import { ImpressionScrollView } from "../../components/Impressions";
 import { filterRecommendable } from "../../lib/recommendation/eligibility";
 import { isStretch } from "../../lib/recommendation";
 import { dedupeVenues } from "../../lib/recommendation/dedupe";
@@ -84,6 +85,7 @@ export default function DiscoverTab() {
   // browse surface too — Discover could sort by fit and distance but had no way
   // to say "Thai, tonight".
   const [mood, setMood] = useState<Mood>(null);
+  const requestIdRef = useRef(newRequestId());
   const [myCuisines, setMyCuisines] = useState<CuisineSlice[]>([]);
   useEffect(() => {
     let alive = true;
@@ -184,8 +186,9 @@ export default function DiscoverTab() {
         .catch(() => {});
       setFeedLoading(false);
 
-      // Fire impressions for the visible top
-      void trackImpressions(candidates.slice(0, TOP_PER_TAB).map((p) => p.google_place_id), { surface: "discover_for_you" });
+      // A new ranking pass. Impressions fire from the cards themselves when
+      // they are actually on screen (components/Impressions.tsx), never here.
+      requestIdRef.current = newRequestId();
     } catch (e: any) {
       setError(e?.message ?? "Couldn't load Discover");
       setHereLoading(false); setFeedLoading(false);
@@ -468,7 +471,7 @@ export default function DiscoverTab() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScrollView
+      <ImpressionScrollView
         contentContainerStyle={styles.body}
         refreshControl={
           <RefreshControl
@@ -635,7 +638,7 @@ export default function DiscoverTab() {
                         where you go to be shown something, so it belongs here.
                         Under the ranked list on purpose — a stretch is what you
                         read after the safe answers, not instead of them. */}
-                    <List items={moodedList.items} onHide={hideId} surface="discover_for_you" emptyMsg="Log a few visits. Once Palate sees a pattern, we'll personalize this list. In the meantime, the Trending tab shows what's hot in your area." />
+                    <List items={moodedList.items} onHide={hideId} surface="discover_for_you" requestId={requestIdRef.current} mood={mood} emptyMsg="Log a few visits. Once Palate sees a pattern, we'll personalize this list. In the meantime, the Trending tab shows what's hot in your area." />
                     <Spacer size={20} />
                     <Text style={styles.stretchHead}>Stretch your palate</Text>
                     <StretchPick />
@@ -648,7 +651,7 @@ export default function DiscoverTab() {
                         Outside what you usually pick, but close enough to something you
                         already like that it should land.
                       </Text>
-                      <List items={stretchList} onHide={hideId} surface="discover_stretch"
+                      <List items={stretchList} onHide={hideId} surface="discover_stretch" requestId={requestIdRef.current} slot="explore"
                         emptyMsg="Nothing here yet." />
                     </>
                   ) : (
@@ -663,14 +666,14 @@ export default function DiscoverTab() {
                     <MoodRow chips={moodChips} value={mood} onChange={setMood} />
                     {!!nearbyList.note && <Text style={styles.moodNote}>{nearbyList.note}</Text>}
                     <Spacer size={10} />
-                    <List items={nearbyList.items} onHide={hideId} surface="discover_shelf" emptyMsg="Nothing nearby." />
+                    <List items={nearbyList.items} onHide={hideId} surface="discover_shelf" requestId={requestIdRef.current} mood={mood} emptyMsg="Nothing nearby." />
                   </>
                 )}
               </>
             )}
           </>
         )}
-      </ScrollView>
+      </ImpressionScrollView>
 
     </SafeAreaView>
   );
@@ -854,8 +857,9 @@ async function loadVisitedPlaceIds(userId: string): Promise<Set<string>> {
     return new Set<string>();
   }
 }
-function List({ items, surface, emptyMsg, onHide }: {
+function List({ items, surface, emptyMsg, onHide, requestId, slot, mood }: {
   items: RankedRestaurant[]; surface: any; emptyMsg: string; onHide?: (id: string) => void;
+  requestId?: string; slot?: "exploit" | "explore"; mood?: string | null;
 }) {
   if (items.length === 0) {
     return (
@@ -866,8 +870,17 @@ function List({ items, surface, emptyMsg, onHide }: {
   }
   return (
     <View>
-      {items.map((r) => (
-        <RestaurantCompatibilityCard key={r.google_place_id} restaurant={r} surface={surface} onDismissed={onHide ? () => onHide(r.google_place_id) : undefined} />
+      {items.map((r, i) => (
+        <RestaurantCompatibilityCard
+          key={r.google_place_id}
+          restaurant={r}
+          surface={surface}
+          rank={i}
+          requestId={requestId}
+          slot={slot}
+          mood={mood}
+          onDismissed={onHide ? () => onHide(r.google_place_id) : undefined}
+        />
       ))}
     </View>
   );
