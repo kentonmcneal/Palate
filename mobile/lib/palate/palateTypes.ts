@@ -95,13 +95,14 @@ export type PalateProfile = {
   noveltyScore: number;                  // 0..1
   premiumScore: number;                  // 0..1
   tags: Tag[];                           // 3-4 max, ordered by signal strength
-  /** 1-2 sentence headline copy — soft language for middle users */
+  /** 1-2 plain sentences about what the person did this week. Never names
+   *  the model: no scores, axes or identity names used as adjectives. */
   explanation: string;
-  /** Concrete behavior signals to render as bullets ("3 of 5 visits to new spots") */
+  /** Concrete behavior signals to render as bullets ("3 of 5 visits were somewhere new.") */
   behaviorSignals: string[];
   /** Optional movement vs. last week — only set when prior week is available */
   movement?: {
-    /** "You moved toward Curator" / "You were more Roamer than last week" */
+    /** "More new places than last week." / "About the same as last week." */
     summary: string;
     direction: "more_novel" | "more_consistent" | "more_premium" | "more_casual" | "stable";
   };

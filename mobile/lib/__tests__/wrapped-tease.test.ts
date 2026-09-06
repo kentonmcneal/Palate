@@ -17,8 +17,8 @@ describe("wrapped tease", () => {
   });
 
   it("puts the numbers in the copy", () => {
-    expect(teaseCopy({ visits: 4, places: 3 })?.body).toBe("4 visits, 3 places. Wrapped reads it back tomorrow.");
-    expect(teaseCopy({ visits: 1, places: 1 })?.body).toBe("1 visit, 1 place. Wrapped reads it back tomorrow.");
+    expect(teaseCopy({ visits: 4, places: 3 })?.body).toBe("4 visits, 3 places. Your Wrapped lands tomorrow.");
+    expect(teaseCopy({ visits: 1, places: 1 })?.body).toBe("1 visit, 1 place. Your Wrapped lands tomorrow.");
   });
 
   it("fires Saturday at 18:30 and not after it has passed", () => {

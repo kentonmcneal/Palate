@@ -9,6 +9,10 @@
 //
 // Wrapped is descriptive (not exploratory). All numbers come from the graph
 // directly — no recomputation, no surprise weights.
+//
+// The Wrapped tab reads only `topCuisines` from this today; the `share` block
+// has no on-screen consumer. Its strings are kept plain anyway so nothing in
+// here can leak jargon if a surface picks it up later.
 // ============================================================================
 
 import type { TasteGraph } from "./taste-graph";
@@ -31,11 +35,11 @@ export type WrappedSummary = {
     comfort: number;      // 0..100 — derived from repeat + low novelty
     stretch: number;      // 0..100 — derived from exploration + cuisine diversity
   };
-  /** Shareable headline + one-line summary for "Your next era" */
+  /** Shareable headline, one-line summary, and a one-line nudge for next week. */
   share: {
     headline: string;     // identity label
     summary: string;      // one-liner suitable for stories
-    nextEra: string;      // aspirational nudge based on stretch behavior
+    nextEra: string;      // what to try next week, based on this one
   };
 };
 
@@ -54,21 +58,21 @@ export function composeWrapped(graph: TasteGraph): WrappedSummary {
     .slice(0, 5)
     .map(([name, n]) => ({ name, share: n / totalCuisineWeight }));
 
-  const headline = identity?.label ?? "Pattern Forming";
+  const headline = identity?.label ?? "Warming up";
   const summaryParts: string[] = [];
   if (graph.totalVisits > 0) {
     summaryParts.push(`${graph.totalVisits} visit${graph.totalVisits === 1 ? "" : "s"} across ${graph.uniqueRestaurants} place${graph.uniqueRestaurants === 1 ? "" : "s"}`);
   }
   if (topCuisines[0]) {
-    summaryParts.push(`leaning ${humanize(topCuisines[0].name)}`);
+    summaryParts.push(`mostly ${humanize(topCuisines[0].name)}`);
   }
-  const summary = summaryParts.join(" · ") || "A quiet week. Log a few visits and we'll start the picture.";
+  const summary = summaryParts.join(" · ") || "A quiet week. Log a few visits and Wrapped fills in.";
 
   const nextEra = graph.explorationRate >= 0.6
-    ? "Your next era: keep wandering. The map's getting bigger every week."
+    ? "You keep finding new places. Keep going."
     : graph.repeatRate >= 0.55
-    ? "Your next era: try one new spot this week. Stretch the routine."
-    : "Your next era: lean into the cuisines you've been circling.";
+    ? "Try one new spot this week."
+    : "Pick one of the cuisines you keep coming back to and go deeper.";
 
   return {
     identity,

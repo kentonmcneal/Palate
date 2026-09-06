@@ -28,9 +28,12 @@ import { loadPersonalSignal } from "../../lib/personal-signal";
 import { assembleGraph, composeWrapped, type WrappedSummary } from "../../lib/recommendation";
 import {
   getProfileFromVector, IDENTITY_BLURB, composeEgoHook,
-  type PalateProfile,
+  type PalateProfile, type PrimaryIdentity,
 } from "../../lib/palate";
 import { identityName, displayStoredPersona } from "../../lib/palate";
+import { storedPersonaKey } from "../../lib/palate/palateNames";
+import { composeLearningLine } from "../../lib/palate/palateCopy";
+import { tagLabel } from "../../lib/palate/palateTags";
 import { supabase } from "../../lib/supabase";
 import { WhatArePalates } from "../../components/WhatArePalates";
 import { SharePalateCard, type ShareStat } from "../../components/SharePalateCard";
@@ -39,13 +42,14 @@ import { generateInviteLink, inviteShareMessage } from "../../lib/referrals";
 
 // ============================================================================
 // Wrapped — REFLECTION ONLY. One job: tell me what kind of eater I am.
-// Layout (4 visible sections, in order):
-//   1. Identity headline ("You're a Late-Night Explorer")
-//   2. Three stat tiles (Visits / Variety / Repeat %)
-//   3. One insight line
-//   4. Share + deep-insights links
-// Charts, percentiles, cohorts, "ALSO/AND/THIS WEEK" — all live on Profile →
-// Insights now. Wrapped stays scannable.
+// Layout (in order):
+//   1. Hero card: identity badge ("Explorer") with its one-line meaning under
+//      it, all-time stats, top spots, top cuisines
+//   2. This week's numbers
+//   3. Charts
+//   4. What are Palates? explainer + share actions
+// Every identity name on this screen is followed by what it means. A name on
+// its own reads as jargon to anyone who has not used the app.
 // ============================================================================
 
 // Module-scope flag — survives component remounts. Without this, the Wrapped
@@ -60,6 +64,9 @@ const VISITS_FOR_WRAPPED = visitsToWrapped(0);
 export default function WrappedTab() {
   const [data, setData] = useState<Wrapped | null>(null);
   const [profile, setProfile] = useState<PalateProfile | null>(null);
+  // The week's visit count, for the line under "Warming Up": it says the
+  // number the person has and the number they need.
+  const [weekVisits, setWeekVisits] = useState<number>(0);
   const [vector, setVector] = useState<TasteVector | null>(null);
   const [, setStage] = useState<SessionStage>(1);
   const [summary, setSummary] = useState<WrappedSummary | null>(null);
@@ -99,6 +106,7 @@ export default function WrappedTab() {
         await AsyncStorage.setItem(LAST_SEEN_WRAPPED_KEY, latest.week_start);
       }
       setVector(allTimeVec ?? null);
+      setWeekVisits(weekVec?.visitCount ?? 0);
       const personal = await loadPersonalSignal().catch(() => null);
       const weekGraph = assembleGraph(weekVec ?? null, personal);
       setSummary(composeWrapped(weekGraph));
@@ -280,11 +288,28 @@ export default function WrappedTab() {
     return identityName("Learning");
   }
 
+  /** The identity key behind the week's label, so its meaning can sit under it. */
+  function weekIdentityKey(): PrimaryIdentity | null {
+    if (profile) return profile.primaryIdentity;
+    return storedPersonaKey(data?.personality_label);
+  }
+
+  /** The hero's identity key: all-time, falling back to the week. */
+  function heroIdentityKey(): PrimaryIdentity | null {
+    return allTimeProfile?.primaryIdentity ?? weekIdentityKey();
+  }
+
+  /** A name on its own is jargon. Every card that shows one puts this under it. */
+  function taglineFor(key: PrimaryIdentity | null): string | undefined {
+    return key ? IDENTITY_BLURB[key].tagline : undefined;
+  }
+
   function insightLine(): string {
-    // Use the profile's composed explanation — already handles soft language
-    // for middle users + Learning state for low-data.
-    if (profile) return profile.explanation;
-    return "We're still learning your Palate. Log a few more visits and we'll show you who you eat like.";
+    // The profile's explanation is plain prose about what the person did.
+    // Below the naming threshold it is replaced by the count they have and
+    // the count they need, which is the only thing they can act on.
+    if (profile && profile.primaryIdentity !== "Learning") return profile.explanation;
+    return composeLearningLine(weekVisits);
   }
 
   return (
@@ -331,11 +356,9 @@ export default function WrappedTab() {
                 // and tells them nothing about what the app has built.
                 stats={allTime ? allTimeStats(allTime) : undefined}
                 personaOverride={allTimeIdentityLabel()}
-                personaDescription={
-                  allTimeProfile && allTimeProfile.primaryIdentity !== "Learning"
-                    ? IDENTITY_BLURB[allTimeProfile.primaryIdentity].tagline
-                    : undefined
-                }
+                // Whatever produced the name above, its meaning goes under it,
+                // including "Not enough visits to say yet" for a thin history.
+                personaDescription={taglineFor(heroIdentityKey())}
                 // All-time as well, or the card would mix scopes: lifetime
                 // visits and places above a week's worth of cuisines.
                 topCuisines={
@@ -420,7 +443,7 @@ export default function WrappedTab() {
                 PalateShare = new design-bible 9:16 card. */}
             <View style={{ position: "absolute", left: -9999, top: 0 }} pointerEvents="none">
               <View ref={storyRef as any} collapsable={false}>
-                <WrappedStoryCard data={data} personaOverride={identityLabel()} />
+                <WrappedStoryCard data={data} personaOverride={identityLabel()} personaDescription={taglineFor(weekIdentityKey())} />
               </View>
               {profile && profile.primaryIdentity !== "Learning" && (
                 <View ref={palateShareRef as any} collapsable={false} style={{ marginTop: 24 }}>
@@ -428,7 +451,8 @@ export default function WrappedTab() {
                     identity={profile.primaryIdentity}
                     weekRange={formatWeekRange(data.week_start, data.week_end)}
                     stats={buildShareStats(data)}
-                    tags={profile.tags.slice(0, 3)}
+                    // Tag keys stay internal; the card shows the plain phrase.
+                    tags={profile.tags.slice(0, 3).map(tagLabel)}
                     egoHook={composeEgoHook(profile)}
                   />
                 </View>
@@ -440,8 +464,10 @@ export default function WrappedTab() {
           // version so the tab feels alive while the user waits for Sunday.
           <>
             <View style={styles.identityCard}>
-              <Text style={styles.identityEyebrow}>YOUR PALATE THIS WEEK LEANED</Text>
+              <Text style={styles.identityEyebrow}>YOUR PALATE THIS WEEK</Text>
               <Text style={styles.identityName}>{identityLabel()}</Text>
+              {/* The name is a badge. This is what it means, on the same card. */}
+              <Text style={styles.identityTagline}>{taglineFor(weekIdentityKey())}</Text>
             </View>
             <View style={styles.insightCard}>
               <Text style={styles.insightText}>{insightLine()}</Text>
@@ -456,7 +482,7 @@ export default function WrappedTab() {
           <>
             <Text style={[type.micro, { marginBottom: 10 }]}>PREVIEW · what your Sunday will look like</Text>
             <View style={{ opacity: 0.55 }} pointerEvents="none">
-              <WrappedCard data={SAMPLE_WRAPPED} />
+              <WrappedCard data={SAMPLE_WRAPPED} personaDescription={IDENTITY_BLURB.Anchor.tagline} />
             </View>
             <Spacer />
             <View style={styles.empty}>
@@ -504,6 +530,8 @@ function buildShareStats(w: Wrapped): ShareStat[] {
   return out;
 }
 
+// The preview shows one of the app's real identity names with its meaning,
+// not the retired server-minted "The Fast Casual Regular".
 const SAMPLE_WRAPPED: Wrapped = {
   id: "sample",
   user_id: "sample",
@@ -514,14 +542,14 @@ const SAMPLE_WRAPPED: Wrapped = {
   top_restaurant: "Sweetgreen",
   top_category: "fast_casual",
   repeat_rate: 0.42,
-  personality_label: "The Fast Casual Regular",
+  personality_label: "The Regular",
   wrapped_json: {
     total_visits: 12,
     unique_restaurants: 7,
     top_restaurant: "Sweetgreen",
     top_category: "fast_casual",
     repeat_rate: 0.42,
-    personality_label: "The Fast Casual Regular",
+    personality_label: "The Regular",
     top_three: [
       { name: "Sweetgreen", count: 4 },
       { name: "Joe & The Juice", count: 2 },
@@ -578,6 +606,7 @@ const styles = StyleSheet.create({
     lineHeight: 38,
     marginTop: 6,
   },
+  identityTagline: { ...type.body, color: colors.mute, marginTop: 6, lineHeight: 20 },
 
   statRow: {
     marginTop: spacing.md,

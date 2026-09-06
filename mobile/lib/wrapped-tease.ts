@@ -39,7 +39,9 @@ export function teaseCopy(w: WeekSoFar): { title: string; body: string } | null 
   const p = w.places === 1 ? "1 place" : `${w.places} places`;
   return {
     title: "Your week so far",
-    body: `${v}, ${p}. Wrapped reads it back tomorrow.`,
+    // "Lands tomorrow" matches the tab's own "Your first official Wrapped
+    // lands Sunday", so the notification and the screen say the same thing.
+    body: `${v}, ${p}. Your Wrapped lands tomorrow.`,
   };
 }
 

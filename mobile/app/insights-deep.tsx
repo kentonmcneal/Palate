@@ -144,7 +144,7 @@ export default function InsightsDeepScreen() {
             {/* Aspirational */}
             {aspirational && (
               <View style={[styles.card, { backgroundColor: colors.ink }]}>
-                <Text style={[styles.eyebrow, { color: "rgba(255,255,255,0.6)" }]}>YOUR NEXT ERA</Text>
+                <Text style={[styles.eyebrow, { color: "rgba(255,255,255,0.6)" }]}>WHERE YOU ARE HEADED</Text>
                 <Text style={[styles.cardTitle, { color: "#fff" }]}>{aspirational.insight}</Text>
                 {aspirational.topAspirationTags.length > 0 && (
                   <View style={styles.tagRow}>

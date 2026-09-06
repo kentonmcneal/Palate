@@ -2,7 +2,7 @@ import { View, StyleSheet, Dimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { palateColors, palateGradients } from "../lib/theme/palateTheme";
 import type { PalateProfile, PrimaryIdentity } from "../lib/palate";
-import { IDENTITY_BLURB } from "../lib/palate";
+import { IDENTITY_BLURB, identityName } from "../lib/palate";
 import { CanvasText } from "./CanvasText";
 
 // ============================================================================
@@ -75,7 +75,7 @@ export function SharePalateCard({ identity, weekRange, stats, tags, egoHook }: P
           adjustsFontSizeToFit
           minimumFontScale={0.7}
         >
-          {identity}
+          {identityName(identity)}
         </CanvasText>
         <CanvasText style={styles.descriptor}>{blurb.shareDescriptor}</CanvasText>
       </View>

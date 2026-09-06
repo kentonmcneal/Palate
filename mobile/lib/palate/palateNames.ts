@@ -29,7 +29,8 @@ export const IDENTITY_NAME: Record<PrimaryIdentity, string> = {
   Learning: "Warming Up",
 };
 
-/** Bare noun, for prose: "your palate leaned Explorer this week". */
+/** Bare noun, for a badge: "Explorer". The prose around it says what the
+ *  person did; it never uses the name as an adjective. */
 export function identityName(id: PrimaryIdentity | null | undefined): string {
   return id ? (IDENTITY_NAME[id] ?? id) : "Warming Up";
 }
@@ -75,14 +76,25 @@ const LEGACY_TO_KEY: Record<string, PrimaryIdentity> = {
   "the comfort food connoisseur": "Anchor",
 };
 
+/** The identity key behind anything stored in `weekly_wrapped.personality_label`,
+ *  or null when the string is not one of ours in any spelling. The Wrapped
+ *  hero needs the key, not just the display name, because a name shown on
+ *  its own is jargon: the card has to put the identity's plain meaning under
+ *  it, and the meaning is looked up by key. */
+export function storedPersonaKey(stored: string | null | undefined): PrimaryIdentity | null {
+  if (!stored) return null;
+  const legacy = LEGACY_TO_KEY[stored.trim().toLowerCase()];
+  if (legacy) return legacy;
+  // Already one of ours, stored bare ("Explorer") or titled ("The Explorer").
+  const bare = stored.replace(/^the\s+/i, "").trim().toLowerCase();
+  const match = (Object.entries(IDENTITY_NAME) as [PrimaryIdentity, string][])
+    .find(([, name]) => name.toLowerCase() === bare);
+  return match ? match[0] : null;
+}
+
 /** Normalise anything stored in `weekly_wrapped.personality_label`. */
 export function displayStoredPersona(stored: string | null | undefined): string | null {
   if (!stored) return null;
-  const key = LEGACY_TO_KEY[stored.trim().toLowerCase()];
-  if (key) return identityTitle(key);
-  // Already one of ours, stored bare ("Explorer") or titled ("The Explorer").
-  const bare = stored.replace(/^the\s+/i, "").trim();
-  const match = (Object.entries(IDENTITY_NAME) as [PrimaryIdentity, string][])
-    .find(([, name]) => name.toLowerCase() === bare.toLowerCase());
-  return match ? identityTitle(match[0]) : stored;
+  const key = storedPersonaKey(stored);
+  return key ? identityTitle(key) : stored;
 }

@@ -402,7 +402,7 @@ function AspirationalCard({
 }) {
   return (
     <View style={[styles.section, { backgroundColor: colors.ink }]}>
-      <Text style={[type.micro, { color: "rgba(255,255,255,0.65)" }]}>YOUR NEXT ERA</Text>
+      <Text style={[type.micro, { color: "rgba(255,255,255,0.65)" }]}>WHERE YOU ARE HEADED</Text>
       <Spacer size={10} />
       <Text style={styles.aspInsight}>{nextEraLine(aspirational)}</Text>
 
@@ -602,7 +602,7 @@ function topSpotsNarrative(spots: { name: string; count: number }[]): string | u
  *  leans Y." phrasing with a movement-flavored line. Honest about uncertainty
  *  when the gap signal is weak. */
 function nextEraLine(asp: AspirationalPalate): string {
-  if (!asp.hasGap) return "Your next era will appear once Palate has more history.";
+  if (!asp.hasGap) return "Save a few places you want to try and this fills in.";
   // Pick the strongest aspirational signal — cuisine if the wishlist diverges,
   // otherwise neighborhood, else fall back to neutral copy.
   const cuisineGap = asp.aspirationalCuisines[0];
@@ -613,9 +613,9 @@ function nextEraLine(asp: AspirationalPalate): string {
   }
   if (asp.aspirationalNeighborhoods.length > 0) {
     const hood = asp.aspirationalNeighborhoods[0];
-    return `You're eyeing ${hood}. Your next chapter likely starts there.`;
+    return `You keep saving places in ${hood}. That is probably where you eat next.`;
   }
-  return "Your next era is forming. Keep saving the spots that pull you.";
+  return "Keep saving the places that pull you, and this fills in.";
 }
 
 function HeroStat({ label, value }: { label: string; value: string }) {

@@ -12,9 +12,14 @@ const STORY_H = STORY_W * (16 / 9);
 export function WrappedStoryCard({
   data,
   personaOverride,
+  personaDescription,
 }: {
   data: Wrapped;
   personaOverride?: string;
+  /** What the identity means, in one line. This card is the one most likely
+   *  to be read by somebody who has never opened the app, so the name never
+   *  goes out without it. */
+  personaDescription?: string;
 }) {
   const j = data.wrapped_json;
   const top3 = j.top_three ?? [];
@@ -44,6 +49,9 @@ export function WrappedStoryCard({
         <CanvasText style={styles.persona} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.7}>
           {personaLabel}
         </CanvasText>
+        {personaDescription ? (
+          <CanvasText style={styles.personaDescription}>{personaDescription}</CanvasText>
+        ) : null}
       </View>
 
       {/* Stats row */}
@@ -119,6 +127,13 @@ const styles = StyleSheet.create({
     letterSpacing: -1.2,
     lineHeight: 60,
     marginTop: 8,
+  },
+  personaDescription: {
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 16,
+    lineHeight: 22,
+    marginTop: 10,
+    fontWeight: "500",
   },
 
   stats: { flexDirection: "row", gap: 10, marginTop: 24 },

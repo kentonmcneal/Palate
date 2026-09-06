@@ -4,7 +4,7 @@ import { Text } from "./Text";
 import Svg, { Defs, Marker, Path } from "react-native-svg";
 import { colors, spacing } from "../theme";
 import { palateColors, palateMotion } from "../lib/theme/palateTheme";
-import { IDENTITY_NAME, type PalateProfile } from "../lib/palate";
+import { IDENTITY_NAME, WHAT_ARE_PALATES, type PalateProfile } from "../lib/palate";
 import { FONT_CAP } from "../lib/a11y";
 
 // ============================================================================
@@ -82,16 +82,18 @@ export function PalateAxisGraph({ profile }: { profile: PalateProfile }) {
   return (
     <View style={styles.wrap}>
       {/* Top axis label (outside square) */}
-      <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.axisLabel, styles.axisTop]}>Premium</Text>
+      {/* Plain words, not model words: "Premium / Consistency / Novelty" is
+          how the axes are computed, not what a person did. */}
+      <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.axisLabel, styles.axisTop]}>{WHAT_ARE_PALATES.axisLabels.yTop}</Text>
 
       {/* Left axis label (outside, vertically centered) */}
-      <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.axisLabel, styles.axisLeft]}>Consistency</Text>
+      <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.axisLabel, styles.axisLeft]}>{WHAT_ARE_PALATES.axisLabels.xLeft}</Text>
 
       {/* Right axis label (outside, vertically centered) */}
-      <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.axisLabel, styles.axisRight]}>Novelty</Text>
+      <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.axisLabel, styles.axisRight]}>{WHAT_ARE_PALATES.axisLabels.xRight}</Text>
 
       {/* Bottom axis label (outside square) */}
-      <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.axisLabel, styles.axisBottom]}>Casual</Text>
+      <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.axisLabel, styles.axisBottom]}>{WHAT_ARE_PALATES.axisLabels.yBottom}</Text>
 
       <View style={styles.plot}>
         {/* Quadrant background — only the user's quadrant is tinted red. */}
@@ -107,7 +109,7 @@ export function PalateAxisGraph({ profile }: { profile: PalateProfile }) {
         {/* Quadrant labels — current is red, others muted gray. */}
         <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.qLabel, styles.qLabelTopLeft,  isActive("Steward") && styles.qLabelActive]}>{IDENTITY_NAME.Steward}</Text>
         <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.qLabel, styles.qLabelTopRight, isActive("Curator") && styles.qLabelActive]}>{IDENTITY_NAME.Curator}</Text>
-        <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.qLabel, styles.qLabelBotLeft,  isActive("Anchor")  && styles.qLabelActive]}>Anchor</Text>
+        <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.qLabel, styles.qLabelBotLeft,  isActive("Anchor")  && styles.qLabelActive]}>{IDENTITY_NAME.Anchor}</Text>
         <Text maxFontSizeMultiplier={FONT_CAP.chart} style={[styles.qLabel, styles.qLabelBotRight, isActive("Forager") && styles.qLabelActive]}>{IDENTITY_NAME.Forager}</Text>
 
         {/* Movement arrow (prior week → now). Drawn on top of the quadrants

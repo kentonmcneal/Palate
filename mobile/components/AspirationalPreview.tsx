@@ -24,7 +24,7 @@ export function AspirationalPreview() {
 
   return (
     <Pressable onPress={() => router.push("/insights")} style={styles.card}>
-      <Text style={styles.eyebrow}>YOUR NEXT ERA</Text>
+      <Text style={styles.eyebrow}>WHERE YOU ARE HEADED</Text>
       <Text style={styles.insight}>{data.insight}</Text>
       {data.topAspirationTags.length > 0 && (
         <View style={styles.tagRow}>

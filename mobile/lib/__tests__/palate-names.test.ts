@@ -1,5 +1,5 @@
 import {
-  IDENTITY_NAME, identityName, identityWithArticle, identityTitle, displayStoredPersona,
+  IDENTITY_NAME, identityName, identityWithArticle, identityTitle, displayStoredPersona, storedPersonaKey,
 } from "../palate/palateNames";
 
 describe("identity names", () => {
@@ -35,5 +35,16 @@ describe("identity names", () => {
   it("passes through anything it does not recognise rather than blanking it", () => {
     expect(displayStoredPersona("The Sandwich Guy")).toBe("The Sandwich Guy");
     expect(displayStoredPersona(null)).toBeNull();
+  });
+
+  it("recovers the key behind a stored label, so its meaning can sit under it", () => {
+    // The Wrapped hero shows a tagline under every name; the tagline is
+    // looked up by key, so a stored string has to resolve to one.
+    expect(storedPersonaKey("The Fast Casual Regular")).toBe("Anchor");
+    expect(storedPersonaKey("Explorer")).toBe("Forager");
+    expect(storedPersonaKey("The Tastemaker")).toBe("Curator");
+    expect(storedPersonaKey("Warming Up")).toBe("Learning");
+    expect(storedPersonaKey("The Sandwich Guy")).toBeNull();
+    expect(storedPersonaKey(null)).toBeNull();
   });
 });

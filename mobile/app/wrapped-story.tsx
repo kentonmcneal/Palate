@@ -6,36 +6,47 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors, spacing, type } from "../theme";
-import { computeTasteVector, type TasteVector } from "../lib/taste-vector";
+import { computeTasteVector } from "../lib/taste-vector";
 import {
-  getProfileFromVector, IDENTITY_BLURB, vectorToWeeklyData, composeEgoHook,
-  composeNextEra, type PalateProfile, type UserWeeklyData,
+  getProfileFromVector, IDENTITY_BLURB, vectorToWeeklyData,
+  type PalateProfile, type UserWeeklyData,
 } from "../lib/palate";
 import { identityName, identityTitle } from "../lib/palate";
+import {
+  composeLearningLine, composeNextEra, composeStoryAlso, composeStoryNumbers, composeStoryStandout,
+} from "../lib/palate/palateCopy";
 import { isoWeekStart } from "../lib/wrapped";
 import { triggerHapticSelection } from "../lib/haptics";
 import { palateGradients, palateColors } from "../lib/theme/palateTheme";
 import { myTopLovedItems, type LovedItem } from "../lib/menu-items";
-import { generateCohortInsightAsync, type CohortInsight } from "../lib/population-stats";
-import { generateIdentitySet } from "../lib/palate-labels";
 import { useFontScale } from "../lib/a11y";
 
 // ============================================================================
 // Wrapped Story — Spotify-Wrapped-style identity reveal in up to 5 cards.
 // ----------------------------------------------------------------------------
-// Now the EXCLUSIVE home for the deep narrative pieces (identity, signals,
-// behavior, percentile/ego hook, top dish, cohort, next era). The Wrapped
-// tab keeps only the share card, charts, area palates, and What Are Palates.
+// The EXCLUSIVE home for the narrative pieces. The Wrapped tab keeps only the
+// share card, charts, and What Are Palates.
+//
+// Every card says one plain thing, with a number where there is one, in at
+// most two short sentences. The words live in lib/palate/palateCopy.ts so
+// they are pure and tested; this file only decides which cards to show.
 //
 // Cards (in order):
-//   1. Identity Reveal     — "FORAGER" + tagline
-//   2. The Numbers         — "10 new places." + secondary stats
-//   3. Why You Moved       — ego hook + interpretation + movement
-//   4. Signals + Top Dish  — dominant tag + sub tags + top dish
-//   5. Your Next Era       — composeNextEra + cohort line
+//   1. Your Palate this week  — the badge ("The Explorer") + what it means
+//   2. Your week in numbers   — "6 visits." + places, neighborhoods, cuisines
+//   3. What stood out         — "4 of 6 visits were somewhere new." + vs last week
+//   4. Also this week         — the details as plain phrases + the dish you loved
+//   5. If this keeps up       — the identity the week's shift points at, + meaning
 //
-// Cards 4 and 5 are skipped when their data isn't strong enough — the story
-// tightens to 3 cards rather than padding with empty UI.
+// Cards 2, 4 and 5 are skipped when they have nothing to say: the story
+// tightens rather than padding with a sentence that restates the last card.
+//
+// The cohort line ("1,050 Palates eat like you. They average 3.4 eating-out
+// meals a week.") used to close card 5. It was preview data, generated from
+// a hash of the identity label, shown to a real person as a statistic. The
+// founder pulled "Top Palates in <city>" off the tab on 2026-09-05 for the
+// same reason, so it is gone from here too; population-stats still has the
+// real-data path if the user count ever earns it back.
 //
 // Shown the first time per ISO week the user opens Wrapped (gated via
 // AsyncStorage key 'palate.wrappedStory.lastShownWeek').
@@ -49,10 +60,10 @@ type StoryCard = {
   eyebrow: string;
   /** Headline gets the display-size treatment. */
   headline: string;
-  /** Optional small line ABOVE the body — used for the dominant tag on Card 3. */
+  /** Optional small line ABOVE the body. */
   dominantSubline?: string;
   body: string;
-  /** Optional footer line — used for top dish on Card 4 ("♥ Coffee · Starbucks"). */
+  /** Optional footer line — used for the dish on card 4 ("♥ Coffee · Starbucks"). */
   footer?: string;
   /** When true, headline gets the display-grade font + brand-red glow. */
   hero?: boolean;
@@ -83,24 +94,18 @@ export default function WrappedStoryScreen() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      // Pull every piece of data the story needs in parallel.
       const weekVec = await computeTasteVector({ sinceDays: 7 }).catch(() => null);
       const profile = weekVec ? await getProfileFromVector(weekVec).catch(() => null) : null;
       const weekly = weekVec ? vectorToWeeklyData(weekVec) : null;
 
-      const [topDish, cohort] = await Promise.all([
-        myTopLovedItems(1, 7).then((items) => items[0] ?? null).catch(() => null),
-        loadCohortInsight(weekVec, profile).catch(() => null),
-      ]);
-
       // Top dish has a sensible all-time fallback: if the user rated zero
       // items this week, pull their loudest all-time love instead.
-      let dish = topDish;
+      let dish = await myTopLovedItems(1, 7).then((items) => items[0] ?? null).catch(() => null);
       if (!dish) {
         dish = await myTopLovedItems(1).then((items) => items[0] ?? null).catch(() => null);
       }
 
-      if (alive) setCards(buildCards(profile, weekly, dish, cohort));
+      if (alive) setCards(buildCards(profile, weekly, weekVec?.uniqueRestaurants ?? null, dish));
     })();
     return () => {
       alive = false;
@@ -186,7 +191,9 @@ export default function WrappedStoryScreen() {
           {card.dominantSubline && (
             <Text style={styles.dominantSubline}>{card.dominantSubline}</Text>
           )}
-          <Text style={styles.cardBody}>{card.body}</Text>
+          {card.body.length > 0 && (
+            <Text style={styles.cardBody}>{card.body}</Text>
+          )}
           {card.footer && (
             <Text style={styles.footerLine}>{card.footer}</Text>
           )}
@@ -201,23 +208,24 @@ export default function WrappedStoryScreen() {
 }
 
 // ----------------------------------------------------------------------------
-// Card builder — up to 5 cards. Skips cards whose data isn't strong enough,
-// so a quiet week gets a tighter story.
+// Card builder — up to 5 cards. Skips cards with nothing to say, so a quiet
+// week gets a tighter story.
 // ----------------------------------------------------------------------------
 function buildCards(
   profile: PalateProfile | null,
   weekly: UserWeeklyData | null,
+  uniquePlaces: number | null,
   topDish: LovedItem | null,
-  cohort: CohortInsight | null,
 ): StoryCard[] {
   const id = profile?.primaryIdentity ?? "Learning";
 
-  // Card 1 — Identity reveal -------------------------------------------------
+  // Card 1 — the badge, with what it means on the same card. A week too thin
+  // to name says the number it has and the number it needs.
   const card1: StoryCard = id === "Learning"
     ? {
         eyebrow: "YOUR PALATE THIS WEEK",
         headline: identityName("Learning"),
-        body: "Log a few more visits and your Palate will surface.",
+        body: composeLearningLine(weekly?.totalVisits ?? 0),
         gradient: palateGradients.storyDark,
         hero: true,
       }
@@ -231,144 +239,32 @@ function buildCards(
 
   const cards: StoryCard[] = [card1];
 
-  // Card 2 — The numbers (Spotify-Wrapped style hero number) ----------------
-  const numbers = composeNumbersCard(weekly);
-  if (numbers) cards.push(numbers);
-
-  // Card 3 — Why you moved (interpretation + ego hook) ---------------------
-  if (profile && id !== "Learning") {
-    const ego = composeEgoHook(profile);
-    cards.push({
-      eyebrow: ego ? ego.toUpperCase().replace(/\.$/, "") : "HOW YOU MOVED",
-      headline: pickWhyHeadline(profile),
-      body: composeWhyBody(profile),
-      gradient: palateGradients.storyDark,
-    });
+  // Card 2 — the week in numbers.
+  const numbers = composeStoryNumbers(weekly, uniquePlaces);
+  if (numbers) {
+    cards.push({ eyebrow: "YOUR WEEK IN NUMBERS", ...numbers, gradient: palateGradients.storyDark });
   }
 
-  // Card 4 — Signals + top dish --------------------------------------------
-  const signals = composeSignalsCard(profile, topDish);
-  if (signals) cards.push(signals);
-
-  // Card 5 — Your next era (cohort + movement) -----------------------------
   if (profile && id !== "Learning") {
-    cards.push({
-      eyebrow: "YOUR NEXT ERA",
-      headline: composeNextEra(id, profile.movement),
-      body: composeNextEraBody(cohort),
-      gradient: palateGradients.storyDark,
-    });
+    // Card 3 — the one thing that stood out, and how it compares to last week.
+    cards.push({ eyebrow: "WHAT STOOD OUT", ...composeStoryStandout(profile), gradient: palateGradients.storyDark });
+
+    // Card 4 — the details, as plain phrases, and the dish they loved.
+    const also = composeStoryAlso(profile.tags, topDish);
+    if (also) {
+      cards.push({ eyebrow: "ALSO THIS WEEK", ...also, gradient: palateGradients.storyRed, hero: true });
+    }
+
+    // Card 5 — the identity this week's shift points at, only when it is a
+    // different one from card 1. Same treatment as card 1: badge + meaning.
+    const next = composeNextEra(id, profile.movement);
+    if (next) {
+      cards.push({ eyebrow: "IF THIS KEEPS UP", ...next, gradient: palateGradients.storyRed, hero: true });
+    }
   }
 
   // Belt-and-suspenders: never exceed 5.
   return cards.slice(0, 5);
-}
-
-// ----------------------------------------------------------------------------
-// Card composers
-// ----------------------------------------------------------------------------
-
-function composeNumbersCard(d: UserWeeklyData | null): StoryCard | null {
-  if (!d || d.totalVisits === 0) return null;
-
-  const newCount = Math.round(d.totalVisits * d.newPlaceRate);
-
-  // Headline — dominant numeric reveal. Prefer "all new" framing when it
-  // actually applies, then fall back to plain visit count.
-  let headline: string;
-  if (newCount === d.totalVisits && d.totalVisits >= 4) {
-    headline = `${d.totalVisits} visits.\n${d.totalVisits} new places.`;
-  } else if (newCount >= d.totalVisits * 0.7 && newCount >= 3) {
-    headline = `${newCount} new places.`;
-  } else if (d.totalVisits >= 4) {
-    headline = `${d.totalVisits} visits this week.`;
-  } else {
-    headline = `${d.totalVisits} visit${d.totalVisits === 1 ? "" : "s"}.`;
-  }
-
-  // Body — secondary stats joined into a quick one-liner.
-  const bodyParts: string[] = [];
-  if (d.neighborhoodCount >= 3) bodyParts.push(`Across ${d.neighborhoodCount} neighborhoods.`);
-  if (d.cuisineDiversity >= 0.6) bodyParts.push("A wide cuisine spread.");
-  else if (d.cuisineDiversity <= 0.25 && d.totalVisits >= 4) bodyParts.push("One or two cuisines, deeply.");
-  if (d.repeatRate >= 0.5) bodyParts.push("And a steady rotation.");
-  if (bodyParts.length === 0 && d.neighborhoodCount >= 1) bodyParts.push(`Across ${d.neighborhoodCount} neighborhood${d.neighborhoodCount === 1 ? "" : "s"}.`);
-
-  return {
-    eyebrow: "YOUR WEEK, IN NUMBERS",
-    headline,
-    body: bodyParts.join(" "),
-    gradient: palateGradients.storyDark,
-  };
-}
-
-function composeWhyBody(profile: PalateProfile): string {
-  // Combine first behavior signal + movement summary into a single emotional
-  // beat. Falls back gracefully when one is missing.
-  const sig = profile.behaviorSignals[0] ?? "";
-  const move = profile.movement?.summary ?? "";
-  if (sig && move) return `${sig} ${move}`;
-  return sig || move || profile.explanation;
-}
-
-function composeSignalsCard(profile: PalateProfile | null, topDish: LovedItem | null): StoryCard | null {
-  if (!profile || profile.primaryIdentity === "Learning") return null;
-  const tags = profile.tags;
-  if (tags.length === 0 && !topDish) return null;
-
-  const dominant = tags[0];
-  const subTags = tags.slice(1, 4);
-  const headline = dominant ?? "Steady week";
-  const body = subTags.length > 0
-    ? subTags.join(" · ")
-    : topDish
-      ? "And one dish carried it."
-      : "Your Palate showed up quietly.";
-  const footer = topDish ? `♥ ${topDish.itemName} · ${topDish.restaurantName}` : undefined;
-
-  return {
-    eyebrow: "THIS WEEK'S SIGNALS",
-    headline,
-    body,
-    footer,
-    gradient: palateGradients.storyRed,
-    hero: true,
-  };
-}
-
-function composeNextEraBody(cohort: CohortInsight | null): string {
-  if (!cohort) return "Keep eating like you. Your Palate will keep moving.";
-  // Trim cohort lines into one editorial sentence — never the full bullet list.
-  return `${cohort.countLine}. ${cohort.paceLine}.`;
-}
-
-/** Picks a short, observational WHY headline from the profile. */
-function pickWhyHeadline(profile: PalateProfile): string {
-  const id = profile.primaryIdentity;
-  const novelty = profile.noveltyScore;
-  const premium = profile.premiumScore;
-
-  if (id === "Forager") return novelty >= 0.75 ? "You chased variety." : "You explored.";
-  if (id === "Curator") return "You picked carefully.";
-  if (id === "Steward") return premium >= 0.65 ? "You returned to the right places." : "You stuck with what works.";
-  if (id === "Anchor") return "You leaned on the trusted few.";
-  return "Your pattern took shape.";
-}
-
-// ----------------------------------------------------------------------------
-// Cohort loader — uses the legacy palate-labels system to build the input the
-// population-stats helper expects. Wraps the whole thing in a try so a failure
-// here just drops Card 5's body to the fallback line.
-// ----------------------------------------------------------------------------
-async function loadCohortInsight(
-  weekVec: TasteVector | null,
-  profile: PalateProfile | null,
-): Promise<CohortInsight | null> {
-  if (!weekVec || !profile || profile.primaryIdentity === "Learning") return null;
-  const allTime = await computeTasteVector().catch(() => null);
-  if (!allTime) return null;
-  const ids = generateIdentitySet(allTime, weekVec);
-  return generateCohortInsightAsync(ids.primary, allTime).catch(() => null);
 }
 
 // ----------------------------------------------------------------------------

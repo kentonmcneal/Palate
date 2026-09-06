@@ -4,11 +4,51 @@
 // Tags are derived from UserWeeklyData and ranked by signal strength. UI shows
 // only the top 3-4 to keep things scannable. Distance tags (Grounded/Roamer)
 // use neighborhood count, not raw miles, per spec.
+//
+// The Tag values are KEYS, not copy. They stay as they are in the type union
+// and in every test, and TAG_LABEL below is the only place the words a person
+// reads live, so a wording change is one edit here and nothing else moves.
 // ============================================================================
 
 import type { Tag, UserWeeklyData } from "./palateTypes";
 
 const MAX_TAGS = 4;
+
+// What a person reads for each tag. Written as the thing they did, in their
+// own words, because "Roamer" and "Trend-aware" needed a glossary and a
+// stranger reading a friend's phone does not have one. Each phrase says what
+// the rule under it actually measures: "Trend-aware" fires on fine dining and
+// wine bar share, so it says that rather than something about trends.
+export const TAG_LABEL: Record<Tag, string> = {
+  // Distance (neighborhood count, not miles)
+  Grounded: "Stayed in one or two areas",
+  Roamer: "Ate all over town",
+  // Time of day
+  "Brunch-heavy": "Big on brunch",
+  "Late-night": "Late nights",
+  "Weekday lunch": "Weekday lunches",
+  "Cafe regular": "Cafe regular",
+  // Social
+  "Group dining": "Ate in groups",
+  "Solo dining": "Ate alone a lot",
+  "Date-night": "Date nights",
+  "Friends-first": "Out with friends",
+  // Behavior
+  "High variety": "Tried a lot of cuisines",
+  "Repeat favorite": "Kept going back",
+  "Trend-aware": "Fine dining and wine bars",
+  Planner: "Dates and group dinners",
+  "Comfort-driven": "Stuck with what you know",
+  "Stretching lately": "Mostly new places",
+  "Wellness-leaning": "Healthy picks",
+  "Cuisine-focused": "One or two cuisines",
+};
+
+/** The phrase a person reads for a tag key. Falls back to the key itself so
+ *  an unknown value renders rather than blanking a chip. */
+export function tagLabel(tag: Tag | string): string {
+  return (TAG_LABEL as Record<string, string>)[tag] ?? tag;
+}
 
 type ScoredTag = { tag: Tag; score: number };
 
