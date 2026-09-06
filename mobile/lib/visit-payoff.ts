@@ -34,6 +34,10 @@ export type VisitFacts = {
   cuisine: string | null;
   /** Visits to this cuisine in the last 30 days, including now. */
   cuisineVisits30d: number;
+  /** Visits to this cuisine ever, including now. Lets the payoff state the
+   *  SHARE — "Italian is now 30% of your Palate" — which is the founder's
+   *  own example of what logging a meal should tell you it did. */
+  cuisineVisitsAll?: number;
   /** Distinct restaurants ever logged, including this one. */
   distinctPlaces: number;
   /**
@@ -62,6 +66,21 @@ function ordinal(n: number): string {
 }
 
 /**
+ * How much this cuisine's share of the whole history moved, in percentage
+ * points, and where it landed. Exact rather than approximated: this visit is
+ * already inside both counts, so the before-state is (n-1)/(total-1).
+ *
+ * Null when there is no before to compare against, or no cuisine.
+ */
+export function cuisineShare(f: VisitFacts): { after: number; points: number } | null {
+  const all = f.cuisineVisitsAll;
+  if (!f.cuisine || all == null || all < 1 || f.totalVisits < 2) return null;
+  const afterPct = (all / f.totalVisits) * 100;
+  const beforePct = ((all - 1) / (f.totalVisits - 1)) * 100;
+  return { after: Math.round(afterPct), points: Math.round(afterPct - beforePct) };
+}
+
+/**
  * The single line to show after a confirmed visit, or null when nothing true
  * and interesting can be said.
  *
@@ -78,6 +97,13 @@ export function visitPayoff(f: VisitFacts): string | null {
   // A changed favourite is the most interesting thing that can happen.
   if (f.becameTopSpot && f.visitsHere >= 2) {
     return "That just became your most-visited place.";
+  }
+
+  // A cuisine never eaten before is new information about the person, which
+  // beats a new address and beats any percentage. Guarded on the all-time
+  // count so it can never fire for the fourth Thai place.
+  if (f.cuisine && f.cuisineVisitsAll === 1 && f.totalVisits > 1) {
+    return `Your first ${label(f.cuisine)}. That's new.`;
   }
 
   // Repeat visits say more about taste than a new place does.
@@ -104,7 +130,24 @@ export function visitPayoff(f: VisitFacts): string | null {
     return `New place. That's ${f.distinctPlaces} you've been to.`;
   }
 
-  // Nothing worth saying. Say nothing.
+  // The share of the whole history — the founder's own example of what this
+  // moment should tell you. It sits LAST among the true things rather than
+  // first because a changed favourite or a third visit is more interesting
+  // than a percentage; but it is computable on almost every confirm, so it is
+  // what turns "say nothing" into "say something true" most of the time.
+  // A share this small is noise, not a fact about someone's palate: one visit
+  // in forty moves 2% to 3% and saying "up 1" about that is the kind of
+  // manufactured progress this module exists to avoid.
+  const MEANINGFUL_SHARE = 5;
+  const share = cuisineShare(f);
+  if (f.cuisine && share && share.after >= MEANINGFUL_SHARE) {
+    if (share.points >= 1) {
+      return `${label(f.cuisine)} is now ${share.after}% of your palate, up ${share.points}.`;
+    }
+    return `${label(f.cuisine)} holds at ${share.after}% of your palate.`;
+  }
+
+  // Nothing worth saying. Say nothing. A fake payoff is worse than none.
   return null;
 }
 
@@ -117,6 +160,7 @@ type FactsRow = {
   visits_here: number;
   cuisine: string | null;
   cuisine_visits_30d: number;
+  cuisine_visits_all: number;
   distinct_places: number;
   became_top_spot: boolean;
 };
@@ -139,6 +183,7 @@ export async function loadVisitPayoff(visitId: string): Promise<string | null> {
       visitsHere: data.visits_here,
       cuisine: data.cuisine,
       cuisineVisits30d: data.cuisine_visits_30d,
+      cuisineVisitsAll: data.cuisine_visits_all,
       distinctPlaces: data.distinct_places,
       visitsToWrapped: visitsToWrapped(data.total_visits),
       becameTopSpot: data.became_top_spot,

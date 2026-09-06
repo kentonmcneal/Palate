@@ -11,6 +11,8 @@ import { confirmDigest } from "../lib/digest-confirm";
 import { buildDigest, type Digest, type DigestEntry } from "../lib/passive-digest";
 import { saveVisit, recordPromptDecision } from "../lib/visits";
 import { loadVisitPayoff } from "../lib/visit-payoff";
+import { Confetti } from "../components/Confetti";
+import { triggerHapticSuccess } from "../lib/haptics";
 import type { Restaurant } from "../lib/places";
 
 // The nightly digest. Confirmation is far cheaper cognitively than input, so
@@ -36,6 +38,7 @@ export default function DigestScreen() {
   const [showLow, setShowLow] = useState(false);
   const [saving, setSaving] = useState(false);
   const [payoff, setPayoff] = useState<string | null>(null);
+  const [celebrate, setCelebrate] = useState(false);
   const [done, setDone] = useState(false);
 
   const load = useCallback(async () => {
@@ -107,6 +110,13 @@ export default function DigestScreen() {
       }
 
       if (savedIds[0]) setPayoff(await loadVisitPayoff(savedIds[0]));
+      // The digest is where most confirmations happen — it is the screen the
+      // notification opens — and it was the one path with no celebration at
+      // all. The single-visit screens have had confetti since they shipped.
+      if (savedIds.length > 0 && failed.length === 0) {
+        setCelebrate(true);
+        void triggerHapticSuccess();
+      }
       setDone(failed.length === 0);
     } finally {
       setSaving(false);
@@ -124,6 +134,7 @@ export default function DigestScreen() {
   if (done) {
     return (
       <SafeAreaView style={styles.safe}>
+        <Confetti fire={celebrate} count={80} />
         <View style={styles.center}>
           <Text style={styles.emoji}>🍽️</Text>
           <Text style={styles.h1}>Logged</Text>
