@@ -38,6 +38,8 @@ import * as WebBrowser from "expo-web-browser";
 import { initObservability, captureError } from "../lib/observability";
 import { registerPushToken } from "../lib/notifications";
 import { track } from "../lib/analytics";
+import { currentPermissionState } from "../lib/passive-permissions";
+import { notificationsGranted } from "../lib/notifications";
 import { checkForAutoVisitOnForeground } from "../lib/auto-detect";
 import { installGlobalErrorHandlers } from "../lib/global-error-handler";
 import * as Notifications from "expo-notifications";
@@ -254,6 +256,21 @@ export default function RootLayout() {
   useEffect(() => {
     if (!session?.user) return;
     void recordHeartbeat(true).catch(() => {});
+    // The funnel's denominator. Without a launch event no rate in it means
+    // anything: "40 testers, 8 opted in" and "9 testers, 8 opted in" produce
+    // identical numbers everywhere else. Fired once per signed-in session,
+    // not on every foreground, so it counts people rather than app switches.
+    void (async () => {
+      const [perms, notifs] = await Promise.all([
+        currentPermissionState().catch(() => ({ always: false, whenInUse: false })),
+        notificationsGranted().catch(() => false),
+      ]);
+      track("app_opened", {
+        location_always: perms.always,
+        location_when_in_use: perms.whenInUse,
+        notifications: notifs,
+      });
+    })();
     void drainConfirmQueue().catch(() => {});
     // Self-heal. The digest is scheduled when a visit lands and rewritten when
     // one is confirmed, and both of those need JS to have been running. If the
