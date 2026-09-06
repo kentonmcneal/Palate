@@ -50,9 +50,8 @@ import {
 } from "../lib/passive-capture";
 import { addVisitListener } from "../modules/palate-visit-monitor";
 import {
-  checkPermissionDowngrade, hasAlways, needsAlwaysPrompt, dismissAlwaysPrompt,
+  checkPermissionDowngrade, hasAlways,
 } from "../lib/passive-permissions";
-import { PermissionRepairBanner } from "../components/PermissionRepairBanner";
 
 // Install app-wide catch-alls for uncaught errors / unhandled rejections BEFORE
 // any app code runs. Under the New Architecture an unhandled rejection would
@@ -120,7 +119,6 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
 
-  const [repairVisible, setRepairVisible] = useState(false);
 
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular, Inter_500Medium, Inter_600SemiBold,
@@ -202,19 +200,12 @@ export default function RootLayout() {
       void reportDay7PermissionState(hasAlways, (granted, days) => {
         void track("perm_always_day7", { granted, days_since_opt_in: days });
       }).catch((e) => captureError(e, { at: "passive:day7" }));
-      // Detect a silent Always downgrade and surface the repair banner — but
-      // only nag someone who actually opted in. Anyone else revoking location
-      // is doing exactly what they meant to.
+      // Record a silent Always downgrade (the detector's own bookkeeping and
+      // the perm_always_revoked event). The dismissible repair banner that
+      // used to hang off this is gone: components/CaptureWarning.tsx now sits
+      // on every tab, cannot be closed, and covers the downgrade case and the
+      // never-granted case alike.
       void checkPermissionDowngrade()
-        .then(async (downgraded) => {
-          if (!(await isPassiveOptedIn())) return;
-          // A downgrade always surfaces. So does never having granted Always at
-          // all — onboarding used to tell people to pick "While Using the App",
-          // so an opted-in account could sit for weeks with a tracking toggle
-          // reading ON, capturing nothing, and nothing explaining why. That
-          // second case is rate-limited to once a week.
-          if (downgraded || (await needsAlwaysPrompt())) setRepairVisible(true);
-        })
         .catch((e) => captureError(e, { at: "passive:downgrade" }));
     };
     onForeground();
@@ -530,10 +521,6 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar style="dark" />
-        <PermissionRepairBanner
-          visible={repairVisible}
-          onDismiss={() => { setRepairVisible(false); void dismissAlwaysPrompt(); }}
-        />
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.paper } }}>
           <Stack.Screen name="sign-in" />
           <Stack.Screen name="onboarding" />

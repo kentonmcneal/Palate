@@ -7,6 +7,7 @@ import { colors } from "../../theme";
 import { latestWrapped } from "../../lib/wrapped";
 import { triggerHapticSelection } from "../../lib/haptics";
 import { PalateIntroModal } from "../../components/PalateIntroModal";
+import { CaptureWarning } from "../../components/CaptureWarning";
 import { FONT_CAP, useFontScale, scaleSpace } from "../../lib/a11y";
 
 export const LAST_SEEN_WRAPPED_KEY = "palate.wrapped.lastSeen";
@@ -39,6 +40,11 @@ export default function TabsLayout() {
   return (
     <>
     <PalateIntroModal />
+    {/* Above the navigator, not inside a screen, so it is on every tab and
+        nothing in a screen can scroll it away. It renders nothing while
+        Location is Always and notifications are on, and it has no close
+        button; see components/CaptureWarning.tsx for why. */}
+    <CaptureWarning />
     <Tabs
       screenOptions={{
         headerShown: false,
