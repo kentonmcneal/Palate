@@ -64,6 +64,21 @@ select count(*) from public.dishes_near(35.098, -89.841, 8000);
 select count(*) from public.restaurants_by_cuisine(35.098, -89.841, 'american', 8000, 5);
 select count(*) from public.restaurants_by_dish(35.098, -89.841, 'tacos', 8000, 5);
 select count(*) from public.place_heat(35.098, -89.841, 6000, 5);
+-- Added with the follow model (0116-0120). board_leaders in particular is a
+-- plpgsql `return query` over a four-branch UNION ALL, which is precisely the
+-- shape that deploys clean and raises on first execution.
+select count(*) from public.list_follows('following');
+select count(*) from public.list_follows('followers');
+select count(*) from public.list_follows('friends');
+select count(*) from public.follow_counts('00000000-0000-0000-0000-0000000000b2');
+select count(*) from public.board_leaders('never_cooks', 'everyone', 'all', 5);
+select count(*) from public.board_leaders('widest_net', 'following', 'week', 5);
+select count(*) from public.board_leaders('deep_regular', 'everyone', 'month', 5);
+select count(*) from public.board_leaders('first_in', 'everyone', 'year', 5);
+select count(*) from public.restaurant_regulars('Chick', 5);
+select public.are_friends(
+  '00000000-0000-0000-0000-0000000000a1',
+  '00000000-0000-0000-0000-0000000000b2');
 
 select count(*) from public.get_friend_profile_snapshot('00000000-0000-0000-0000-0000000000a1');
 select public.friend_taste_features('00000000-0000-0000-0000-0000000000b2');

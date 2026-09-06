@@ -247,6 +247,19 @@ begin
   select id into mom    from public.profiles where display_name = 'mcldkt';
   select id into taylor from public.profiles where display_name = 'Taylor M.';
 
+  -- a signed-out caller sees nothing
+  perform set_config('request.jwt.claims', null, true);
+  select count(*) into n from public.list_follows('followers');
+  if n <> 0 then raise exception '0116: unauthenticated caller read the graph'; end if;
+
+  -- CI rebuilds this migration against an empty database. These proofs are
+  -- about the DATA migration, so with no data there is nothing to prove and
+  -- the assertions below would fire on three nulls.
+  if kenton is null or mom is null or taylor is null then
+    raise notice '0116: fresh database, no seed profiles — data proofs skipped';
+    return;
+  end if;
+
   -- the accepted friendship became a mutual follow
   if not public.are_friends(kenton, mom) then raise exception '0116: the accepted friendship did not survive'; end if;
   -- the pending request became a one-way follow, and is NOT a friendship
@@ -262,10 +275,6 @@ begin
   st := public.unfollow_user(kenton);
   if st <> 'follows_you' then raise exception '0116: unfollow reported %', st; end if;
 
-  -- a signed-out caller sees nothing
-  perform set_config('request.jwt.claims', null, true);
-  select count(*) into n from public.list_follows('followers');
-  if n <> 0 then raise exception '0116: unauthenticated caller read the graph'; end if;
 
   perform set_config('request.jwt.claims', json_build_object('sub', kenton::text)::text, true);
   select count(*) into n from public.list_follows('following');

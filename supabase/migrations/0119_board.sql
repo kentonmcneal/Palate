@@ -155,6 +155,11 @@ begin
   select count(*) into n from public.restaurant_regulars('a');
   if n <> 0 then raise exception '0119: signed-out caller read regulars'; end if;
 
+  if kenton is null then
+    raise notice '0119: fresh database, no seed profiles — proofs skipped';
+    return;
+  end if;
+
   perform set_config('request.jwt.claims', json_build_object('sub', kenton::text)::text, true);
   for r in select * from public.board_leaders('never_cooks','everyone') loop
     raise notice 'never_cooks: % = %', coalesce(r.display_name,'?'), r.value;

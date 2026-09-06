@@ -180,6 +180,10 @@ do $$
 declare kenton uuid; r record; wk date;
 begin
   select id into kenton from public.profiles where display_name = 'Kenton M';
+  if kenton is null then
+    raise notice '0118: fresh database, no seed profiles — proofs skipped';
+    return;
+  end if;
   perform set_config('request.jwt.claims', json_build_object('sub', kenton::text)::text, true);
 
   select week_start into wk from public.weekly_wrapped where user_id = kenton order by week_start desc limit 1;

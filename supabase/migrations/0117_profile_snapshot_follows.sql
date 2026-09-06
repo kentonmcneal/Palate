@@ -115,6 +115,15 @@ begin
   select id into mom    from public.profiles where display_name = 'mcldkt';
   select id into taylor from public.profiles where display_name = 'Taylor M.';
 
+  perform set_config('request.jwt.claims', null, true);
+  select count(*) into n from public.get_friend_profile_snapshot(kenton);
+  if n <> 0 then raise exception '0117: signed-out caller read a profile'; end if;
+
+  if kenton is null or mom is null or taylor is null then
+    raise notice '0117: fresh database, no seed profiles — proofs skipped';
+    return;
+  end if;
+
   perform set_config('request.jwt.claims', json_build_object('sub', kenton::text)::text, true);
   select * into r from public.get_friend_profile_snapshot(mom);
   if r.follow_state <> 'mutual' then raise exception '0117: mutual follow read as %', r.follow_state; end if;
@@ -141,7 +150,4 @@ begin
   delete from public.follows where follower_id = taylor and followee_id = kenton;
   update public.profiles set profile_visibility = 'public' where id = kenton;
 
-  perform set_config('request.jwt.claims', null, true);
-  select count(*) into n from public.get_friend_profile_snapshot(kenton);
-  if n <> 0 then raise exception '0117: signed-out caller read a profile'; end if;
 end $$;
