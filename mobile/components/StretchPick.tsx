@@ -15,6 +15,7 @@ import { assembleGraph, computeRightNow, type RightNowPick as StretchPickType } 
 import { toInput as toCandidateInput } from "../lib/recommendation/candidates";
 import { filterRecommendable } from "../lib/recommendation/eligibility";
 import { cuisineHue, PlaceTile } from "./PlaceArt";
+import { placeFacts } from "../lib/place-facts";
 import { FONT_CAP } from "../lib/a11y";
 
 // ============================================================================
@@ -78,6 +79,7 @@ export function StretchPick() {
   // The same hue this place wears on every other card, so the pick is
   // recognisably the same restaurant if it also appears in the list above.
   const hue = cuisineHue(r.cuisine_type, r.google_place_id);
+  const facts = placeFacts(r);
   const sub = r.cuisine_type ? cap(r.cuisine_type) : "";
 
   return (
@@ -114,10 +116,12 @@ export function StretchPick() {
       </View>
       {/* Star in saffron, cuisine in its hue: the same subline grammar as the
           list cards, so the eye does not have to learn a second one here. */}
-      {(r.rating != null || sub.length > 0) && (
+      {(facts.rating || facts.price || sub.length > 0) && (
         <Text style={styles.sub}>
-          {r.rating != null && <Text style={styles.star}>★ {r.rating.toFixed(1)}</Text>}
-          {r.rating != null && sub.length > 0 && " · "}
+          {!!facts.rating && <Text style={styles.star}>{facts.rating}</Text>}
+          {!!facts.rating && (!!facts.price || sub.length > 0) && " · "}
+          {!!facts.price && facts.price}
+          {!!facts.price && sub.length > 0 && " · "}
           {sub.length > 0 && <Text style={[styles.cuisineText, { color: hue }]}>{sub}</Text>}
         </Text>
       )}

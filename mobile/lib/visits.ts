@@ -258,7 +258,10 @@ export async function recentVisits(limit = 20) {
     .select(`
       id, user_id, restaurant_id, visited_at, meal_type, detection_source,
       confirmed_by_user, notes, photo_url, is_public,
-      restaurant:restaurants ( id, name, chain_name, address, primary_type, google_place_id )
+      restaurant:restaurants (
+        id, name, chain_name, address, primary_type, google_place_id,
+        cuisine_type, rating, price_level, user_rating_count
+      )
     `)
     .order("visited_at", { ascending: false })
     .limit(limit);

@@ -4,6 +4,7 @@ import { View, StyleSheet, Pressable, ActivityIndicator, Alert, Image } from "re
 import { Text } from "./Text";
 import { colors, spacing, type, card, shadow, categoryColors } from "../theme";
 import { cuisineHue, initialsOf, PlaceTile } from "./PlaceArt";
+import { placeFacts } from "../lib/place-facts";
 import { trackRecEvent, trackImpression, rememberRecTouch, newRequestId, type RecEventContext } from "../lib/recommendation-events";
 import { Impression } from "./Impressions";
 import { loadPlacePhotos, cachedPlacePhoto } from "../lib/place-photos";
@@ -497,7 +498,7 @@ function RecRow({ rec, photo, rank, requestId, mood, onHide }: {
   rank: number; requestId: string; mood?: string | null; onHide: () => void;
 }) {
   const hue = cuisineHue(rec.cuisine, rec.google_place_id);
-  const price = priceTag(rec.price_level);
+  const facts = placeFacts(rec);
   // Home fired nothing for its whole existence: no impression, no click, no
   // save, no directions. The surface that ranks on finalScore was the one
   // surface the ranker could never hear back from.
@@ -641,11 +642,11 @@ function RecRow({ rec, photo, rank, requestId, mood, onHide }: {
               star, it is not a second score. */}
           <Text style={styles.sub} numberOfLines={1}>
             {dotJoin([
-              rec.rating != null ? <Text key="r" style={styles.star}>★ {rec.rating.toFixed(1)}</Text> : null,
-              price,
+              facts.rating ? <Text key="r" style={styles.star}>{facts.rating}</Text> : null,
+              facts.price,
               rec.cuisine ? <Text key="c" style={[styles.cuisineText, { color: hue }]}>{capitalize(rec.cuisine)}</Text> : null,
               rec.distanceKm != null ? formatDistance(rec.distanceKm) : null,
-              rec.user_rating_count != null && rec.user_rating_count > 0 ? formatReviewCount(rec.user_rating_count) : null,
+              facts.reviews,
             ]) ?? "Nearby"}
           </Text>
         </View>
@@ -709,22 +710,6 @@ function inferAspirationTags(rec: RestaurantRecommendation): AspirationTag[] {
 
 function capitalize(s: string): string {
   return s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, " ") : s;
-}
-
-/** "$" to "$$$$" for Google's 1..4 price levels. Anything outside that range
- *  (0 means free, null means unknown) says nothing rather than something
- *  wrong. */
-function priceTag(level?: number | null): string | null {
-  if (level == null || level < 1 || level > 4) return null;
-  return "$".repeat(Math.round(level));
-}
-
-/** "1.2k reviews", "38 reviews". Same rounding as the Discover card, written
- *  here rather than imported so the two surfaces do not share a private
- *  helper across a component boundary. */
-function formatReviewCount(n: number): string {
-  const count = n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-  return `${count} ${n === 1 ? "review" : "reviews"}`;
 }
 
 const styles = StyleSheet.create({

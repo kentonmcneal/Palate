@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { placeFacts } from "../../lib/place-facts";
 import { loadView } from "../../lib/load-state";
 import { LoadError } from "../../components/LoadError";
 import {
@@ -289,9 +290,16 @@ function WishlistRow({
   const router = useRouter();
   const r = entry.restaurant;
   if (!r) return null;
+  // Same grammar as every other card: how good, how expensive, what it is,
+  // where. The rating used to hang off the end of the "Saved 3 Sep" line,
+  // which is the one place on the card nobody reads.
+  const facts = placeFacts(r);
   const subline = [
+    facts.rating,
+    facts.price,
     r.cuisine_type ? capitalize(r.cuisine_type) : null,
     r.neighborhood,
+    facts.reviews,
   ].filter(Boolean).join(" · ");
   const added = new Date(entry.added_at);
   const tags = entry.aspiration_tags ?? [];
@@ -314,7 +322,6 @@ function WishlistRow({
           <Text style={styles.cardSub}>{subline || "Nearby"}</Text>
           <Text style={styles.cardDate}>
             Saved {added.toLocaleDateString([], { month: "short", day: "numeric" })}
-            {r.rating ? `  ·  ★ ${r.rating.toFixed(1)}${r.user_rating_count ? ` (${formatCount(r.user_rating_count)})` : ""}` : ""}
           </Text>
         </Pressable>
       </View>

@@ -25,6 +25,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Spacer } from "../../components/Button";
 import { FeedAvatar } from "../../components/FeedAvatar";
 import { cuisineHue } from "../../components/PlaceArt";
+import { placeFacts } from "../../lib/place-facts";
 import { FONT_CAP } from "../../lib/a11y";
 import { colors, categoryColors, radius, shadow, spacing, type } from "../../theme";
 import { listFeed, toggleLike, type FeedEvent } from "../../lib/feed";
@@ -342,7 +343,12 @@ function VisitCard({ event, isSelf, graph, hue }: { event: FeedEvent; isSelf: bo
   // The cuisine is the one word on this line that carries colour, so it
   // leaves the joined string and becomes a pill; neighborhood and meal stay
   // muted text beside it.
-  const subline = [p.neighborhood, meal].filter(Boolean).join("  ·  ");
+  // list_feed already returns the catalogue row's rating, price and review
+  // count (migration 0096); the card just never read them. A place somebody
+  // went to is exactly where the two numbers a diner reads first belong.
+  const facts = placeFacts(event.restaurant ?? {});
+  const subline = [facts.rating, facts.price, p.neighborhood, meal]
+    .filter(Boolean).join("  ·  ");
   // Green means "you have a history here", grey means you do not. The label
   // already says which; the colour lets you read it from across the row.
   const beenColor = (event.viewerVisitCount ?? 0) > 0 ? categoryColors.pine : colors.mute;

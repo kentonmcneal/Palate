@@ -7,9 +7,9 @@ import { colors, spacing, type } from "../theme";
 import { Button, Spacer } from "../components/Button";
 import { track } from "../lib/analytics";
 import { getInbox, removeFromInbox } from "../lib/passive-confirm";
-import { confirmDigest } from "../lib/digest-confirm";
+import { confirmDigest, type VisitRating } from "../lib/digest-confirm";
 import { buildDigest, type Digest, type DigestEntry } from "../lib/passive-digest";
-import { saveVisit, recordPromptDecision } from "../lib/visits";
+import { saveVisit, recordPromptDecision, rateVisit } from "../lib/visits";
 import { loadVisitPayoff } from "../lib/visit-payoff";
 import { Confetti } from "../components/Confetti";
 import { triggerHapticSuccess } from "../lib/haptics";
@@ -41,6 +41,10 @@ export default function DigestScreen() {
   const [resolvedChoice, setResolvedChoice] = useState<Record<string, Restaurant>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showLow, setShowLow] = useState(false);
+  // A reaction per entry, collected on the row. Nobody is required to give
+  // one: the digest exists to confirm that a meal happened, and it has to
+  // keep working for a person who taps Confirm and nothing else.
+  const [ratings, setRatings] = useState<Record<string, VisitRating | undefined>>({});
   const [saving, setSaving] = useState(false);
   const [payoff, setPayoff] = useState<string | null>(null);
   const [celebrate, setCelebrate] = useState(false);
@@ -63,6 +67,14 @@ export default function DigestScreen() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  function rate(id: string, r: VisitRating) {
+    // Saying how it was is also saying you went. Rating a row ticks it, and
+    // tapping the same answer again clears the rating without unticking:
+    // undoing an opinion is not the same as undoing the visit.
+    setRatings((prev) => ({ ...prev, [id]: prev[id] === r ? undefined : r }));
+    setChecked((prev) => new Set(prev).add(id));
+  }
 
   function toggle(id: string) {
     setChecked((prev) => {
@@ -96,7 +108,8 @@ export default function DigestScreen() {
         confirmed as never,
         skipped as never,
         resolvedChoice as never,
-        { saveVisit, removeFromInbox, recordPromptDecision, track },
+        { saveVisit, removeFromInbox, recordPromptDecision, track, rateVisit },
+        ratings,
       );
 
       track("digest_confirmed", {
@@ -173,6 +186,7 @@ export default function DigestScreen() {
           <Section>
             {digest.high.map((e) => (
               <Row key={e.id} entry={e} checked={checked.has(e.id)} chosen={resolvedChoice[e.id]}
+                   rating={ratings[e.id]} onRate={(r) => rate(e.id, r)}
                    onToggle={() => toggle(e.id)}
                    expanded={expanded.has(e.id)}
                    onExpand={() => setExpanded((p) => new Set(p).add(e.id))}
@@ -185,6 +199,7 @@ export default function DigestScreen() {
           <Section title="Also nearby today?">
             {digest.medium.map((e) => (
               <Row key={e.id} entry={e} checked={checked.has(e.id)} chosen={resolvedChoice[e.id]}
+                   rating={ratings[e.id]} onRate={(r) => rate(e.id, r)}
                    onToggle={() => toggle(e.id)}
                    expanded={expanded.has(e.id)}
                    onExpand={() => setExpanded((p) => new Set(p).add(e.id))}
@@ -202,6 +217,7 @@ export default function DigestScreen() {
               <Section>
                 {digest.low.map((e) => (
                   <Row key={e.id} entry={e} checked={checked.has(e.id)} chosen={resolvedChoice[e.id]}
+                       rating={ratings[e.id]} onRate={(r) => rate(e.id, r)}
                        onToggle={() => toggle(e.id)}
                        expanded={expanded.has(e.id)}
                        onExpand={() => setExpanded((p) => new Set(p).add(e.id))}
@@ -236,12 +252,20 @@ function Section({ title, children }: { title?: string; children: React.ReactNod
   );
 }
 
+const RATINGS: { key: VisitRating; label: string }[] = [
+  { key: "loved", label: "Loved it" },
+  { key: "ok", label: "Fine" },
+  { key: "not_for_me", label: "Not for me" },
+];
+
 function Row({
-  entry, checked, chosen, onToggle, expanded, onExpand, onChoose,
+  entry, checked, chosen, rating, onRate, onToggle, expanded, onExpand, onChoose,
 }: {
   entry: DigestEntry;
   checked: boolean;
   chosen?: Restaurant;
+  rating?: VisitRating;
+  onRate: (r: VisitRating) => void;
   onToggle: () => void;
   expanded: boolean;
   onExpand: () => void;
@@ -259,6 +283,33 @@ function Row({
           <Text style={styles.meta}>{timeOf(entry.detectedAt)}</Text>
         </View>
       </Pressable>
+
+      {/* Three taps, on the row, only once you have said you went.
+          Two of fifty-five visits carried a rating before this, because the
+          only way to give one was to open the visit afterwards and nobody
+          does. The reaction is what the ranker needs most and the confirm is
+          the one moment somebody is already thinking about the meal. Skipping
+          it stays free: Confirm works untouched. */}
+      {checked && (
+        <View style={styles.rateRow}>
+          {RATINGS.map((r) => {
+            const on = rating === r.key;
+            return (
+              <Pressable
+                key={r.key}
+                onPress={() => onRate(r.key)}
+                style={[styles.rateChip, on && styles.rateChipOn]}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={`${r.label} at ${name}`}
+              >
+                <Text style={[styles.rateText, on && styles.rateTextOn]}>{r.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
 
       {/* Several plausible venues: "which one?" is the honest question, not a
           yes/no about our best guess. */}
@@ -282,6 +333,14 @@ function Row({
 }
 
 const styles = StyleSheet.create({
+  rateRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10, marginLeft: 34 },
+  rateChip: {
+    paddingHorizontal: 13, paddingVertical: 7, borderRadius: 999,
+    backgroundColor: colors.wash, borderWidth: 1, borderColor: colors.line,
+  },
+  rateChipOn: { backgroundColor: colors.redTint, borderColor: colors.redTintBorder },
+  rateText: { fontSize: 13, fontWeight: "700", color: colors.mute },
+  rateTextOn: { color: colors.redText },
   safe: { flex: 1, backgroundColor: colors.paper },
   body: { padding: spacing.lg, paddingBottom: spacing.xxl },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.lg },

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { placeFacts } from "../../lib/place-facts";
 import {
   View,
   StyleSheet,
@@ -184,16 +185,21 @@ function VisitRow({
   const when = new Date(visit.visited_at)
     .toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   const name = visit.restaurant?.name ?? "Somewhere";
+  const facts = placeFacts(visit.restaurant ?? {});
   const hidden = visit.is_public === false;
 
   return (
     <Pressable onPress={onPress} style={styles.row} accessibilityRole="button">
       <View style={{ flex: 1 }}>
         <Text style={styles.name} numberOfLines={1}>{name}</Text>
-        <Text style={styles.meta}>
-          {when}
-          {nth > 1 ? ` · ${ordinalLabel(nth)}` : ""}
-          {visit.detection_source === "auto" ? " · captured" : ""}
+        <Text style={styles.meta} numberOfLines={1}>
+          {[
+            when,
+            nth > 1 ? ordinalLabel(nth) : null,
+            facts.rating,
+            facts.price,
+            visit.detection_source === "auto" ? "captured" : null,
+          ].filter(Boolean).join(" · ")}
         </Text>
       </View>
       {/* Hidden is stated, never implied. Somebody who curated their profile

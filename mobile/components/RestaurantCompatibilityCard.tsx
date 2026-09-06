@@ -17,6 +17,7 @@ import { AnimatedNumber } from "./AnimatedNumber";
 import { SaveBurst } from "./SaveBurst";
 import { TapCard } from "./TapCard";
 import { PlaceArt, PlaceTile, cuisineHue } from "./PlaceArt";
+import { placeFacts } from "../lib/place-facts";
 import { cachedPlacePhoto } from "../lib/place-photos";
 
 // ============================================================================
@@ -107,15 +108,14 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
   // "1.2k reviews" are what a diner checks to decide whether the rating means
   // anything, and the card was making them tap through for both. Both stay
   // in the muted line colour; the star and the cuisine word carry the hue.
-  const price = priceMarks(restaurant.price_level);
-  const reviews = reviewCount(restaurant.user_rating_count);
+  const facts = placeFacts(restaurant);
   const sublineParts: React.ReactNode[] = [
-    restaurant.rating != null ? <Text key="r" style={styles.star}>★ {restaurant.rating.toFixed(1)}</Text> : null,
-    price,
+    facts.rating ? <Text key="r" style={styles.star}>{facts.rating}</Text> : null,
+    facts.price,
     restaurant.cuisine_type ? <Text key="c" style={[styles.cuisineText, { color: hue }]}>{cap(restaurant.cuisine_type)}</Text> : null,
     restaurant.neighborhood || null,
     restaurant.distanceKm != null ? formatDistance(restaurant.distanceKm) : null,
-    reviews,
+    facts.reviews,
   ].filter((p) => p != null && p !== "");
   const subline: React.ReactNode[] = [];
   sublineParts.forEach((p, i) => {
@@ -303,27 +303,11 @@ function humanize(s: string): string {
   return s.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
-function formatCount(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
-}
-
 /** "$" to "$$$$" for Google's 1..4 price level. Null for 0 (free), for a
  *  missing value and for anything out of range, so the subline simply omits
  *  it rather than printing an empty slot between two dots. */
-function priceMarks(level: number | null | undefined): string | null {
-  if (level == null || !Number.isFinite(level)) return null;
-  const n = Math.round(level);
-  if (n < 1) return null;
-  return "$".repeat(Math.min(4, n));
-}
-
 /** "1.2k reviews", "38 reviews", "1 review". Null when Google has no count,
  *  so a place nobody has reviewed does not advertise "0 reviews". */
-function reviewCount(n: number | null | undefined): string | null {
-  if (n == null || !(n > 0)) return null;
-  return `${formatCount(n)} ${n === 1 ? "review" : "reviews"}`;
-}
 
 const styles = StyleSheet.create({
   body: { padding: card.padding },
