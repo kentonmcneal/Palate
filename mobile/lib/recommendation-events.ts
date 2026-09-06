@@ -117,15 +117,24 @@ export async function loadUserRecCounters(
   const out: Record<string, { saves: number; skips: number; dismisses: number; clicks: number }> = {};
   if (googlePlaceIds.length === 0) return out;
   try {
+    // Own rows only, and bounded. This had neither: no user filter, because
+    // RLS returned nothing anyway and the bug was invisible, and no limit,
+    // which would have pulled every rec event the account had ever generated
+    // and filtered in JS. Harmless at 55 visits, quadratic later.
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return out;
     const { data } = await supabase
       .from("analytics_events")
       .select("event, props")
+      .eq("user_id", user.id)
       .in("event", [
         "rec_restaurant_saved",
         "rec_restaurant_skipped",
         "rec_recommendation_dismissed",
         "rec_restaurant_clicked",
-      ]);
+      ])
+      .order("created_at", { ascending: false })
+      .limit(2000);
     for (const row of (data ?? []) as Array<{ event: string; props: any }>) {
       const id = row.props?.google_place_id;
       if (!id || !googlePlaceIds.includes(id)) continue;
