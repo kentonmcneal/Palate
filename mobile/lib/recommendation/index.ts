@@ -20,7 +20,8 @@ export { buildTasteGraph, assembleGraph, type TasteGraph } from "./taste-graph";
 export { computeCompatibility } from "./compatibility";
 export { scoreRestaurant, scoreContext } from "./scoring";
 export { generateCandidates, type Candidate } from "./candidates";
-export { rerank, capByKey, type RerankOptions } from "./reranking";
+export { capByKey } from "./reranking";
+export { foldFeedback, feedbackAdjustment, FEEDBACK, type FeedbackLedger, type PlaceFeedback } from "./feedback";
 export { isStretch } from "./candidates";
 export { explainCompatibility, explainRightNow, type RightNowExplanation } from "./explanations";
 export { composeWrapped, type WrappedSummary } from "./wrapped";
@@ -121,8 +122,10 @@ function makeGraphId(g: TasteGraph): string {
     g.itemSentimentByRestaurant.size,
     g.itemSentimentByCuisine.size,
     g.friendVisitsByPlace.size,
-    g.dismissesByPlace.size,
-    g.skipsByPlace.size,
+    // Explicit acts change the %, so they are in the key. The implicit
+    // ledger is deliberately NOT: it never reaches compatibility, and a
+    // cached % must not jitter because somebody scrolled past a card.
+    g.placeSentiment.size,
     g.dislikes.placeIds.size,
   ].join(":");
 }

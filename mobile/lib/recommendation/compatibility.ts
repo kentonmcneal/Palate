@@ -278,10 +278,6 @@ function scoreNovelty(g: TasteGraph, r: RestaurantInput): Dim {
 function computePersonalDelta(g: TasteGraph, r: RestaurantInput): number {
   let d = 0;
 
-  // Item-level sentiment at this restaurant
-  // (we don't have restaurants.id here, so this only fires for places the user
-  //  has already visited — handled via place_id → restaurant_id elsewhere; safe to skip)
-
   // Item ↔ cuisine cross-learning: loved hummus → boost Mediterranean
   if (r.cuisine_type) {
     const c = g.itemSentimentByCuisine.get(r.cuisine_type);
@@ -303,11 +299,16 @@ function computePersonalDelta(g: TasteGraph, r: RestaurantInput): number {
       : r.cuisine_region ? shareOf(g.cuisines, r.cuisine_region) : 0;
   d -= dislikePenalty(g.dislikes, r, Math.round(share * g.totalVisits));
 
-  // Negative events
-  const dismisses = g.dismissesByPlace.get(r.google_place_id) ?? 0;
-  d -= Math.min(12, dismisses * 6);
-  const skips = g.skipsByPlace.get(r.google_place_id) ?? 0;
-  d -= Math.min(6, skips * 3);
+  // How you rated your own visits here. This map was loaded and skipped for
+  // the whole life of the scorer ("we don't have restaurants.id here ...
+  // safe to skip"), so a place you marked not_for_me came straight back.
+  // Explicit, so it may move the displayed %: you said it.
+  const ps = g.placeSentiment.get(r.google_place_id);
+  if (ps) d += clamp(6 * (ps.loved - ps.not_for_me), -12, 6);
+
+  // Implicit feedback (clicks, passes, directions) is NOT here on purpose.
+  // It lives in scoring.ts feedbackAdjustment, changes order, and never the
+  // number a person reads. See recommendation/feedback.ts.
 
   // Friend boost (subtle — friend signal is also in social dimension)
   const friends = g.friendVisitsByPlace.get(r.google_place_id) ?? 0;

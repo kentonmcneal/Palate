@@ -46,13 +46,6 @@ function legacyMatch(graph: TasteGraph, r: RestaurantInput, contextFit: number) 
   };
 }
 
-// Exploration rate per surface (per spec)
-const EXPLORATION_RATE = {
-  right_now: 0.07,      // 7% — fast decisions need confidence
-  probably_like: 0.12,
-  stretch: 0.50,
-};
-
 // ----------------------------------------------------------------------------
 // National-chain denylist for the Right Now hero.
 // "What should I eat right now?" should reach for the unique/independent/
@@ -169,21 +162,12 @@ export async function computeRightNow(opts: RightNowOptions): Promise<RightNowRe
   const strategy: RightNowStrategy = opts.strategy ?? "best";
   const exploit = sortForStrategy(baseFiltered, strategy);
 
-  // Exploration swap (only on the default "best" strategy — the explicit
-  // strategies are user-chosen and shouldn't get randomized away).
-  let rightNowPick: RankedRestaurant | null = null;
-  if (strategy === "best" && Math.random() < EXPLORATION_RATE.right_now) {
-    // Draw the exploration pick from baseFiltered, NOT scored — otherwise the
-    // ~7% exploration branch bypasses the national-chain + visited-3x filters
-    // and can surface exactly the McDonald's / been-there-5x pick the hero is
-    // supposed to exclude.
-    const stretchPool = baseFiltered
-      .filter((s) => s.pool === "stretch_adjacent" || s.restaurant.score.recommendationType === "stretch")
-      .sort((a, b) => b.restaurant.score.compatibilityScore - a.restaurant.score.compatibilityScore);
-    rightNowPick = stretchPool[0]?.restaurant ?? exploit[0]?.restaurant ?? null;
-  } else {
-    rightNowPick = exploit[0]?.restaurant ?? null;
-  }
+  // No random swap. This used to replace the pick with a stretch place on 7%
+  // of loads, unseeded and unlogged: nobody could tell an explore pick from an
+  // exploit pick in the events, so its outcomes could never be read. Home's
+  // explore slot (recommendation/shortlist.ts) does the job deterministically
+  // and says so in the event stream.
+  const rightNowPick: RankedRestaurant | null = exploit[0]?.restaurant ?? null;
 
   // ---- Stretch slot: pick the MOST NOVEL adjacent option ----
   // Per latest feedback, Stretch is "outside your usual" — so we pick the

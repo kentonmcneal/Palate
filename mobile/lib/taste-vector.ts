@@ -29,6 +29,9 @@ export type TasteVector = {
   cuisineType: WeightMap;
   cuisineRegionAspirational: WeightMap;
   cuisineSubregionAspirational: WeightMap;
+  /** Saves by cuisine_type — the best-populated cuisine column (77% of the
+   *  catalogue) and the one the aspirational blend never reached. */
+  cuisineTypeAspirational?: WeightMap;
 
   // Format / price / chain
   formatClass: WeightMap;
@@ -253,6 +256,7 @@ export function aggregate(
     if (!r) continue;
     addWeight(v.cuisineRegionAspirational, r.cuisine_region, WISHLIST_WEIGHT);
     addWeight(v.cuisineSubregionAspirational, r.cuisine_subregion, WISHLIST_WEIGHT);
+    addWeight(v.cuisineTypeAspirational!, r.cuisine_type, WISHLIST_WEIGHT);
     for (const t of wish.aspiration_tags ?? []) addWeight(v.aspirationTags, t, 1);
   }
 
@@ -332,6 +336,7 @@ function emptyVector(): TasteVector {
     cuisineType: {},
     cuisineRegionAspirational: {},
     cuisineSubregionAspirational: {},
+    cuisineTypeAspirational: {},
     formatClass: {},
     priceTier: {},
     chainType: {},

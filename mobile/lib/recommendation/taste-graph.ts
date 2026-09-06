@@ -1,23 +1,23 @@
 // ============================================================================
 // recommendation/taste-graph.ts — formal weighted user→entity relationships.
 // ----------------------------------------------------------------------------
-// Wraps the existing TasteVector (visit-derived) and the PersonalSignal
-// (event-driven: saves, dismisses, item ratings, friends) into one graph
-// the scorers consume. Behavior weights match the spec:
-//   logged visit:    +8
-//   repeat visit:    +12
-//   save:            +5
-//   share:           +6
-//   click/search:    +2
-//   skip:            -3
-//   dismiss:         -4
-//   bad rating:     -10
-// All event signals decay with a 30-day half-life (matches taste-vector).
+// Wraps the TasteVector (visit-derived) and the PersonalSignal (ratings,
+// friends, "Not interested", and the per-place feedback ledger) into one
+// graph the scorers consume.
+//
+// Two kinds of thing live here and the distinction is load-bearing:
+//   • attribute maps (cuisines, formats, ...) — built from visits and saves,
+//     read by compatibility.ts, and therefore what the displayed % match
+//     rests on. Only explicit acts reach them.
+//   • per-place ledgers (feedbackByPlace, placeSentiment, friendVisits) —
+//     read per restaurant. Implicit feedback lives ONLY in feedbackByPlace
+//     and is applied in scoring.ts, so it changes order and never the %.
 // ============================================================================
 
 import { computeTasteVector, type TasteVector } from "../taste-vector";
 import { EMPTY_DISLIKES, type DislikeProfile } from "../dislikes";
 import { loadPersonalSignal, type PersonalSignal } from "../personal-signal";
+import { EMPTY_FEEDBACK, type FeedbackLedger } from "./feedback";
 
 export type EntityWeight = { key: string; weight: number };
 
@@ -40,9 +40,10 @@ export type TasteGraph = {
   itemSentimentByCuisine: Map<string, { loved: number; not_for_me: number }>;
   // Friend visits
   friendVisitsByPlace: Map<string, number>;
-  // Negative event counts
-  dismissesByPlace: Map<string, number>;
-  skipsByPlace: Map<string, number>;
+  /** How the person rated their own visits to a place (visits.overall_rating). */
+  placeSentiment: Map<string, { loved: number; ok: number; not_for_me: number }>;
+  /** Implicit feedback, per place, bounded and decayed (feedback.ts). */
+  feedbackByPlace: FeedbackLedger;
   // "Not interested": excluded ids and the learned profile (lib/dislikes.ts)
   dislikes: DislikeProfile;
   // Aggregate behavioral metrics
@@ -81,7 +82,10 @@ export function assembleGraph(vector: TasteVector | null, personal: PersonalSign
     // weaker evidence than actually going, hence 0.4, not 1.
     cuisines: blendAspiration(v.cuisineRegion, v.cuisineRegionAspirational),
     cuisinesSubregion: blendAspiration(v.cuisineSubregion, v.cuisineSubregionAspirational),
-    cuisineTypes: v.cuisineType ?? {},
+    // Saves reach cuisine_type too. It is the best-populated cuisine column
+    // and the one this blend skipped, so a save taught region and subregion
+    // (42% null) and said nothing to the field 77% of rows carry.
+    cuisineTypes: blendAspiration(v.cuisineType ?? {}, v.cuisineTypeAspirational),
     formats: v.formatClass,
     occasions: v.occasion,
     flavors: v.flavor,
@@ -95,8 +99,8 @@ export function assembleGraph(vector: TasteVector | null, personal: PersonalSign
     itemSentimentByRestaurant: p.itemSentimentByRestaurantId,
     itemSentimentByCuisine: p.itemSentimentByCuisine,
     friendVisitsByPlace: p.friendVisitsByPlaceId,
-    dismissesByPlace: p.dismissesByPlaceId,
-    skipsByPlace: p.skipsByPlaceId,
+    placeSentiment: p.placeSentimentByPlaceId,
+    feedbackByPlace: p.feedbackByPlaceId,
     dislikes: p.dislikes ?? EMPTY_DISLIKES,
     totalVisits: v.visitCount,
     uniqueRestaurants: v.uniqueRestaurants,
@@ -147,7 +151,7 @@ export function emptyVector(): TasteVector {
   return {
     visitCount: 0, wishlistCount: 0,
     cuisineRegion: {}, cuisineSubregion: {}, cuisineType: {},
-    cuisineRegionAspirational: {}, cuisineSubregionAspirational: {},
+    cuisineRegionAspirational: {}, cuisineSubregionAspirational: {}, cuisineTypeAspirational: {},
     formatClass: {}, priceTier: {}, chainType: {}, occasion: {}, flavor: {},
     culturalContext: {},
     topNeighborhoods: [], neighborhoodLoyalty: 0, geographicSpreadKm: 0,
@@ -162,11 +166,11 @@ function emptyPersonal(): PersonalSignal {
   return {
     visitsByPlaceId: new Map(),
     visitsByRestaurantId: new Map(),
-    dismissesByPlaceId: new Map(),
-    skipsByPlaceId: new Map(),
     itemSentimentByRestaurantId: new Map(),
     itemSentimentByCuisine: new Map(),
+    placeSentimentByPlaceId: new Map(),
     friendVisitsByPlaceId: new Map(),
+    feedbackByPlaceId: EMPTY_FEEDBACK,
     dislikes: EMPTY_DISLIKES,
   };
 }

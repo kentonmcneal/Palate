@@ -15,6 +15,7 @@ import type { TasteGraph } from "./taste-graph";
 import { shareOf } from "./taste-graph";
 import { computeCompatibility } from "./compatibility";
 import { gemAdjustment } from "./gems";
+import { feedbackAdjustment } from "./feedback";
 import { venueOpenAt } from "../opening-hours";
 
 const FINAL_W = {
@@ -45,11 +46,22 @@ export function scoreRestaurant(
     // acclaim signals so genuine gems rise and ordinary places sink to fallback.
     gemAdjustment(r) +
     // Keep cafés/coffee shops from crowding out actual restaurants in recs.
-    cafeFormatAdjustment(graph, r, ctx);
+    cafeFormatAdjustment(graph, r, ctx) +
+    // What you did with this place when it was shown before: passed, opened,
+    // saved, asked for directions. Bounded to [-8, +6] final points, decays
+    // in weeks, touches this place only. This is what stops the same three
+    // rows sitting on Home until a visit happens.
+    feedbackAdjustment(graph.feedbackByPlace, r.google_place_id);
 
   return {
     restaurantId: r.google_place_id,
-    finalScore: Math.round(Math.min(99, Math.max(0, final))),
+    // No ceiling. finalScore is what a list is ORDERED by and is never
+    // displayed (the % a person reads is compatibilityScore), and a cap at
+    // 99 was flattening the top of the real Memphis pool into a tie: Acre
+    // ranks 102.8 uncapped, Southern Social 99.8, and an eight-point pass
+    // penalty on Acre vanished into the clamp, so the same place sat in
+    // slot one every day whatever the person did with it.
+    finalScore: Math.round(Math.max(0, final)),
     compatibilityScore: compat.score,
     confidenceScore,
     tasteFit: compat.breakdown.tasteFit,

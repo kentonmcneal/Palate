@@ -23,9 +23,11 @@ import { getEffectiveLocation, useBrowsingCity } from "../lib/browsing-location"
 import { loadPersonalSignal, onPersonalSignalInvalidate } from "../lib/personal-signal";
 import { nearbyRestaurants } from "../lib/places";
 import { getOrFetchNearby } from "../lib/nearby-cache";
-import { assembleGraph, getCompatibility, scoreRestaurant } from "../lib/recommendation";
+import { assembleGraph, getCompatibility, scoreRestaurant, type RestaurantInput } from "../lib/recommendation";
 import { restaurantsNear } from "../lib/cuisine-catalogue";
-import { capByKey } from "../lib/recommendation/reranking";
+import { shortlist as buildShortlist, daySeed } from "../lib/recommendation/shortlist";
+import { toInput } from "../lib/recommendation/candidates";
+import { supabase } from "../lib/supabase";
 import { track } from "../lib/analytics";
 import { filterRecommendable } from "../lib/recommendation/eligibility";
 import { triggerHapticSuccess, triggerHapticSelection } from "../lib/haptics";
@@ -62,12 +64,28 @@ import { askNotInterested } from "./notInterested";
 // scored on the same graph, or the % match beside it would mean something
 // different from the % match beside everything else on the screen.
 /**
- * The three shown. Ranked order, but never more than two of one cuisine —
- * three burger places is the same suggestion three times, and the real pool
- * around Memphis ranks ten American restaurants in its top ten.
+ * The three shown. lib/recommendation/shortlist.ts decides: rested places
+ * sit out, never more than two of one cuisine, and when the pattern is
+ * narrow the third row is a deliberate step outside it. `inputs` carries the
+ * full restaurant rows the rules need (hours, region, dish families), which
+ * the display type deliberately does not.
  */
-function shortlist(items: RestaurantRecommendation[]): RestaurantRecommendation[] {
-  return capByKey(items, (r) => r.cuisine, 2, 3);
+function shortlist(
+  items: RestaurantRecommendation[],
+  ctx: { graph: ReturnType<typeof assembleGraph>; userId: string | null; inputs: Map<string, RestaurantInput> } | null,
+  explore: boolean,
+): RestaurantRecommendation[] {
+  if (!ctx) return items.slice(0, 3);
+  const now = new Date();
+  const { picks, exploreIndex } = buildShortlist(items, {
+    graph: ctx.graph,
+    now,
+    seed: daySeed(ctx.userId, now),
+    toInput: (r) => ctx.inputs.get(r.google_place_id) ?? ({ google_place_id: r.google_place_id, name: r.name, cuisine_type: r.cuisine } as RestaurantInput),
+    distanceKm: (r) => r.distanceKm,
+    explore,
+  });
+  return picks.map((r, i) => (i === exploreIndex ? { ...r, explore: true } : r));
 }
 
 function toRecommendation(
@@ -164,6 +182,9 @@ export function RecommendationsCard({
     graph: ReturnType<typeof assembleGraph>;
     here: { lat: number; lng: number };
     personal: Awaited<ReturnType<typeof loadPersonalSignal>> | null;
+    userId: string | null;
+    /** Full rows by place id, for the shortlist rules. */
+    inputs: Map<string, RestaurantInput>;
   } | null>(null);
 
   const requestIdRef = useRef(newRequestId());
@@ -171,10 +192,11 @@ export function RecommendationsCard({
     try {
       setError(false);
       requestIdRef.current = newRequestId();
-      const [vector, here, personal] = await Promise.all([
+      const [vector, here, personal, userId] = await Promise.all([
         computeTasteVector().catch(() => null),
         getEffectiveLocation().catch(() => null),
         loadPersonalSignal().catch(() => null),
+        supabase.auth.getUser().then((r) => r.data.user?.id ?? null).catch(() => null),
       ]);
       if (!here) {
         setRecs([]);
@@ -243,8 +265,10 @@ export function RecommendationsCard({
       // re-slice it without another network round trip.
       enriched.sort((a, b) => (b.finalScore ?? b.matchScore ?? 0) - (a.finalScore ?? a.matchScore ?? 0));
       setAllRecs(enriched);
-      scoringRef.current = { graph, here, personal };
-      setRecs(shortlist(enriched));
+      const inputs = new Map<string, RestaurantInput>();
+      for (const p of nearby) inputs.set(p.google_place_id, toInput(p));
+      scoringRef.current = { graph, here, personal, userId, inputs };
+      setRecs(shortlist(enriched, scoringRef.current, true));
       // Real photos, from our own users' visits — the free source. One batched
       // query, cached at module level. The cards render on the text
       // immediately and upgrade when this lands; a failure is silent.
@@ -313,7 +337,7 @@ export function RecommendationsCard({
     const wantsCatalogue = isCatalogueMood && (!matched || items.length < 3);
 
     if (wantsCatalogue && scoringRef.current) {
-      const { graph, here, personal } = scoringRef.current;
+      const { graph, here, personal, inputs } = scoringRef.current;
       setCatalogueLoading(true);
       const fetchCandidates = isDishMood(mood)
         ? dishCandidates(here, dishOf(mood) ?? "")
@@ -324,6 +348,7 @@ export function RecommendationsCard({
           // The pool's own matches keep their place at the front — they are
           // closer and already scored — and the catalogue fills in behind.
           const poolIds = new Set((matched ? items : []).map((r) => r.google_place_id));
+          for (const r of rows) inputs.set(r.google_place_id, toInput(r));
           const scored = [
             ...(matched ? items : []),
             ...rows
@@ -336,12 +361,12 @@ export function RecommendationsCard({
             // Genuinely nothing of that cuisine within reach. That is a real
             // answer and it is not the same as a failed filter, so it gets its
             // own sentence rather than the fallback list.
-            setRecs(shortlist(items));
+            setRecs(shortlist(items, scoringRef.current, false));
             setMoodCount(0);
             setMoodNote(moodFallbackNote(mood));
             return;
           }
-          setRecs(shortlist(scored));
+          setRecs(shortlist(scored, scoringRef.current, false));
           setMoodCount(scored.length);
           setMoodNote(moodContextNote(mood, scored[0].matchScore ?? null));
         })
@@ -349,7 +374,7 @@ export function RecommendationsCard({
           if (!alive) return;
           // Saying nothing here shows the same three places as "Anything",
           // which is indistinguishable from a chip that does nothing.
-          setRecs(shortlist(items));
+          setRecs(shortlist(items, scoringRef.current, false));
           setMoodCount(null);
           setMoodNote(`Couldn't reach ${moodLabel(mood)} nearby. These are the regular picks.`);
         })
@@ -357,7 +382,7 @@ export function RecommendationsCard({
       return () => { alive = false; };
     }
 
-    setRecs(shortlist(items));
+    setRecs(shortlist(items, scoringRef.current, !mood));
     setMoodCount(mood ? (matched ? items.length : 0) : null);
     const top = items.length > 0 ? items[0].matchScore ?? null : null;
     // "Nothing matched" and "these matched and are not your thing" are
@@ -528,6 +553,12 @@ function RecRow({ rec, photo, first, rank, requestId, mood, onHide }: {
         accessibilityRole="button"
         accessibilityLabel={`${rec.name}. Open place details.`}
       >
+        {rec.explore && (
+          // Row three, when the pattern is narrow: a deliberate step outside
+          // it, said so. A 45% match under two 90s reads as a mistake unless
+          // the row says it is an offer.
+          <Text style={styles.exploreEyebrow} maxFontSizeMultiplier={FONT_CAP.eyebrow}>SOMETHING DIFFERENT</Text>
+        )}
         <View style={styles.titleRow}>
           {/* A real photograph when one of our own users took one. Never a
               licensed one: place-photos.ts reads visits.photo_url, which is
@@ -684,6 +715,7 @@ const styles = StyleSheet.create({
     paddingTop: 6,
   },
   titleRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  exploreEyebrow: { ...type.micro, color: categoryColors.pine, marginBottom: 6 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
   actionRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
   actionRowStacked: { flexDirection: "column", alignItems: "stretch", gap: 8 },

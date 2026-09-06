@@ -3,7 +3,7 @@
 // ----------------------------------------------------------------------------
 // Pulls everything personal in one round-trip:
 //   • visit counts per place (anti-staleness penalty)
-//   • dismiss / skip counters (negative signal)
+//   • the per-place feedback ledger (recommendation/feedback.ts)
 //   • menu-item ratings, aggregated per restaurant + per cuisine (item-level
 //     loves/dislikes feed both restaurant scoring and item↔cuisine cross-
 //     learning, e.g. "loves hummus" → boost Mediterranean spots)
@@ -15,16 +15,23 @@
 // ============================================================================
 
 import { supabase } from "./supabase";
-import { buildDislikeProfile, dislikePenalty, listDislikes, EMPTY_DISLIKES, type DislikeProfile, type DislikeCandidate } from "./dislikes";
+import { buildDislikeProfile, listDislikes, EMPTY_DISLIKES, type DislikeProfile } from "./dislikes";
+import { foldFeedback, EMPTY_FEEDBACK, FEEDBACK_EVENTS, FEEDBACK_WINDOW_DAYS, type FeedbackLedger, type FeedbackRow } from "./recommendation/feedback";
+import { isFlagEnabled } from "./flags";
+
+/** Kill switch for the implicit-feedback loop. On unless the founder turns
+ *  it off from the flags table; a network blip keeps the last value seen. */
+export const FEEDBACK_LOOP_FLAG = "rec_feedback_loop";
 
 export type PersonalSignal = {
   /** google_place_id → number of logged visits */
   visitsByPlaceId: Map<string, number>;
   /** restaurant_id → number of logged visits (same data, indexed differently) */
   visitsByRestaurantId: Map<string, number>;
-  /** google_place_id → dismiss + skip counts */
-  dismissesByPlaceId: Map<string, number>;
-  skipsByPlaceId: Map<string, number>;
+  /** google_place_id → decayed, bounded implicit feedback (feedback.ts) */
+  feedbackByPlaceId: FeedbackLedger;
+  /** google_place_id → how the person rated their own visits there */
+  placeSentimentByPlaceId: Map<string, { loved: number; ok: number; not_for_me: number }>;
   /** restaurant_id → { loved, ok, not_for_me } from menu_item_ratings */
   itemSentimentByRestaurantId: Map<string, { loved: number; ok: number; not_for_me: number }>;
   /** cuisine_type → { loved, not_for_me } aggregated across all rated items */
@@ -38,8 +45,8 @@ export type PersonalSignal = {
 const EMPTY: PersonalSignal = {
   visitsByPlaceId: new Map(),
   visitsByRestaurantId: new Map(),
-  dismissesByPlaceId: new Map(),
-  skipsByPlaceId: new Map(),
+  feedbackByPlaceId: EMPTY_FEEDBACK,
+  placeSentimentByPlaceId: new Map(),
   itemSentimentByRestaurantId: new Map(),
   itemSentimentByCuisine: new Map(),
   friendVisitsByPlaceId: new Map(),
@@ -85,17 +92,31 @@ export async function loadPersonalSignal(): Promise<PersonalSignal> {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return EMPTY;
 
+      // The feedback window. 60 days is four half-lives of every counter
+      // but save, and well inside the 180-day analytics prune, so the prune
+      // never changes a weight silently.
+      const since = new Date(Date.now() - FEEDBACK_WINDOW_DAYS * 86_400_000).toISOString();
+      const loopOn = await isFlagEnabled(FEEDBACK_LOOP_FLAG, true);
+
       // Five queries in parallel — all small.
       const [visitsRes, eventsRes, itemsRes, friendsRes, friendVisitsRes] = await Promise.all([
         supabase
           .from("visits")
-          .select("restaurant_id, overall_rating, restaurant:restaurants(google_place_id, cuisine_type)")
+          .select("restaurant_id, overall_rating, visited_at, restaurant:restaurants(google_place_id, cuisine_type)")
           .eq("user_id", user.id),
-        supabase
-          .from("analytics_events")
-          .select("event, props")
-          .eq("user_id", user.id)
-          .in("event", ["rec_restaurant_skipped", "rec_recommendation_dismissed"]),
+        // Own rows only (0128), bounded, newest first. When the loop is
+        // switched off nothing is read and the ledger stays empty, which is
+        // exactly today's ranking.
+        loopOn
+          ? supabase
+              .from("analytics_events")
+              .select("event, props, created_at")
+              .eq("user_id", user.id)
+              .in("event", [...FEEDBACK_EVENTS])
+              .gte("created_at", since)
+              .order("created_at", { ascending: false })
+              .limit(3000)
+          : Promise.resolve({ data: [] as FeedbackRow[] }),
         supabase
           .from("menu_item_ratings")
           .select("rating, item:menu_items(restaurant_id, restaurant:restaurants(cuisine_type))")
@@ -114,8 +135,8 @@ export async function loadPersonalSignal(): Promise<PersonalSignal> {
       const sig: PersonalSignal = {
         visitsByPlaceId: new Map(),
         visitsByRestaurantId: new Map(),
-        dismissesByPlaceId: new Map(),
-        skipsByPlaceId: new Map(),
+        feedbackByPlaceId: EMPTY_FEEDBACK,
+        placeSentimentByPlaceId: new Map(),
         itemSentimentByRestaurantId: new Map(),
         itemSentimentByCuisine: new Map(),
         friendVisitsByPlaceId: new Map(),
@@ -134,7 +155,9 @@ export async function loadPersonalSignal(): Promise<PersonalSignal> {
         setTimeout(() => invalidatePersonalSignal(), 30_000);
       }
 
-      // Visits — both indexes
+      // Visits — both indexes, plus when you were last there, so the fold
+      // can wipe the passes that preceded a visit.
+      const lastVisitAt = new Map<string, number>();
       for (const row of (visitsRes.data ?? []) as any[]) {
         if (row.restaurant_id) {
           sig.visitsByRestaurantId.set(row.restaurant_id, (sig.visitsByRestaurantId.get(row.restaurant_id) ?? 0) + 1);
@@ -142,12 +165,25 @@ export async function loadPersonalSignal(): Promise<PersonalSignal> {
         const r = Array.isArray(row.restaurant) ? row.restaurant[0] : row.restaurant;
         if (r?.google_place_id) {
           sig.visitsByPlaceId.set(r.google_place_id, (sig.visitsByPlaceId.get(r.google_place_id) ?? 0) + 1);
+          const at = row.visited_at ? new Date(row.visited_at).getTime() : NaN;
+          if (Number.isFinite(at) && at > (lastVisitAt.get(r.google_place_id) ?? -Infinity)) {
+            lastVisitAt.set(r.google_place_id, at);
+          }
         }
         // Overall "how was this place" reaction (visit-level) flows through the
         // SAME sentiment maps as menu-item ratings, so a loved/not-for-me visit
         // shifts recommendations for that restaurant AND its cuisine.
         const rating = row.overall_rating as "loved" | "ok" | "not_for_me" | null;
         if (rating === "loved" || rating === "ok" || rating === "not_for_me") {
+          // Keyed by google_place_id, which is what the scorer has in hand.
+          // The restaurant_id map below was always loaded and then skipped
+          // in computePersonalDelta ("safe to skip"), so a not_for_me visit
+          // never cost that place a point.
+          if (r?.google_place_id) {
+            const cur = sig.placeSentimentByPlaceId.get(r.google_place_id) ?? { loved: 0, ok: 0, not_for_me: 0 };
+            cur[rating]++;
+            sig.placeSentimentByPlaceId.set(r.google_place_id, cur);
+          }
           if (row.restaurant_id) {
             const cur = sig.itemSentimentByRestaurantId.get(row.restaurant_id)
               ?? { loved: 0, ok: 0, not_for_me: 0 };
@@ -164,16 +200,12 @@ export async function loadPersonalSignal(): Promise<PersonalSignal> {
         }
       }
 
-      // Dismiss + skip counters from analytics_events
-      for (const row of (eventsRes.data ?? []) as any[]) {
-        const id = row.props?.google_place_id;
-        if (!id) continue;
-        if (row.event === "rec_recommendation_dismissed") {
-          sig.dismissesByPlaceId.set(id, (sig.dismissesByPlaceId.get(id) ?? 0) + 1);
-        } else if (row.event === "rec_restaurant_skipped") {
-          sig.skipsByPlaceId.set(id, (sig.skipsByPlaceId.get(id) ?? 0) + 1);
-        }
-      }
+      // The feedback ledger. One pure fold, shared with the harness.
+      sig.feedbackByPlaceId = foldFeedback(
+        ((eventsRes as any).data ?? []) as FeedbackRow[],
+        Date.now(),
+        { lastVisitAt },
+      );
 
       // Item ratings — aggregate per restaurant + per cuisine
       for (const row of (itemsRes.data ?? []) as any[]) {
@@ -234,150 +266,4 @@ export async function loadPersonalSignal(): Promise<PersonalSignal> {
     }
   })();
   return inflight;
-}
-
-// ============================================================================
-// Penalty / boost computation — pure functions the scorers call once per
-// candidate. Bounded so a single signal can't dominate the composite.
-// ============================================================================
-
-const STALE_VISITS_FREE = 2;       // first 2 visits don't penalize
-const STALE_PER_VISIT = 4;         // -4 per extra visit
-const STALE_CAP = 16;
-const DISMISS_PER_EVENT = 6;
-const DISMISS_CAP = 18;
-const SKIP_PER_EVENT = 3;
-const SKIP_CAP = 9;
-const ITEM_LOVED_PER = 4;
-const ITEM_NOT_FOR_ME_PER = 5;
-const ITEM_REST_CAP = 14;
-const FRIEND_PER = 2;
-const FRIEND_CAP = 6;
-const CUISINE_BOOST_PER_NET = 2;
-const CUISINE_BOOST_CAP = 8;
-
-export type PersonalAdjustment = {
-  delta: number;       // signed points to add to a 0..100 match score
-  notes: string[];     // human-readable, optional UX surface ("3 friends visited")
-};
-
-/**
- * Computes the personal adjustment for one candidate restaurant. Caller
- * adds `delta` to the base score, then re-clamps to [0, 100].
- */
-export function personalAdjustment(opts: {
-  signal: PersonalSignal;
-  googlePlaceId: string;
-  restaurantId?: string | null;
-  cuisineType?: string | null;
-  /** The candidate's tags, so a learned dislike can apply here too. */
-  candidate?: DislikeCandidate;
-  /** When true (Home recs feed), apply anti-staleness. Disabled on detail
-   *  pages, restaurant search, or favorites where the user wants their
-   *  known spots. */
-  applyStaleness?: boolean;
-}): PersonalAdjustment {
-  const notes: string[] = [];
-  let delta = 0;
-
-  // Anti-staleness — penalize over-visited spots in the recs feed only.
-  if (opts.applyStaleness) {
-    const visits = opts.signal.visitsByPlaceId.get(opts.googlePlaceId) ?? 0;
-    const over = Math.max(0, visits - STALE_VISITS_FREE);
-    if (over > 0) {
-      const pen = Math.min(STALE_CAP, over * STALE_PER_VISIT);
-      delta -= pen;
-      notes.push(`${visits} visits, easing up`);
-    }
-  }
-
-  // Negative signals: dismissals + skips
-  const dismisses = opts.signal.dismissesByPlaceId.get(opts.googlePlaceId) ?? 0;
-  if (dismisses > 0) {
-    delta -= Math.min(DISMISS_CAP, dismisses * DISMISS_PER_EVENT);
-  }
-  const skips = opts.signal.skipsByPlaceId.get(opts.googlePlaceId) ?? 0;
-  if (skips > 0) {
-    delta -= Math.min(SKIP_CAP, skips * SKIP_PER_EVENT);
-  }
-
-  // What "Not interested" taught, applied to places like the ones you said
-  // no to. The place itself never reaches a scorer: it is excluded upstream.
-  const cand: DislikeCandidate = opts.candidate ?? { google_place_id: opts.googlePlaceId, cuisine_type: opts.cuisineType ?? null };
-  const learned = dislikePenalty(opts.signal.dislikes, cand);
-  if (learned > 0) {
-    delta -= learned;
-    notes.push("like places you passed on");
-  }
-
-  // Item-level sentiment at this restaurant
-  if (opts.restaurantId) {
-    const s = opts.signal.itemSentimentByRestaurantId.get(opts.restaurantId);
-    if (s) {
-      const itemDelta = (s.loved * ITEM_LOVED_PER) - (s.not_for_me * ITEM_NOT_FOR_ME_PER);
-      const clamped = Math.max(-ITEM_REST_CAP, Math.min(ITEM_REST_CAP, itemDelta));
-      delta += clamped;
-      if (s.loved >= 2) notes.push(`you loved ${s.loved} items here`);
-      else if (s.not_for_me >= 2) notes.push(`${s.not_for_me} items weren't for you`);
-    }
-  }
-
-  // Item↔cuisine cross-learning — if you've loved hummus across multiple
-  // Mediterranean spots, every unseen Mediterranean spot gets a small lift.
-  if (opts.cuisineType) {
-    const c = opts.signal.itemSentimentByCuisine.get(opts.cuisineType);
-    if (c) {
-      const net = c.loved - c.not_for_me;
-      if (net !== 0) {
-        const cuisineDelta = Math.max(
-          -CUISINE_BOOST_CAP,
-          Math.min(CUISINE_BOOST_CAP, net * CUISINE_BOOST_PER_NET),
-        );
-        delta += cuisineDelta;
-      }
-    }
-  }
-
-  // Friend social proof
-  const friends = opts.signal.friendVisitsByPlaceId.get(opts.googlePlaceId) ?? 0;
-  if (friends > 0) {
-    delta += Math.min(FRIEND_CAP, friends * FRIEND_PER);
-    notes.push(`${friends} friend${friends === 1 ? "" : "s"} visited`);
-  }
-
-  return { delta, notes };
-}
-
-// ============================================================================
-// Time-of-day context boost — small adjustment based on whether the
-// restaurant's occasion tags align with right-now. Used on the simple
-// match-score so cards reflect "good for THIS hour" as well as overall fit.
-// ============================================================================
-
-export function timeOfDayBoost(occasionTags: string[] | null | undefined, now = new Date()): number {
-  if (!occasionTags || occasionTags.length === 0) return 0;
-  const hour = now.getHours();
-  const dow = now.getDay();
-  const isWeekend = dow === 0 || dow === 6;
-
-  // Resolve current "slot"
-  let slot: "breakfast" | "brunch" | "lunch" | "dinner" | "late_night";
-  if (hour < 10) slot = "breakfast";
-  else if (hour < 13 && isWeekend) slot = "brunch";
-  else if (hour < 15) slot = "lunch";
-  else if (hour < 22) slot = "dinner";
-  else slot = "late_night";
-
-  const matchMap: Record<string, string[]> = {
-    breakfast: ["breakfast", "brunch"],
-    brunch: ["brunch", "breakfast"],
-    lunch: ["working_lunch", "casual_solo"],
-    dinner: ["date_night", "group_dinner", "casual_solo"],
-    late_night: ["late_night"],
-  };
-  const wanted = matchMap[slot] ?? [];
-  const hits = occasionTags.filter((t) => wanted.includes(t)).length;
-  if (hits === 0) return 0;
-  // Soft bonus — never enough to dominate the base match score.
-  return Math.min(6, hits * 3);
 }
