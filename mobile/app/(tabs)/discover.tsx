@@ -34,7 +34,6 @@ import { dedupeVenues } from "../../lib/recommendation/dedupe";
 import { loadPlacePhotos } from "../../lib/place-photos";
 import { RestaurantCompatibilityCard } from "../../components/RestaurantCompatibilityCard";
 import { CardSkeleton, Shimmer } from "../../components/Shimmer";
-import { FeaturedLists } from "../../components/FeaturedLists";
 import { loadPersonalSignal, type PersonalSignal } from "../../lib/personal-signal";
 import {
   assembleGraph, buildRankedRestaurant, generateCandidates,
@@ -595,9 +594,6 @@ export default function DiscoverTab() {
           <>
             {/* (Wishlist rail + "Based on your saves" moved to Home page.
                 Discover stays a pure browse/search surface.) */}
-
-            {/* Featured Lists — Beli-style curated rows above the sub-tabs. */}
-            <FeaturedLists here={here} city={browsingCity?.name ?? null} vector={vector} personal={personal} />
 
             {/* Sub-tabs — order: Most Compatible → Trending → Nearby */}
             <View style={styles.tabs}>

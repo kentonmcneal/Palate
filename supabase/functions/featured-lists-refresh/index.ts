@@ -36,7 +36,21 @@ const TOP_N = 10;
 // that actually under-fill. NB: this cron calls Google directly, outside
 // places-proxy's daily kill-switch, so keeping pagination conditional matters.
 const MAX_PAGES = 3;
-const STALE_AFTER_MS = 36 * 60 * 60 * 1000; // 36h
+// How long a city's lists stay good for. ONE number, and it has to match
+// `is_fresh` in the cache view and the cron's own gate, or the tightest of the
+// three wins and the other two are decoration.
+//
+// It was 36 hours, and the on-demand path below refreshed anything older than
+// half that. So the binding constraint was never the cron: any signed-in user
+// opening the app 18 hours after the last rebuild triggered a fresh one, at
+// ~15 paid Text Searches a go. That is how 284 billable calls landed on a
+// single day with fourteen accounts.
+//
+// Ninety days. These lists are editorial — "the ten best pizza places in
+// Memphis" is not a fact with a daily cadence — and a genuinely new restaurant
+// still reaches people immediately through Discover and search.
+const REFRESH_INTERVAL_DAYS = 90;
+const STALE_AFTER_MS = REFRESH_INTERVAL_DAYS * 24 * 60 * 60 * 1000;
 
 // The same daily budget places-proxy meters against. This function used to be
 // the one Google caller outside the kill switch — a nightly cron over every
@@ -207,16 +221,25 @@ serve(async (req) => {
       const seenRecently = (allCities ?? []).filter((c) =>
         !c.city_key.startsWith("gps:") || new Date(c.last_seen_at).getTime() >= gpsCutoff);
 
-      // Weekly per city, not nightly. LIVE on 2026-09-05: the nightly run
-      // spent 189 Text Searches (~$6) rebuilding "Top 10 Pizza" lists that do
-      // not change day to day. A city is rebuilt only when its cache is older
-      // than six days; the client already treats anything under 36 hours as
-      // fresh and everything else as stale-but-usable, so nobody sees a gap.
-      const weekAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString();
+      // QUARTERLY per city.
+      //
+      // This was nightly, then weekly. Both were wrong for the same reason:
+      // "the ten best pizza places in Memphis" is not a fact that changes on
+      // a weekly cadence, and each city costs ~15 paid Text Searches to
+      // rebuild. Measured over the 30 days to 2026-09-06, featured lists were
+      // 377 of 1,053 billable Google calls — a third of the entire bill, and
+      // the single largest line in it — spent re-deriving lists that came back
+      // materially identical.
+      //
+      // Ninety days. A restaurant that opens today will wait a quarter to
+      // appear in a curated list, which is the correct trade: the list is
+      // editorial, not real-time, and the Discover tab and search both find a
+      // new place immediately.
+      const staleBefore = new Date(Date.now() - STALE_AFTER_MS).toISOString();
       const { data: recent } = await admin
         .from("featured_lists_cache")
         .select("city_key")
-        .gte("refreshed_at", weekAgo);
+        .gte("refreshed_at", staleBefore);
       const freshKeys = new Set(((recent ?? []) as { city_key: string }[]).map((r) => r.city_key));
       const cities = seenRecently.filter((c) => !freshKeys.has(c.city_key));
 
@@ -273,8 +296,10 @@ async function refreshCity(
     .limit(1)
     .maybeSingle();
 
-  if (existing && Date.now() - new Date(existing.refreshed_at).getTime() < STALE_AFTER_MS / 2) {
-    // Already refreshed within the last 18 hours — skip.
+  if (existing && Date.now() - new Date(existing.refreshed_at).getTime() < STALE_AFTER_MS) {
+    // Still inside the refresh window. This used to be STALE_AFTER_MS / 2,
+    // which made the ON-DEMAND path twice as eager as the cron and turned
+    // every user opening the app into a potential rebuild.
     return { categories_refreshed: 0, total_restaurants: 0 };
   }
 

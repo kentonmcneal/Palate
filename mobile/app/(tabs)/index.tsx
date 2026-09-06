@@ -24,6 +24,7 @@ import { Confetti } from "../../components/Confetti";
 import { LocationPill } from "../../components/LocationPill";
 import { HomeHero, TrackingLine } from "../../components/HomeHero";
 import { MoodRow } from "../../components/MoodRow";
+import { FeaturedLists } from "../../components/FeaturedLists";
 import { RecommendationsCard } from "../../components/RecommendationsCard";
 import { AllTimeCard } from "../../components/AllTimeCard";
 import { Spacer } from "../../components/Button";
@@ -316,6 +317,15 @@ export default function Home() {
           excludePlaceIds={[]}
           onCuisinesAvailable={setNearbyPool}
         />
+
+        {/* Curated city lists, under the mood picks rather than buried on
+            Discover. The two belong together: the mood row answers "what do I
+            want", and these answer "what is this city good at" — which is the
+            same question asked from the other end, and the one a visitor asks
+            first. Placed AFTER the picks, not between the chips and the
+            picks, because splitting a control from its own results would
+            make the mood row look broken. */}
+        <FeaturedLists here={here} city={null} />
 
         {/* All time, under the picks: visits, cuisines as bars, who you are,
             and the three palates closest to yours. */}
