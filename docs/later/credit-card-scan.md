@@ -1,3 +1,19 @@
+# Later: credit-card / bank transaction scan
+
+**Status: parked 2026-09-06, founder's call ("let's save credit card scans for later").**
+
+**What would earn it back:** TestFlight running and passive location proven
+with real testers; then a two-week build on Plaid's free trial tier (10
+connected accounts) behind a feature flag. Needs a native build (SDK), a
+universal-link redirect, an App Store privacy label for Financial Info, and a
+legal-entity developer account. Roughly $0.45-0.95 per user per month cold,
+trending to ~$0.40. Transactions post 1-3 days late with no time of day, so
+it fills gaps; it cannot drive the same-evening prompt.
+
+The research below is the source material, with links.
+
+---
+
 # Palate passive-source research (2026-09-06)
 
 ## Q1 , Bank/card transaction scanning
