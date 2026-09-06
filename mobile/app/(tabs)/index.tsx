@@ -13,7 +13,7 @@ import { recentlyPrompted, recentVisits, type Visit } from "../../lib/visits";
 import { openInAppleMaps } from "../../lib/maps";
 import { AnimatedNumber } from "../../components/AnimatedNumber";
 import { computeStreak, type StreakInfo } from "../../lib/streak";
-import { refreshDailyReminder } from "../../lib/notifications";
+import { refreshDailyReminder, notificationsGranted } from "../../lib/notifications";
 import { refreshWrappedTease } from "../../lib/wrapped-tease";
 import { captureError } from "../../lib/observability";
 import { postMilestoneAndNotify } from "../../lib/feed";
@@ -133,13 +133,14 @@ export default function Home() {
   }, [moodParam]);
 
   const loadHomeState = useCallback(async (visitCount: number, friends: number) => {
-    const [inbox, perms, gmail, optedIn] = await Promise.all([
+    const [inbox, perms, gmail, optedIn, notifsOn] = await Promise.all([
       getInbox().catch(() => []),
       currentPermissionState().catch(() => ({ whenInUse: false, always: false })),
       getGmailStatus().catch(() => ({
         connected: false, email: null, last_scanned_at: null, imported_count: 0,
       })),
       isPassiveOptedIn().catch(() => false),
+      notificationsGranted().catch(() => true), // fail closed on the NUDGE, not on the user
     ]);
     const always = perms.always || (await hasAlways().catch(() => false));
     const on = optedIn && always;
@@ -154,6 +155,7 @@ export default function Home() {
       pending: inbox.map((e: { name?: string }) => ({ name: e.name ?? "" })),
       activation: {
         locationAlways: perms.always,
+        notificationsGranted: notifsOn,
         locationWhenInUse: perms.whenInUse,
         gmailConnected: gmail.connected,
         gmailImported: gmail.imported_count,

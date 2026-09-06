@@ -6,7 +6,7 @@ jest.mock("expo-notifications", () => ({
 import { homeState, whenLabel, type HomeInputs } from "../home-state";
 
 const healthy = {
-  locationAlways: true, locationWhenInUse: true,
+  locationAlways: true, locationWhenInUse: true, notificationsGranted: true,
   gmailConnected: false, gmailImported: 0,
   visitCount: 30, friendCount: 2,
 };
@@ -99,5 +99,36 @@ describe("whenLabel", () => {
     expect(whenLabel(at(13))).toBe("Thursday afternoon");
     expect(whenLabel(at(19))).toBe("Thursday evening");
     expect(whenLabel(at(23, 57))).toBe("Thursday, late");
+  });
+});
+
+// ============================================================================
+// Detection with no way to deliver it.
+// ----------------------------------------------------------------------------
+// Location granted, meals being noticed and filed, notifications off. Nothing
+// ever asks, so the person sees an app that appears to do nothing and
+// concludes passive capture is broken. Home must say so rather than sitting
+// on "steady".
+// ============================================================================
+describe("notifications off", () => {
+  it("outranks the steady state, because the app is asking nobody", () => {
+    const s = homeState(
+      inputs({ activation: { ...healthy, notificationsGranted: false } }),
+      at(14),
+    );
+    expect(s.kind).toBe("activation");
+    if (s.kind === "activation") {
+      expect(s.step.key).toBe("notifications");
+    }
+  });
+
+  it("still lets a pending confirmation come first", () => {
+    // If there is something to confirm, the notification never mattered:
+    // they are already here and can just do it.
+    const s = homeState(inputs({
+      pending: [{ name: "K'Far Cafe" }],
+      activation: { ...healthy, notificationsGranted: false },
+    }), at(21));
+    expect(s.kind).toBe("review");
   });
 });

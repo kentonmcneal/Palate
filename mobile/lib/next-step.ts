@@ -36,6 +36,9 @@ export type ActivationState = {
   locationAlways: boolean;
   /** "When in use" — granted, but not enough for background detection. */
   locationWhenInUse: boolean;
+  /** Whether iOS will deliver a notification. Detection without this is the
+   *  app watching, resolving, and then asking nobody. */
+  notificationsGranted: boolean;
   gmailConnected: boolean;
   /**
    * How many visits this account has ever committed from email. Read from
@@ -49,7 +52,7 @@ export type ActivationState = {
 };
 
 export type NextStep = {
-  key: "location" | "import_review" | "gmail" | "log_one" | "friends" | "none";
+  key: "location" | "notifications" | "import_review" | "gmail" | "log_one" | "friends" | "none";
   title: string;
   /** Why this, said in terms of what the person gets — never in feature names. */
   body: string;
@@ -84,6 +87,25 @@ export function nextStep(s: ActivationState): NextStep | null {
         : "Palate works by noticing the restaurants you already go to, then asking. Nothing is logged until you say yes.",
       cta: "Set it up",
       route: "/passive-capture-intro",
+    };
+  }
+
+  // Detection with nothing to deliver it. This ranks immediately after
+  // location and above everything else for the same reason import_review
+  // ranks first: the expensive permission is already granted and the app is
+  // producing nothing from it. Palate notices a meal, resolves it, files it,
+  // and then has no way to ask — so the person sees an empty app and
+  // concludes passive capture does not work.
+  //
+  // Only asked once location is actually on. Asking for notifications first
+  // would be asking permission to send messages there is nothing to send.
+  if (s.locationAlways && !s.notificationsGranted) {
+    return {
+      key: "notifications",
+      title: "Palate is noticing your meals. Let it ask.",
+      body: "It spotted where you ate today and has no way to check. One message in the evening, and you confirm the whole day in a couple of taps.",
+      cta: "Turn on notifications",
+      route: "/notifications-intro",
     };
   }
 

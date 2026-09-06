@@ -136,8 +136,9 @@ export default function PassiveCaptureIntro() {
             <Text style={styles.cardTitle}>One heads-up</Text>
             <Text style={styles.cardBody}>
               In a few days iOS will ask whether Palate can keep using your location in the
-              background, and show you a map of where it checked. Tap "Change to Always Allow".
-              if you pick "Keep Only While Using," passive logging stops.
+              background, and will show you a map of where it checked. Choose "Change to
+              Always Allow". If you pick "Keep Only While Using", passive logging stops and
+              you are back to typing meals in.
             </Text>
           </View>
         </View>
@@ -153,9 +154,20 @@ export default function PassiveCaptureIntro() {
       <View style={{ flex: 1, justifyContent: "center" }}>
         <Text style={styles.emoji}>📍🍽️</Text>
         <Text style={styles.h1}>Log where you ate without opening the app</Text>
+        {/* The WHY comes first now. The screen used to open with the mechanism
+            and the privacy guarantees, which answer "is this safe" but never
+            answer "why should I". Always location is the hardest permission
+            iOS has; it has to be worth something before it is safe. */}
         <Text style={styles.p}>
-          Palate can notice when you've spent time at a restaurant and ask, with
-          one tap, whether you ate there. No check-ins and no typing meals in.
+          Everything Palate gives you comes out of your history: what it
+          recommends, your weekly Wrapped, the people whose taste matches
+          yours. Typing that history in by hand is what every other app asks
+          for, and it is the thing nobody keeps doing for long.
+        </Text>
+        <Text style={styles.p}>
+          So Palate notices instead. It spots when you have spent a while at a
+          restaurant and asks you once, in the evening. One tap and the day is
+          logged.
         </Text>
         <Spacer />
         <Text style={styles.bullet}>
@@ -166,6 +178,12 @@ export default function PassiveCaptureIntro() {
         <Text style={styles.bullet}>• We only look at where you stopped, not everywhere you go.</Text>
         <Text style={styles.bullet}>• Home and work are filtered out on your phone.</Text>
         <Text style={styles.bullet}>• Turn it off anytime in Settings.</Text>
+        {/* The honest cost of saying no. Somebody who declines should know
+            what they are choosing, not discover it three weeks later. */}
+        <Text style={styles.bullet}>
+          • Say no and Palate still works. You will just be typing every meal
+          in yourself.
+        </Text>
       </View>
 
       <View>

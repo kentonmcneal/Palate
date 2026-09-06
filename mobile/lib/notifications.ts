@@ -270,3 +270,23 @@ export async function disableSundayWrappedReminder(): Promise<void> {
   await AsyncStorage.removeItem(SCHEDULED_KEY);
   await AsyncStorage.setItem(PREF_KEY, "0");
 }
+
+/**
+ * Whether iOS will actually deliver a notification right now. Read-only: it
+ * never prompts, so it is safe on every render of the home screen.
+ *
+ * This exists because notifications were absent from the activation ladder
+ * entirely. Somebody could have Always location granted and meals detecting
+ * and notifications off, which is the most wasteful state the app can be in:
+ * it is watching, it is resolving, and it is asking nobody.
+ */
+export async function notificationsGranted(): Promise<boolean> {
+  try {
+    const Notifications = await loadNotificationsLib();
+    if (!Notifications) return false;
+    const perm = await Notifications.getPermissionsAsync();
+    return !!perm.granted;
+  } catch {
+    return false;
+  }
+}

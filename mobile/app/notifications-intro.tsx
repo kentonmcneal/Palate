@@ -95,31 +95,39 @@ export default function NotificationsIntro() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.body}>
         <Text style={styles.emoji}>🔔</Text>
-        <Text style={styles.h1}>Three things worth a tap</Text>
+        <Text style={styles.h1}>This is how Palate asks</Text>
+        {/* The evening digest leads, because it is not really a notification:
+            it is the only way a detected meal ever reaches the person. With
+            it off, Palate notices your day, resolves it, files it, and asks
+            nobody — and the app looks like it does nothing. */}
         <Text style={styles.p}>
-          Palate is quiet by default. These are the only times it reaches out.
+          Palate notices where you ate, but it never saves anything until you
+          say so. The evening message is how it asks. Without it, the app
+          watches your week and never mentions it.
         </Text>
         <Spacer />
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>A friend just ate somewhere</Text>
+          <Text style={styles.cardTitle}>Your evening question</Text>
           <Text style={styles.cardBody}>
-            When someone you follow logs a visit, you hear about it. That is the
-            whole social side of the app.
-          </Text>
-        </View>
-        <Spacer size={10} />
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Your evening digest</Text>
-          <Text style={styles.cardBody}>
-            If Palate noticed you at a restaurant today, one message at 9pm asks
-            whether to keep it. Never in the middle of a meal.
+            If Palate noticed you at a restaurant today, one message asks
+            whether you ate there. You can answer it without opening the app.
+            Never during a meal, never late at night.
           </Text>
         </View>
         <Spacer size={10} />
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Sunday Wrapped</Text>
           <Text style={styles.cardBody}>
-            Once a week, what your palate did.
+            Once a week, what your palate did. It is the thing all the logging
+            is for.
+          </Text>
+        </View>
+        <Spacer size={10} />
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Someone you follow ate somewhere</Text>
+          <Text style={styles.cardBody}>
+            The social side of the app, and the only one of the three you are
+            likely to want off. It has its own switch in Settings.
           </Text>
         </View>
         <View style={{ flex: 1 }} />

@@ -4,6 +4,7 @@ import { Text } from "./Text";
 import { useRouter } from "expo-router";
 import { colors, spacing, type, card, shadow } from "../theme";
 import { nextStep, type NextStep } from "../lib/next-step";
+import { notificationsGranted } from "../lib/notifications";
 import { currentPermissionState } from "../lib/passive-permissions";
 import { getGmailStatus } from "../lib/gmail";
 import { triggerHapticSelection } from "../lib/haptics";
@@ -41,15 +42,19 @@ export function NextStepCard({
     void (async () => {
       // Both are free reads: a local permission check and one RPC. Nothing
       // here touches Gmail or Google Places.
-      const [perms, gmail] = await Promise.all([
+      const [perms, gmail, notifsOn] = await Promise.all([
         currentPermissionState().catch(() => ({ whenInUse: false, always: false })),
         getGmailStatus().catch(() => ({
           connected: false, email: null, last_scanned_at: null, imported_count: 0,
         })),
+        // Fail CLOSED on the nudge: if we cannot tell, assume it is on rather
+        // than nagging somebody who already said yes.
+        notificationsGranted().catch(() => true),
       ]);
       if (!alive) return;
       setStep(nextStep({
         locationAlways: perms.always,
+        notificationsGranted: notifsOn,
         locationWhenInUse: perms.whenInUse,
         gmailConnected: gmail.connected,
         gmailImported: gmail.imported_count,

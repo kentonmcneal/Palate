@@ -3,6 +3,7 @@ import { nextStep, wrappedPromise, type ActivationState } from "../next-step";
 const base: ActivationState = {
   locationAlways: true,
   locationWhenInUse: true,
+  notificationsGranted: true,
   gmailConnected: false,
   gmailImported: 4,
   visitCount: 10,
@@ -102,5 +103,46 @@ describe("wrappedPromise", () => {
   it("says nothing at all once Wrapped is unlocked", () => {
     expect(wrappedPromise(3, 3)).toBe("");
     expect(wrappedPromise(9, 3)).toBe("");
+  });
+});
+
+// ============================================================================
+// Notifications were absent from this ladder entirely.
+// ----------------------------------------------------------------------------
+// Somebody could grant Always location, have meals detected and resolved and
+// filed, and never be asked about any of them, because the one thing that
+// asks is a notification. The app looks broken and the person concludes
+// passive capture does not work. It ranks directly after location for the
+// same reason import_review ranks first: the expensive permission is already
+// granted and nothing is coming of it.
+// ============================================================================
+describe("the notification step", () => {
+  it("asks once location is on and there is something to deliver", () => {
+    expect(nextStep(s({ notificationsGranted: false }))?.key).toBe("notifications");
+  });
+
+  it("does not ask before location, because there would be nothing to send", () => {
+    const step = nextStep(s({ locationAlways: false, notificationsGranted: false }));
+    expect(step?.key).toBe("location");
+  });
+
+  it("outranks a cold account, because detection is already happening", () => {
+    const step = nextStep(s({
+      notificationsGranted: false, visitCount: 0, gmailConnected: false, friendCount: 0,
+    }));
+    expect(step?.key).toBe("notifications");
+  });
+
+  it("still finishes half-done email work first", () => {
+    const step = nextStep(s({
+      notificationsGranted: false, gmailConnected: true, gmailImported: 0,
+    }));
+    expect(step?.key).toBe("import_review");
+  });
+
+  it("says why in terms of what the person gets, not the feature name", () => {
+    const step = nextStep(s({ notificationsGranted: false }));
+    expect(step?.body).toMatch(/confirm the whole day/i);
+    expect(step?.body).not.toMatch(/push|permission/i);
   });
 });
