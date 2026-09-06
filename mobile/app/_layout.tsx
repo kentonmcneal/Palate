@@ -313,6 +313,13 @@ export default function RootLayout() {
         router.push(`/profile/${String(data.user_id ?? "")}` as never);
         return;
       }
+      if (data?.type === "dm_message" && data.thread_id) {
+        router.push({
+          pathname: "/thread/[id]",
+          params: { id: String(data.thread_id), other: String(data.user_id ?? "") },
+        } as never);
+        return;
+      }
       // A new follower. Their profile, because the action the notification is
       // asking for — follow back — lives there, on the button.
       if (data?.type === "new_follower" && data.user_id) {
@@ -539,6 +546,7 @@ export default function RootLayout() {
           <Stack.Screen name="year-in-review" options={{ presentation: "modal" }} />
           <Stack.Screen name="insights" options={{ presentation: "modal" }} />
           <Stack.Screen name="follows" options={{ presentation: "modal" }} />
+          <Stack.Screen name="messages" options={{ presentation: "modal" }} />
           <Stack.Screen name="board" options={{ presentation: "modal" }} />
           <Stack.Screen name="people" options={{ presentation: "modal" }} />
           <Stack.Screen name="rankings" options={{ presentation: "modal" }} />

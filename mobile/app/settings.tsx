@@ -197,6 +197,11 @@ export default function Settings() {
           />
           <Spacer />
           <Button
+            title="Messages"
+            onPress={() => router.push("/messages" as never)}
+          />
+          <Spacer />
+          <Button
             title="Following"
             onPress={() => router.push({ pathname: "/follows", params: { tab: "following" } })}
             variant="ghost"

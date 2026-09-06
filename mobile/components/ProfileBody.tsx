@@ -544,6 +544,24 @@ export function ProfileBody({ targetId }: { targetId: string }) {
                 {/* Four states, and the button says which one you are in.
                     "Follows you" is the one that earns a filled button: it is
                     a friendship one tap away. */}
+                {/* Message, only for a mutual follow. The button is absent
+                    rather than disabled for everyone else: offering an action
+                    that will be refused teaches people the app is broken. The
+                    server refuses it anyway (dm_send, 0130) — this is the UI
+                    agreeing with the server, not the permission. */}
+                {!blocked && snapshot.follow_state === "mutual" && (
+                  <Pressable
+                    onPress={() => router.push({
+                      pathname: "/thread/[id]",
+                      params: { id: "new", other: targetId, name: snapshot.display_name ?? "" },
+                    } as never)}
+                    style={styles.btnGhost}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.btnGhostText}>Message</Text>
+                  </Pressable>
+                )}
+
                 {!blocked && (
                   snapshot.follow_state === "mutual" ? (
                     <Pressable onPress={handleUnfollow} disabled={acting} style={styles.btnGhost}>

@@ -37,6 +37,28 @@ const MAX_ATTEMPTS = 4;
 // which a beta of fourteen people can actually see each other's activity.
 const MAX_PER_USER_PER_DAY = 3;
 
+// A message from a person is not ambient activity, and the cap above was
+// counting it as if it were.
+//
+// MAX_PER_USER_PER_DAY exists to stop "somebody you follow ate somewhere"
+// becoming a firehose. Applied indiscriminately it means three of those
+// broadcasts, and then a real direct message from a real person is deferred
+// twenty-four hours or dropped at expiry. That is the wrong way round: the
+// ambient stream is the thing worth rationing, and correspondence is the thing
+// worth delivering.
+//
+// So direct types get their own, much higher ceiling — a ceiling rather than
+// no limit at all, because an unbounded path is a way to buzz somebody
+// forever, and because the DM send RPC's own rate limits should be the first
+// thing to stop that, not this.
+const DIRECT_TYPES = new Set(["dm_message"]);
+const MAX_DIRECT_PER_USER_PER_DAY = 25;
+
+function isDirect(row: { data?: Record<string, unknown> | null }): boolean {
+  const t = row.data?.type;
+  return typeof t === "string" && DIRECT_TYPES.has(t);
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -132,12 +154,18 @@ serve(async (req) => {
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
     const { data: recent } = await admin
       .from("push_outbox")
-      .select("user_id")
+      .select("user_id, data")
       .not("sent_at", "is", null)
       .gte("sent_at", since);
+    // Counted in two separate buckets. One shared counter would mean a busy
+    // day of correspondence silently suppressing the ambient feed, and three
+    // ambient pushes suppressing correspondence — each class starving the
+    // other for reasons that have nothing to do with the other.
     const sentToday = new Map<string, number>();
-    for (const r of (recent ?? []) as { user_id: string }[]) {
-      sentToday.set(r.user_id, (sentToday.get(r.user_id) ?? 0) + 1);
+    const sentDirectToday = new Map<string, number>();
+    for (const r of (recent ?? []) as { user_id: string; data?: Record<string, unknown> | null }[]) {
+      const m = isDirect(r) ? sentDirectToday : sentToday;
+      m.set(r.user_id, (m.get(r.user_id) ?? 0) + 1);
     }
 
     const eligible: OutboxRow[] = [];
@@ -145,16 +173,21 @@ serve(async (req) => {
     // A Map, not a Set: the set saturated at one, so a user with eight due
     // rows at the 08:00 drain got all eight. Found by the code review.
     const admittedThisRun = new Map<string, number>();
+    const admittedDirectThisRun = new Map<string, number>();
     const expireNow: string[] = [];
     for (const r of live) {
-      const already = (sentToday.get(r.user_id) ?? 0) + (admittedThisRun.get(r.user_id) ?? 0);
-      if (already >= MAX_PER_USER_PER_DAY) {
+      const direct = isDirect(r);
+      const sentMap = direct ? sentDirectToday : sentToday;
+      const runMap = direct ? admittedDirectThisRun : admittedThisRun;
+      const ceiling = direct ? MAX_DIRECT_PER_USER_PER_DAY : MAX_PER_USER_PER_DAY;
+      const already = (sentMap.get(r.user_id) ?? 0) + (runMap.get(r.user_id) ?? 0);
+      if (already >= ceiling) {
         // Deferring past the row's own expiry is a slower way of dropping it.
         if (r.expires_at && new Date(r.expires_at).getTime() < Date.now() + 24 * 3600 * 1000) expireNow.push(r.id);
         else deferred.push(r.id);
         continue;
       }
-      admittedThisRun.set(r.user_id, (admittedThisRun.get(r.user_id) ?? 0) + 1);
+      runMap.set(r.user_id, (runMap.get(r.user_id) ?? 0) + 1);
       eligible.push(r);
     }
 
