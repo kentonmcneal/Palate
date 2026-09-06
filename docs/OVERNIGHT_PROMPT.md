@@ -152,7 +152,75 @@ and Details responses we already pay for, so capturing it is free.
 **Acceptance:** a unit test proving a `CLOSED_PERMANENTLY` row is excluded, and
 a null `business_status` is not — absent must never mean closed.
 
-### 6. Sentry config plugin — probably blocked
+### 6. Drive the marginal cost structurally toward zero
+
+The economics: Google cost is per-PLACE, not per-user. Once a restaurant is in
+the catalogue every future resolution of it is free, for everybody, forever.
+A hundred users in one metro is nearly free; a hundred users in a hundred
+cities is not. So the work is coverage, not rationing.
+
+Three things, all free:
+
+1. **Do not pay to resolve a stop we are going to discard.** Read the
+   confidence scoring in `mobile/lib/passive-confidence.ts` and the order of
+   operations in `resolveVenue`. If a stop is going to land in the low band and
+   be shown as an ambiguous "which one?", establish whether we needed the paid
+   lookup at all, or whether the catalogue answer would have served. Do not
+   introduce a hard "skip low-confidence stops" rule that silently loses real
+   meals — the fix is ordering and reuse, not refusal. Show the numbers behind
+   whatever you change.
+2. **Measure catalogue coverage properly.** Add a probe that answers: for the
+   stops we resolved in the last 30 days, what share had a catalogue answer
+   within the resolve radius? That is the number that predicts the marginal
+   cost of the next user, and right now nobody knows it. Report it.
+3. **The cache**, as described in task 2 above.
+
+### 7. Own the data
+
+Every place we resolve once should be ours permanently. This is the same move
+Foursquare made — the places database stopped being a cost and became the
+asset — and the catalogue is already accumulating it by accident. Make it
+deliberate.
+
+- Audit whether we persist EVERYTHING we pay for. When `places-proxy` fetches
+  20 nearby restaurants and the client uses three, are the other seventeen
+  written to `public.restaurants`, or discarded? If they are discarded we are
+  paying for data and throwing it away, which is the single cheapest thing to
+  fix on this whole list.
+- Check the same for the `details` action and for featured-lists text search.
+- Verify the enrichment-preserving trigger from 0104 cannot be defeated by a
+  later cheap upsert overwriting expensive fields.
+- Report catalogue growth over the last 30 days: rows added, and how many came
+  from each path.
+
+Do not add any new paid fetching to "improve coverage". This task is about
+keeping what we already buy.
+
+### 8. Who pays — ANALYSIS ONLY, decide nothing
+
+This is a business model question and it is the founder's to answer. Do not
+choose, do not build, do not add a payments dependency, do not sign up for
+anything.
+
+Produce a short written analysis in the report covering:
+
+- What the app's own data can already support. Query it: how many restaurants
+  do we hold, in how many metros, with what classification coverage? A
+  restaurant-side product needs supply-side density; say honestly whether we
+  have it anywhere.
+- For each of the three models — charge restaurants (the OpenTable answer),
+  charge diners a subscription, license or syndicate the catalogue (the
+  Foursquare answer) — what would have to be TRUE technically before it could
+  ship, and roughly what building it would involve. Be concrete about the
+  engineering, not the market.
+- What we would need to start measuring NOW to make that decision later with
+  evidence rather than instinct. Some of it is probably one analytics event
+  away, and adding those events tonight is in scope.
+
+Keep it under a page. The founder wants the shape of the decision, not a
+business plan.
+
+### 9. Sentry config plugin — probably blocked
 
 Check whether `EXPO_PUBLIC_SENTRY_DSN` has appeared in `mobile/.env`, and
 whether a Sentry org/project slug is anywhere in the repo or in
@@ -170,6 +238,9 @@ build and a version bump; do not bump the version for JS-only work.
 Then write me a report at `docs/OVERNIGHT_2026-09-07.md` with:
 
 - what you finished, with the evidence label for each claim
+- the catalogue coverage number from task 6 and the persistence audit from
+  task 7, which together are the answer to "what does the next user cost"
+- the who-pays analysis from task 8, kept short
 - what you skipped and exactly why
 - anything you found that I have not asked about, especially anything that
   costs money or leaks data
