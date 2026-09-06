@@ -65,16 +65,17 @@ serve(async (req) => {
       poster?.display_name ||
       (poster?.email ? poster.email.split("@")[0] : "Someone");
 
-    // Friends of the poster who can see their events (visibility is enforced
-    // via RLS on feed_events; we replicate the same gate here).
-    const { data: friends } = await admin
-      .from("friendships")
-      .select("requester_id, addressee_id")
-      .eq("status", "accepted")
-      .or(`requester_id.eq.${me},addressee_id.eq.${me}`);
+    // The poster's FOLLOWERS. Under the old mutual-accept model this was the
+    // accepted-friendship set; a post now reaches whoever chose to hear about
+    // it, which is what following means. Visibility is still enforced by RLS
+    // on feed_events; the same gate is replicated below.
+    const { data: followers } = await admin
+      .from("follows")
+      .select("follower_id")
+      .eq("followee_id", me);
 
-    const friendIds = (friends ?? [])
-      .map((f) => (f.requester_id === me ? f.addressee_id : f.requester_id))
+    const friendIds = (followers ?? [])
+      .map((f: { follower_id: string }) => f.follower_id)
       .filter(Boolean);
 
     if (friendIds.length === 0) return json({ sent: 0 });

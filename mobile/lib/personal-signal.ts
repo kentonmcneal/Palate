@@ -100,12 +100,14 @@ export async function loadPersonalSignal(): Promise<PersonalSignal> {
           .from("menu_item_ratings")
           .select("rating, item:menu_items(restaurant_id, restaurant:restaurants(cuisine_type))")
           .eq("user_id", user.id),
-        // Pull friends so we can scope friend-visit queries to this user's circle.
+        // The people you follow, so "somewhere your people go" can be scoped
+        // to your circle. Following is the right edge here rather than mutual
+        // friendship: you follow someone because you care where they eat, and
+        // whether they followed back says nothing about that.
         supabase
-          .from("friendships")
-          .select("requester_id, addressee_id")
-          .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
-          .eq("status", "accepted"),
+          .from("follows")
+          .select("followee_id")
+          .eq("follower_id", user.id),
         Promise.resolve({ data: null }), // placeholder; we'll fill after we know friend ids
       ]);
 
@@ -197,11 +199,10 @@ export async function loadPersonalSignal(): Promise<PersonalSignal> {
         }
       }
 
-      // Friend visits — load only if user has friends
+      // Visits by the people you follow — loaded only if you follow anyone.
       const friendIds: string[] = [];
       for (const f of (friendsRes.data ?? []) as any[]) {
-        const otherId = f.requester_id === user.id ? f.addressee_id : f.requester_id;
-        if (otherId) friendIds.push(otherId);
+        if (f.followee_id) friendIds.push(f.followee_id);
       }
       if (friendIds.length > 0) {
         try {
