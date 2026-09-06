@@ -295,7 +295,10 @@ final class PalateVisitManager: NSObject, CLLocationManagerDelegate {
     let heldBeforeLeaving = c.lastSeen.timeIntervalSince(c.firstSeen)
     logEvent("candidate_left", String(format: "held=%.0fs emitted=%@", heldBeforeLeaving, c.emitted ? "y" : "n"))
     if !c.emitted, heldBeforeLeaving >= minDwellSec {
-      emitStop(c)
+      // c.lastSeen is the final fix taken while still inside the radius, so it
+      // is when the meal ended. `now` is when we noticed, which can be much
+      // later if the app was suspended through the whole sitting.
+      emitStop(c, departedAt: c.lastSeen)
     }
     let fresh = StopCandidate(
       id: UUID().uuidString, center: fix, accuracy: fix.horizontalAccuracy,
@@ -309,7 +312,28 @@ final class PalateVisitManager: NSObject, CLLocationManagerDelegate {
 
   /// Take one high-accuracy fix before reporting — this is what turns "somewhere
   /// on this block" into "Shake Shack". Falls back to the coarse centre.
-  private func emitStop(_ stop: StopCandidate) {
+  ///
+  /// `departedAt` is non-nil when the stop is already OVER, and it changes
+  /// everything: a fresh fix would be taken wherever the phone is standing NOW,
+  /// which on the departure path is by construction more than 120 m from the
+  /// restaurant. That coordinate was being written onto the finished stop, so
+  /// the meal was resolved against whatever the user had walked to — asking
+  /// "did you eat at" the bar across the street, or finding no venue at all and
+  /// paying Google for the privilege. It also poisoned the on-device home/work
+  /// history, which is keyed on this same coordinate.
+  ///
+  /// The bug was an inversion, which is why it survived: the TIMEOUT path below
+  /// already fell back to `stop.center` and was correct, while the success path
+  /// was not. A departed stop needs no precise fix at all — the centre we
+  /// accumulated while the user sat there IS the best estimate we will ever
+  /// have — so it skips straight to persisting.
+  private func emitStop(_ stop: StopCandidate, departedAt: Date? = nil) {
+    if let departedAt {
+      logEvent("emit_after_departure", "using candidate centre, not a fix taken elsewhere")
+      persistStop(stop, coordinate: stop.center.coordinate,
+                  accuracy: stop.accuracy, departure: departedAt)
+      return
+    }
     pendingPreciseEmit = stop
     preciseManager.desiredAccuracy = kCLLocationAccuracyBest
     preciseManager.requestLocation()
@@ -324,16 +348,22 @@ final class PalateVisitManager: NSObject, CLLocationManagerDelegate {
   private func persistStop(
     _ stop: StopCandidate,
     coordinate: CLLocationCoordinate2D,
-    accuracy: CLLocationAccuracy
+    accuracy: CLLocationAccuracy,
+    departure: Date? = nil
   ) {
-    // departure = now: the stop is still open, but the JS pipeline needs a
+    // For a stop still in progress, departure = now: the JS pipeline needs a
     // bounded dwell to qualify it, and "how long they have been here so far" is
     // the honest answer at this instant.
+    //
+    // For a stop already ended, `departure` is the last fix we saw INSIDE the
+    // radius. Stamping `Date()` there inflated the dwell by however long the
+    // phone took to notice the departure, which pushed real meals past the
+    // 240-minute dwell-too-long ceiling and dropped them.
     persist(makeRecord(
       coordinate: coordinate,
       horizontalAccuracy: accuracy,
       arrival: stop.firstSeen,
-      departure: Date(),
+      departure: departure ?? Date(),
       source: "stop"
     ))
   }
