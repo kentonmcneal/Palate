@@ -333,9 +333,13 @@ export default function Settings() {
             variant="ghost"
             onPress={() => Linking.openURL("https://palate-zm29.vercel.app/terms")}
           />
+          {/* Was "Questions? hello@palate.app." — palate.app has no MX record
+              (verified live), so that address bounced silently and it was the
+              only support route named anywhere in the app. Send Feedback above
+              writes a real row to a real table. */}
           <Note>
             Palate v0.1. No ads, we don't sell your data, and you control what's
-            public. Questions? hello@palate.app.
+            public. Questions? Use Send Feedback above and it reaches us.
           </Note>
           {/* Which bundle is actually running. Two OTAs on the same runtime
               both report the same app version, so the version alone cannot
