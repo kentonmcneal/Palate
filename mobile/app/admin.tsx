@@ -14,6 +14,7 @@ import { useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import { isAdmin, listPendingUsers, setApproval, type PendingUser } from "../lib/waitlist";
 import { listFeedback, markFeedbackTriaged, type FeedbackRow } from "../lib/feedback-admin";
+import { loadRecFunnel, summarize, type RecFunnelRow } from "../lib/rec-funnel";
 
 export default function AdminWaitlistScreen() {
   const router = useRouter();
@@ -29,6 +30,7 @@ export default function AdminWaitlistScreen() {
   // Tester reports. The push is the fast route and it can fail — no token, a
   // revoked permission, Expo down. This is the route that cannot.
   const [feedback, setFeedback] = useState<FeedbackRow[]>([]);
+  const [funnel, setFunnel] = useState<RecFunnelRow[] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -38,6 +40,7 @@ export default function AdminWaitlistScreen() {
       if (admin) {
         setPending(await listPendingUsers());
         setFeedback(await listFeedback(50).catch(() => []));
+        setFunnel(await loadRecFunnel(28).catch(() => null));
         const { data } = await supabase
           .from("feature_flags").select("enabled").eq("key", "server_push").maybeSingle();
         setServerPush(Boolean(data?.enabled));
@@ -163,6 +166,36 @@ export default function AdminWaitlistScreen() {
                 {flipping ? "…" : serverPush ? "Turn off" : "Turn on"}
               </Text>
             </Pressable>
+          </View>
+        )}
+
+        {!loading && allowed && funnel && (
+          <View style={[styles.card, { marginBottom: 12 }]}>
+            <Text style={type.subtitle}>Recommendations, last 28 days</Text>
+            <Text style={[type.small, { marginTop: 4 }]}>
+              Seen is a card at least half on screen for half a second. Taken is a tap, a save or directions. Went is a confirmed visit within seven days of being shown.
+            </Text>
+            {summarize(funnel).length === 0 && (
+              <Text style={[type.small, { marginTop: 10 }]}>Nothing recorded yet. Impressions started on 2026-09-06.</Text>
+            )}
+            {summarize(funnel).map((row) => (
+              <View key={row.surface} style={styles.report}>
+                <Text style={styles.reportMeta}>{row.surface.toUpperCase()}</Text>
+                <Text style={styles.reportBody}>
+                  {row.impressions} seen · {row.taken} taken · {row.visits} went · {row.users} {row.users === 1 ? "person" : "people"}
+                </Text>
+              </View>
+            ))}
+            {funnel.some((r) => r.slot === "explore") && (
+              <View style={styles.report}>
+                <Text style={styles.reportMeta}>SOMETHING DIFFERENT (explore slot)</Text>
+                <Text style={styles.reportBody}>
+                  {funnel.filter((r) => r.slot === "explore").reduce((n, r) => n + r.impressions, 0)} seen ·{" "}
+                  {funnel.filter((r) => r.slot === "explore").reduce((n, r) => n + r.clicks + r.saves + r.maps, 0)} taken ·{" "}
+                  {funnel.filter((r) => r.slot === "explore").reduce((n, r) => n + r.visits_7d, 0)} went
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
