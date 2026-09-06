@@ -10,3 +10,9 @@ format fields the scorer reads, with counts.
 These exist so a ranking change can be measured against the real distribution
 instead of a synthetic one. A fixture invented by hand would have had a
 cuisine_region on every row and would have hidden the entire defect.
+
+`founder-visit-places.json` — the same 35 visits, one row each, WITH the
+google_place_id, visited_at, rating, source and cuisine_type. Pulled
+2026-09-06. founder-visits.json is grouped and cannot support a held-out
+replay; this can. Only the places that are also in memphis-pool.json can be
+scored, which is what the held-out test reports first.

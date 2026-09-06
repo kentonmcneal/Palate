@@ -1,0 +1,282 @@
+[
+ {
+  "google_place_id": "ChIJy_ZP-Gi0xokRjqT9EQtJGFE",
+  "visited_at": "2026-05-01T13:07:48Z",
+  "overall_rating": null,
+  "source": "manual",
+  "confirmed": true,
+  "cuisine_type": "american"
+ },
+ {
+  "google_place_id": "ChIJFZ6TuS7HxokR0nv-mBcdrmQ",
+  "visited_at": "2026-05-01T13:09:07Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": "american"
+ },
+ {
+  "google_place_id": "ChIJ37_HwrXHxokRxQDPY8Qop1s",
+  "visited_at": "2026-05-01T13:09:13Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": null
+ },
+ {
+  "google_place_id": "ChIJm43TLQDHxokRlKYVbe-QqQU",
+  "visited_at": "2026-05-01T13:21:45Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": null
+ },
+ {
+  "google_place_id": "ChIJk3qIbVLGxokRhL8mDShGPhg",
+  "visited_at": "2026-05-01T13:22:11Z",
+  "overall_rating": null,
+  "source": "manual",
+  "confirmed": true,
+  "cuisine_type": "american"
+ },
+ {
+  "google_place_id": "ChIJWeZiBmTHxokRNvlQNYx2GcY",
+  "visited_at": "2026-05-05T04:39:41Z",
+  "overall_rating": null,
+  "source": "manual",
+  "confirmed": true,
+  "cuisine_type": "mediterranean"
+ },
+ {
+  "google_place_id": "ChIJf-mICzrGxokR7ra7ZY1MLv4",
+  "visited_at": "2026-05-05T04:39:52Z",
+  "overall_rating": null,
+  "source": "manual",
+  "confirmed": true,
+  "cuisine_type": "american"
+ },
+ {
+  "google_place_id": "ChIJLfhKaTfGxokRiOZL6x398WY",
+  "visited_at": "2026-05-05T04:40:22Z",
+  "overall_rating": null,
+  "source": "manual",
+  "confirmed": true,
+  "cuisine_type": "american"
+ },
+ {
+  "google_place_id": "ChIJf3RcnHTHxokRboGZEInUtRo",
+  "visited_at": "2026-05-06T17:16:27Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": null
+ },
+ {
+  "google_place_id": "ChIJQZ34orbHxokRdCwA_7uoCYk",
+  "visited_at": "2026-05-07T11:28:21Z",
+  "overall_rating": null,
+  "source": "manual",
+  "confirmed": true,
+  "cuisine_type": "middle-eastern"
+ },
+ {
+  "google_place_id": "ChIJFZ6TuS7HxokR0nv-mBcdrmQ",
+  "visited_at": "2026-05-07T13:15:53Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": "american"
+ },
+ {
+  "google_place_id": "ChIJQ3RRZi_GxokRa55i5Tz53OI",
+  "visited_at": "2026-05-07T21:29:44Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": null
+ },
+ {
+  "google_place_id": "ChIJc6mzBvzH2YgRAwd0YrzGCHQ",
+  "visited_at": "2026-05-08T15:20:45Z",
+  "overall_rating": null,
+  "source": "manual",
+  "confirmed": true,
+  "cuisine_type": "american"
+ },
+ {
+  "google_place_id": "ChIJnxEbcAC32YgR440jYbszDrU",
+  "visited_at": "2026-05-08T15:20:59Z",
+  "overall_rating": null,
+  "source": "manual",
+  "confirmed": true,
+  "cuisine_type": "american"
+ },
+ {
+  "google_place_id": "ChIJ0QmGQwAVTIYR0iLdFJTP3Yk",
+  "visited_at": "2026-05-08T15:21:15Z",
+  "overall_rating": null,
+  "source": "manual",
+  "confirmed": true,
+  "cuisine_type": "american"
+ },
+ {
+  "google_place_id": "ChIJRwpRsW632YgRx0MrxcUDw-c",
+  "visited_at": "2026-05-08T15:21:43Z",
+  "overall_rating": null,
+  "source": "manual",
+  "confirmed": true,
+  "cuisine_type": "american"
+ },
+ {
+  "google_place_id": "ChIJhQA_6R232YgR5eyL0E5zOJA",
+  "visited_at": "2026-05-08T15:21:52Z",
+  "overall_rating": null,
+  "source": "manual",
+  "confirmed": true,
+  "cuisine_type": "american"
+ },
+ {
+  "google_place_id": "ChIJBXexubHHxokR-vJPttmO90M",
+  "visited_at": "2026-05-21T18:36:28Z",
+  "overall_rating": null,
+  "source": "manual",
+  "confirmed": true,
+  "cuisine_type": null
+ },
+ {
+  "google_place_id": "ChIJQZ34orbHxokRdCwA_7uoCYk",
+  "visited_at": "2026-05-22T16:28:38Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": "middle-eastern"
+ },
+ {
+  "google_place_id": "ChIJQ3RRZi_GxokRa55i5Tz53OI",
+  "visited_at": "2026-05-23T01:51:59Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": null
+ },
+ {
+  "google_place_id": "ChIJBdUeZi_GxokR2uEUM6HYpJ4",
+  "visited_at": "2026-05-23T01:52:04Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": "japanese"
+ },
+ {
+  "google_place_id": "ChIJjYTLgZl_1YcRWyBE3kUfeDI",
+  "visited_at": "2026-07-18T22:41:07Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": "filipino"
+ },
+ {
+  "google_place_id": "ChIJZbbUSP2bf4gR_Y6XCbAvL9M",
+  "visited_at": "2026-07-21T04:16:31Z",
+  "overall_rating": null,
+  "source": "manual",
+  "confirmed": true,
+  "cuisine_type": "mexican"
+ },
+ {
+  "google_place_id": "ChIJl5pBc6xZwokRyba8gBQv0F8",
+  "visited_at": "2026-08-06T20:06:42Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": "american"
+ },
+ {
+  "google_place_id": "ChIJQZ34orbHxokRdCwA_7uoCYk",
+  "visited_at": "2026-08-06T20:06:44Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": "middle-eastern"
+ },
+ {
+  "google_place_id": "ChIJH9AcnBm3t4kRQJsAaoQAr9Y",
+  "visited_at": "2026-08-08T00:10:02Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": "mediterranean"
+ },
+ {
+  "google_place_id": "ChIJ45cgQw-Ff4gRsFCL3UeGn2w",
+  "visited_at": "2026-08-21T01:52:29Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": "american"
+ },
+ {
+  "google_place_id": "ChIJc5w7vvy6j4ARAFnKDu5CVRI",
+  "visited_at": "2026-08-28T21:25:58Z",
+  "overall_rating": "loved",
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": "american"
+ },
+ {
+  "google_place_id": "ChIJT4jAdqKAhYARKd4aDzZ7Quc",
+  "visited_at": "2026-08-29T01:58:30Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": null
+ },
+ {
+  "google_place_id": "ChIJVVr2_Jmaf4gRv3TFeuKi4p0",
+  "visited_at": "2026-09-02T17:43:26Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": "american"
+ },
+ {
+  "google_place_id": "ChIJt3YZBqibf4gRDGBGZE6m3Wk",
+  "visited_at": "2026-09-04T02:24:44Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": "steakhouse"
+ },
+ {
+  "google_place_id": "ChIJQ1nx1mKaf4gRmKBdcPsrrQc",
+  "visited_at": "2026-09-04T19:41:53Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": "chinese"
+ },
+ {
+  "google_place_id": "ChIJ3_3gh4Obf4gRn1aQ2xQIGyA",
+  "visited_at": "2026-09-05T04:26:08Z",
+  "overall_rating": "loved",
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": "italian"
+ },
+ {
+  "google_place_id": "ChIJVVr2_Jmaf4gRv3TFeuKi4p0",
+  "visited_at": "2026-09-05T15:00:53Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": "american"
+ },
+ {
+  "google_place_id": "ChIJ3_3gh4Obf4gRn1aQ2xQIGyA",
+  "visited_at": "2026-09-06T03:25:58Z",
+  "overall_rating": null,
+  "source": "auto",
+  "confirmed": true,
+  "cuisine_type": "italian"
+ }
+]
