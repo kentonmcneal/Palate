@@ -329,8 +329,8 @@ const RULES: Rule[] = [
 
   // ---------- Floors ----------
   {
-    label: "Pattern Forming",
-    secondary: "A picture is starting to emerge.",
+    label: "Still Reading You",
+    secondary: "A few more visits and this gets specific.",
     description: "Your taste is taking shape. Keep logging. Week three is where it gets specific.",
     meaning: "Build the inputs and Palate will surface a real identity within 2-3 visits.",
     match: (v) => 0.3 * gate(v.visitCount > 0),
@@ -385,7 +385,7 @@ function pickDistinct(rest: PalateIdentity[], primary: PalateIdentity): [PalateI
 }
 
 function floor(_v?: TasteVector | {}, mood?: boolean): PalateIdentity {
-  const label = mood ? "Pattern Forming" : "Just Getting Started";
+  const label = mood ? "Still Reading You" : "Just Getting Started";
   const secondary = mood
     ? "A picture is starting to emerge."
     : "Log a few visits and we'll start drawing the picture.";

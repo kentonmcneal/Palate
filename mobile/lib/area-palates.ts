@@ -1,13 +1,20 @@
 // ============================================================================
 // area-palates.ts — "Top Palates in your area"
 // ----------------------------------------------------------------------------
-// Auto-swaps between FAKE preview data and REAL aggregated data:
+// REAL aggregated data, or nothing:
 //   - If the user's city has >= REAL_DATA_THRESHOLD users with a palate set,
 //     we return real percentages from the population_city_palate_counts view.
 //   - Otherwise we return a curated city-specific mix (or a generic mix if
 //     we can't infer a city).
 //
-// The `source` field tells the UI whether to show the "preview data" label.
+// There is no preview mode. It used to fall back to a hand-written mix of
+// palates per city, rendered as "TOP PALATES IN MEMPHIS · preview" with
+// percentages beside each one. The founder cut exactly that card from the
+// Wrapped tab on 2026-09-05, for the reason that a fabricated leaderboard with
+// a hedge attached still reads as a leaderboard. It survived on Profile ->
+// Insights until 2026-09-06 because the cut was made per screen instead of at
+// the source. Under the threshold this returns null and the card does not
+// render.
 // ============================================================================
 
 import { computeTasteVector } from "./taste-vector";
@@ -18,13 +25,14 @@ const REAL_DATA_THRESHOLD = 25;
 
 export type AreaPalate = {
   label: string;
-  share: number; // 0..1, fake percentage of locals matching
+  share: number; // 0..1, measured share of real local accounts
 };
 
 export type AreaPalateSummary = {
   area: string;
   palates: AreaPalate[];
-  source: "real" | "preview";
+  /** Always "real". There is no other kind; see the note at the top. */
+  source: "real";
 };
 
 // City mixes use the Curator/Forager/Steward/Anchor identity system, paired
@@ -34,80 +42,6 @@ export type AreaPalateSummary = {
 //   Steward → Premium + Consistency
 //   Anchor  → Casual + Consistency
 // Modifiers reflect what locals are known for, not stereotypes.
-const CITY_MIXES: Record<string, AreaPalate[]> = {
-  "New York": [
-    { label: "Forager · Late-night",      share: 0.18 },
-    { label: "Anchor · Slice-loyal",      share: 0.14 },
-    { label: "Curator · Brunch",          share: 0.12 },
-    { label: "Anchor · Corner-store",     share: 0.10 },
-    { label: "Steward · Group-dinner",    share: 0.07 },
-  ],
-  "Brooklyn": [
-    { label: "Steward · Italian-focused", share: 0.16 },
-    { label: "Forager · Late-night",      share: 0.14 },
-    { label: "Curator · Wine-bar",        share: 0.11 },
-    { label: "Forager · Cross-cuisine",   share: 0.10 },
-    { label: "Curator · Brunch",          share: 0.09 },
-  ],
-  "Philadelphia": [
-    { label: "Anchor · Bar-late",         share: 0.17 },
-    { label: "Steward · Italian-focused", share: 0.13 },
-    { label: "Anchor · Comfort",          share: 0.11 },
-    { label: "Curator · Brunch",          share: 0.10 },
-    { label: "Curator · Wine-bar",        share: 0.08 },
-  ],
-  "Los Angeles": [
-    { label: "Anchor · Health-forward",   share: 0.18 },
-    { label: "Forager · Taco-mapping",    share: 0.15 },
-    { label: "Curator · Brunch",          share: 0.12 },
-    { label: "Steward · Group-dinner",    share: 0.09 },
-    { label: "Curator · Wine-bar",        share: 0.08 },
-  ],
-  "Atlanta": [
-    { label: "Curator · Southern-brunch", share: 0.19 },
-    { label: "Anchor · Comfort",          share: 0.14 },
-    { label: "Steward · Soul-food",       share: 0.11 },
-    { label: "Forager · Late-night",      share: 0.09 },
-    { label: "Steward · Group-dinner",    share: 0.08 },
-  ],
-  "Austin": [
-    { label: "Steward · BBQ-focused",     share: 0.18 },
-    { label: "Forager · Taco-mapping",    share: 0.16 },
-    { label: "Curator · Brunch",          share: 0.11 },
-    { label: "Curator · Wine-bar",        share: 0.08 },
-    { label: "Forager · Late-night",      share: 0.07 },
-  ],
-  "Memphis": [
-    { label: "Steward · Dry-rub-BBQ",     share: 0.19 },
-    { label: "Anchor · Soul-food",        share: 0.15 },
-    { label: "Anchor · Meat-and-three",   share: 0.11 },
-    { label: "Forager · Beale-late",      share: 0.09 },
-    { label: "Curator · Brunch",          share: 0.08 },
-  ],
-  "Chicago": [
-    { label: "Steward · Deep-dish",       share: 0.15 },
-    { label: "Anchor · Comfort",          share: 0.12 },
-    { label: "Steward · Steakhouse",      share: 0.11 },
-    { label: "Forager · Late-night",      share: 0.10 },
-    { label: "Curator · Brunch",          share: 0.09 },
-  ],
-  "San Francisco": [
-    { label: "Anchor · Health-forward",   share: 0.16 },
-    { label: "Forager · Cross-cuisine",   share: 0.13 },
-    { label: "Curator · Wine-bar",        share: 0.11 },
-    { label: "Anchor · Café-morning",     share: 0.10 },
-    { label: "Curator · Modernist",       share: 0.08 },
-  ],
-};
-
-const DEFAULT_MIX: AreaPalate[] = [
-  { label: "Curator · Brunch",          share: 0.14 },
-  { label: "Anchor · Comfort",          share: 0.12 },
-  { label: "Anchor · Café-morning",     share: 0.10 },
-  { label: "Forager · Cross-cuisine",   share: 0.09 },
-  { label: "Curator · Wine-bar",        share: 0.07 },
-];
-
 // Map common neighborhood substrings to a city key. Heuristic only — when we
 // have real user location data, swap for a proper geocoder.
 const HOOD_TO_CITY: Array<{ match: RegExp; city: string }> = [
@@ -122,7 +56,7 @@ const HOOD_TO_CITY: Array<{ match: RegExp; city: string }> = [
   { match: /san francisco|mission|hayes valley|noe valley|north beach/i, city: "San Francisco" },
 ];
 
-export async function getAreaPalates(): Promise<AreaPalateSummary> {
+export async function getAreaPalates(): Promise<AreaPalateSummary | null> {
   // 1. Resolve a city, preferring user's self-reported current_city.
   const profile = await getMyProfile().catch(() => null);
   let city: string | null = profile?.current_city?.trim() || null;
@@ -136,15 +70,11 @@ export async function getAreaPalates(): Promise<AreaPalateSummary> {
         if (match.test(topHood)) { city = c; break; }
       }
     }
-    if (!city) return { area: topHood ?? "Your area", palates: DEFAULT_MIX, source: "preview" };
+    if (!city) return null;
   }
 
-  // 2. Try to fetch real data for this city
-  const real = await tryRealAreaPalates(city);
-  if (real) return real;
-
-  // 3. Fall back to curated preview mix
-  return { area: city, palates: CITY_MIXES[city] ?? DEFAULT_MIX, source: "preview" };
+  // 2. Real rows for this city, or nothing.
+  return await tryRealAreaPalates(city);
 }
 
 async function tryRealAreaPalates(city: string): Promise<AreaPalateSummary | null> {

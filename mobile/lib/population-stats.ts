@@ -1,12 +1,19 @@
 // ============================================================================
-// population-stats.ts — percentiles + "people like you" cohort.
+// population-stats.ts — how strong your own signals are, and how many people
+// are actually here.
 // ----------------------------------------------------------------------------
-// Auto-swaps fake → real:
-//   - When the real cohort (population_palate_counts view) reaches
-//     REAL_DATA_THRESHOLD users, the cohort line uses the real count.
-//   - Percentile cards always use vector-derived values for now (real
-//     percentile math needs population distributions for each metric, not
-//     just user counts — that's a future aggregator job).
+// Nothing in this file invents a number any more.
+//
+// The cards are about YOU: "Strong in trying new restaurants" is a label on
+// your own exploration rate, not a rank against anybody, and the file says so
+// in the type. A real percentile needs a population distribution per metric,
+// which is an aggregator job nobody has written.
+//
+// The cohort line is the only cross-user claim, it needs REAL_DATA_THRESHOLD
+// real accounts, and when it cannot clear that it returns null and the card
+// does not render. It used to fall back to a cohort generated from a hash of
+// the identity's name, under the word "preview". See the note on
+// CohortInsight.source for why that is gone.
 // ============================================================================
 
 import type { TasteVector } from "./taste-vector";
@@ -25,22 +32,24 @@ export type PercentileCard = {
 };
 
 export type CohortInsight = {
-  /** "12,400 Palate users eat like you" */
+  /** The only line this app can actually source: a count of real accounts. */
   countLine: string;
-  /** "They average 4.2 visits a week" */
-  paceLine: string;
-  /** "Top cities for this Palate: Brooklyn, LA, Austin" */
-  citiesLine: string;
-  /** "Most-saved spot in the cohort: Lucali" */
-  topSavedLine: string;
-  /** "real" once we have enough users; "preview" until then */
-  source: "real" | "preview";
+  /**
+   * Always "real". The type used to carry a "preview" mode alongside three
+   * more lines (a meals-per-week pace, three cities, a top saved spot) that
+   * were generated from a hash of the identity's own name. Worse, the REAL
+   * branch spread that same object and replaced only the count, so a card
+   * labelled real still told you your cohort eats 4.7 times a week and lives
+   * in Brooklyn. There is no cohort data. The card now says the one thing
+   * that is true, or it does not appear.
+   */
+  source: "real";
 };
 
 // ----------------------------------------------------------------------------
 // Percentile cards — derived from the user's vector + persona.
 //
-// Each card uses a "preview data" generator that takes a real signal from
+// Each card takes a real signal from
 // the vector and maps it to a plausible percentile. Same input always
 // returns the same number (deterministic) so the user doesn't see numbers
 // jumping around between renders.
@@ -116,24 +125,10 @@ function pctScore(signal: number): number {
   return Math.round(Math.max(0, Math.min(1, signal)) * 100);
 }
 
-function hashOffset(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return (h % 7) - 3; // -3..+3
-}
-
-// ----------------------------------------------------------------------------
-// "People like you" cohort — synchronous (fake) version, kept for backwards
-// compat with existing UI calls.
-// ----------------------------------------------------------------------------
-export function generateCohortInsight(identity: PalateIdentity, v: TasteVector): CohortInsight {
-  return generateFakeCohort(identity, v);
-}
-
-/** Async version: tries real data first, falls back to fake. */
+/** A real count of real accounts, or null. Never an estimate. */
 export async function generateCohortInsightAsync(
   identity: PalateIdentity, v: TasteVector,
-): Promise<CohortInsight> {
+): Promise<CohortInsight | null> {
   // Map an identity label down to a starter persona key when possible.
   // Falls back to total-population count for anyone that didn't quiz in.
   const personaKey = identityToQuizKey(identity.label);
@@ -147,10 +142,8 @@ export async function generateCohortInsightAsync(
         .maybeSingle();
       const count = (data as any)?.user_count ?? 0;
       if (count >= REAL_DATA_THRESHOLD) {
-        const fake = generateFakeCohort(identity, v);
         return {
-          ...fake,
-          countLine: `${count.toLocaleString()} Palate${count === 1 ? "" : "s"} share your starter persona`,
+          countLine: `${count.toLocaleString()} ${count === 1 ? "person shares" : "people share"} your starter persona`,
           source: "real",
         };
       }
@@ -162,48 +155,20 @@ export async function generateCohortInsightAsync(
       .maybeSingle();
     const total = (totalRow as any)?.total_users ?? 0;
     if (total >= REAL_DATA_THRESHOLD * 4) {
-      const fake = generateFakeCohort(identity, v);
-      return {
-        ...fake,
-        countLine: `${total.toLocaleString()} people on Palate so far`,
-        source: "real",
-      };
+      return { countLine: `${total.toLocaleString()} people on Palate so far`, source: "real" };
     }
   } catch {
-    // ignore — fall through to fake
+    // ignore, and say nothing rather than invent something
   }
 
-  return generateFakeCohort(identity, v);
-}
-
-function generateFakeCohort(identity: PalateIdentity, v: TasteVector): CohortInsight {
-  const seed = hashOffset(identity.label) + identity.label.length;
-
-  const cohortPct = 0.005 + (seed % 5) * 0.003;
-  const cohortCount = Math.max(800, Math.round(50_000 * cohortPct));
-
-  const pace = (3.0 + ((seed * 7) % 30) / 10).toFixed(1);
-
-  const cityPool = [
-    ["Brooklyn", "Austin", "LA"],
-    ["Manhattan", "Chicago", "SF"],
-    ["Queens", "Atlanta", "Boston"],
-    ["Brooklyn", "Philadelphia", "Portland"],
-    ["LA", "Miami", "Brooklyn"],
-    ["Chicago", "Seattle", "DC"],
-    ["Atlanta", "Houston", "Brooklyn"],
-  ];
-  const cities = cityPool[(seed >>> 0) % cityPool.length];
-
-  const exemplar = pickExemplar(identity.label, v);
-
-  return {
-    countLine: `${cohortCount.toLocaleString()} Palates eat like you`,
-    paceLine: `They average ${pace} eating-out meals a week`,
-    citiesLine: `Most concentrated in: ${cities.join(", ")}`,
-    topSavedLine: `Top saved spot in this cohort: ${exemplar}`,
-    source: "preview",
-  };
+  // Nothing real to say. The old fallback built a cohort out of a hash of the
+  // identity's own name: a count, a meals-per-week figure and three cities,
+  // all invented, shipped under the word "preview". That is the same thing
+  // the founder killed on 2026-09-05 when Top Palates in a city rendered a
+  // ranking of five accounts, and for the same reason: a fabricated statistic
+  // with a hedge attached still reads as a fact. Under the threshold the
+  // honest answer is no card at all.
+  return null;
 }
 
 // Best-effort mapping from a composed identity label back to a starter persona
@@ -223,28 +188,6 @@ function identityToQuizKey(label: string): string | null {
   return null;
 }
 
-function pickExemplar(label: string, v: TasteVector): string {
-  const sub = topByValue(v.cuisineSubregion);
-  const region = topByValue(v.cuisineRegion);
-  if (sub === "memphis_bbq") return "Central BBQ";
-  if (sub === "korean_bbq") return "Cote";
-  if (sub === "japanese_sushi") return "Sushi Noz";
-  if (sub === "japanese_ramen") return "Ippudo";
-  if (sub === "vietnamese_pho") return "Saigon Social";
-  if (sub === "italian_neapolitan") return "Lucali";
-  if (sub === "italian_pizzeria") return "Joe's Pizza";
-  if (sub === "mexican_taqueria") return "Los Tacos No. 1";
-  if (sub === "halal_cart") return "The Halal Guys";
-  if (sub === "korean") return "Atomix";
-  if (sub === "café") return "Blue Bottle";
-  if (region === "southern_us") return "Sweet Chick";
-  if (region === "east_asian") return "Kru";
-  if (region === "latin_american") return "Llama San";
-  if (region === "italian") return "Lilia";
-  if (label.toLowerCase().includes("brunch")) return "Tatte Bakery";
-  if (label.toLowerCase().includes("late-night")) return "The Halal Guys";
-  return "Sweetgreen";
-}
 
 function topByValue(map: Record<string, number>): string | null {
   const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);

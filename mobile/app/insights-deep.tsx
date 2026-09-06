@@ -102,6 +102,9 @@ export default function InsightsDeepScreen() {
               <View style={styles.card}>
                 <Text style={styles.eyebrow}>PALATE LORE</Text>
                 <Text style={styles.cardTitle}>{identities.primary.label}</Text>
+                {/* Same rule as everywhere else: the name never stands alone. */}
+                <Text style={styles.body1}>{identities.primary.secondary}</Text>
+                <Spacer size={10} />
                 {(() => {
                   const lore = expandedLore(identities.primary);
                   return (
@@ -131,13 +134,8 @@ export default function InsightsDeepScreen() {
             {/* People like you */}
             {cohort && (
               <View style={styles.card}>
-                <Text style={styles.eyebrow}>
-                  PEOPLE LIKE YOU{cohort.source === "preview" ? " · preview" : ""}
-                </Text>
+                <Text style={styles.eyebrow}>PEOPLE LIKE YOU</Text>
                 <Text style={styles.cardTitle}>{cohort.countLine}</Text>
-                <Text style={styles.body1}>· {cohort.paceLine}</Text>
-                <Text style={styles.body1}>· {cohort.citiesLine}</Text>
-                <Text style={styles.body1}>· {cohort.topSavedLine}</Text>
               </View>
             )}
 
@@ -161,10 +159,7 @@ export default function InsightsDeepScreen() {
             {/* Top palates in area */}
             {area && area.palates.length > 0 && (
               <View style={styles.card}>
-                <Text style={styles.eyebrow}>
-                  TOP PALATES IN {area.area.toUpperCase()}
-                  {area.source === "preview" ? " · preview" : ""}
-                </Text>
+                <Text style={styles.eyebrow}>TOP PALATES IN {area.area.toUpperCase()}</Text>
                 {area.palates.map((p, i) => (
                   <View key={p.label} style={styles.row}>
                     <Text style={styles.rowLeft}>{i + 1}. {p.label}</Text>

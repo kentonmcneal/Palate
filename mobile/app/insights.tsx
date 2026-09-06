@@ -367,6 +367,11 @@ function PalateIdentityCard({ identities }: { identities: PalateIdentitySet }) {
     <View style={styles.identityCard}>
       <Text style={styles.identityEyebrow}>YOUR PALATE</Text>
       <Text style={styles.identityPrimary}>{identities.primary.label}</Text>
+      {/* The plain sentence has always been on the rule as `secondary` and was
+          never rendered, so the screen showed "Late-Night Explorer" and left
+          the reader to guess. A name nobody can define is decoration; the name
+          plus the sentence is information. */}
+      <Text style={styles.identityPlain}>{identities.primary.secondary}</Text>
       {identities.primary.evidence.slice(0, 2).map((e, i) => (
         <Text key={i} style={styles.identityEvidence}>· {e}</Text>
       ))}
@@ -375,10 +380,12 @@ function PalateIdentityCard({ identities }: { identities: PalateIdentitySet }) {
         <View style={styles.identitySecondaryCol}>
           <Text style={styles.identitySubLabel}>ALSO</Text>
           <Text style={styles.identitySecondary}>{identities.secondary[0].label}</Text>
+          <Text style={styles.identityPlainSmall}>{identities.secondary[0].secondary}</Text>
         </View>
         <View style={styles.identitySecondaryCol}>
           <Text style={styles.identitySubLabel}>AND</Text>
           <Text style={styles.identitySecondary}>{identities.secondary[1].label}</Text>
+          <Text style={styles.identityPlainSmall}>{identities.secondary[1].secondary}</Text>
         </View>
       </View>
 
@@ -793,6 +800,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 34,
   },
+  identityPlain: { color: "rgba(255,255,255,0.9)", fontSize: 16, marginTop: 6, lineHeight: 22 },
+  identityPlainSmall: { color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 4, lineHeight: 18 },
   identityEvidence: { color: "rgba(255,255,255,0.78)", fontSize: 13, marginTop: 6, lineHeight: 18 },
   identitySecondaryRow: {
     flexDirection: "row",
