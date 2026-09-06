@@ -134,7 +134,7 @@ function scoreTaste(g: TasteGraph, r: RestaurantInput): Dim {
   // took the quiz had "entries" here, skipped the neutral branch, and scored
   // every restaurant 0 on taste — the quiz made cold start WORSE than no
   // quiz. Found by the code review, LIVE.
-  if (!hasEntries(g.cuisinesSubregion) && !hasEntries(g.cuisines)
+  if (!hasEntries(g.cuisinesSubregion) && !hasEntries(g.cuisines) && !hasEntries(g.cuisineTypes)
       && !(FLAVOR_WEIGHT > 0 && hasEntries(g.flavors))) {
     return { s: 0.5, matched: false };
   }
@@ -151,7 +151,29 @@ function scoreTaste(g: TasteGraph, r: RestaurantInput): Dim {
   }
   if (r.cuisine_region && hasEntries(g.cuisines)) {
     const aff = affinityOf(g.cuisines, r.cuisine_region);
-    score += aff * 0.3; weight += 0.3;
+    score += aff * 0.25; weight += 0.25;
+  }
+  // cuisine_type, the field this block did not read for its whole existence.
+  //
+  // It is the best-populated cuisine column in the catalogue: measured live on
+  // 2026-09-06, 376 of 1,620 rows are null on it (23%), against 687 (42%) that
+  // are null on BOTH region and subregion. Inside the 8km pool the app
+  // actually searches around Memphis, 55 restaurants carry a type and no
+  // region — so the scorer knew what they served and refused to look, and each
+  // one fell through to UNKNOWN_TASTE_PRIOR.
+  //
+  // It matters at the other end too. The founder has 35 visits and only 19 of
+  // them carry a region, so his own Italian and his most-visited place both
+  // contributed nothing to the graph. assembleGraph has always populated
+  // cuisineTypes; only the score ignored it.
+  //
+  // Weighted below subregion because it is coarser (`american` covers a
+  // burger bar and a diner), and above region for the same reason in the other
+  // direction. Region drops 0.30 -> 0.25 so the three cuisine signals do not
+  // collectively drown the behaviour and quality terms.
+  if (r.cuisine_type && hasEntries(g.cuisineTypes)) {
+    const aff = affinityOf(g.cuisineTypes, r.cuisine_type);
+    score += aff * 0.35; weight += 0.35;
   }
   if (FLAVOR_WEIGHT > 0 && r.flavor_tags?.length) {
     const overlap = sumAffinity(g.flavors, r.flavor_tags);
