@@ -97,7 +97,12 @@ export function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: n
 // CLUSTER_RADIUS_M whose times skew overnight (home) or weekday-daytime (work).
 // ----------------------------------------------------------------------------
 
-type ClusterPoint = { lat: number; lng: number; hour: number; weekday: boolean };
+type ClusterPoint = {
+  lat: number; lng: number; hour: number; weekday: boolean;
+  /** Minutes stayed. Absent on points written before this existed; those fall
+   *  back to arrival-instant behaviour rather than breaking. */
+  dwellMin?: number;
+};
 
 async function loadClusterHistory(): Promise<ClusterPoint[]> {
   try {
@@ -116,6 +121,9 @@ export async function recordForClustering(raw: RawVisit): Promise<void> {
     lng: raw.lng,
     hour: when.getHours(),
     weekday: when.getDay() >= 1 && when.getDay() <= 5,
+    // How long they stayed, so a stay that runs through the night can be
+    // recognised as home even though it began in the evening.
+    dwellMin: dwellMinutes(raw) ?? 0,
   };
   const history = await loadClusterHistory();
   history.push(point);
@@ -127,8 +135,34 @@ export async function recordForClustering(raw: RawVisit): Promise<void> {
 const LUNCH_START_HOUR = 11;
 const LUNCH_END_HOUR = 15;
 
-function isOvernight(hour: number): boolean {
-  return hour >= 22 || hour < 6;
+/**
+ * Whether a stay covers the middle of the night, which is the only reliable
+ * signal for "this is where they sleep".
+ *
+ * This used to test the ARRIVAL HOUR alone: `hour >= 22 || hour < 6`. Nobody
+ * arrives home at 2am. People get home at seven in the evening and leave at
+ * eight the next morning, so the arrival hour was 19 — not overnight, and not
+ * inside work hours either. Home therefore accumulated as neutral points and
+ * suppression never fired once: `home-work-suppressed` was 0 across 668 real
+ * detections in 30 days, while 92 stops resolved to no-venue-found with GPS
+ * accuracy between 4 and 27 metres. Those were somebody's flat and office,
+ * looked up against Google one at a time.
+ *
+ * A stay is overnight if any hour it spans falls in the small hours.
+ */
+export function spansOvernight(startHour: number, dwellMin = 0): boolean {
+  const hours = Math.min(24, Math.floor(dwellMin / 60));
+  for (let i = 0; i <= hours; i++) {
+    const h = (startHour + i) % 24;
+    if (h >= 23 || h < 6) return true;
+  }
+  // No dwell recorded (an older point, or an open visit): fall back to the
+  // arrival instant, which is what this did before.
+  return dwellMin === 0 && (startHour >= 22 || startHour < 6);
+}
+
+function isOvernight(p: ClusterPoint): boolean {
+  return spansOvernight(p.hour, p.dwellMin ?? 0);
 }
 // Weekday desk hours MINUS the lunch window. The exclusion is the whole point:
 // a 9-17 test swallows lunch, so eating at the same weekday spot three times
@@ -148,7 +182,7 @@ export async function isHomeOrWorkSuppressed(raw: RawVisit): Promise<boolean> {
   const history = await loadClusterHistory();
   const near = history.filter((p) => distanceMeters(raw.lat, raw.lng, p.lat, p.lng) <= CLUSTER_RADIUS_M);
   if (near.length < CLUSTER_MIN_HITS) return false;
-  const overnight = near.filter((p) => isOvernight(p.hour)).length;
+  const overnight = near.filter(isOvernight).length;
   const work = near.filter((p) => isWorkHours(p.hour, p.weekday)).length;
   // If the recurring cluster is dominated by sleep hours or the 9–5 weekday
   // block, treat it as home/work and suppress.

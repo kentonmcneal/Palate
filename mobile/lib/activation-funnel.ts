@@ -128,19 +128,38 @@ export function buildFunnel(events: FunnelEvent[]): Funnel {
  * Own-rows only: `analytics_events` is RLS'd per user and this is a debug view
  * of your own account, not an admin dashboard.
  */
+/**
+ * Counts per event and reason, across everybody, for an admin.
+ *
+ * This used to select straight from analytics_events. That table has an INSERT
+ * policy and deliberately no SELECT policy, so the query returned an empty
+ * array under RLS — PostgREST answers 200 with [] rather than an error — and
+ * this screen has rendered a funnel of zeroes since the day it shipped, on top
+ * of 6,825 rows of real telemetry. It was not broken in a way anyone could
+ * see, which is the worst way for an instrument to be broken.
+ *
+ * The RPC (0123) is admin-gated and returns COUNTS ONLY, never rows, so
+ * reading the funnel can never become a way to read one person's movements.
+ */
 export async function loadFunnel(days = 30): Promise<Funnel> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return buildFunnel([]);
 
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
-    .from("analytics_events")
-    .select("event, props, created_at")
-    .eq("user_id", user.id)
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(2000);
+  const { data, error } = await supabase.rpc("capture_funnel", { p_days: days });
   if (error) return buildFunnel([]);
 
-  return buildFunnel((data ?? []) as FunnelEvent[]);
+  // buildFunnel counts events, so an aggregate row of n is n events. Expanding
+  // keeps the pure builder unchanged and exhaustively tested.
+  // Bounded, because this runs on a phone and a year of a busy account is a
+  // lot of objects to materialise for a screen that only shows percentages.
+  const MAX_EXPANDED = 50_000;
+  const rows: FunnelEvent[] = [];
+  const now = new Date().toISOString();
+  for (const r of (data ?? []) as { event: string; reason: string; n: number }[]) {
+    const props = r.reason ? { reason: r.reason } : null;
+    for (let i = 0; i < r.n && rows.length < MAX_EXPANDED; i++) {
+      rows.push({ event: r.event, props, created_at: now });
+    }
+  }
+  return buildFunnel(rows);
 }
