@@ -48,6 +48,8 @@ export type RestaurantRecommendation = {
   reason: string;
   price_level?: number | null;
   rating?: number | null;
+  /** Google's review count, for "1.2k reviews" beside the rating. */
+  user_rating_count?: number | null;
   /** % match for the user (0..100). Computed against the taste vector. */
   matchScore?: number | null;
   /** Distance in km from the user's last known location. */

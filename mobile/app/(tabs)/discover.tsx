@@ -1,16 +1,17 @@
-import { useCallback, useEffect, useMemo, useState, useRef } from "react";
-import { View, StyleSheet, Pressable, RefreshControl, ActivityIndicator, Modal } from "react-native";
+import { useCallback, useEffect, useMemo, useState, useRef, type ReactNode } from "react";
+import { View, StyleSheet, Pressable, RefreshControl, ActivityIndicator, Modal, type StyleProp, type ViewStyle } from "react-native";
 import { TextInput } from "../../components/TextInput";
 import { Text } from "../../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { Spacer } from "../../components/Button";
-import { colors, spacing, type } from "../../theme";
+import { colors, spacing, type, shadow, categoryColors } from "../../theme";
 import { nearbyRestaurants, searchRestaurants, searchRestaurantsLocal, type Restaurant } from "../../lib/places";
 import { useSuggestions } from "../../lib/use-suggestions";
 import { getOrFetchNearby } from "../../lib/nearby-cache";
 import { StretchPick } from "../../components/StretchPick";
-import { MoodRow } from "../../components/MoodRow";
+import { MoodRow, chipHue } from "../../components/MoodRow";
+import { FONT_CAP } from "../../lib/a11y";
 import {
   buildDishChips, applyMood, moodFallbackNote, moodContextNote,
   isIntentMood, isSurprise, isDishMood, dishOf, moodLabel,
@@ -488,18 +489,32 @@ export default function DiscoverTab() {
 
         {/* Search bar */}
         <View style={styles.searchRow}>
-          <TextInput
-            value={query}
-            onChangeText={(t: string) => { setQuery(t); if (searchResults) setSearchResults(null); }}
-            placeholder="Search restaurants…"
-            placeholderTextColor={colors.mute}
-            style={styles.searchInput}
-            returnKeyType="search"
-            onSubmitEditing={runSearch}
-            onFocus={openSearch}
-            autoCapitalize="words"
-            autoCorrect={false}
-          />
+          <View style={styles.searchField}>
+            {/* The field was a bare outline filled with the page's own grey,
+                so nothing about it said "type here". A magnifier is the one
+                glyph everybody already reads as search. It is decorative and
+                hidden from screen readers; the placeholder carries the meaning. */}
+            <Text
+              style={styles.searchGlyph}
+              maxFontSizeMultiplier={FONT_CAP.chrome}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
+              ⌕
+            </Text>
+            <TextInput
+              value={query}
+              onChangeText={(t: string) => { setQuery(t); if (searchResults) setSearchResults(null); }}
+              placeholder="Search restaurants…"
+              placeholderTextColor={colors.mute}
+              style={styles.searchInput}
+              returnKeyType="search"
+              onSubmitEditing={runSearch}
+              onFocus={openSearch}
+              autoCapitalize="words"
+              autoCorrect={false}
+            />
+          </View>
           {searchActive ? (
             <Pressable onPress={closeSearch} style={styles.mapPill}>
               <Text style={styles.mapPillText}>Cancel</Text>
@@ -626,11 +641,11 @@ export default function DiscoverTab() {
                   <>
                     <MoodRow chips={moodChips} value={mood} onChange={setMood} />
                     {catalogueLoading ? (
-                      <Text style={styles.moodNote}>
+                      <Note hue={chipHue(mood)} style={styles.moodNoteRow}>
                         Looking further out for {moodLabel(mood)}…
-                      </Text>
+                      </Note>
                     ) : !!moodedList.note && (
-                      <Text style={styles.moodNote}>{moodedList.note}</Text>
+                      <Note hue={chipHue(mood)} style={styles.moodNoteRow}>{moodedList.note}</Note>
                     )}
                     <Spacer size={10} />
                     {/* One place slightly outside the pattern. It lived on Home
@@ -638,33 +653,36 @@ export default function DiscoverTab() {
                         where you go to be shown something, so it belongs here.
                         Under the ranked list on purpose — a stretch is what you
                         read after the safe answers, not instead of them. */}
-                    <List items={moodedList.items} onHide={hideId} surface="discover_for_you" requestId={requestIdRef.current} mood={mood} emptyMsg="Log a few visits. Once Palate sees a pattern, we'll personalize this list. In the meantime, the Trending tab shows what's hot in your area." />
+                    <List items={moodedList.items} onHide={hideId} surface="discover_for_you" requestId={requestIdRef.current} mood={mood} emptyMsg="Log a few visits. Once Palate sees a pattern, this list becomes yours. Nearby shows what is close in the meantime." />
                     <Spacer size={20} />
-                    <Text style={styles.stretchHead}>Stretch your palate</Text>
+                    <View style={styles.stretchHeadRow}>
+                      <View style={styles.stretchHeadAccent} />
+                      <Text style={styles.stretchHead}>Stretch your palate</Text>
+                    </View>
                     <StretchPick />
                   </>
                 )}
                 {tab === "stretch" && (
                   stretchList.length > 0 ? (
                     <>
-                      <Text style={styles.stretchNote}>
+                      <Note hue={categoryColors.pine} style={styles.stretchNoteRow}>
                         Outside what you usually pick, but close enough to something you
                         already like that it should land.
-                      </Text>
+                      </Note>
                       <List items={stretchList} onHide={hideId} surface="discover_stretch" requestId={requestIdRef.current} slot="explore"
                         emptyMsg="Nothing here yet." />
                     </>
                   ) : (
-                    <Text style={styles.emptyListText}>
+                    <EmptyNote hue={categoryColors.pine}>
                       Log a few more visits. Stretch needs to know your pattern before it can
                       step outside it.
-                    </Text>
+                    </EmptyNote>
                   )
                 )}
                 {tab === "nearby" && (
                   <>
                     <MoodRow chips={moodChips} value={mood} onChange={setMood} />
-                    {!!nearbyList.note && <Text style={styles.moodNote}>{nearbyList.note}</Text>}
+                    {!!nearbyList.note && <Note hue={chipHue(mood)} style={styles.moodNoteRow}>{nearbyList.note}</Note>}
                     <Spacer size={10} />
                     <List items={nearbyList.items} onHide={hideId} surface="discover_shelf" requestId={requestIdRef.current} mood={mood} emptyMsg="Nothing nearby." />
                   </>
@@ -687,9 +705,41 @@ export default function DiscoverTab() {
 // match the controlled vocabulary in classifier.ts.
 function SubTabBtn({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={[styles.tabBtn, active && styles.tabBtnActive]}>
+    <Pressable onPress={onPress} style={[styles.tabBtn, active && styles.tabBtnActive]} accessibilityRole="tab" accessibilityState={{ selected: active }}>
       <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
     </Pressable>
+  );
+}
+
+/** A one-line note under a chip row, led by a dot in the hue of whatever the
+ *  sentence is about: the mood chip's colour for a mood note, pine for a
+ *  stretch. The dot ties the sentence to the control it explains, where a
+ *  bare grey line read as a stray caption between two rows. */
+function Note({ hue, style, children }: { hue: string; style?: StyleProp<ViewStyle>; children: ReactNode }) {
+  return (
+    <View style={[styles.noteRow, style]}>
+      <View style={[styles.noteDot, { backgroundColor: hue }]} />
+      <Text style={styles.noteText}>{children}</Text>
+    </View>
+  );
+}
+
+/** An empty list, as a card with a coloured glyph rather than a sentence
+ *  sitting alone on the grey page. The glyph is decorative and hidden from
+ *  screen readers; the sentence carries the meaning. */
+function EmptyNote({ hue, children }: { hue: string; children: ReactNode }) {
+  return (
+    <View style={styles.emptyList}>
+      <Text
+        style={[styles.emptyGlyph, { color: hue }]}
+        maxFontSizeMultiplier={FONT_CAP.chrome}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        ◎
+      </Text>
+      <Text style={styles.emptyListText}>{children}</Text>
+    </View>
   );
 }
 
@@ -862,11 +912,7 @@ function List({ items, surface, emptyMsg, onHide, requestId, slot, mood }: {
   requestId?: string; slot?: "exploit" | "explore"; mood?: string | null;
 }) {
   if (items.length === 0) {
-    return (
-      <View style={styles.emptyList}>
-        <Text style={styles.emptyListText}>{emptyMsg}</Text>
-      </View>
-    );
+    return <EmptyNote hue={categoryColors.saffron}>{emptyMsg}</EmptyNote>;
   }
   return (
     <View>
@@ -907,13 +953,23 @@ function toInput(p: Restaurant): RestaurantInput {
 }
 
 const styles = StyleSheet.create({
-  moodNote: { ...type.small, marginTop: 10, lineHeight: 17 },
-  stretchNote: {
-    fontSize: 13, color: colors.mute, lineHeight: 19, marginBottom: 12,
-  },
+  // A note is a dot plus a sentence. The dot takes the hue of whatever the
+  // sentence is about, so it reads as attached to that control rather than
+  // as a stray grey caption between two rows.
+  noteRow: { flexDirection: "row", alignItems: "flex-start", gap: 7 },
+  noteDot: { width: 7, height: 7, borderRadius: 4, marginTop: 5 },
+  noteText: { ...type.small, lineHeight: 18, flex: 1 },
+  moodNoteRow: { marginTop: 10 },
+  stretchNoteRow: { marginBottom: 12 },
+  stretchHeadRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
+  // Pine is the colour of "outside your pattern" across the app: Home's
+  // SOMETHING DIFFERENT eyebrow, the Somewhere new chip, the StretchPick
+  // eyebrow. The heading wears the same mark so the section is recognisably
+  // that idea before the words are read.
+  stretchHeadAccent: { width: 4, height: 16, borderRadius: 2, backgroundColor: categoryColors.pine },
   stretchHead: {
     fontSize: 17, fontWeight: "800", color: colors.ink,
-    letterSpacing: -0.3, marginBottom: 10,
+    letterSpacing: -0.3,
   },
   filterBar: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12,
@@ -956,11 +1012,19 @@ const styles = StyleSheet.create({
   body: { padding: spacing.lg, paddingBottom: 100 },
 
   searchRow: { flexDirection: "row", gap: 8 },
-  searchInput: {
-    flex: 1, height: 44, borderRadius: 14,
+  // The field is one control holding the glyph and the input: a wash fill so
+  // it sits a step off the page instead of being the page, and a hairline so
+  // its edge still holds where wash meets paper.
+  searchField: {
+    flex: 1, flexDirection: "row", alignItems: "center", gap: 6,
+    minHeight: 44, borderRadius: 14, paddingLeft: 12,
     borderWidth: 1, borderColor: colors.line,
-    paddingHorizontal: 14, fontSize: 15, color: colors.ink,
-    backgroundColor: colors.paper,
+    backgroundColor: colors.wash,
+  },
+  searchGlyph: { fontSize: 18, lineHeight: 22, color: colors.mute },
+  searchInput: {
+    flex: 1, alignSelf: "stretch", paddingVertical: 0, paddingRight: 14,
+    fontSize: 15, color: colors.ink, textAlignVertical: "center",
   },
   mapPill: {
     paddingHorizontal: 16,
@@ -972,16 +1036,21 @@ const styles = StyleSheet.create({
 
   tabs: {
     marginTop: spacing.lg,
-    flexDirection: "row", gap: 6,
-    padding: 4,
+    // Gap and padding each gave up a point to pay for the pill border below,
+    // so "Most Compatible" keeps the width it had and stays on one line.
+    flexDirection: "row", gap: 4,
+    padding: 3,
     borderRadius: 14,
     backgroundColor: colors.faint,
   },
-  tabBtn: { flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: "center" },
-  tabBtnActive: {
-    backgroundColor: colors.paper,
-    shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 },
-  },
+  // Every pill carries a transparent border so the active one's tinted border
+  // does not nudge the row by a point on each tap.
+  tabBtn: { flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: "center", borderWidth: 1, borderColor: "transparent" },
+  // The active pill was paper on a white bar: the page colour, which reads as
+  // a hole rather than a selection. The brand tint is what a selected control
+  // looks like everywhere else in the app, and it is the one place on this
+  // bar the red is allowed.
+  tabBtnActive: { backgroundColor: colors.redTint, borderColor: colors.redTintBorder },
   tabText: { fontSize: 13, fontWeight: "600", color: colors.mute },
   tabTextActive: { color: colors.redText },
 
@@ -1009,13 +1078,18 @@ const styles = StyleSheet.create({
   sortChipTextActive: { color: "#fff" },
   filterDivider: { width: 1, alignSelf: "stretch", marginVertical: 4, backgroundColor: colors.line },
 
+  // A card like every other card: white, the shared shadow, no border. The
+  // glyph colour comes from the caller, so an empty Stretch tab is pine and
+  // an empty list is saffron rather than one grey ring for every occasion.
   emptyList: {
     padding: spacing.lg,
     borderRadius: 16,
     backgroundColor: colors.faint,
-    borderWidth: 1, borderColor: colors.line,
+    alignItems: "center", gap: 6,
+    ...shadow.card,
   },
-  emptyListText: { ...type.small, lineHeight: 20 },
+  emptyGlyph: { fontSize: 22, lineHeight: 26 },
+  emptyListText: { ...type.small, lineHeight: 20, textAlign: "center" },
   suggestRow: {
     flexDirection: "row", alignItems: "center",
     paddingVertical: 12,

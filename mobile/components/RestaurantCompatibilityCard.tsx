@@ -103,11 +103,19 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
   const hue = cuisineHue(restaurant.cuisine_type, restaurant.google_place_id);
   // Google's rating leads. It is the one number every diner already reads,
   // and hiding it made the card look like it was withholding something.
+  // Price sits right after it and the review count closes the line: "$$" and
+  // "1.2k reviews" are what a diner checks to decide whether the rating means
+  // anything, and the card was making them tap through for both. Both stay
+  // in the muted line colour; the star and the cuisine word carry the hue.
+  const price = priceMarks(restaurant.price_level);
+  const reviews = reviewCount(restaurant.user_rating_count);
   const sublineParts: React.ReactNode[] = [
     restaurant.rating != null ? <Text key="r" style={styles.star}>★ {restaurant.rating.toFixed(1)}</Text> : null,
+    price,
     restaurant.cuisine_type ? <Text key="c" style={[styles.cuisineText, { color: hue }]}>{cap(restaurant.cuisine_type)}</Text> : null,
     restaurant.neighborhood || null,
     restaurant.distanceKm != null ? formatDistance(restaurant.distanceKm) : null,
+    reviews,
   ].filter((p) => p != null && p !== "");
   const subline: React.ReactNode[] = [];
   sublineParts.forEach((p, i) => {
@@ -130,6 +138,11 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
     >
     <Animated.View style={enterStyle}>
     <TapCard onPress={openDetail} onLongPress={showLessLikeThis} style={styles.card}>
+    {/* Shadow on the outer view, clipping on the inner one: iOS drops a
+        view's own shadow when that view clips its children, so one view
+        cannot both cast the card shadow and cut the art and the rail to
+        the rounded corners. Home and Feed cards are built the same way. */}
+    <View style={styles.cardClip}>
       {/* Art ONLY when there is a real photo. A gradient with two initials
           is not visual — it is a 132pt loading skeleton that never loads, and
           it pushes the name, the match and the reason below the fold. The
@@ -229,6 +242,7 @@ export function RestaurantCompatibilityCard({ restaurant, surface, bucket, onDis
             captured implicitly via skips when the user scrolls past. */}
       </View>
       </View>
+    </View>
     </TapCard>
     </Animated.View>
     </Impression>
@@ -282,16 +296,38 @@ function formatCount(n: number): string {
   return String(n);
 }
 
+/** "$" to "$$$$" for Google's 1..4 price level. Null for 0 (free), for a
+ *  missing value and for anything out of range, so the subline simply omits
+ *  it rather than printing an empty slot between two dots. */
+function priceMarks(level: number | null | undefined): string | null {
+  if (level == null || !Number.isFinite(level)) return null;
+  const n = Math.round(level);
+  if (n < 1) return null;
+  return "$".repeat(Math.min(4, n));
+}
+
+/** "1.2k reviews", "38 reviews", "1 review". Null when Google has no count,
+ *  so a place nobody has reviewed does not advertise "0 reviews". */
+function reviewCount(n: number | null | undefined): string | null {
+  if (n == null || !(n > 0)) return null;
+  return `${formatCount(n)} ${n === 1 ? "review" : "reviews"}`;
+}
+
 const styles = StyleSheet.create({
   body: { padding: card.padding },
   card: {
     // No padding: the art runs edge to edge, and the body below sets its own.
     borderRadius: card.radius,
+    // Stays white. An 8% wash of the cuisine hue behind the body was worked
+    // out on paper and rejected: over white the cooler hues land at #F4EFF2
+    // (plum) and #EFF4F4 (pine), both darker than the page's #F6F6F6, so the
+    // card stops popping off the grey and sinks into it. The rail carries
+    // the hue instead.
     backgroundColor: colors.faint,
     marginBottom: 10,
-    overflow: "hidden",
     ...shadow.card,
   },
+  cardClip: { borderRadius: card.radius, overflow: "hidden" },
   head: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   // Name is the primary visual element on the card.
   name: { fontSize: 19, fontWeight: "800", color: colors.ink, letterSpacing: -0.3, lineHeight: 24 },

@@ -45,16 +45,26 @@ import { LoadError } from "./LoadError";
 import { askNotInterested } from "./notInterested";
 
 // ============================================================================
-// RecommendationsCard — always-visible spot suggestions on the Home tab.
+// RecommendationsCard — the three picks on the Home tab.
 // ----------------------------------------------------------------------------
-// Time-of-day aware via the headline copy (morning -> "for your morning",
-// midday -> "for lunch", evening -> "for tonight"). Pulls 2 personas-driven
-// picks for fast scanning. Each row is tappable to save to wishlist.
+// Three places, ranked on the shared taste graph, each on its own white card
+// with a rail in its cuisine's hue. A card opens the place, saves it, or hands
+// it to Maps.
 // ============================================================================
 
-// Card kept intentionally bare per the "Home = decision only" brief.
-// No time-of-day blurbs, no explanatory subtitles — the title and the rows
-// are the whole story.
+// Kept bare per the "Home = decision only" brief: no time-of-day blurbs, no
+// explanatory subtitles. The picks used to share ONE white container, divided
+// by hairlines, and the container's top edge landed directly above the first
+// name as a stray rule the founder asked to lose. Three separate cards on the
+// grey page need no divider at all, and the mood row above reaches the first
+// pick through spacing alone.
+
+/**
+ * What a Home pick carries beyond the shared recommendation type. The pool
+ * rows have Google's review count and toRecommendation passes it through, but
+ * the shared type in lib/ is not this component's to widen, so the field is
+ * declared here and read here.
+ */
 
 // ----------------------------------------------------------------------------
 // One place a Restaurant row becomes a scored recommendation.
@@ -135,6 +145,10 @@ function toRecommendation(
     visited: (personal?.visitsByPlaceId.get(p.google_place_id) ?? 0) > 0,
     neighborhood: p.neighborhood ?? null,
     price_level: p.price_level ?? null,
+    // Review volume, for the subline. It arrives on the same row as the rating
+    // and the price, and a rating with no count behind it reads as a guess:
+    // 4.8 from nine people and 4.8 from two thousand are different facts.
+    user_rating_count: p.user_rating_count ?? null,
     latitude: p.latitude ?? null,
     longitude: p.longitude ?? null,
     rating: p.rating ?? null,
@@ -423,12 +437,17 @@ export function RecommendationsCard({
     );
   }
 
+  // Anything written above the picks (the early-read caveat, the mood heading,
+  // its note) is plain text on the page ground, and the cards keep a little
+  // more distance from text than they do from the chips.
+  const hasIntro = earlyEstimate || typeof mood === "string" || catalogueLoading || !!moodNote;
+
   return (
-    <View style={styles.card}>
+    <View>
       {/* No "MOST COMPATIBLE" eyebrow. Home now asks "What are you in the mood
           for?" directly above this and the chips answer it, so a label saying
           what the list is was a third heading for one list. The early-read
-          caveat is kept — that one says something the question does not. */}
+          caveat is kept: that one says something the question does not. */}
       {earlyEstimate && (
         <Text style={styles.eyebrow} maxFontSizeMultiplier={FONT_CAP.eyebrow}>
           A FIRST READ ON YOUR PALATE
@@ -443,12 +462,11 @@ export function RecommendationsCard({
       {catalogueLoading
         ? <Text style={styles.moodNote}>Looking further out for {moodLabel(mood)}…</Text>
         : !!moodNote && <Text style={styles.moodNote}>{moodNote}</Text>}
-      <View style={{ marginTop: earlyEstimate ? 14 : 2 }}>
+      <View style={[styles.picks, hasIntro && styles.picksAfterIntro]}>
         {recs.map((rec, i) => (
           <RecRow
             key={rec.google_place_id}
             rec={rec}
-            first={i === 0}
             rank={i}
             requestId={requestIdRef.current}
             mood={mood}
@@ -474,11 +492,12 @@ function dotJoin(parts: Array<React.ReactNode | null>): React.ReactNode[] | null
   return out;
 }
 
-function RecRow({ rec, photo, first, rank, requestId, mood, onHide }: {
-  rec: RestaurantRecommendation; photo: string | null; first?: boolean;
+function RecRow({ rec, photo, rank, requestId, mood, onHide }: {
+  rec: RestaurantRecommendation; photo: string | null;
   rank: number; requestId: string; mood?: string | null; onHide: () => void;
 }) {
   const hue = cuisineHue(rec.cuisine, rec.google_place_id);
+  const price = priceTag(rec.price_level);
   // Home fired nothing for its whole existence: no impression, no click, no
   // save, no directions. The surface that ranks on finalScore was the one
   // surface the ranker could never hear back from.
@@ -542,17 +561,26 @@ function RecRow({ rec, photo, first, rank, requestId, mood, onHide }: {
       id={rec.google_place_id}
       surface="home_recs"
       onSeen={() => trackImpression(rec.google_place_id, ctx)}
-      style={[styles.row, first && styles.rowFirst]}
+      style={styles.pick}
     >
-      {/* The name gets the full width. It used to share the line with the
-          match badge AND a stacked ✕/Save column, which squeezed it to about
-          half the screen: "Huey's Southwind" wrapped to two lines and "Waffle
-          Mania winners" truncated mid-word. Actions moved to their own row. */}
+      {/* The shadow lives on the outer view and the clipping on the inner one.
+          iOS drops a view's own shadow the moment that view is asked to clip
+          its children, so one view cannot both cast the card shadow and cut
+          the rail to the card's rounded corners. */}
       <TapCard
         onPress={openDetail}
         accessibilityRole="button"
         accessibilityLabel={`${rec.name}. Open place details.`}
+        style={styles.pickBody}
       >
+        {/* A rail in the cuisine's hue down the card's left edge, the same
+            colour as the monogram beside the name and the chip above. Three
+            white cards read as three different places because of it. */}
+        <View style={[styles.rail, { backgroundColor: hue }]} />
+        {/* The name gets the full width. It used to share the line with the
+            match badge AND a stacked ✕/Save column, which squeezed it to about
+            half the screen: "Huey's Southwind" wrapped to two lines and "Waffle
+            Mania winners" truncated mid-word. Actions moved to their own row. */}
         {rec.explore && (
           // Row three, when the pattern is narrow: a deliberate step outside
           // it, said so. A 45% match under two 90s reads as a mistake unless
@@ -604,11 +632,16 @@ function RecRow({ rec, photo, first, rank, requestId, mood, onHide }: {
               />
             </View>
           )}
+          {/* Rating, price, cuisine, distance, then how many people the rating
+              rests on. The count goes last and stays muted: it qualifies the
+              star, it is not a second score. */}
           <Text style={styles.sub} numberOfLines={1}>
             {dotJoin([
               rec.rating != null ? <Text key="r" style={styles.star}>★ {rec.rating.toFixed(1)}</Text> : null,
+              price,
               rec.cuisine ? <Text key="c" style={[styles.cuisineText, { color: hue }]}>{capitalize(rec.cuisine)}</Text> : null,
               rec.distanceKm != null ? formatDistance(rec.distanceKm) : null,
+              rec.user_rating_count != null && rec.user_rating_count > 0 ? formatReviewCount(rec.user_rating_count) : null,
             ]) ?? "Nearby"}
           </Text>
         </View>
@@ -674,11 +707,28 @@ function capitalize(s: string): string {
   return s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, " ") : s;
 }
 
+/** "$" to "$$$$" for Google's 1..4 price levels. Anything outside that range
+ *  (0 means free, null means unknown) says nothing rather than something
+ *  wrong. */
+function priceTag(level?: number | null): string | null {
+  if (level == null || level < 1 || level > 4) return null;
+  return "$".repeat(Math.round(level));
+}
+
+/** "1.2k reviews", "38 reviews". Same rounding as the Discover card, written
+ *  here rather than imported so the two surfaces do not share a private
+ *  helper across a component boundary. */
+function formatReviewCount(n: number): string {
+  const count = n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+  return `${count} ${n === 1 ? "review" : "reviews"}`;
+}
+
 const styles = StyleSheet.create({
   moodNote: { fontSize: 12, color: colors.mute, marginTop: 10, lineHeight: 17 },
   moodHead: { ...type.micro, marginTop: 4 },
   card: {
-    // No top margin — the parent section header controls spacing now.
+    // Only the empty state uses this now; the picks are separate cards
+    // (styles.pick). No top margin: the mood row above controls the spacing.
     padding: card.padding,
     borderRadius: card.radius,
     // Stays WHITE. The whole light re-skin rests on a white card popping off
@@ -703,17 +753,24 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: "center", paddingVertical: spacing.lg, gap: 6 },
   emptyGlyph: { fontSize: 22, color: colors.line },
 
-  row: {
-    paddingVertical: 14,
-    borderTopColor: colors.line,
-    borderTopWidth: 1,
+  // The picks sit on the page, not in a shared container, so there is nothing
+  // to draw between the chips and the first name. The gap does the dividing.
+  picks: { gap: 10, marginTop: 4 },
+  picksAfterIntro: { marginTop: 12 },
+  // One pick: a white card with the app's one shadow. No border; the rail is
+  // the only line on it.
+  pick: {
+    borderRadius: card.radius,
+    backgroundColor: colors.faint,
+    ...shadow.card,
   },
-  // The divider belongs BETWEEN picks. On the first one it sat directly under
-  // the heading as a stray rule — the "topline" the founder asked to lose.
-  rowFirst: {
-    borderTopWidth: 0,
-    paddingTop: 6,
+  pickBody: {
+    borderRadius: card.radius,
+    backgroundColor: colors.faint,
+    overflow: "hidden",
+    padding: card.padding,
   },
+  rail: { position: "absolute", left: 0, top: 0, bottom: 0, width: 4 },
   titleRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   exploreEyebrow: { ...type.micro, color: categoryColors.pine, marginBottom: 6 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },

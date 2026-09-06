@@ -7,7 +7,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { Wordmark } from "../../components/Logo";
-import { colors, spacing, type } from "../../theme";
+import { colors, categoryColors, spacing, type } from "../../theme";
 import { getCurrentLocation, logLocationEvent, requestForegroundPermission, classifyAccuracy } from "../../lib/location";
 import { nearbyRestaurants, type Restaurant } from "../../lib/places";
 import { recentlyPrompted, recentVisits, type Visit } from "../../lib/visits";
@@ -307,8 +307,10 @@ export default function Home() {
           <HomeHero state={home} />
         )}
 
-        <View style={styles.homeRule} />
-
+        {/* No rule between the hero and the question. The founder does not
+            want lines on Home, and a short warm bar above the heading does
+            the same separating job while giving the page its first colour. */}
+        <View style={styles.moodAccent} />
         <Text style={styles.moodHead}>What are you in the mood for?</Text>
         {/* Directly under the question, above the chips and the picks, on the
             founder's call. It reads better than I expected: the heading asks
@@ -453,9 +455,10 @@ const styles = StyleSheet.create({
     color: colors.ink, letterSpacing: -0.4, marginBottom: 4,
   },
   palateRead: { ...type.small, marginBottom: 10, lineHeight: 18 },
-  homeRule: {
-    height: 1, backgroundColor: colors.line,
-    marginTop: spacing.lg, marginBottom: spacing.lg,
+  moodAccent: {
+    width: 28, height: 3, borderRadius: 2,
+    backgroundColor: categoryColors.terracotta,
+    marginTop: spacing.lg, marginBottom: 10,
   },
   safe: { flex: 1, backgroundColor: colors.paper },
   container: { padding: spacing.lg, paddingBottom: 100 },

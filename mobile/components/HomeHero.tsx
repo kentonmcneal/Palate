@@ -3,6 +3,8 @@ import { Text } from "./Text";
 import { useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import { whenLabel, type HomeState } from "../lib/home-state";
+import { FONT_CAP } from "../lib/a11y";
+import { useCaptureStatus, useCaptureFix } from "./CaptureWarning";
 
 /**
  * The one thing Home is about, said once, at the top.
@@ -42,17 +44,41 @@ export function HomeHero({ state, now = new Date() }: { state: HomeState; now?: 
   );
 }
 
-/** A sentence, not a dashboard. Never exposes detector internals. */
+/**
+ * A sentence, not a dashboard. Never exposes detector internals.
+ *
+ * Off is a problem, not a neutral state: the point of the app is that it logs
+ * meals for you, and a grey dot said "off" the way it would say "n/a". So off
+ * gets the red dot, says what it costs, and offers the one tap that fixes it.
+ * On stays a quiet green status light.
+ */
 export function TrackingLine({ on, lastCheck }: { on: boolean; lastCheck: string | null }) {
+  // The same destination the strip and the Profile row use, so three "Fix"
+  // buttons for one fault never send people three different places.
+  const router = useRouter();
+  const status = useCaptureStatus();
+  const fix = useCaptureFix("home_footer");
   return (
     <View style={styles.trackWrap}>
-      <View style={[styles.dot, { backgroundColor: on ? colors.live : colors.mute }]} />
+      <View style={[styles.dot, { backgroundColor: on ? colors.live : colors.red }]} />
       <Text style={styles.trackText}>
         <Text style={{ color: colors.ink, fontWeight: "700" }}>
           {on ? "Tracking is on." : "Tracking is off."}
         </Text>
         {on && lastCheck ? ` Last checked ${lastCheck}.` : ""}
+        {!on ? " Palate can't log meals for you." : ""}
       </Text>
+      {!on && (
+        <Pressable
+          onPress={() => (status && status.kind !== "ok" ? fix(status) : router.push("/passive-capture-intro" as never))}
+          style={styles.fix}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Fix tracking"
+        >
+          <Text style={styles.fixText} maxFontSizeMultiplier={FONT_CAP.chrome}>Fix</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -75,11 +101,21 @@ const styles = StyleSheet.create({
   },
   ctaText: { color: "#fff", fontSize: 15, fontWeight: "800", letterSpacing: -0.1 },
 
+  // No hairline. The founder asked for no lines on Home; the gap does the
+  // separating.
   trackWrap: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    marginTop: spacing.xl, paddingTop: spacing.lg,
-    borderTopWidth: 1, borderTopColor: colors.line,
+    marginTop: spacing.xl,
   },
   dot: { width: 7, height: 7, borderRadius: 4 },
   trackText: { ...type.small, flex: 1, lineHeight: 19 },
+  // The same tint-and-border pill as the match chip, so it reads as the app's
+  // accent and not as an alarm. redText, not red: small type on a light
+  // ground needs the darker cut to stay AA.
+  fix: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999,
+    backgroundColor: colors.redTint,
+    borderWidth: 1, borderColor: colors.redTintBorder,
+  },
+  fixText: { fontSize: 12, fontWeight: "800", color: colors.redText },
 });

@@ -4,7 +4,7 @@ import { Text } from "./Text";
 import { useRouter } from "expo-router";
 import { trackRecEvent, trackImpression, rememberRecTouch, type RecEventContext } from "../lib/recommendation-events";
 import { Impression } from "./Impressions";
-import { colors, spacing, type, card, shadow } from "../theme";
+import { colors, spacing, type, card, shadow, categoryColors } from "../theme";
 import { computeTasteVector } from "../lib/taste-vector";
 import { nearbyRestaurants } from "../lib/places";
 import { getCachedNearby, setCachedNearby } from "../lib/nearby-cache";
@@ -14,6 +14,8 @@ import { matchScoreColor, matchScoreTint } from "../lib/match-score";
 import { assembleGraph, computeRightNow, type RightNowPick as StretchPickType } from "../lib/recommendation";
 import { toInput as toCandidateInput } from "../lib/recommendation/candidates";
 import { filterRecommendable } from "../lib/recommendation/eligibility";
+import { cuisineHue } from "./PlaceArt";
+import { FONT_CAP } from "../lib/a11y";
 
 // ============================================================================
 // StretchPick — one recommendation slightly outside the user's pattern.
@@ -73,6 +75,9 @@ export function StretchPick() {
     surface: "discover_for_you", bucket: "stretch", slot: "explore",
     matchScore: score, finalScore: r.score?.finalScore,
   };
+  // The same hue this place wears on every other card, so the pick is
+  // recognisably the same restaurant if it also appears in the list above.
+  const hue = cuisineHue(r.cuisine_type, r.google_place_id);
   const sub = r.cuisine_type ? cap(r.cuisine_type) : "";
 
   return (
@@ -84,16 +89,35 @@ export function StretchPick() {
         void trackRecEvent("stretch_pick_clicked", r.google_place_id, stretchCtx);
         router.push(`/restaurant/${r.google_place_id}` as any);
       }}
+      accessibilityRole="button"
+      accessibilityLabel={`${r.name}. Open place details.`}
     >
+    {/* Shadow on the outer view, clipping on the inner one: iOS drops a
+        view's own shadow when that view clips its children, so one view
+        cannot both cast the card shadow and cut the rail to the corners. */}
+    <View style={styles.cardClip}>
+      {/* The rail every recommendation card wears, in this place's own
+          cuisine hue, so the pick reads as one more place rather than as a
+          banner about one. */}
+      <View style={[styles.rail, { backgroundColor: hue }]} />
       <View style={styles.head}>
-        <Text style={styles.eyebrow}>ONE PLACE TO STRETCH YOUR PALATE</Text>
+        <Text style={styles.eyebrow} maxFontSizeMultiplier={FONT_CAP.eyebrow}>ONE PLACE TO STRETCH YOUR PALATE</Text>
         <View style={[styles.scoreChip, { backgroundColor: matchScoreTint(score), borderColor: matchScoreColor(score) }]}>
           <Text style={[styles.scoreText, { color: matchScoreColor(score) }]}>{score}</Text>
         </View>
       </View>
       <Text style={styles.name} numberOfLines={2}>{r.name}</Text>
-      {sub.length > 0 && <Text style={styles.sub}>{sub}</Text>}
+      {/* Star in saffron, cuisine in its hue: the same subline grammar as the
+          list cards, so the eye does not have to learn a second one here. */}
+      {(r.rating != null || sub.length > 0) && (
+        <Text style={styles.sub}>
+          {r.rating != null && <Text style={styles.star}>★ {r.rating.toFixed(1)}</Text>}
+          {r.rating != null && sub.length > 0 && " · "}
+          {sub.length > 0 && <Text style={[styles.cuisineText, { color: hue }]}>{sub}</Text>}
+        </Text>
+      )}
       <Text style={styles.status}>{pick.explanation.secondary}</Text>
+    </View>
     </Pressable>
     </Impression>
   );
@@ -105,13 +129,22 @@ function cap(s: string): string {
 
 const styles = StyleSheet.create({
   card: {
-    padding: spacing.md,
     borderRadius: card.radius,
     backgroundColor: colors.faint,
     ...shadow.card,
   },
+  // Clips the rail to the rounded corner. Padding lives here so the rail can
+  // run the card's full height at its edge.
+  cardClip: {
+    borderRadius: card.radius,
+    overflow: "hidden",
+    padding: spacing.md,
+  },
+  rail: { position: "absolute", left: 0, top: 0, bottom: 0, width: 4 },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  eyebrow: { ...type.micro, color: colors.mute },
+  // Pine is the colour of "outside your pattern" across the app: Home's
+  // SOMETHING DIFFERENT eyebrow and the Somewhere new chip wear it too.
+  eyebrow: { ...type.micro, color: categoryColors.pine },
   scoreChip: {
     minWidth: 38, height: 26, borderRadius: 13,
     paddingHorizontal: 8,
@@ -122,6 +155,8 @@ const styles = StyleSheet.create({
 
   name: { fontSize: 20, fontWeight: "800", color: colors.ink, letterSpacing: -0.4, marginTop: 8, lineHeight: 24 },
   sub: { ...type.small, marginTop: 2 },
+  star: { color: categoryColors.saffron, fontWeight: "700" },
+  cuisineText: { fontWeight: "700" },
 
   reasonRow: { marginTop: 10 },
   reason: { fontSize: 14, color: colors.ink, fontWeight: "600", lineHeight: 20 },

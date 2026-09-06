@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, Pressable } from "react-native";
 import { Text } from "./Text";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { colors, spacing, type, card } from "../theme";
+import { colors, categoryColors, spacing, type, card } from "../theme";
 import { buildFeaturedLists, type FeaturedList } from "../lib/featured-lists";
 import type { TasteVector } from "../lib/taste-vector";
 import type { PersonalSignal } from "../lib/personal-signal";
@@ -42,6 +42,10 @@ export function FeaturedLists({ here, city, vector, personal }: Props) {
   return (
     <View style={styles.wrap}>
       <View style={styles.head}>
+        {/* A saffron mark before the eyebrow. The question above carries a
+            terracotta bar; this row is the city's answers to it, and a second
+            warm accent ties the two together without adding a third heading. */}
+        <View style={styles.headDot} />
         <Text style={type.micro}>FEATURED LISTS</Text>
       </View>
       <ScrollView
@@ -72,8 +76,10 @@ export function FeaturedLists({ here, city, vector, personal }: Props) {
               <Text style={styles.title} numberOfLines={2}>{l.title}</Text>
               <Text style={styles.sub}>{l.subtitle}</Text>
               <View style={styles.progressRow}>
+                {/* The count is the fact; the words around it are grammar. It
+                    goes full white and heavy, the sentence stays a step back. */}
                 <Text style={styles.progress}>
-                  You've been to {l.visitedCount} of {l.totalCount}
+                  You've been to <Text style={styles.progressCount}>{l.visitedCount}</Text> of {l.totalCount}
                 </Text>
               </View>
             </View>
@@ -89,7 +95,8 @@ const CARD_H = 170;
 
 const styles = StyleSheet.create({
   wrap: { marginTop: spacing.lg },
-  head: { paddingHorizontal: 0, marginBottom: 10 },
+  head: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 10 },
+  headDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: categoryColors.saffron },
   scroll: { gap: 12, paddingRight: spacing.lg },
 
   card: {
@@ -114,4 +121,5 @@ const styles = StyleSheet.create({
   sub: { color: "rgba(255,255,255,0.72)", fontSize: 12, fontWeight: "600" },
   progressRow: { marginTop: 8 },
   progress: { color: "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: "700" },
+  progressCount: { color: "#fff", fontWeight: "800", fontSize: 13 },
 });

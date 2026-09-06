@@ -23,8 +23,10 @@ import { Text } from "../../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Spacer } from "../../components/Button";
-import { Avatar } from "../../components/Avatar";
-import { colors, spacing, type } from "../../theme";
+import { FeedAvatar } from "../../components/FeedAvatar";
+import { cuisineHue } from "../../components/PlaceArt";
+import { FONT_CAP } from "../../lib/a11y";
+import { colors, categoryColors, radius, shadow, spacing, type } from "../../theme";
 import { listFeed, toggleLike, type FeedEvent } from "../../lib/feed";
 import { loadView } from "../../lib/load-state";
 import { LoadError } from "../../components/LoadError";
@@ -179,7 +181,13 @@ export default function FeedTab() {
 
         {sections.map((section) => (
           <View key={section.title}>
-            <Text style={styles.dayHeader}>{section.title}</Text>
+            {/* A saffron dot in front of each day. The headers are the only
+                thing between one white card and the next, and grey uppercase
+                alone disappears against the grey page. */}
+            <View style={styles.dayHeader}>
+              <View style={styles.dayDot} accessibilityElementsHidden importantForAccessibility="no" />
+              <Text style={styles.dayHeaderText}>{section.title}</Text>
+            </View>
             {section.data.map((ev) => (
               <FeedRow
                 key={ev.id}
@@ -253,14 +261,26 @@ function FeedRow({
     ]);
   }
 
+  // A visit card wears its place's cuisine hue on a rail down the left edge,
+  // the same hue that place has on Home and Discover. The restaurant row is
+  // the live classification; the payload's cuisine is the snapshot the post
+  // was written with, kept as the fallback for posts whose row is gone.
+  const hue = event.kind === "visit_logged" ? visitHue(event) : null;
+
   return (
+    // Two layers on purpose. The rail has to be clipped to the card's rounded
+    // corners, which needs overflow hidden, and on iOS overflow hidden on the
+    // view that carries the shadow clips the shadow too. So the outer view
+    // owns the shadow and the inner one owns the clipping.
     <View style={styles.card}>
+    <View style={styles.cardClip}>
+      {hue && <View style={[styles.rail, { backgroundColor: hue }]} />}
       <View style={styles.row}>
         <Pressable
           style={styles.rowMain}
           onPress={() => event.user_id && router.push(`/profile/${event.user_id}`)}
         >
-          <Avatar uri={event.user?.avatar_url} name={event.user?.display_name} size={40} />
+          <FeedAvatar uri={event.user?.avatar_url} name={event.user?.display_name} size={40} />
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{name}</Text>
             <Text style={styles.when}>{when}</Text>
@@ -274,7 +294,7 @@ function FeedRow({
       </View>
 
       {event.kind === "visit_logged"
-        ? <VisitCard event={event} isSelf={isSelf} graph={graph} />
+        ? <VisitCard event={event} isSelf={isSelf} graph={graph} hue={hue ?? colors.ink} />
         : <FeedBody event={event} />}
 
       <View style={styles.actions}>
@@ -291,7 +311,17 @@ function FeedRow({
         )}
       </View>
     </View>
+    </View>
   );
+}
+
+/** The hue a visit post wears: the live restaurant row's cuisine first, the
+ *  payload's snapshot second, both seeded by the place id so a place with no
+ *  known cuisine still gets one stable colour. */
+function visitHue(event: FeedEvent): string {
+  const p = event.payload as { cuisine: string | null; google_place_id?: string };
+  const placeId = event.restaurant?.google_place_id ?? p.google_place_id ?? "";
+  return cuisineHue(event.restaurant?.cuisine_type ?? p.cuisine, placeId);
 }
 
 // ----------------------------------------------------------------------------
@@ -301,7 +331,7 @@ function FeedRow({
 // three stats: their nth time here, your match with the place, and whether
 // you have been. The last two are about the reader, which is the whole
 // difference between a feed people scroll and one they read.
-function VisitCard({ event, isSelf, graph }: { event: FeedEvent; isSelf: boolean; graph: TasteGraph | null }) {
+function VisitCard({ event, isSelf, graph, hue }: { event: FeedEvent; isSelf: boolean; graph: TasteGraph | null; hue: string }) {
   const router = useRouter();
   const p = event.payload as { restaurant_name: string; cuisine: string | null; neighborhood: string | null; google_place_id?: string };
   const placeId = event.restaurant?.google_place_id ?? p.google_place_id ?? null;
@@ -309,7 +339,13 @@ function VisitCard({ event, isSelf, graph }: { event: FeedEvent; isSelf: boolean
   const nth = ordinalLabel(event.authorVisitOrdinal);
   const been = youveBeenLabel(event.viewerVisitCount, isSelf);
   const meal = mealLine(event.mealType, event.visitedAt);
-  const chips = [p.cuisine ? prettyCuisine(p.cuisine) : null, p.neighborhood, meal].filter(Boolean) as string[];
+  // The cuisine is the one word on this line that carries colour, so it
+  // leaves the joined string and becomes a pill; neighborhood and meal stay
+  // muted text beside it.
+  const subline = [p.neighborhood, meal].filter(Boolean).join("  ·  ");
+  // Green means "you have a history here", grey means you do not. The label
+  // already says which; the colour lets you read it from across the row.
+  const beenColor = (event.viewerVisitCount ?? 0) > 0 ? categoryColors.pine : colors.mute;
 
   return (
     <View>
@@ -319,8 +355,17 @@ function VisitCard({ event, isSelf, graph }: { event: FeedEvent; isSelf: boolean
         accessibilityRole={placeId ? "button" : undefined}
       >
         <Text style={styles.place}>{p.restaurant_name}</Text>
-        {chips.length > 0 && (
-          <Text style={styles.chips}>{chips.join("  ·  ")}</Text>
+        {(p.cuisine || subline) && (
+          <View style={styles.chipLine}>
+            {p.cuisine && (
+              <View style={[styles.cuisinePill, { backgroundColor: hue + "1F" }]}>
+                <Text style={[styles.cuisinePillText, { color: hue }]} maxFontSizeMultiplier={FONT_CAP.chrome}>
+                  {prettyCuisine(p.cuisine)}
+                </Text>
+              </View>
+            )}
+            {!!subline && <Text style={styles.chips}>{subline}</Text>}
+          </View>
         )}
       </Pressable>
 
@@ -331,7 +376,7 @@ function VisitCard({ event, isSelf, graph }: { event: FeedEvent; isSelf: boolean
       <View style={styles.stats}>
         {nth && (
           <View style={styles.stat}>
-            <Text style={styles.statV}>{nth}</Text>
+            <Text style={[styles.statV, styles.statOrdinal]}>{nth}</Text>
             <Text style={styles.statL}>for them</Text>
           </View>
         )}
@@ -346,7 +391,7 @@ function VisitCard({ event, isSelf, graph }: { event: FeedEvent; isSelf: boolean
         )}
         {been && (
           <View style={styles.stat}>
-            <Text style={styles.statV} numberOfLines={1}>{been}</Text>
+            <Text style={[styles.statV, { color: beenColor }]} numberOfLines={1}>{been}</Text>
             <Text style={styles.statL}>you</Text>
           </View>
         )}
@@ -387,7 +432,10 @@ function FeedBody({ event }: { event: FeedEvent }) {
     };
     return (
       <View style={styles.wrappedCard}>
-        <Text style={styles.wrappedEyebrow}>WEEKLY WRAPPED</Text>
+        <View style={styles.wrappedEyebrowRow}>
+          <View style={styles.dayDot} accessibilityElementsHidden importantForAccessibility="no" />
+          <Text style={styles.wrappedEyebrow}>WEEKLY WRAPPED</Text>
+        </View>
         <Text style={styles.wrappedPersona}>{p.persona_label}</Text>
         <Text style={styles.wrappedTagline}>"{p.tagline}"</Text>
         <View style={styles.wrappedStats}>
@@ -481,9 +529,12 @@ const styles = StyleSheet.create({
   },
   friendsBtnText: { fontSize: 13, fontWeight: "700", color: colors.ink },
   center: { padding: 60, alignItems: "center" },
+  // The empty state is a card like any other: white on the grey page, no
+  // hairline. Paper-on-paper with a border was the look being replaced.
   empty: {
-    padding: spacing.lg, borderRadius: 18,
-    borderWidth: 1, borderColor: colors.line,
+    padding: spacing.lg, borderRadius: radius.md,
+    backgroundColor: colors.faint,
+    ...shadow.card,
   },
   emptyCta: {
     alignSelf: "flex-start",
@@ -492,28 +543,33 @@ const styles = StyleSheet.create({
   },
   emptyCtaText: { color: "#fff", fontWeight: "700", fontSize: 14 },
 
+  // White card on the grey page, carried by shadow rather than a border. The
+  // cards used to be paper on paper with a hairline, which is why the feed
+  // read as one long grey column instead of a stack of posts. Padding lives
+  // on cardClip so the rail can run the card's full height at its edge.
   card: {
     marginBottom: 14,
-    padding: spacing.md,
-    borderRadius: 18,
-    backgroundColor: colors.paper,
-    borderWidth: 1, borderColor: colors.line,
+    borderRadius: radius.md,
+    backgroundColor: colors.faint,
+    ...shadow.card,
   },
+  cardClip: {
+    borderRadius: radius.md,
+    overflow: "hidden",
+    padding: spacing.md,
+  },
+  rail: { position: "absolute", left: 0, top: 0, bottom: 0, width: 4 },
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
   rowMain: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 },
   menuBtn: { paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start" },
   menuDots: { color: colors.mute, fontSize: 16, fontWeight: "800", letterSpacing: 1 },
-  avatar: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: colors.red,
-    alignItems: "center", justifyContent: "center",
-  },
-  avatarText: { color: "#fff", fontSize: 16, fontWeight: "800" },
   name: { fontSize: 15, fontWeight: "700", color: colors.ink },
   when: { ...type.small, marginTop: 2 },
 
   bodyText: { marginTop: 12, fontSize: 16, color: colors.ink, lineHeight: 22 },
-  bodyAccent: { color: colors.red, fontWeight: "700" },
+  // redText, not red: this is body-size text on white, and the brighter
+  // brand red does not clear AA at that size.
+  bodyAccent: { color: colors.redText, fontWeight: "700" },
 
   wrappedCard: {
     marginTop: 12,
@@ -521,6 +577,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: colors.ink,
   },
+  wrappedEyebrowRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   wrappedEyebrow: { color: "rgba(255,255,255,0.6)", fontSize: 10, fontWeight: "700", letterSpacing: 1.5 },
   wrappedPersona: { color: colors.red, fontSize: 22, fontWeight: "800", letterSpacing: -0.5, marginTop: 4 },
   wrappedTagline: { color: "rgba(255,255,255,0.85)", fontSize: 13, fontStyle: "italic", marginTop: 2 },
@@ -534,29 +591,45 @@ const styles = StyleSheet.create({
   wrappedStatL: { color: "rgba(255,255,255,0.55)", fontSize: 10, fontWeight: "600", marginTop: 2 },
 
   summary: { ...type.small, marginBottom: 6 },
-  dayHeader: { ...type.micro, marginTop: 10, marginBottom: 10 },
+  dayHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10, marginBottom: 10 },
+  dayHeaderText: { ...type.micro, flexShrink: 1 },
+  dayDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: categoryColors.saffron },
 
   place: { marginTop: 12, fontSize: 20, fontWeight: "800", color: colors.ink, letterSpacing: -0.4 },
-  chips: { ...type.small, marginTop: 4 },
-  photo: { marginTop: 12, width: "100%", aspectRatio: 16 / 10, borderRadius: 12, backgroundColor: colors.faint },
+  // Wraps, so a long neighborhood at a large text size drops under the pill
+  // instead of squeezing it.
+  chipLine: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 6 },
+  cuisinePill: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999 },
+  cuisinePillText: { fontSize: 12, fontWeight: "700" },
+  chips: { ...type.small, flexShrink: 1 },
+  photo: { marginTop: 12, width: "100%", aspectRatio: 16 / 10, borderRadius: 12, backgroundColor: colors.wash },
   stats: { flexDirection: "row", gap: 8, marginTop: 14 },
+  // Wash on the white card, with the border painted the same wash so it
+  // costs no layout. The match tile overrides both with its score tint and
+  // colour, which is the one tile that earns a visible edge.
   stat: {
     flex: 1, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 12,
-    backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
+    backgroundColor: colors.wash, borderWidth: 1, borderColor: colors.wash,
   },
   statV: { fontSize: 15, fontWeight: "800", color: colors.ink },
+  statOrdinal: { color: categoryColors.plum },
   statL: { ...type.micro, marginTop: 3, fontSize: 10 },
 
   actions: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 8 },
+  // Controls on a white card fill with wash; paper here was a grey blot on
+  // white. Active is the soft red tint with the darker red text that clears
+  // AA at 13px, not the brand red, which is for the Save CTA beside it.
   kudos: {
     paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999,
-    borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper,
+    borderWidth: 1, borderColor: colors.wash, backgroundColor: colors.wash,
   },
-  kudosActive: { borderColor: colors.red, backgroundColor: colors.redTint },
+  kudosActive: { borderColor: colors.redTintBorder, backgroundColor: colors.redTint },
   kudosText: { fontSize: 13, fontWeight: "700", color: colors.ink },
-  kudosTextActive: { color: colors.red },
+  kudosTextActive: { color: colors.redText },
   save: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: colors.red },
-  saveDone: { backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line },
+  // Wash, not faint: a saved Save on a white card was white on white and
+  // read as an outline only.
+  saveDone: { backgroundColor: colors.wash, borderWidth: 1, borderColor: colors.wash },
   saveText: { fontSize: 13, fontWeight: "700", color: "#fff" },
   saveTextDone: { color: colors.mute },
 });
