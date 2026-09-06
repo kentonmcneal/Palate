@@ -20,6 +20,8 @@ import { getCachedNearby, setCachedNearby } from "./nearby-cache";
 import { confidenceScore, confidenceBand, type ConfidenceBand } from "./passive-confidence";
 import { venueOpenAt } from "./opening-hours";
 import { recordMiss } from "./passive-misses";
+import { restaurantsNear } from "./cuisine-catalogue";
+import { track } from "./analytics";
 
 // Qualifying thresholds (spec Phase 3).
 // Five minutes. A sit-down meal and a Shake Shack counter order are both real
@@ -406,6 +408,24 @@ export function rankCandidates(
 }
 
 /** Resolve a qualified raw visit to its top candidate restaurants (cache-first). */
+/**
+ * Restaurants we already know about within the resolve radius. Free: one
+ * bounding-box scan over rows we own (migration 0109).
+ *
+ * Deliberately uses the SAME radius as the Google call it replaces, so this
+ * is a cheaper source for an identical question rather than a looser one. A
+ * wider search here would resolve stops to plausible neighbours and quietly
+ * degrade accuracy to save money, which is the wrong trade.
+ */
+async function catalogueCandidates(raw: RawVisit, radius: number): Promise<Restaurant[]> {
+  try {
+    const rows = await restaurantsNear({ lat: raw.lat, lng: raw.lng }, { radiusM: radius, limit: 20 });
+    return rows.filter(isLoggableVenue);
+  } catch {
+    return [];
+  }
+}
+
 export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null> {
   const radius = resolveRadius(raw);
   const cached = await getCachedNearby(raw.lat, raw.lng, radius);
@@ -414,6 +434,25 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
   if (cached) {
     places = cached;
     cacheHit = true;
+  } else if ((await catalogueCandidates(raw, radius)).length > 0) {
+    // OUR OWN CATALOGUE, BEFORE GOOGLE.
+    //
+    // This path is the largest per-user cost in the product. Every stop that
+    // is not already in the local cache used to buy a billable Nearby Search,
+    // and it is the one Google call that scales linearly with users: more
+    // people eating more meals is more paid lookups, forever.
+    //
+    // But we already hold the answer most of the time. `restaurants` has
+    // 1,620 rows, 200 of them inside 8km of Memphis, and a stop is by
+    // definition somewhere a person actually went — which for a returning
+    // user is overwhelmingly somewhere we, or another user, have already
+    // resolved once. Asking Postgres first is free.
+    //
+    // Same question, same radius, cheaper source. Google is still there for
+    // the genuinely new place, which is the case worth paying for.
+    places = await catalogueCandidates(raw, radius);
+    cacheHit = true;
+    void track("visit_resolved_from_catalogue", { count: places.length });
   } else {
     const res = await nearbyRestaurantsDetailed(raw.lat, raw.lng, radius);
     places = res.places;
