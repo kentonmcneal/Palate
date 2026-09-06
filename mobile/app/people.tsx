@@ -5,7 +5,6 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
-  Linking,
   RefreshControl,
 } from "react-native";
 import { Text } from "../components/Text";
@@ -15,7 +14,7 @@ import { Avatar } from "../components/Avatar";
 import { loadCompatiblePeople, compatibilityLine, type CompatiblePerson } from "../lib/social";
 import { colors, spacing, type, card, shadow } from "../theme";
 import {
-  browseProfiles, instagramUrl, tiktokUrl,
+  browseProfiles,
   needsDiscoveryPrompt, markDiscoveryPrompted,
   type PublicProfile,
 } from "../lib/social";
@@ -23,6 +22,8 @@ import { setProfileVisibility } from "../lib/profile";
 import { loadPalateMatches } from "../lib/palate/pairCompatibility";
 import type { PalateMatch } from "../lib/recommendation/palate-match";
 import { triggerHapticSelection } from "../lib/haptics";
+import { TextInput } from "../components/TextInput";
+import { searchUsers, followUser, unfollowUser, listFollowing, type FriendProfile } from "../lib/friends";
 import { captureError } from "../lib/observability";
 
 // ============================================================================
@@ -48,12 +49,23 @@ export default function PeopleScreen() {
   // They are asked once rather than switched for them — a default governs
   // people who haven't decided, not people who have.
   const [askDiscovery, setAskDiscovery] = useState(false);
+  // Search folded in from the old Friends screen's "Find" tab. It searches the
+  // same directory the grid shows, so a name you can see you can also type.
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<FriendProfile[] | null>(null);
+  // Who you already follow, so a tile can say "Following" instead of offering
+  // to do it again.
+  const [following, setFollowing] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       setError(null);
       const rows = await browseProfiles(50, 0);
       setPeople(rows);
+      void listFollowing()
+        .then((f) => setFollowing(new Set(f.map((x) => x.friend.id))))
+        .catch(() => {});
 
       // Ranked across everybody, server-side, in one call. A directory without
       // it is still a directory, so a failure here never fails the screen.
@@ -80,6 +92,22 @@ export default function PeopleScreen() {
   useEffect(() => {
     void needsDiscoveryPrompt().then(setAskDiscovery).catch(() => {});
   }, []);
+
+  // Following from the grid, without leaving it. The server is the authority;
+  // the local set is only so the tile stops offering what you just did.
+  async function toggleFollow(id: string) {
+    setBusy(id);
+    try {
+      if (following.has(id)) {
+        await unfollowUser(id);
+        setFollowing((prev) => { const n = new Set(prev); n.delete(id); return n; });
+      } else {
+        await followUser(id);
+        setFollowing((prev) => new Set(prev).add(id));
+      }
+    } catch { /* the tile stays as it was */ }
+    finally { setBusy(null); }
+  }
 
   const sorted = people
     ? [...people].sort((a, b) => {
@@ -115,6 +143,44 @@ export default function PeopleScreen() {
         <Text style={styles.lead}>
           Sorted by how much your palate overlaps with theirs.
         </Text>
+
+        <View style={styles.searchRow}>
+          <TextInput
+            value={q}
+            onChangeText={async (t: string) => {
+              setQ(t);
+              if (t.trim().length < 2) { setHits(null); return; }
+              try { setHits(await searchUsers(t)); } catch { setHits([]); }
+            }}
+            placeholder="Search by name, handle or email"
+            placeholderTextColor={colors.mute}
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={styles.searchInput}
+          />
+        </View>
+
+        {hits !== null && (
+          <View style={styles.hits}>
+            {hits.length === 0 && <Text style={styles.emptyLine}>Nobody by that name.</Text>}
+            {hits.map((h) => (
+              <Pressable key={h.id} style={styles.hitRow} onPress={() => router.push(`/profile/${h.id}` as never)}>
+                <Avatar uri={h.avatar_url} name={h.display_name} size={38} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.compatName} numberOfLines={1}>
+                    {h.display_name || (h.username ? `@${h.username}` : "Someone")}
+                  </Text>
+                  {!!h.username && !!h.display_name && <Text style={styles.handle}>@{h.username}</Text>}
+                </View>
+                <FollowPill
+                  following={following.has(h.id)}
+                  busy={busy === h.id}
+                  onPress={() => void toggleFollow(h.id)}
+                />
+              </Pressable>
+            ))}
+          </View>
+        )}
 
         {/* Ranked across everybody, not just friends, so a new tester can find
             somebody worth following before they have any. Each row says what it
@@ -190,69 +256,95 @@ export default function PeopleScreen() {
           </View>
         )}
 
-        {sorted.map((p) => (
-          <PersonRow key={p.id} person={p} match={matches[p.id]} onOpen={() => {
-            void triggerHapticSelection();
-            router.push(`/profile/${p.id}` as never);
-          }} />
-        ))}
+        {/* Explore, not a phone book. Faces in a grid read as a room full of
+            people; a stacked list of bios reads as admin. The match percentage
+            rides on the tile because it is the reason to tap. */}
+        <View style={styles.grid}>
+          {sorted.map((p) => (
+            <PersonTile
+              key={p.id}
+              person={p}
+              match={matches[p.id]}
+              following={following.has(p.id)}
+              busy={busy === p.id}
+              onFollow={() => void toggleFollow(p.id)}
+              onOpen={() => {
+                void triggerHapticSelection();
+                router.push(`/profile/${p.id}` as never);
+              }}
+            />
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function PersonRow({
-  person, match, onOpen,
-}: { person: PublicProfile; match?: PalateMatch; onOpen: () => void }) {
-  const name = person.display_name || person.username || "Someone";
-  const sub = [person.school, person.current_city].filter(Boolean).join(" · ");
-
+function FollowPill({ following, busy, onPress }: { following: boolean; busy: boolean; onPress: () => void }) {
   return (
-    <Pressable style={styles.row} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`${name}. Open profile.`}>
-      <Avatar uri={person.avatar_url} name={person.display_name} email={null} size={52} />
-      <View style={{ flex: 1 }}>
-        <View style={styles.nameRow}>
-          <Text style={styles.name} numberOfLines={1}>{name}</Text>
-          {match?.ready && (
-            <View style={styles.matchChip}>
-              <Text style={styles.matchChipText}>{match.score}%</Text>
-            </View>
-          )}
-        </View>
-        {!!person.username && <Text style={styles.handle}>@{person.username}</Text>}
-        {!!person.bio && <Text style={styles.bio} numberOfLines={2}>{person.bio}</Text>}
-        {!!sub && <Text style={styles.sub} numberOfLines={1}>{sub}</Text>}
+    <Pressable
+      onPress={(e) => { e.stopPropagation(); onPress(); }}
+      disabled={busy}
+      style={[styles.pill, following && styles.pillGhost]}
+      hitSlop={6}
+      accessibilityRole="button"
+    >
+      <Text style={[styles.pillText, following && styles.pillGhostText]}>
+        {busy ? "…" : following ? "Following" : "Follow"}
+      </Text>
+    </Pressable>
+  );
+}
 
-        {(person.instagram_handle || person.tiktok_handle) && (
-          <View style={styles.links}>
-            {!!person.instagram_handle && (
-              <Pressable
-                onPress={(e) => { e.stopPropagation(); void Linking.openURL(instagramUrl(person.instagram_handle!)); }}
-                style={styles.linkChip}
-                accessibilityRole="link"
-                accessibilityLabel={`${name} on Instagram`}
-              >
-                <Text style={styles.linkChipText}>Instagram</Text>
-              </Pressable>
-            )}
-            {!!person.tiktok_handle && (
-              <Pressable
-                onPress={(e) => { e.stopPropagation(); void Linking.openURL(tiktokUrl(person.tiktok_handle!)); }}
-                style={styles.linkChip}
-                accessibilityRole="link"
-                accessibilityLabel={`${name} on TikTok`}
-              >
-                <Text style={styles.linkChipText}>TikTok</Text>
-              </Pressable>
-            )}
-          </View>
-        )}
-      </View>
+function PersonTile({
+  person, match, following, busy, onFollow, onOpen,
+}: {
+  person: PublicProfile; match?: PalateMatch; following: boolean;
+  busy: boolean; onFollow: () => void; onOpen: () => void;
+}) {
+  const name = person.display_name || person.username || "Someone";
+  const where = person.current_city || person.school || null;
+  return (
+    <Pressable style={styles.tile} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`${name}. Open profile.`}>
+      <Avatar uri={person.avatar_url} name={person.display_name} email={null} size={64} />
+      <Text style={styles.tileName} numberOfLines={1}>{name}</Text>
+      {match?.ready ? (
+        <Text style={styles.tileMatch}>{match.score}% match</Text>
+      ) : where ? (
+        <Text style={styles.tileSub} numberOfLines={1}>{where}</Text>
+      ) : (
+        <Text style={styles.tileSub} numberOfLines={1}>
+          {person.username ? `@${person.username}` : " "}
+        </Text>
+      )}
+      <FollowPill following={following} busy={busy} onPress={onFollow} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  searchRow: { marginBottom: spacing.md },
+  searchInput: {
+    borderWidth: 1, borderColor: colors.line, borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 11, fontSize: 15, color: colors.ink,
+    backgroundColor: colors.faint,
+  },
+  hits: { marginBottom: spacing.lg, gap: 4 },
+  hitRow: { flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 8 },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 18 },
+  tile: {
+    width: "31%", alignItems: "center", gap: 5,
+  },
+  tileName: { fontSize: 13, fontWeight: "700", color: colors.ink, textAlign: "center" },
+  tileMatch: { fontSize: 11, fontWeight: "700", color: colors.red },
+  tileSub: { fontSize: 11, fontWeight: "500", color: colors.mute },
+  pill: {
+    marginTop: 2, paddingVertical: 5, paddingHorizontal: 12,
+    borderRadius: 999, backgroundColor: colors.ink,
+  },
+  pillGhost: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.line },
+  pillText: { fontSize: 11, fontWeight: "800", color: "#fff" },
+  pillGhostText: { color: colors.ink },
   compatBlock: {
     marginTop: spacing.md, marginBottom: spacing.lg, padding: spacing.md,
     borderRadius: 18, backgroundColor: colors.faint,
@@ -312,11 +404,6 @@ const styles = StyleSheet.create({
   handle: { ...type.small, marginTop: 1 },
   bio: { ...type.small, color: colors.inkDim, marginTop: 6 },
   sub: { ...type.small, marginTop: 4 },
-  matchChip: {
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
-    backgroundColor: colors.redTint, borderWidth: 1, borderColor: colors.redTintBorder,
-  },
-  matchChipText: { fontSize: 12, fontWeight: "800", color: colors.redText },
   links: { flexDirection: "row", gap: 8, marginTop: 10 },
   linkChip: {
     paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999,

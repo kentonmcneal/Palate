@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { View, StyleSheet, Pressable, Animated, Easing } from "react-native";
 import { Text } from "./Text";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { colors, spacing, type, card, shadow } from "../theme";
 import { getEffectiveLocation } from "../lib/browsing-location";
@@ -16,8 +17,11 @@ import { placeHeat, heatHeadline, crowdSize, type HotPlace } from "../lib/place-
 // version that ships without a native build, on react-native-maps and the
 // Animated API already in the bundle:
 //
-//   * pitched camera with buildings on, which is the 2.5D Apple Maps gives
-//     away for free
+//   * a genuinely pitched camera with buildings on — Apple Maps renders 3D
+//     massing for free, and the map had been asking for it (`pitchEnabled`)
+//     without ever setting a pitch, so it drew flat top-down. It now lifts
+//     from overhead into the tilt once, on first paint, which is the whole
+//     difference between "a map" and "a place"
 //   * each hot place is a soft glow whose size and warmth scale with heat,
 //     breathing on a loop; the top place gets a flame
 //   * the "people" are small dots clustered at the place, one per recent
@@ -99,11 +103,21 @@ export function HypeMap() {
           ref={mapRef}
           provider={PROVIDER_DEFAULT}
           style={StyleSheet.absoluteFill}
-          initialRegion={{
-            latitude: places[0].latitude,
-            longitude: places[0].longitude,
-            latitudeDelta: 0.04,
-            longitudeDelta: 0.04,
+          initialCamera={{
+            center: { latitude: places[0].latitude, longitude: places[0].longitude },
+            // Start flat. The lift into 3D happens in onMapReady, because a
+            // camera that is already tilted reads as a static picture and one
+            // that arrives there reads as a place you are looking down into.
+            pitch: 0,
+            heading: 0,
+            altitude: 2600,
+            zoom: 14.2,
+          }}
+          onMapReady={() => {
+            mapRef.current?.animateCamera(
+              { pitch: 55, heading: 18, altitude: 1500, zoom: 15.4 },
+              { duration: 1400 },
+            );
           }}
           showsBuildings
           showsPointsOfInterests={false}
@@ -128,6 +142,20 @@ export function HypeMap() {
             </Marker>
           ))}
         </MapView>
+        {/* The map used to end in a hard horizontal cut against the card. Two
+            short scrims — paper at the top, paper at the bottom — let it fade
+            into the card instead of being pasted onto it. */}
+        <LinearGradient
+          colors={[colors.paper, "transparent"]}
+          style={[styles.scrim, { top: 0, height: 34 }]}
+          pointerEvents="none"
+        />
+        <LinearGradient
+          colors={["transparent", colors.paper]}
+          style={[styles.scrim, { bottom: 0, height: 44 }]}
+          pointerEvents="none"
+        />
+        <View style={styles.horizon} pointerEvents="none" />
       </View>
       <View style={styles.legend}>
         {places.slice(0, 3).map((p, i) => (
@@ -210,7 +238,14 @@ const styles = StyleSheet.create({
   title: { ...type.subtitle, color: colors.ink },
   sub: { ...type.small, marginTop: 2 },
   link: { fontSize: 13, fontWeight: "700", color: colors.red },
-  mapWrap: { height: HEIGHT, backgroundColor: colors.line },
+  mapWrap: { height: HEIGHT, backgroundColor: colors.line, overflow: "hidden" },
+  scrim: { position: "absolute", left: 0, right: 0 },
+  // A single hairline across the top third, where the pitched camera puts the
+  // horizon. It is the one line that makes the tilt legible as depth.
+  horizon: {
+    position: "absolute", left: 0, right: 0, top: HEIGHT * 0.3, height: 1,
+    backgroundColor: colors.ink, opacity: 0.06,
+  },
   legend: { paddingHorizontal: card.padding, paddingVertical: 8 },
   legendRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 6 },
   legendRank: { width: 16, fontSize: 12, fontWeight: "800", color: colors.mute },
