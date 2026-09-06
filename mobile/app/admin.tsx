@@ -14,6 +14,8 @@ import { useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import { isAdmin, listPendingUsers, setApproval, type PendingUser } from "../lib/waitlist";
 import { observabilityStatus, sendTestEvent } from "../lib/observability";
+import * as Updates from "expo-updates";
+import Constants from "expo-constants";
 import { listFeedback, markFeedbackTriaged, type FeedbackRow } from "../lib/feedback-admin";
 import { loadRecFunnel, summarize, type RecFunnelRow } from "../lib/rec-funnel";
 
@@ -137,6 +139,26 @@ export default function AdminWaitlistScreen() {
                 )}
               </View>
             ))}
+          </View>
+        )}
+
+        {/* Which bundle is actually running.
+            Nothing in the app said this, so "the new screen is not there" and
+            "the update has not arrived yet" looked identical from a phone, and
+            neither the founder nor I could tell them apart. expo-updates
+            downloads on one launch and applies on the NEXT, so a change can be
+            two cold starts away and look like it shipped broken. */}
+        {!loading && allowed && (
+          <View style={[styles.card, { marginBottom: 12 }]}>
+            <Text style={type.subtitle}>This build</Text>
+            <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
+              App {Constants.expoConfig?.version ?? "?"} · runtime {Updates.runtimeVersion ?? "?"} · channel {Updates.channel ?? "none"}
+            </Text>
+            <Text style={[type.small, { marginTop: 4, lineHeight: 20 }]}>
+              {Updates.isEmbeddedLaunch
+                ? "Running the bundle that shipped inside the app. No update has been applied yet."
+                : `Update ${(Updates.updateId ?? "?").slice(0, 8)}${Updates.createdAt ? `, published ${new Date(Updates.createdAt).toLocaleString()}` : ""}`}
+            </Text>
           </View>
         )}
 
