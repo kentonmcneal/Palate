@@ -32,8 +32,19 @@ export type PersonalSignal = {
   feedbackByPlaceId: FeedbackLedger;
   /** google_place_id → how the person rated their own visits there */
   placeSentimentByPlaceId: Map<string, { loved: number; ok: number; not_for_me: number }>;
-  /** restaurant_id → { loved, ok, not_for_me } from menu_item_ratings */
+  /** restaurant_id → { loved, ok, not_for_me } from menu_item_ratings.
+   *  Kept for the identity/insight readers. NOT read by the scorer: it has
+   *  google_place_id in hand and not restaurants.id, which is exactly why the
+   *  map below exists. */
   itemSentimentByRestaurantId: Map<string, { loved: number; ok: number; not_for_me: number }>;
+  /** google_place_id → { loved, ok, not_for_me } from menu_item_ratings.
+   *
+   *  Added 2026-09-07. Dish ratings reached the cuisine map and the
+   *  restaurant_id map, and the scorer reads neither: it works in
+   *  google_place_id. So rating a dish "loved" at a restaurant improved every
+   *  OTHER place of that cuisine and did nothing for the one whose food you
+   *  had just praised. */
+  itemSentimentByPlaceId: Map<string, { loved: number; ok: number; not_for_me: number }>;
   /** cuisine_type → { loved, not_for_me } aggregated across all rated items */
   itemSentimentByCuisine: Map<string, { loved: number; not_for_me: number }>;
   /** google_place_id → number of friends who've visited */
@@ -48,6 +59,7 @@ const EMPTY: PersonalSignal = {
   feedbackByPlaceId: EMPTY_FEEDBACK,
   placeSentimentByPlaceId: new Map(),
   itemSentimentByRestaurantId: new Map(),
+  itemSentimentByPlaceId: new Map(),
   itemSentimentByCuisine: new Map(),
   friendVisitsByPlaceId: new Map(),
   dislikes: EMPTY_DISLIKES,
@@ -119,7 +131,7 @@ export async function loadPersonalSignal(): Promise<PersonalSignal> {
           : Promise.resolve({ data: [] as FeedbackRow[] }),
         supabase
           .from("menu_item_ratings")
-          .select("rating, item:menu_items(restaurant_id, restaurant:restaurants(cuisine_type))")
+          .select("rating, item:menu_items(restaurant_id, restaurant:restaurants(cuisine_type, google_place_id))")
           .eq("user_id", user.id),
         // The people you follow, so "somewhere your people go" can be scoped
         // to your circle. Following is the right edge here rather than mutual
@@ -138,6 +150,7 @@ export async function loadPersonalSignal(): Promise<PersonalSignal> {
         feedbackByPlaceId: EMPTY_FEEDBACK,
         placeSentimentByPlaceId: new Map(),
         itemSentimentByRestaurantId: new Map(),
+  itemSentimentByPlaceId: new Map(),
         itemSentimentByCuisine: new Map(),
         friendVisitsByPlaceId: new Map(),
         dislikes: EMPTY_DISLIKES,
@@ -220,8 +233,18 @@ export async function loadPersonalSignal(): Promise<PersonalSignal> {
           else if (row.rating === "not_for_me") cur.not_for_me++;
           sig.itemSentimentByRestaurantId.set(restId, cur);
         }
-        // Cross-learning to cuisine: only loved/not_for_me carry signal (ok ≈ noise).
         const restWrap = Array.isArray(item.restaurant) ? item.restaurant[0] : item.restaurant;
+        // The same counts keyed the way the scorer can actually look them up.
+        const placeId: string | null = restWrap?.google_place_id ?? null;
+        if (placeId) {
+          const cur = sig.itemSentimentByPlaceId.get(placeId)
+            ?? { loved: 0, ok: 0, not_for_me: 0 };
+          if (row.rating === "loved") cur.loved++;
+          else if (row.rating === "ok") cur.ok++;
+          else if (row.rating === "not_for_me") cur.not_for_me++;
+          sig.itemSentimentByPlaceId.set(placeId, cur);
+        }
+        // Cross-learning to cuisine: only loved/not_for_me carry signal (ok ≈ noise).
         const cuisine: string | null = restWrap?.cuisine_type ?? null;
         if (cuisine && (row.rating === "loved" || row.rating === "not_for_me")) {
           const cur = sig.itemSentimentByCuisine.get(cuisine) ?? { loved: 0, not_for_me: 0 };

@@ -50,6 +50,7 @@ export function founderGraph(): TasteGraph {
     hours: new Array(24).fill(0),
     restaurantVisits: {},
     itemSentimentByRestaurant: new Map(),
+    itemSentimentByPlace: new Map(),
     itemSentimentByCuisine: new Map(),
     friendVisitsByPlace: new Map(),
     placeSentiment: new Map(),

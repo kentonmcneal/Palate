@@ -36,6 +36,10 @@ export type TasteGraph = {
   restaurantVisits: Record<string, number>;
   // Item-level sentiment per restaurant (loved/ok/not_for_me)
   itemSentimentByRestaurant: Map<string, { loved: number; ok: number; not_for_me: number }>;
+  /** google_place_id → dish-level sentiment, the key the scorer can use.
+   *  See personal-signal.ts: the restaurant_id map above was unreadable by
+   *  compatibility.ts, so a loved dish never helped its own restaurant. */
+  itemSentimentByPlace: Map<string, { loved: number; ok: number; not_for_me: number }>;
   // Item-level sentiment aggregated to cuisine for cross-learning
   itemSentimentByCuisine: Map<string, { loved: number; not_for_me: number }>;
   // Friend visits
@@ -97,6 +101,7 @@ export function assembleGraph(vector: TasteVector | null, personal: PersonalSign
     hours: v.hourly,
     restaurantVisits: visitsByPlace,
     itemSentimentByRestaurant: p.itemSentimentByRestaurantId,
+    itemSentimentByPlace: p.itemSentimentByPlaceId,
     itemSentimentByCuisine: p.itemSentimentByCuisine,
     friendVisitsByPlace: p.friendVisitsByPlaceId,
     placeSentiment: p.placeSentimentByPlaceId,
@@ -167,6 +172,7 @@ function emptyPersonal(): PersonalSignal {
     visitsByPlaceId: new Map(),
     visitsByRestaurantId: new Map(),
     itemSentimentByRestaurantId: new Map(),
+    itemSentimentByPlaceId: new Map(),
     itemSentimentByCuisine: new Map(),
     placeSentimentByPlaceId: new Map(),
     friendVisitsByPlaceId: new Map(),

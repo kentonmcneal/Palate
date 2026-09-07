@@ -30,6 +30,8 @@ import { LocationPill } from "../../components/LocationPill";
 import { computeTasteVector, type TasteVector } from "../../lib/taste-vector";
 import { distanceKm, formatDistance } from "../../lib/match-score";
 import { newRequestId } from "../../lib/recommendation-events";
+import { currentSessionId } from "../../lib/recommendation-events";
+import { trackSlate } from "../../lib/recommendation/slate";
 import { ImpressionScrollView } from "../../components/Impressions";
 import { filterRecommendable } from "../../lib/recommendation/eligibility";
 import { isStretch } from "../../lib/recommendation";
@@ -381,6 +383,38 @@ export default function DiscoverTab() {
     () => mostCompatibleSorted.slice(0, TOP_PER_TAB),
     [mostCompatibleSorted],
   );
+
+  // One slate per ranking pass, carrying the candidates that were ranked and
+  // not shown. Home logs the same thing; Discover matters separately because
+  // it orders on compatibilityScore by design, so its winners and losers are
+  // a different question from Home's.
+  //
+  // Guarded by request id rather than fired from the memo above. The list
+  // recomputes whenever a mood or a photo tick changes, and a slate per
+  // re-render would be both wrong and expensive: a slate describes a RANKING,
+  // and the ranking only changes when load() mints a new request id.
+  const slateLoggedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const rid = requestIdRef.current;
+    if (!rid || slateLoggedFor.current === rid) return;
+    if (mostCompatibleSorted.length === 0) return;
+    slateLoggedFor.current = rid;
+    trackSlate({
+      requestId: rid,
+      surface: "discover_for_you",
+      sessionId: currentSessionId(),
+      ranked: mostCompatibleSorted.map((r) => ({
+        google_place_id: r.google_place_id,
+        matchScore: r.score?.compatibilityScore ?? null,
+        // Discover ranks on compatibility, so there is no separate finalScore
+        // to record. Null rather than a copy: two identical columns would read
+        // as agreement between two scorers rather than the absence of one.
+        finalScore: null,
+      })),
+      shownIds: new Set(mostCompatibleList.map((r) => r.google_place_id)),
+      poolSize: mostCompatibleSorted.length,
+    });
+  }, [mostCompatibleSorted, mostCompatibleList]);
 
   // A mood narrows the already-ranked list; it never re-scores. The candidates
   // carry cuisine_type and format_class, and applyMood reads `cuisine`, so the

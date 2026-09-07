@@ -329,6 +329,21 @@ function computePersonalDelta(g: TasteGraph, r: RestaurantInput): number {
   const ps = g.placeSentiment.get(r.google_place_id);
   if (ps) d += clamp(6 * (ps.loved - ps.not_for_me), -12, 6);
 
+  // Dishes rated at THIS place. Until 2026-09-07 a loved dish reached the
+  // cuisine map and a restaurant_id map the scorer cannot read, so praising
+  // the food at one restaurant improved every other restaurant of that
+  // cuisine and did nothing at all for the kitchen that cooked it.
+  //
+  // Half the weight of a visit rating, deliberately. "I loved this dish" is a
+  // narrower claim than "I loved this place", and somebody who rates four
+  // dishes in one sitting has not said the restaurant is four times better.
+  // Optional read: a graph assembled by older code, or by a test fixture
+  // written before this field existed, must rank without this signal rather
+  // than throw. A missing map is one lost nudge; an exception here is a blank
+  // Home screen.
+  const isn = g.itemSentimentByPlace?.get(r.google_place_id);
+  if (isn) d += clamp(3 * (isn.loved - isn.not_for_me), -6, 3);
+
   // Implicit feedback (clicks, passes, directions) is NOT here on purpose.
   // It lives in scoring.ts feedbackAdjustment, changes order, and never the
   // number a person reads. See recommendation/feedback.ts.
