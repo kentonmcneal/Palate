@@ -204,63 +204,32 @@ async function loadDeviceLib(): Promise<typeof import("expo-device") | null> {
 }
 
 /**
- * Re-engagement nudge. Schedules a one-shot local notification for this
- * evening if the user hasn't logged today, with streak-aware copy so an
- * at-risk streak gets a sharper message. Safe to call on every Home load:
- * it cancels any prior daily reminder first so we never stack.
+ * Cancel the nightly streak nudge, on every Home load, forever.
  *
- * Only schedules for users who have ALREADY granted notification permission —
- * it never prompts. (The Sunday-Wrapped opt-in in Settings is where users
- * grant permission; this rides on that grant.)
+ * This used to schedule an 8pm local notification reading "Your N-day streak
+ * is on the line. Log today's meal before midnight to keep it alive." The
+ * founder received one and asked for it to go, and he is right twice over.
+ *
+ * It is the wrong thing to say. Palate's promise is that it notices where you
+ * ate so you do not have to think about it, and a notification threatening to
+ * take something away if you do not open the app is the opposite promise: it
+ * makes the app the thing you owe, rather than the thing that helps. The
+ * streak chip already came off Home for the same reason.
+ *
+ * It was also redundant. It fired at 8pm, an hour before the passive digest,
+ * which asks a strictly better question because it names the places you were
+ * actually at instead of asking cold whether you ate.
+ *
+ * This function stays rather than simply deleting the scheduler, because
+ * every device that ran the old code has one of these already sitting in
+ * iOS's queue, and deleting the code that creates them does not remove the
+ * ones already created. It is cheap and idempotent, so it can keep running.
  */
-export async function refreshDailyReminder(opts: { loggedToday: boolean; streak: number; visitCount?: number }): Promise<void> {
+export async function cancelStreakReminder(): Promise<void> {
   const Notifications = await loadNotificationsLib();
   if (!Notifications) return;
-  // Nothing to nudge about. A brand-new account was getting "every visit
-  // sharpens your Wrapped" at 20:00 nightly before it had a visit.
-  if (opts.visitCount === 0) {
-    await cancelScheduledOfKind(Notifications, "type", "streak_reminder");
-    return;
-  }
-
-  const perm = await Notifications.getPermissionsAsync();
-  if (!perm.granted) return;
-
-  // Clear every prior daily reminder, by kind rather than by a remembered
-  // id, so overlapping runs cannot leave orphans (lib/notification-dedupe.ts).
   await cancelScheduledOfKind(Notifications, "type", "streak_reminder");
   await AsyncStorage.removeItem(DAILY_REMINDER_KEY).catch(() => {});
-
-  // Already logged today → nothing to nudge. Tomorrow's Home load reschedules.
-  if (opts.loggedToday) return;
-
-  // Fire tonight at 8:00pm local — only if that's still comfortably in the
-  // future (no midnight buzzing; if it's already past, the next day handles it).
-  const fire = new Date();
-  fire.setHours(20, 0, 0, 0);
-  if (fire.getTime() <= Date.now() + 60_000) return;
-
-  const { title, body } = streakReminderCopy(opts.streak);
-  const id = await Notifications.scheduleNotificationAsync({
-    content: { title, body, sound: "default", data: { type: "streak_reminder" } },
-    // SDK 57 requires a typed trigger; a bare Date throws "invalid trigger"
-    // (which was rejecting on every Home load and, pre-fix, crashing new accounts).
-    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: fire },
-  });
-  await AsyncStorage.setItem(DAILY_REMINDER_KEY, id);
-}
-
-function streakReminderCopy(streak: number): { title: string; body: string } {
-  if (streak >= 1) {
-    return {
-      title: `🔥 Your ${streak}-day streak is on the line`,
-      body: "Log today's meal before midnight to keep it alive.",
-    };
-  }
-  return {
-    title: "What did you eat today?",
-    body: "Ten seconds to log it. Every visit sharpens your Wrapped.",
-  };
 }
 
 export async function disableSundayWrappedReminder(): Promise<void> {

@@ -14,7 +14,7 @@ import { recentlyPrompted, recentVisits, type Visit } from "../../lib/visits";
 import { openInAppleMaps } from "../../lib/maps";
 import { AnimatedNumber } from "../../components/AnimatedNumber";
 import { computeStreak, type StreakInfo } from "../../lib/streak";
-import { refreshDailyReminder, notificationsGranted } from "../../lib/notifications";
+import { cancelStreakReminder, notificationsGranted } from "../../lib/notifications";
 import { refreshWrappedTease } from "../../lib/wrapped-tease";
 import { captureError } from "../../lib/observability";
 import { postMilestoneAndNotify } from "../../lib/feed";
@@ -194,11 +194,12 @@ export default function Home() {
     ).catch((e) => captureError(e, { at: "loadHomeState" }));
     if (s.status === "fulfilled") {
       setStreak(s.value);
-      // Re-engagement: schedule (or clear) tonight's streak-at-risk nudge.
-      // Guarded: a rejection in the notification-scheduling path must not escape
-      // as an unhandled fatal (see _layout startup effect for why that crashes).
-      void refreshDailyReminder({ loggedToday: s.value.loggedToday, streak: s.value.current, visitCount: v.status === "fulfilled" ? v.value.length : undefined })
-        .catch((e) => captureError(e, { at: "refreshDailyReminder" }));
+      // Clear the nightly streak nudge, including any already sitting in iOS's
+      // queue from a build that still scheduled them. Guarded: a rejection in
+      // the notification path must not escape as an unhandled fatal (see the
+      // _layout startup effect for why that crashes).
+      void cancelStreakReminder()
+        .catch((e) => captureError(e, { at: "cancelStreakReminder" }));
       // Saturday 18:30: the week's numbers, and that Wrapped is in tomorrow.
       if (v.status === "fulfilled") {
         void refreshWrappedTease(v.value)
