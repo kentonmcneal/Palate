@@ -356,7 +356,26 @@ async function handleConnect(admin: ReturnType<typeof createClient>, userId: str
   });
   if (!tokenResp.ok) {
     const text = await tokenResp.text();
-    return json({ error: "google_token_exchange_failed", detail: text }, 502);
+    // Google answers every one of these with the same two words, "invalid_grant"
+    // / "Bad Request", for causes that need completely different fixes: a
+    // redirect that does not match the one used at authorize, a PKCE verifier
+    // that does not match the challenge, a code already redeemed, or a code
+    // issued to a different client than the one redeeming it.
+    //
+    // I have now guessed wrong at this twice, so the request is described back
+    // rather than reasoned about. None of it is secret: an OAuth client id is
+    // public by design and ships inside the app binary, and the code and
+    // verifier are single-use and already dead by the time this runs. Only
+    // lengths and a suffix are kept, which is enough to tell the four causes
+    // apart and not enough to be worth holding.
+    const probe = {
+      redirect_uri,
+      client_id_tail: GOOGLE_CLIENT_ID.slice(-28),
+      client_id_len: GOOGLE_CLIENT_ID.length,
+      code_len: code.length,
+      verifier_len: code_verifier.length,
+    };
+    return json({ error: "google_token_exchange_failed", detail: text, probe }, 502);
   }
   const tokens = await tokenResp.json() as { access_token: string; refresh_token?: string; expires_in: number; id_token?: string };
 

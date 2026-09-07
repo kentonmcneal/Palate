@@ -179,20 +179,18 @@ export default function Settings() {
         <View style={{ width: 40 }} />
       </View>
       <ScrollView contentContainerStyle={styles.container}>
-        {/* Collapsed like every other section. It was the one always-open
-            block, and it sat first, so Settings opened on a Gmail prompt
-            rather than on your settings.
-            Titled "Gmail import" rather than "Bring in your history", which
-            never said email: this section is now where you MANAGE or
-            disconnect, and somebody arrives here looking for that word. The
-            offer itself lives on Profile, where it can be seen. */}
-        <CollapsibleSection title="Gmail import">
+        {/* Open, not collapsed. It was collapsed so Settings would not greet
+            you with a Gmail prompt, and the cost was that the button lived two
+            taps down behind a heading that did not say email — and behind a
+            triangle, next to a card repeating the same words back at you.
+            An action you might need is worth one line of a settings screen. */}
+        <Section title="Bring in your history">
           <GmailImportCard />
           <Note>
             Reservation and delivery confirmations become visits, so Palate knows
             your taste before you log anything.
           </Note>
-        </CollapsibleSection>
+        </Section>
 
         <Section title="Friends">
           <Button

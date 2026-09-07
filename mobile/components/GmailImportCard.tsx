@@ -21,6 +21,10 @@ export function GmailImportCard() {
   const router = useRouter();
   const [status, setStatus] = useState<GmailStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  // The last failure, kept on screen. An alert says it once and is gone, which
+  // is no use for something you are going to retry — and no use to me either,
+  // since the founder had to retype the message out of a screenshot.
+  const [lastError, setLastError] = useState<string | null>(null);
 
   useEffect(() => { void load(); }, []);
 
@@ -47,7 +51,7 @@ export function GmailImportCard() {
     if (gResponse.type !== "success") {
       setBusy(false);
       if (gResponse.type === "error") {
-        Alert.alert("Couldn't connect", "Google declined the request. Please try again.");
+        setLastError("Google declined the request.");
       }
       return;
     }
@@ -58,14 +62,15 @@ export function GmailImportCard() {
         // so it is read back off the request rather than reconstructed.
         const redirectUri = (gRequest as { redirectUri?: string } | null)?.redirectUri ?? "";
         if (!code || !redirectUri) {
-          Alert.alert("Couldn't connect", "Google didn't return an authorization code.");
+          setLastError("Google did not return an authorization code.");
           return;
         }
         const r = await exchangeGmailCode(code, gRequest?.codeVerifier, redirectUri);
         if (!r.ok) {
-          Alert.alert("Couldn't connect", r.error ?? "Try again");
+          setLastError(r.error ?? "Try again");
           return;
         }
+        setLastError(null);
         void triggerHapticSuccess();
         await load();
         router.push("/import-review");
@@ -116,7 +121,8 @@ export function GmailImportCard() {
   if (!status.connected) {
     return (
       <View style={styles.card}>
-        <Text style={styles.eyebrow}>BRING IN YOUR HISTORY</Text>
+        {/* No eyebrow. The section above already says "Bring in your history",
+            and the card was repeating it word for word directly underneath. */}
         <Text style={styles.title}>Connect Gmail</Text>
         <Text style={styles.body}>
           Palate can turn recent reservations and delivery orders into visits.
@@ -129,6 +135,12 @@ export function GmailImportCard() {
         >
           <Text style={styles.btnPrimaryText}>{busy ? "Connecting…" : "Connect Gmail"}</Text>
         </Pressable>
+        {!!lastError && (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorLabel}>LAST ATTEMPT</Text>
+            <Text style={styles.errorText} selectable>{lastError}</Text>
+          </View>
+        )}
       </View>
     );
   }
@@ -178,5 +190,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999,
     backgroundColor: colors.faint, borderWidth: 1, borderColor: colors.line,
   },
+  // The failure, left where the retry button is. Red enough to read as wrong,
+  // quiet enough not to shout on a settings screen. `selectable` on purpose:
+  // the founder had to retype an error out of a screenshot to hand it to me.
+  errorBox: {
+    marginTop: 12, padding: 10, borderRadius: 10,
+    backgroundColor: colors.wash,
+  },
+  errorLabel: { ...type.micro, color: colors.redText },
+  errorText: { ...type.small, color: colors.ink, marginTop: 4, lineHeight: 17 },
   btnGhostText: { color: colors.mute, fontSize: 13, fontWeight: "700" },
 });
