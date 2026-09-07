@@ -11,3 +11,4 @@ and does not build them too early.
 | [Ratings that move other people's rankings](ratings-for-others.md) | 2026-09-06 | people actually rate (2 of 55 visits do today); one-tap rating at confirm time first |
 | [Top palates in a city, the hype map, review-mined tags](parked-ideas.md) | 2026-09-05 | see each entry |
 | [Impression retention + monthly rollup](telemetry-retention.md) | 2026-09-07 | a second heavy user, or the database crossing ~150 MB, or opening TestFlight to 15+ real users |
+| [A learned ranker](learned-ranker.md) | 2026-09-07 | ~30 users with 5+ visits in one metro AND ~2,000 decision events (21 clicks exist today) |
