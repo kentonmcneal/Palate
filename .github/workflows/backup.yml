@@ -1,0 +1,192 @@
+name: Nightly database backup
+
+# ============================================================================
+# A backup that has never been restored is not a backup, it is a hope.
+# ----------------------------------------------------------------------------
+# The Supabase free tier gives no point-in-time recovery. Today that is fine —
+# 29 MB, 14 accounts — and the day a stranger has logged three months of meals
+# it is unforgivable, because nothing in the code substitutes for a restore
+# point. This buys a daily one for the price of Actions minutes.
+#
+# Two decisions worth stating.
+#
+# ENCRYPTED, ALWAYS. Artifacts are readable by anyone with read access to the
+# repository, and repository visibility is a setting that can change by
+# accident. The dump holds every visit, every email address and every location
+# anybody ever confirmed, so it is encrypted before it is ever written to disk
+# in a place GitHub keeps. A leaked artifact then costs nothing.
+#
+# RESTORED, EVERY NIGHT. The dump is restored into a throwaway Postgres and
+# checked for the tables and rows that should be there. A dump that cannot be
+# restored fails silently for months and is discovered on the worst day of the
+# project; this turns that into a red X the next morning.
+#
+# Setup, once — GitHub → Settings → Secrets and variables → Actions:
+#   SUPABASE_DB_URL    Supabase → Settings → Database → Connection string →
+#                      URI. Use the DIRECT connection (port 5432), not the
+#                      pooler: pg_dump needs session-level features the
+#                      transaction pooler does not offer.
+#   BACKUP_PASSPHRASE  A long random string. WRITE IT DOWN SOMEWHERE THAT IS
+#                      NOT THIS REPOSITORY AND NOT THIS DATABASE. Without it
+#                      the backups are unreadable, including by you.
+#
+# Restoring is documented in docs/RESTORE.md. Read it before you need it.
+# ============================================================================
+
+on:
+  schedule:
+    # 08:20 UTC — after the 03:xx–04:xx prune and snapshot crons have run, so a
+    # backup reflects a settled database rather than one mid-sweep.
+    - cron: '20 8 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Dump, encrypt, and prove it restores
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      # Same major as production (17.6). pg_dump refuses a server newer than
+      # itself, and a restore into an older major can silently drop syntax.
+      verify:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: verify
+          POSTGRES_DB: verify
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+
+    steps:
+      - name: Fail early if the secrets are missing
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          missing=""
+          [ -z "$DB_URL" ] && missing="$missing SUPABASE_DB_URL"
+          [ -z "$PASSPHRASE" ] && missing="$missing BACKUP_PASSPHRASE"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing secret(s):$missing — see the header of this workflow."
+            exit 1
+          fi
+
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          pg_dump --version
+
+      - name: Dump
+        env:
+          # Read from the environment, never interpolated into a command line,
+          # so the connection string cannot land in a log or a process list.
+          PGURL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          # --no-owner / --no-privileges: a restore target will not have
+          # Supabase's roles, and ownership statements would abort it.
+          # Schema public only: auth, storage and the extension schemas are
+          # Supabase's to recreate, and dumping them makes a restore fail.
+          pg_dump "$PGURL" \
+            --format=plain --no-owner --no-privileges \
+            --schema=public \
+            --file=dump.sql
+          ls -l dump.sql
+          echo "DUMP_BYTES=$(stat -c%s dump.sql)" >> "$GITHUB_ENV"
+
+      - name: Refuse to store a suspiciously small dump
+        run: |
+          set -euo pipefail
+          # 29 MB of database is a dump well over a megabyte. A few kilobytes
+          # means the connection succeeded and returned almost nothing, which
+          # is the failure that looks most like success.
+          if [ "${DUMP_BYTES}" -lt 500000 ]; then
+            echo "::error::Dump is only ${DUMP_BYTES} bytes — refusing to treat this as a backup."
+            exit 1
+          fi
+          for t in restaurants visits profiles analytics_events; do
+            grep -q "CREATE TABLE public.$t" dump.sql \
+              || { echo "::error::Dump has no public.$t"; exit 1; }
+          done
+
+      - name: Prove it restores
+        run: |
+          set -euo pipefail
+          export PGPASSWORD=verify
+          psql -h localhost -U postgres -d verify -v ON_ERROR_STOP=0 -q -f dump.sql > restore.log 2>&1 || true
+          # Extensions and Supabase-specific grants will complain; that is
+          # expected and harmless. What matters is that the tables and their
+          # rows arrived.
+          TABLES=$(psql -h localhost -U postgres -d verify -tAc \
+            "select count(*) from information_schema.tables where table_schema='public'")
+          RESTAURANTS=$(psql -h localhost -U postgres -d verify -tAc \
+            "select count(*) from public.restaurants" 2>/dev/null || echo 0)
+          VISITS=$(psql -h localhost -U postgres -d verify -tAc \
+            "select count(*) from public.visits" 2>/dev/null || echo 0)
+          echo "restored tables=$TABLES restaurants=$RESTAURANTS visits=$VISITS"
+          [ "$TABLES" -ge 30 ] || { echo "::error::Only $TABLES tables restored"; tail -40 restore.log; exit 1; }
+          [ "$RESTAURANTS" -ge 100 ] || { echo "::error::Only $RESTAURANTS restaurants restored"; exit 1; }
+          echo "RESTORE_SUMMARY=tables=$TABLES restaurants=$RESTAURANTS visits=$VISITS" >> "$GITHUB_ENV"
+
+      - name: Encrypt
+        env:
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          gzip -9 dump.sql
+          # Symmetric AES-256. The passphrase arrives on a file descriptor
+          # rather than the command line, so it never appears in a process list.
+          printf '%s' "$PASSPHRASE" | gpg --batch --yes --symmetric \
+            --cipher-algo AES256 --passphrase-fd 0 \
+            --output "palate-$(date -u +%Y-%m-%d).sql.gz.gpg" dump.sql.gz
+          rm -f dump.sql.gz
+          ls -l ./*.gpg
+
+      - name: Keep the daily copy
+        uses: actions/upload-artifact@v4
+        with:
+          name: palate-db-${{ github.run_id }}
+          path: '*.gpg'
+          retention-days: 14
+          if-no-files-found: error
+
+      # A fortnight of dailies covers "I broke it yesterday". A year of
+      # monthlies covers "when did this column start being wrong", which is the
+      # question you cannot answer from a two-week window.
+      - name: Is it the first of the month
+        id: when
+        run: echo "day=$(date -u +%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Monthly copy
+        if: steps.when.outputs.day == '01'
+        uses: actions/upload-artifact@v4
+        with:
+          name: palate-db-monthly-${{ github.run_id }}
+          path: '*.gpg'
+          retention-days: 365
+          if-no-files-found: error
+
+      - name: Summary
+        run: |
+          {
+            echo "### Backup complete"
+            echo ""
+            echo "- dump: ${DUMP_BYTES} bytes before compression"
+            echo "- restore check: ${RESTORE_SUMMARY}"
+            echo "- encrypted with AES256, retained 14 days (365 on the 1st)"
+            echo ""
+            echo "Restoring: see \`docs/RESTORE.md\`."
+          } >> "$GITHUB_STEP_SUMMARY"
