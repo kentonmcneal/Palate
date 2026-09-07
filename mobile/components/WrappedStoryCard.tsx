@@ -3,6 +3,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../theme";
 import type { Wrapped } from "../lib/wrapped";
 import { CanvasText } from "./CanvasText";
+import { cuisineHue } from "./PlaceArt";
+import { SHARE_DOMAIN } from "../lib/share-target";
 
 // Instagram story aspect ratio: 9:16. Width = ~1080 ideal but we render at
 // device width and let view-shot capture pixel-perfect.
@@ -25,19 +27,32 @@ export function WrappedStoryCard({
   const top3 = j.top_three ?? [];
   const personaLabel = personaOverride || data.personality_label;
 
+  // The card takes its colour from what the person actually ate. Every share
+  // was the same charcoal-and-red rectangle before this, so a Thai week and a
+  // barbecue week were indistinguishable — and a thing worth posting has to
+  // look like it belongs to the person posting it. Same cuisineHue the cards
+  // in the app use, so somebody's Wrapped matches the colours they have been
+  // looking at all week.
+  const hue = cuisineHue(j.top_category ?? data.top_category, data.id);
+  const deep = shade(hue, 0.72);
+  const ink = shade(hue, 0.88);
+
   return (
     <View style={[styles.card, { width: STORY_W, height: STORY_H }]} collapsable={false}>
       <LinearGradient
-        colors={["#1A1A1A", "#0E0E0E"]}
+        colors={[deep, ink]}
         style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
       />
-      <View style={styles.glowRed} />
+      {/* Two soft lights rather than one, offset, so the card has a direction
+          to it instead of a corner smudge. */}
+      <View style={[styles.glow, styles.glowTop, { backgroundColor: hue }]} />
+      <View style={[styles.glow, styles.glowBottom, { backgroundColor: hue }]} />
 
       {/* Top: brand + week */}
       <View style={styles.head}>
-        <View style={styles.logoBox}><CanvasText style={styles.logoP}>p</CanvasText></View>
+        <View style={[styles.logoBox, { backgroundColor: hue }]}><CanvasText style={styles.logoP}>p</CanvasText></View>
         <CanvasText style={styles.brandText}>palate</CanvasText>
       </View>
 
@@ -46,7 +61,7 @@ export function WrappedStoryCard({
       {/* Center: persona */}
       <View style={styles.center}>
         <CanvasText style={styles.youAre}>YOU ARE</CanvasText>
-        <CanvasText style={styles.persona} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.7}>
+        <CanvasText style={[styles.persona, { color: "#fff" }]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.7}>
           {personaLabel}
         </CanvasText>
         {personaDescription ? (
@@ -79,7 +94,7 @@ export function WrappedStoryCard({
 
       {/* Bottom: handle */}
       <View style={styles.footer}>
-        <CanvasText style={styles.footerText}>palate.app</CanvasText>
+        <CanvasText style={styles.footerText}>{SHARE_DOMAIN}</CanvasText>
       </View>
     </View>
   );
@@ -101,14 +116,21 @@ function formatRange(start: string, end: string) {
   return `${fmt(s)} to ${fmt(e)}`;
 }
 
+/** Darken toward black, so the gradient's far end is obviously the same hue
+ *  rather than a second colour. Mirrors PlaceArt's own shade(). */
+function shade(hex: string, amount: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.round(((n >> 16) & 255) * (1 - amount));
+  const g = Math.round(((n >> 8) & 255) * (1 - amount));
+  const b = Math.round((n & 255) * (1 - amount));
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+}
+
 const styles = StyleSheet.create({
   card: { borderRadius: 28, overflow: "hidden", padding: 32, justifyContent: "space-between" },
-  glowRed: {
-    position: "absolute",
-    top: -100, right: -80,
-    width: 280, height: 280, borderRadius: 999,
-    backgroundColor: colors.red, opacity: 0.35,
-  },
+  glow: { position: "absolute", borderRadius: 999 },
+  glowTop: { top: -110, right: -90, width: 300, height: 300, opacity: 0.38 },
+  glowBottom: { bottom: -140, left: -110, width: 340, height: 340, opacity: 0.22 },
   head: { flexDirection: "row", alignItems: "center", gap: 10 },
   logoBox: {
     width: 36, height: 36, borderRadius: 10,
@@ -121,7 +143,6 @@ const styles = StyleSheet.create({
   center: { marginTop: 20 },
   youAre: { color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: "700", letterSpacing: 2 },
   persona: {
-    color: colors.red,
     fontSize: 56,
     fontWeight: "800",
     letterSpacing: -1.2,
@@ -151,10 +172,11 @@ const styles = StyleSheet.create({
 
   top: { marginTop: 28 },
   topLabel: { color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
+  // No hairlines. The founder's rule for every card in the app, and a
+  // ruled list is the thing that makes a share look like a spreadsheet.
   topRow: {
-    flexDirection: "row", justifyContent: "space-between",
-    paddingVertical: 10,
-    borderBottomColor: "rgba(255,255,255,0.1)", borderBottomWidth: 1,
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingVertical: 9,
   },
   topName: { color: "#fff", fontSize: 17, fontWeight: "600" },
   topRank: { color: "rgba(255,255,255,0.5)" },
