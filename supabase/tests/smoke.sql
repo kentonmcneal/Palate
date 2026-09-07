@@ -125,4 +125,33 @@ begin
   end if;
 end $$;
 
+-- ----------------------------------------------------------------------------
+-- 0140: the funnel history is admin-only, and the snapshot belongs to the
+-- scheduler alone. rec_funnel_weekly holds per-user counts, so a client that
+-- could read it directly would be reading everyone's engagement.
+-- ----------------------------------------------------------------------------
+do $$
+declare g text;
+begin
+  foreach g in array array['public', 'anon', 'authenticated'] loop
+    if has_function_privilege(g, 'public.snapshot_rec_funnel(integer)', 'execute') then
+      raise exception '% can execute snapshot_rec_funnel() — see migration 0140', g;
+    end if;
+  end loop;
+
+  if has_function_privilege('anon', 'public.rec_funnel_history(integer)', 'execute') then
+    raise exception 'anon can execute rec_funnel_history() — see migration 0140';
+  end if;
+
+  -- RLS on with no policy: every client select answers zero rows. Note that
+  -- PostgREST reports this as 200 [] rather than an error, which is why the
+  -- guarantee is asserted here on the table rather than inferred from a call.
+  if not (select relrowsecurity from pg_class where oid = 'public.rec_funnel_weekly'::regclass) then
+    raise exception 'rec_funnel_weekly has RLS disabled — see migration 0140';
+  end if;
+  if exists (select 1 from pg_policies where schemaname='public' and tablename='rec_funnel_weekly') then
+    raise exception 'rec_funnel_weekly grew a policy; it is meant to be unreadable except through rec_funnel_history()';
+  end if;
+end $$;
+
 rollback;
