@@ -181,8 +181,12 @@ export default function Settings() {
       <ScrollView contentContainerStyle={styles.container}>
         {/* Collapsed like every other section. It was the one always-open
             block, and it sat first, so Settings opened on a Gmail prompt
-            rather than on your settings. */}
-        <CollapsibleSection title="Bring in your history">
+            rather than on your settings.
+            Titled "Gmail import" rather than "Bring in your history", which
+            never said email: this section is now where you MANAGE or
+            disconnect, and somebody arrives here looking for that word. The
+            offer itself lives on Profile, where it can be seen. */}
+        <CollapsibleSection title="Gmail import">
           <GmailImportCard />
           <Note>
             Reservation and delivery confirmations become visits, so Palate knows
