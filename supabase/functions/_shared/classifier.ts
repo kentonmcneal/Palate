@@ -144,6 +144,15 @@ export const CUISINE_TYPE_MAP: Record<string, string> = {
   fast_food_restaurant: "american",
   sandwich_shop: "american",
   bar_and_grill: "american",
+  // Found by the eval, 2026-09-07: Google states these outright and the map
+  // dropped them, so "Ching's Hot Wings" came back with no cuisine at all
+  // despite primaryType being chicken_wings_restaurant. Fried chicken and
+  // wings are food, not a format, so unlike bakery or wine_bar they belong
+  // here. Deliberately NOT adding halal_restaurant alongside them: halal is a
+  // dietary law, not a cuisine, and the place behind it is as likely to be
+  // Malaysian as Turkish. Abstaining beats guessing.
+  chicken_wings_restaurant: "american",
+  chicken_restaurant: "american",
   italian_restaurant: "italian",
   pizza_restaurant: "italian",
   chinese_restaurant: "chinese",
@@ -176,6 +185,12 @@ export const CUISINE_TYPE_MAP: Record<string, string> = {
   dessert_restaurant: "dessert",
   acai_shop: "healthy",
   donut_shop: "dessert",
+  // Same eval, same day. ice_cream_shop, dessert_restaurant and donut_shop
+  // were all here and cake_shop and dessert_shop were not, which is an
+  // inconsistency rather than a decision: "Nothing Bundt Cakes" came back with
+  // nothing while a donut shop next door came back as dessert.
+  cake_shop: "dessert",
+  dessert_shop: "dessert",
   // brunch_restaurant, breakfast_restaurant, bakery, bagel_shop, coffee_shop,
   // cafe, wine_bar, pub and bar used to map here. Every one of them answers
   // "what kind of place", not "what food", and this map is the reason 361 of
