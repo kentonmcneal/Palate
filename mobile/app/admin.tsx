@@ -17,7 +17,7 @@ import { observabilityStatus, sendTestEvent } from "../lib/observability";
 import * as Updates from "expo-updates";
 import Constants from "expo-constants";
 import { listFeedback, markFeedbackTriaged, type FeedbackRow } from "../lib/feedback-admin";
-import { loadRecFunnel, summarize, type RecFunnelRow } from "../lib/rec-funnel";
+import { loadRecFunnel, summarize, loadRecFunnelHistory, weeklyTrend, weekLabel, type RecFunnelRow, type RecFunnelWeek } from "../lib/rec-funnel";
 
 export default function AdminWaitlistScreen() {
   const router = useRouter();
@@ -34,6 +34,7 @@ export default function AdminWaitlistScreen() {
   // revoked permission, Expo down. This is the route that cannot.
   const [feedback, setFeedback] = useState<FeedbackRow[]>([]);
   const [funnel, setFunnel] = useState<RecFunnelRow[] | null>(null);
+  const [history, setHistory] = useState<RecFunnelWeek[] | null>(null);
   const [testing, setTesting] = useState(false);
 
   const load = useCallback(async () => {
@@ -45,6 +46,7 @@ export default function AdminWaitlistScreen() {
         setPending(await listPendingUsers());
         setFeedback(await listFeedback(50).catch(() => []));
         setFunnel(await loadRecFunnel(28).catch(() => null));
+        setHistory(await loadRecFunnelHistory(26).catch(() => null));
         const { data } = await supabase
           .from("feature_flags").select("enabled").eq("key", "server_push").maybeSingle();
         setServerPush(Boolean(data?.enabled));
@@ -259,6 +261,27 @@ export default function AdminWaitlistScreen() {
                 </Text>
               </View>
             )}
+          </View>
+        )}
+
+        {!loading && allowed && history && weeklyTrend(history).length > 0 && (
+          <View style={[styles.card, { marginBottom: 12 }]}>
+            <Text style={type.subtitle}>Week by week</Text>
+            <Text style={[type.small, { marginTop: 4 }]}>
+              The permanent record. The card above reads raw events, which are pruned; these weeks are kept as counts and survive it, so this is the only place a change can be compared to the weeks before it.
+            </Text>
+            {weeklyTrend(history).slice(0, 12).map((w) => (
+              <View key={w.week} style={styles.report}>
+                <Text style={styles.reportMeta}>WEEK OF {weekLabel(w.week).toUpperCase()}</Text>
+                <Text style={styles.reportBody}>
+                  {w.impressions} seen · {w.taken} taken · {w.visits} went
+                  {w.takeRate !== null ? ` · ${w.takeRate}% taken` : ""}
+                </Text>
+              </View>
+            ))}
+            <Text style={[type.small, { marginTop: 10 }]}>
+              A rate is left off a week with fewer than 30 impressions. One tap out of three is not a take rate.
+            </Text>
           </View>
         )}
 

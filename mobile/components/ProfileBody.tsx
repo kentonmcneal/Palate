@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Share } from "react-native";
 import { InviteCard } from "./InviteCard";
 import { GmailConnectCard } from "./GmailConnectCard";
+import { RateVisitsCard } from "./RateVisitsCard";
 import { Text } from "./Text";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Avatar } from "./Avatar";
@@ -613,10 +614,12 @@ export function ProfileBody({ targetId }: { targetId: string }) {
             belongs after the person has seen what they have built rather than
             above it. Palate ranks partly on the people you follow and had no
             way to gain any, so this is the one place in the app that says so. */}
-        {/* Gmail first, then people. Both ask for the thing that makes the
-            app work, but importing what you have already eaten pays off on
-            the same day, while an invite pays off when somebody accepts. Each
-            renders nothing once it has been acted on. */}
+        {/* Three asks, ordered by how fast the answer improves the ranking.
+            Rating a meal the app already recorded changes the next screen you
+            look at; importing your inbox changes it today; an invite changes
+            it when somebody accepts. Each renders nothing once there is
+            nothing left to ask. */}
+        {mine && <RateVisitsCard />}
         {mine && <GmailConnectCard />}
         {mine && <InviteCard displayName={displayName} />}
       </ScrollView>

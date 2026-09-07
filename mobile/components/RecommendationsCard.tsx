@@ -6,6 +6,8 @@ import { colors, spacing, type, card, shadow, categoryColors } from "../theme";
 import { cuisineHue, initialsOf, PlaceTile } from "./PlaceArt";
 import { placeFacts } from "../lib/place-facts";
 import { trackRecEvent, trackImpression, rememberRecTouch, newRequestId, type RecEventContext } from "../lib/recommendation-events";
+import { currentSessionId } from "../lib/recommendation-events";
+import { trackSlate } from "../lib/recommendation/slate";
 import { Impression } from "./Impressions";
 import { loadPlacePhotos, cachedPlacePhoto } from "../lib/place-photos";
 import { isoWeekStart } from "../lib/wrapped";
@@ -283,7 +285,21 @@ export function RecommendationsCard({
       const inputs = new Map<string, RestaurantInput>();
       for (const p of nearby) inputs.set(p.google_place_id, toInput(p));
       scoringRef.current = { graph, here, personal, userId, inputs };
-      setRecs(shortlist(enriched, scoringRef.current, true));
+      const picks = shortlist(enriched, scoringRef.current, true);
+      setRecs(picks);
+      // One row for the whole ranking pass, carrying the candidates that lost
+      // as well as the ones that won. Every other rec event describes
+      // something that reached the screen, which means the data can only ever
+      // teach a model to agree with the current scorer. Same request_id as the
+      // impressions, so outcomes join to it without new plumbing.
+      trackSlate({
+        requestId: requestIdRef.current,
+        surface: "home_recs",
+        sessionId: currentSessionId(),
+        ranked: enriched,
+        shownIds: new Set(picks.map((p) => p.google_place_id)),
+        poolSize: enriched.length,
+      });
       // Real photos, from our own users' visits — the free source. One batched
       // query, cached at module level. The cards render on the text
       // immediately and upgrade when this lands; a failure is silent.
