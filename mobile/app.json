@@ -2,13 +2,13 @@
   "expo": {
     "name": "Palate",
     "slug": "palate-app",
-    "version": "0.1.9",
+    "version": "0.1.10",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "palate",
     "userInterfaceStyle": "light",
     "primaryColor": "#FF3008",
-    "description": "Start to see how you actually eat. A weekly identity read of your real eating life \u2014 plus a habit-based profile and feed.",
+    "description": "Start to see how you actually eat. A weekly identity read of your real eating life — plus a habit-based profile and feed.",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.palate.ios",
@@ -17,7 +17,7 @@
         "UIBackgroundModes": [
           "location"
         ],
-        "NSLocationWhenInUseUsageDescription": "Palate uses your location only when the app is open, to detect which restaurant or caf\u00e9 you may be eating at. We never share or sell your location.",
+        "NSLocationWhenInUseUsageDescription": "Palate uses your location only when the app is open, to detect which restaurant or café you may be eating at. We never share or sell your location.",
         "NSUserNotificationsUsageDescription": "Palate tells you when a friend eats somewhere, sends one evening digest of places it noticed you at, and your Wrapped on Sunday. Nothing late at night, and you can turn any of it off in Settings.",
         "NSPhotoLibraryUsageDescription": "Palate uses your photos only when you choose a profile picture.",
         "NSCameraUsageDescription": "Palate uses your camera only when you take a photo of a meal.",
@@ -38,7 +38,8 @@
       },
       "associatedDomains": [
         "applinks:palate.app"
-      ]
+      ],
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "app.palate.android",
@@ -84,7 +85,8 @@
           "organization": "palate-sp",
           "project": "react-native"
         }
-      ]
+      ],
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true

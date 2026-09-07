@@ -48,6 +48,31 @@ export async function signInWithGoogleIdToken(idToken: string) {
   return data;
 }
 
+/**
+ * Sign in with Apple. Required by App Store Review Guideline 4.8: an app that
+ * offers a third-party login service must also offer one that limits data to
+ * name and email AND lets somebody keep their email address private. Our other
+ * option is an emailed code, which by definition cannot — you have to hand
+ * over a working address to receive it. So Google sign-in without this is a
+ * rejection, not a risk.
+ *
+ * Unlike the Google path above, this one carries a nonce. Apple accepts the
+ * SHA-256 of a random string and embeds that hash in the token; Supabase is
+ * handed the raw string and checks it matches. That is what stops a token
+ * captured once from being replayed. expo-auth-session never exposed the raw
+ * nonce for Google, which is why that path skips the check; here nothing is in
+ * the way, so it is done properly.
+ */
+export async function signInWithAppleIdToken(idToken: string, rawNonce: string) {
+  const { data, error } = await supabase.auth.signInWithIdToken({
+    provider: "apple",
+    token: idToken,
+    nonce: rawNonce,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function signOut() {
   await supabase.auth.signOut();
 }

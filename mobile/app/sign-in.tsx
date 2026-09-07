@@ -10,7 +10,9 @@ import { Logo, Wordmark, LOGO_SIZE } from "../components/Logo";
 import { Button, Spacer } from "../components/Button";
 import { colors, spacing, type } from "../theme";
 import * as Linking from "expo-linking";
-import { sendMagicLink, verifyEmailCode, signInWithGoogleIdToken } from "../lib/auth";
+import * as AppleAuthentication from "expo-apple-authentication";
+import * as Crypto from "expo-crypto";
+import { sendMagicLink, verifyEmailCode, signInWithGoogleIdToken, signInWithAppleIdToken } from "../lib/auth";
 import { hasCompletedOnboarding } from "../lib/profile";
 import { isApproved } from "../lib/waitlist";
 import { track } from "../lib/analytics";
@@ -33,6 +35,54 @@ export default function SignIn() {
   const [gRequest, gResponse, gPromptAsync] = Google.useIdTokenAuthRequest({
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
   });
+
+  // Only rendered where it exists. Apple's own control, not a lookalike: the
+  // Human Interface Guidelines require the real button, and a hand-rolled one
+  // is a rejection of its own.
+  const [appleAvailable, setAppleAvailable] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void AppleAuthentication.isAvailableAsync()
+      .then((ok) => { if (alive) setAppleAvailable(ok); })
+      .catch(() => { if (alive) setAppleAvailable(false); });
+    return () => { alive = false; };
+  }, []);
+
+  async function handleApple() {
+    setLoading(true);
+    try {
+      // Apple embeds the SHA-256 of this in the token; Supabase is given the
+      // raw string and checks it matches. That is what makes a captured token
+      // useless a second time.
+      const rawNonce = Crypto.randomUUID();
+      const hashedNonce = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        rawNonce,
+      );
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+        nonce: hashedNonce,
+      });
+      if (!credential.identityToken) {
+        Alert.alert("Couldn't sign in with Apple", "No credential returned. Try again.");
+        return;
+      }
+      await signInWithAppleIdToken(credential.identityToken, rawNonce);
+      void track("sign_in_verified", { method: "apple" });
+      await finishSignIn();
+    } catch (e: any) {
+      // Cancelling is not an error worth a dialog. Apple reports it as
+      // ERR_REQUEST_CANCELED, and older versions as ERR_CANCELED.
+      const code = String(e?.code ?? "");
+      if (code.includes("CANCELED") || code.includes("CANCELLED")) return;
+      Alert.alert("Couldn't sign in with Apple", e?.message ?? "Try again");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!gResponse) return;
@@ -172,6 +222,23 @@ export default function SignIn() {
                   <View style={styles.dividerLine} />
                 </View>
 
+                {/* Apple above Google. The Human Interface Guidelines require
+                    Sign in with Apple to appear no less prominently than other
+                    options, and Apple's own component is used rather than a
+                    lookalike button, which is a rejection in itself. */}
+                {appleAvailable && (
+                  <>
+                    <AppleAuthentication.AppleAuthenticationButton
+                      buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                      buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                      cornerRadius={999}
+                      style={styles.appleButton}
+                      onPress={() => void handleApple()}
+                    />
+                    <Spacer />
+                  </>
+                )}
+
                 <Button
                   title="Continue with Google"
                   variant="ghost"
@@ -227,6 +294,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.ink,
   },
+  // Apple fixes the control's look; only its size is ours to set.
+  appleButton: { height: 48, width: "100%" },
   dividerRow: {
     flexDirection: "row",
     alignItems: "center",

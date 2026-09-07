@@ -20,7 +20,7 @@
 # ============================================================================
 set -u
 
-RUNTIMES=(0.1.9 0.1.8 0.1.7)   # first entry is the true app version
+RUNTIMES=(0.1.10 0.1.9 0.1.8 0.1.7)   # first entry is the true app version
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_JSON="$ROOT/mobile/app.json"
 LOCK="$ROOT/.ota-running"
