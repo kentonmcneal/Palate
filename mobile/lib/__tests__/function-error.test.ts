@@ -17,6 +17,7 @@ describe("readFunctionError", () => {
       error: "google_token_exchange_failed",
       detail: "invalid_grant: redirect_uri mismatch",
     }));
+    expect(text).toContain("[502]");
     expect(text).toContain("google_token_exchange_failed");
     expect(text).toContain("redirect_uri mismatch");
   });
@@ -32,7 +33,7 @@ describe("readFunctionError", () => {
 
   it("does not repeat a reason that appears twice", async () => {
     const text = await readFunctionError(invokeError(500, { error: "boom", message: "boom" }));
-    expect(text).toBe("boom");
+    expect(text).toBe("[500] boom");
   });
 
   it("uses no em dash, because this lands in an alert", async () => {
@@ -42,10 +43,10 @@ describe("readFunctionError", () => {
 
   it("falls back rather than throwing on anything unexpected", async () => {
     const generic = "Edge Function returned a non-2xx status code";
-    expect(await readFunctionError(invokeError(500, ""))).toBe(generic);
+    expect(await readFunctionError(invokeError(500, ""))).toBe(`[500] ${generic}`);
     expect(await readFunctionError({ message: generic })).toBe(generic);
     expect(await readFunctionError(null)).toBe("Something went wrong");
     // Not JSON: the raw text still beats the generic sentence.
-    expect(await readFunctionError(invokeError(500, "upstream timeout"))).toBe("upstream timeout");
+    expect(await readFunctionError(invokeError(500, "upstream timeout"))).toBe("[500] upstream timeout");
   });
 });

@@ -25,14 +25,21 @@ export async function readFunctionError(error: unknown): Promise<string> {
   // Only a Response carries the body; other context shapes are not useful.
   if (!res || typeof (res as Response).text !== "function") return fallback;
 
+  // The status alone separates causes that otherwise read alike: 401 is the
+  // gateway or our own auth check, 500 is an exception inside the handler,
+  // 502 is an upstream (Google) rejection. Without it, "Unauthorized" could
+  // be any of three layers and we were guessing between them.
+  const status = (res as Response).status;
+  const tag = Number.isFinite(status) && status > 0 ? `[${status}] ` : "";
+
   let raw = "";
   try {
     raw = await (res as Response).text();
   } catch {
-    // Already consumed, or not readable. The generic message is all there is.
-    return fallback;
+    // Already consumed, or not readable. The status is still worth having.
+    return `${tag}${fallback}`;
   }
-  if (!raw.trim()) return fallback;
+  if (!raw.trim()) return `${tag}${fallback}`;
 
   try {
     const body = JSON.parse(raw) as Record<string, unknown>;
@@ -41,10 +48,10 @@ export async function readFunctionError(error: unknown): Promise<string> {
     if (parts.length > 0) {
       // De-duplicated: `error` and `message` are often the same string.
       // Joined with a colon rather than a dash: this reaches an alert box.
-      return [...new Set(parts)].join(": ").slice(0, 400);
+      return `${tag}${[...new Set(parts)].join(": ")}`.slice(0, 400);
     }
   } catch {
     // Not JSON. The raw text is still better than the generic sentence.
   }
-  return raw.slice(0, 400);
+  return `${tag}${raw}`.slice(0, 400);
 }

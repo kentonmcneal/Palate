@@ -95,7 +95,12 @@ serve(async (req) => {
     if (action === "disconnect") return await handleDisconnect(admin, userId);
     return json({ error: "unknown action" }, 400);
   } catch (err) {
-    return json({ error: String(err) }, 500);
+    // Named, so an exception in a handler is never mistaken for an auth
+    // rejection. String(err) on its own produced bare messages like
+    // "Unauthorized" that read exactly like the 401 above and sent us
+    // hunting through the wrong layer.
+    const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    return json({ error: "unhandled_exception", detail }, 500);
   }
 });
 
