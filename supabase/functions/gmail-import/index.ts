@@ -72,7 +72,9 @@ serve(async (req) => {
     // closed when the secret is unset so it can never run open by accident.
     if (action === "scan_all") {
       if (!CRON_SECRET || req.headers.get("x-cron-secret") !== CRON_SECRET) {
-        return json({ error: "unauthorized" }, 401);
+        // Named apart from the user 401 below. Two different refusals reading
+        // identically on a phone is what made this function opaque.
+        return json({ error: "cron_unauthorized" }, 401);
       }
       return await handleScanAll(createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY), body);
     }
@@ -81,12 +83,36 @@ serve(async (req) => {
     const jwt = authHeader.replace("Bearer ", "");
     if (!jwt) return json({ error: "missing auth" }, 401);
 
-    const userClient = createClient(SUPABASE_URL, jwt, { global: { headers: { Authorization: `Bearer ${jwt}` } } });
-    const { data: u } = await userClient.auth.getUser();
-    const userId = u.user?.id;
-    if (!userId) return json({ error: "unauthorized" }, 401);
+    // Two mistakes lived on one line here, and together they meant NOBODY has
+    // ever been able to connect Gmail. It read:
+    //
+    //   createClient(SUPABASE_URL, jwt, { global: { headers: {...} } })
+    //   await userClient.auth.getUser()
+    //
+    // The second argument to createClient is the API KEY, not the user's
+    // token. Passing the access token there sends it as `apikey`, which is not
+    // a project key, so the request was rejected before it could identify
+    // anyone. And `getUser()` with no argument reads the client's stored
+    // session — there is no session inside an edge function, so it fails even
+    // when the key is right.
+    //
+    // places-proxy has always had this correct, which is why every other
+    // Google-backed screen works and this one never has. Same shape now:
+    // project key to authenticate the request, JWT passed explicitly to say
+    // who is asking.
+    const userClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false },
+    });
+    const { data: { user }, error: authErr } = await userClient.auth.getUser(jwt);
+    if (authErr || !user) {
+      return json({ error: "unauthorized", detail: authErr?.message ?? "no user for this token" }, 401);
+    }
+    const userId = user.id;
 
-    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+      auth: { persistSession: false },
+    });
 
     if (action === "connect") {
       // Recorded server-side on purpose. Diagnosing this from the phone meant
