@@ -1,4 +1,5 @@
 import { View, StyleSheet } from "react-native";
+import { SHARE_DOMAIN } from "../lib/share-target";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, radius } from "../theme";
 import type { Wrapped } from "../lib/wrapped";
@@ -96,7 +97,7 @@ export function WrappedCard({
         </>
       )}
 
-      <CanvasText style={styles.brand}>palate.app</CanvasText>
+      <CanvasText style={styles.brand}>{SHARE_DOMAIN}</CanvasText>
     </View>
   );
 }

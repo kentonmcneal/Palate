@@ -1,4 +1,5 @@
 import { View, StyleSheet, Dimensions } from "react-native";
+import { SHARE_DOMAIN } from "../lib/share-target";
 import { LinearGradient } from "expo-linear-gradient";
 import { Avatar } from "./Avatar";
 import { CanvasText } from "./CanvasText";
@@ -77,7 +78,7 @@ export function MatchShareCard({
       {!!divergence && <CanvasText style={styles.divergence}>{divergence.label}</CanvasText>}
 
       <View style={{ flex: 1 }} />
-      <CanvasText style={styles.brand}>palate.app</CanvasText>
+      <CanvasText style={styles.brand}>{SHARE_DOMAIN}</CanvasText>
     </View>
   );
 }

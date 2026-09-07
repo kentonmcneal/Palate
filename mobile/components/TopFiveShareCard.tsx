@@ -1,4 +1,5 @@
 import { View, StyleSheet, Dimensions } from "react-native";
+import { SHARE_DOMAIN } from "../lib/share-target";
 import { LinearGradient } from "expo-linear-gradient";
 import { CanvasText } from "./CanvasText";
 import type { TopPlace } from "../lib/rankings-store";
@@ -64,7 +65,7 @@ export function TopFiveShareCard({
           true: every position was settled by a head-to-head the person
           answered. */}
       <CanvasText style={styles.footnote}>Settled one head-to-head at a time</CanvasText>
-      <CanvasText style={styles.brand}>palate.app</CanvasText>
+      <CanvasText style={styles.brand}>{SHARE_DOMAIN}</CanvasText>
     </View>
   );
 }

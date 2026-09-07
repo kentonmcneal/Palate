@@ -1,4 +1,5 @@
 import { View, StyleSheet, Dimensions } from "react-native";
+import { SHARE_DOMAIN } from "../lib/share-target";
 import { LinearGradient } from "expo-linear-gradient";
 import { palateColors, palateGradients } from "../lib/theme/palateTheme";
 import type { PalateProfile, PrimaryIdentity } from "../lib/palate";
@@ -105,7 +106,7 @@ export function SharePalateCard({ identity, weekRange, stats, tags, egoHook }: P
       )}
 
       {/* Footer */}
-      <CanvasText style={styles.footer}>palate.app</CanvasText>
+      <CanvasText style={styles.footer}>{SHARE_DOMAIN}</CanvasText>
     </View>
   );
 }

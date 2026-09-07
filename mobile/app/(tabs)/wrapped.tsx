@@ -422,21 +422,33 @@ export default function WrappedTab() {
             {/* Primary share — the new 9:16 SharePalateCard. Only shown for
                 classified users; "Learning" users have nothing meaningful to
                 share yet. */}
+            {/* One share, not four.
+                sharePalate, shareImage and shareToStory were the same
+                mechanic — captureRef into the system share sheet — differing
+                only in WHICH hidden view they photographed. That is a
+                designer's decision handed to the person using the app, who
+                cannot see the difference between "Share your Palate", "Share
+                Wrapped card" and "Share to Instagram Story" until after they
+                have picked one. Two of the seven buttons here even carried the
+                same words, because the explainer card above renders its own.
+                The story card is the one drawn at 9:16 to be posted, so that
+                is the one that goes.
+                Post to Feed and Invite are kept: different destination,
+                different action. Refresh is a quiet link now — it was
+                competing for attention with the reason the screen exists. */}
             {profile && profile.primaryIdentity !== "Learning" && (
               <>
-                <Button title="Share your Palate" onPress={sharePalate} />
+                <Button title="Share your Wrapped" onPress={sharePalate} />
                 <Spacer size={8} />
               </>
             )}
-            <Button title="Share Wrapped card" variant="ghost" onPress={shareImage} />
-            <Spacer size={8} />
             <Button title="Post to Feed" variant="ghost" onPress={shareToFeed} />
             <Spacer size={8} />
             <Button title="Invite a friend to compare palates" onPress={inviteFriend} />
-            <Spacer size={8} />
-            <Button title="Share to Instagram Story" variant="ghost" onPress={shareToStory} />
-            <Spacer size={8} />
-            <Button title="Refresh" variant="ghost" onPress={generate} loading={loading} />
+            <Spacer size={12} />
+            <Pressable onPress={generate} hitSlop={10} accessibilityRole="button">
+              <Text style={styles.quietAction}>{loading ? "Refreshing…" : "Refresh"}</Text>
+            </Pressable>
 
             {/* Off-screen renderers — kept hidden so view-shot can grab them
                 without affecting on-screen layout. Story = legacy 9:16 card.
@@ -723,6 +735,13 @@ const styles = StyleSheet.create({
   },
   preWaitText: { color: colors.ink, fontSize: 13, fontWeight: "700" },
 
+  // Refresh is maintenance, not the point of the screen. A full-width button
+  // gave it the same weight as sharing, which is the one thing this tab exists
+  // to make easy.
+  quietAction: {
+    textAlign: "center", paddingVertical: 10,
+    fontSize: 13, fontWeight: "600", color: colors.mute,
+  },
   empty: {
     borderRadius: 18,
     borderWidth: 1,

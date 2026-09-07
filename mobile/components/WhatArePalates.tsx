@@ -41,11 +41,10 @@ export function WhatArePalates({ profile, onShare }: { profile: PalateProfile; o
       <Text style={styles.eyebrow}>TAGS</Text>
       <Text style={styles.tagIntro}>{WHAT_ARE_PALATES.tagsIntro}</Text>
 
-      {onShare && profile.primaryIdentity !== "Learning" && (
-        <Pressable onPress={onShare} style={styles.shareBtn} accessibilityRole="button">
-          <Text style={styles.shareBtnText}>Share your Palate →</Text>
-        </Pressable>
-      )}
+      {/* No share button here. This card explains what a Palate is; the
+          screen's own share sits directly below it and used to carry the
+          identical words, so the same action appeared twice within one
+          scroll. */}
     </View>
   );
 }

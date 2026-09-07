@@ -1,4 +1,5 @@
 import { View, StyleSheet, Image, Dimensions } from "react-native";
+import { SHARE_DOMAIN } from "../lib/share-target";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../theme";
 import type { Visit } from "../lib/visits";
@@ -79,7 +80,7 @@ export function VisitShareCard({ visit, restaurantName, neighborhood, cuisine, i
         )}
       </View>
 
-      <CanvasText style={styles.footer}>palate.app</CanvasText>
+      <CanvasText style={styles.footer}>{SHARE_DOMAIN}</CanvasText>
     </View>
   );
 }

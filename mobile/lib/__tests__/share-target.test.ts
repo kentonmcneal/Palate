@@ -53,6 +53,13 @@ describe("the address on a shared card", () => {
     expect(DEAD).not.toContain(SHARE_DOMAIN);
   });
 
+  it("catches the JSX-text form the first version of this test missed", () => {
+    const jsx = '<CanvasText style={styles.brand}>palate.app</CanvasText>';
+    expect(/>[^<>{}\n]*palate\.app/.test(stripComments(jsx))).toBe(true);
+    // And still catches the string form.
+    expect(/["'`][^"'`\n]*palate\.app/.test(stripComments('const u = "palate.app";'))).toBe(true);
+  });
+
   it("catches a dead domain in a literal but not in a comment", () => {
     // Proving the sweep can fail, and that it is not merely blind.
     expect(/["'`][^"'`\n]*palate\.app/.test(stripComments('const x = "go to palate.app";'))).toBe(true);
@@ -64,9 +71,18 @@ describe("the address on a shared card", () => {
     for (const rel of [...sources("components"), ...sources("app")]) {
       const src = stripComments(fs.readFileSync(path.join(ROOT, rel), "utf8"));
       for (const dead of DEAD) {
-        // Comments may discuss them; string literals may not carry them.
-        const inLiteral = new RegExp(`["'\`][^"'\`\\n]*${dead.replace(".", "\\.")}`);
-        if (inLiteral.test(src)) offenders.push(`${rel} contains "${dead}"`);
+        const esc = dead.replace(/\./g, "\\.");
+        // Two ways a domain reaches a screen, and the first version of this
+        // test only knew one of them. WrappedCard rendered
+        // `<CanvasText>palate.app</CanvasText>` — JSX TEXT, with no quote in
+        // front of it — so the literal check sailed past a live bug on the
+        // in-app Wrapped card while reporting all clear. Found by looking at
+        // a screenshot of the running app, which no amount of grepping would
+        // have replaced.
+        const inLiteral = new RegExp(`["'\`][^"'\`\\n]*${esc}`);
+        const inJsxText = new RegExp(`>[^<>{}\\n]*${esc}`);
+        if (inLiteral.test(src)) offenders.push(`${rel} has "${dead}" in a string`);
+        if (inJsxText.test(src)) offenders.push(`${rel} has "${dead}" in JSX text`);
       }
     }
     expect(offenders).toEqual([]);
