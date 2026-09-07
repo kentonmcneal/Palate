@@ -103,12 +103,34 @@ function qualityQuadrant(r: RestaurantInput): number {
   return s;
 }
 
+/**
+ * Price as a hint of ambition, sitting BEHIND ratings rather than ahead of
+ * them. Compressed 2026-09-07 from +10/+7/+2/-8 (an 18-point span) to +6/+4/+1/-3
+ * (nine), on the founder's call.
+ *
+ * The old numbers inverted the thing he asked for. Against qualityQuadrant's
+ * -10..+16, an 18-point price span meant a mediocre expensive restaurant beat
+ * an excellent cheap one:
+ *
+ *     4.8 stars, $     -8 + 10 + 6 = +8
+ *     3.8 stars, $$$$ +10 -  6 + 6 = +10
+ *
+ * and a 4.2-star steakhouse cleared a 4.8-star taqueria by ten points. The
+ * stated principle is "lead with ratings and maybe even perceive price
+ * slightly as an indicator of strength", and this is what slightly looks like:
+ * $$$$ still outranks $ by nine points all else equal, so the upmarket lean
+ * survives, but six rating points now outweigh the whole price range.
+ *
+ * It also settles a contradiction this file already carried. The comment above
+ * refuses to hard-exclude cheap independents — "taquerias, banh mi, dumpling
+ * counters" — and the old -8 then started them eight points down anyway.
+ */
 function priceUpscale(r: RestaurantInput): number {
   switch (r.price_level) {
-    case 4: return 10;
-    case 3: return 7;
-    case 2: return 2;
-    case 1: return -8; // cheap eats / fast-casual correlate
+    case 4: return 6;
+    case 3: return 4;
+    case 2: return 1;
+    case 1: return -3; // still a hint: cheap eats / fast-casual correlate
     default: return 0;
   }
 }

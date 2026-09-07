@@ -98,39 +98,45 @@ describe("a brand-new account's Home", () => {
 });
 
 describe("gemAdjustment is where price actually speaks", () => {
-  it("spends 18 points on price alone, $ to $$$$", () => {
+  it("spends nine points on price alone, $ to $$$$", () => {
+    // Was 18 until 2026-09-07. Compressed so that six rating points outweigh
+    // the entire price range, which is what "lead with ratings" requires.
     const cheap = gemAdjustment(place({ price_level: 1 }));
     const dear = gemAdjustment(place({ price_level: 4 }));
-    expect(dear - cheap).toBe(18);
+    expect(dear - cheap).toBe(9);
   });
 
   // ------------------------------------------------------------------------
-  // NOT what the founder asked for. Recorded, not endorsed.
+  // The inversion that prompted the change, now the right way round.
   //
-  // "Lead with ratings and maybe even perceive price slightly as an indicator
-  // of strength" — measured against the arithmetic, price does not sit behind
-  // ratings at the extremes, it beats them:
+  // Before 2026-09-07, priceUpscale spent 18 points against qualityQuadrant's
+  // -10..+16, so a mediocre expensive restaurant beat an excellent cheap one:
   //
-  //   4.8 stars, $     -8 + 10 + 6 = +8
-  //   3.8 stars, $$$$ +10 -  6 + 6 = +10
+  //   4.8 stars, $     -8 + 10 + 6 =  +8      3.8 stars, $$$$ +10 - 6 + 6 = +10
   //
-  // Comparing the two terms' RANGES (ratings -10..+16 against price -8..+10)
-  // suggested ratings led, and that is the comparison I made first. It is the
-  // wrong one: what decides an ordering is the per-place arithmetic, and there
-  // a 4.2-star steakhouse clears a 4.8-star taqueria by ten points.
+  // Worth noting how that was missed at first: comparing the two terms' RANGES
+  // suggested ratings led. Ranges do not order anything. The per-place
+  // arithmetic does, and it said the opposite.
   // ------------------------------------------------------------------------
-  it("currently lets price outrank ratings at the extremes", () => {
+  it("lets an excellent cheap place beat a mediocre expensive one", () => {
     const goodCheap = gemAdjustment(place({ price_level: 1, rating: 4.8, user_rating_count: 800 }));
     const dullDear = gemAdjustment(place({ price_level: 4, rating: 3.8, user_rating_count: 800 }));
-    expect(goodCheap).toBe(8);
-    expect(dullDear).toBe(10);
-    expect(goodCheap).toBeLessThan(dullDear);
+    expect(goodCheap).toBe(13);
+    expect(dullDear).toBe(6);
+    expect(goodCheap).toBeGreaterThan(dullDear);
   });
 
-  it("puts a 4.2-star $$$$ ten points above a 4.8-star $", () => {
+  it("makes a 4.2-star $$$$ against a 4.8-star $ close to a tie", () => {
+    // Was a ten-point gap. Now one. The upmarket lean survives — the founder
+    // asked for it — but it no longer decides the question on its own, and
+    // half a rating point is enough to overturn it.
     const excellentCheap = gemAdjustment(place({ price_level: 1, rating: 4.8, user_rating_count: 800 }));
     const decentDear = gemAdjustment(place({ price_level: 4, rating: 4.2, user_rating_count: 800 }));
-    expect(decentDear - excellentCheap).toBe(10);
+    expect(decentDear - excellentCheap).toBe(1);
+  });
+
+  it("keeps the upmarket lean the founder asked for, all else equal", () => {
+    expect(gemAdjustment(place({ price_level: 4 }))).toBeGreaterThan(gemAdjustment(place({ price_level: 2 })));
   });
 
   it("applies to everyone, taste graph or not — it is not a cold-start rule", () => {
@@ -143,12 +149,10 @@ describe("gemAdjustment is where price actually speaks", () => {
     expect(f(4)).toBeGreaterThan(f(1));
   });
 
-  it("penalises the cheap independent places gems.ts says it protects", () => {
-    // Not a bug — a documented trade. The module refuses to hard-EXCLUDE a
-    // taqueria, then starts it 8 points down. Pinned so the day somebody wants
-    // Palate to be the app that finds cheap gems, this is the line to change.
-    expect(gemAdjustment(place({ price_level: 1 }))).toBeLessThan(
-      gemAdjustment(place({ price_level: 2 })),
-    );
+  it("no longer starts a taqueria eight points down", () => {
+    // gems.ts refuses to hard-EXCLUDE cheap independents, naming "taquerias,
+    // banh mi, dumpling counters", and then used to penalise them by 8 anyway.
+    // Still a hint, at -3, but a hint a good rating clears easily.
+    expect(gemAdjustment(place({ price_level: 1, rating: 4.5, user_rating_count: 800 }))).toBeGreaterThan(0);
   });
 });
