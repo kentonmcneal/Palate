@@ -24,6 +24,11 @@ export function WhatArePalates({ profile, onShare }: { profile: PalateProfile; o
 
       <PalateAxisGraph profile={profile} />
 
+      {/* Yours in full, the other three as a name and a line.
+          All four used to carry a whole paragraph, each comparing itself to
+          the others, so understanding your own result meant reading four
+          essays every week. The comparisons are the reason they were long and
+          they are exactly what a returning reader already knows. */}
       <View style={styles.quadrants}>
         {QUADRANT_ORDER.map((id) => {
           const isUser = profile.primaryIdentity === id;
@@ -32,7 +37,7 @@ export function WhatArePalates({ profile, onShare }: { profile: PalateProfile; o
             <View key={id} style={[styles.quadrantBlock, isUser && styles.quadrantBlockActive]}>
               <Text style={[styles.qName, isUser && styles.qNameActive]}>{identityName(id)}</Text>
               <Text style={styles.qTagline}>{blurb.tagline}</Text>
-              <Text style={styles.qDesc}>{blurb.description}</Text>
+              {isUser && <Text style={styles.qDesc}>{blurb.description}</Text>}
             </View>
           );
         })}

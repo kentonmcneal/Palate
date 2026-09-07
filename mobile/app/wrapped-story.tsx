@@ -313,10 +313,17 @@ const styles = StyleSheet.create({
   },
   headlineHero: {
     fontSize: 64, lineHeight: 68, letterSpacing: -1.4,
-    color: palateColors.red,
-    textShadowColor: "rgba(255,45,22,0.32)",
+    // White, not red. Red text on the storyRed gradient (#5A0B14 at its
+    // lightest) clears about 3.6:1 — technically legal for type this size and
+    // genuinely hard to read, which the founder saw immediately in a
+    // screenshot and I had not, because I have never looked at this screen.
+    //
+    // The glow stays red. The panel still reads as the red one, the word on it
+    // is legible at a glance, and white on that gradient is over 13:1.
+    color: "#fff",
+    textShadowColor: "rgba(255,45,22,0.55)",
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 16,
+    textShadowRadius: 22,
   },
   dominantSubline: {
     color: "rgba(255,255,255,0.78)",

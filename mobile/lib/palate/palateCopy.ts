@@ -238,9 +238,12 @@ export function composeMovement(
 // "What are Palates?" copy.
 // ----------------------------------------------------------------------------
 export const WHAT_ARE_PALATES = {
-  intro: "Your Palate is how you actually eat, not what you say you like. It comes from where you go, how often you go back, how often you try somewhere new, and whether you keep it casual or go somewhere nicer. It can change week to week, because it is about what you did this week.",
+  // Two sentences. The old three explained the inputs as well as the idea,
+  // which is the kind of thing a person reads once and skips forever after —
+  // and this block sits above a chart that shows the same inputs as axes.
+  intro: "Your Palate is how you actually eat, not what you say you like. It moves week to week, because it describes the week you just had.",
   axisIntro: "Two questions: how often you try somewhere new, and how casual or nice the places are.",
-  tagsIntro: "Tags are the details. Lines like Big on brunch, Ate in groups, or Kept going back describe the week without changing your main Palate.",
+  tagsIntro: "Details that colour the week without changing your Palate. Big on brunch, Ate in groups, Kept going back.",
   axisLabels: {
     yTop: "Nicer",
     yBottom: "Casual",
