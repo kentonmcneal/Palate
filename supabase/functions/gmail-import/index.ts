@@ -88,7 +88,25 @@ serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    if (action === "connect") return await handleConnect(admin, userId, body);
+    if (action === "connect") {
+      // Recorded server-side on purpose. Diagnosing this from the phone meant
+      // waiting for an OTA to propagate and trusting the client's error
+      // plumbing, and both were wrong at different points tonight, which cost
+      // several round trips and told us nothing. analytics_events is written
+      // with the service role, so the row lands whatever the client does with
+      // the response.
+      const res = await handleConnect(admin, userId, body);
+      if (res.status >= 300) {
+        let detail = "";
+        try { detail = await res.clone().text(); } catch { /* body unreadable */ }
+        await admin.from("analytics_events").insert({
+          user_id: userId,
+          event: "gmail_connect_failed",
+          props: { status: res.status, detail: detail.slice(0, 800) },
+        }).then(() => {}, () => {});
+      }
+      return res;
+    }
     if (action === "scan")    return await handleScan(admin, userId, body);
     if (action === "preview") return await handlePreview(admin, userId, body);
     if (action === "commit")  return await handleCommit(admin, userId, body);

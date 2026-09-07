@@ -50,3 +50,21 @@ describe("readFunctionError", () => {
     expect(await readFunctionError(invokeError(500, "upstream timeout"))).toBe("[500] upstream timeout");
   });
 });
+
+// The first version computed the status tag AFTER the shape check, so an
+// error whose context was not a Response came back with no tag at all and
+// read exactly like an unhandled failure.
+describe("the status survives a context that is not a Response", () => {
+  it("keeps the tag when the body cannot be read", async () => {
+    const text = await readFunctionError({
+      message: "Edge Function returned a non-2xx status code",
+      context: { status: 500 },
+    });
+    expect(text).toBe("[500] Edge Function returned a non-2xx status code");
+  });
+
+  it("says something useful when there is no context at all", async () => {
+    const text = await readFunctionError({ message: "boom" });
+    expect(text).toBe("boom");
+  });
+});

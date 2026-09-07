@@ -22,15 +22,20 @@ export async function readFunctionError(error: unknown): Promise<string> {
     ?? "Something went wrong";
 
   const res = (error as { context?: unknown } | null)?.context;
-  // Only a Response carries the body; other context shapes are not useful.
-  if (!res || typeof (res as Response).text !== "function") return fallback;
 
   // The status alone separates causes that otherwise read alike: 401 is the
   // gateway or our own auth check, 500 is an exception inside the handler,
-  // 502 is an upstream (Google) rejection. Without it, "Unauthorized" could
-  // be any of three layers and we were guessing between them.
-  const status = (res as Response).status;
-  const tag = Number.isFinite(status) && status > 0 ? `[${status}] ` : "";
+  // 502 is an upstream (Google) rejection.
+  //
+  // Computed BEFORE the shape check, because the first version returned early
+  // when context was not a Response and dropped the status with it. The
+  // result was a message that looked exactly like having no handler at all,
+  // which is precisely the confusion this function exists to remove.
+  const status = (res as { status?: unknown } | null)?.status;
+  const tag = typeof status === "number" && status > 0 ? `[${status}] ` : "";
+
+  // Only a Response carries a readable body; other shapes give just the tag.
+  if (!res || typeof (res as Response).text !== "function") return `${tag}${fallback}`;
 
   let raw = "";
   try {
