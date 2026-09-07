@@ -81,16 +81,24 @@ control by who you invite.
 - A nearby cache with a 75 m floor and radius-aware keys.
 - Featured lists refresh every 90 days, not every 18 hours.
 
-### The gap I would close before 50 testers
+### The gap before 50 testers — closed 2026-09-06
 
-The per-user limit is 120 calls/day against a 1,500 global cap. Fifty testers
-is a theoretical 6,000, so **roughly thirteen heavy users could trip the cap
-for everyone**, and tripping is not a bill, it is a silent app-wide outage at
-dinner time.
+The per-user limit is 120 calls/day plus a burst limit, against a 1,500 global
+cap. Fifty testers is a theoretical 6,000, so **roughly thirteen heavy users
+could trip the shared cap**, and tripping is not a bill, it is a silent
+app-wide outage at dinner time.
 
-The fix is not a higher ceiling. It is a **per-user daily budget that degrades
-that person to catalogue-only** instead of taking the app down for everyone.
-Say the word and I will build it; it is a day's work and costs nothing.
+**Correction to an earlier version of this doc:** it said the per-user budget
+still needed building and would take a day. It already existed. What did not
+exist was a graceful landing: hitting your own cap returned 429, a hard
+failure, while the code to answer from our own catalogue sat right there
+serving the global kill switch. Now `nearby`, `details` and `search` all treat
+"this account is over its cap" the same as "the shared budget is spent" —
+cached rows and a `degraded` flag. The cap still stops one account spending
+everyone's budget; it no longer breaks that person's screen to do it.
+
+Reading the source and believing it is what produced the wrong entry. The cap
+was in `places-proxy` and had been for weeks.
 
 ### Six more ways to scale without spending
 
@@ -134,7 +142,6 @@ plugin and source maps in an hour.
 | Beta App Review submit for 0.1.9 | yours | 5 min, then Apple's day or two |
 | DMARC + root SPF on your-palate.com | yours | 15 min of DNS |
 | Google consent screen: publish for Gmail | yours | 10 min, decision below |
-| Per-user Google budget | mine | 1 day |
 | Turn `server_push` on when you are ready | yours | 1 min |
 | First stranger actually uses the app | both | the real test |
 
