@@ -15,6 +15,7 @@
 
 import * as WebBrowser from "expo-web-browser";
 import { supabase } from "./supabase";
+import { readFunctionError } from "./function-error";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -97,7 +98,7 @@ export async function exchangeGmailCode(
       code_verifier: codeVerifier,
     },
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: await readFunctionError(error) };
   return { ok: true, ...(data as any) };
 }
 
@@ -113,7 +114,7 @@ export async function rescanGmail(sinceDays = 30): Promise<ConnectResult> {
   const { data, error } = await supabase.functions.invoke("gmail-import", {
     body: { action: "scan", since_days: sinceDays },
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: await readFunctionError(error) };
   return { ok: true, ...(data as any) };
 }
 
@@ -121,7 +122,7 @@ export async function disconnectGmail(): Promise<{ ok: boolean; error?: string }
   const { error } = await supabase.functions.invoke("gmail-import", {
     body: { action: "disconnect" },
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: await readFunctionError(error) };
   return { ok: true };
 }
 
