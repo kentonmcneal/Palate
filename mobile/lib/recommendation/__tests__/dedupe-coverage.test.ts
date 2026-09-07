@@ -20,11 +20,16 @@ const ROOT = path.resolve(__dirname, "..", "..", "..");
 
 const RANKED_SURFACES = [
   "components/RecommendationsCard.tsx",
-  "components/RightNowHero.tsx",
   "app/(tabs)/discover.tsx",
   "lib/featured-lists.ts",
   "lib/recommendation/candidates.ts",
 ];
+
+// components/RightNowHero.tsx is NOT on that list and must not be: it is
+// rendered nowhere. It was removed from Home on purpose, because it and the
+// first ranked pick were repeatedly the same restaurant, and the file was left
+// behind. Listing it here would have made this suite assert coverage of a
+// screen nobody sees, which is a worse kind of green than a missing test.
 
 /** Files that build a pool for SEARCH, where collapsing is wrong. */
 const EXEMPT = ["lib/cuisine-catalogue.ts"];
@@ -42,6 +47,14 @@ describe("venue dedupe covers every ranked surface", () => {
     for (const rel of EXEMPT) {
       expect(fs.readFileSync(path.join(ROOT, rel), "utf8")).not.toContain("dedupeVenues");
     }
+  });
+
+  it("only claims surfaces that are actually rendered", () => {
+    // If RightNowHero is ever brought back, this fails and someone has to
+    // decide whether it belongs on the list above.
+    const app = fs.readFileSync(path.join(ROOT, "app/(tabs)/index.tsx"), "utf8");
+    const rendered = /<RightNowHero[\s/>]/.test(app);
+    expect(rendered).toBe(false);
   });
 
   it("names surfaces that exist, so a rename cannot empty this suite", () => {
