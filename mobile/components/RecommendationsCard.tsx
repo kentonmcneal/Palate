@@ -33,6 +33,7 @@ import { toInput } from "../lib/recommendation/candidates";
 import { supabase } from "../lib/supabase";
 import { track } from "../lib/analytics";
 import { filterRecommendable } from "../lib/recommendation/eligibility";
+import { dedupeVenues } from "../lib/recommendation/dedupe";
 import { triggerHapticSuccess, triggerHapticSelection } from "../lib/haptics";
 import { pickSaveCopy } from "../lib/save-copy";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
@@ -270,7 +271,12 @@ export function RecommendationsCard({
       // old `eligibility > 0` check only caught venues the classifier had
       // already labeled, so unclassified chains still reached this list.
       const hidden = personal?.dislikes.placeIds ?? null;
-      const enriched: RestaurantRecommendation[] = filterRecommendable(nearby, { hidden })
+      // dedupeVenues collapses one venue Google lists twice under different
+      // place ids ("Hong Kong Restaurant" + "Hong Kong Restaurant | Chinese").
+      // Discover has done this since a tester reported the duplicate rows.
+      // Home never did, so the fix landed on one screen and the app's main
+      // surface kept the bug.
+      const enriched: RestaurantRecommendation[] = dedupeVenues(filterRecommendable(nearby, { hidden }))
         .filter((p) => !visitedHeavy.has(p.google_place_id))
         .filter((p) => !excludePlaceIds.includes(p.google_place_id))
         .map((p) => toRecommendation(p, graph, here, personal));

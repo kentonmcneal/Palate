@@ -14,6 +14,7 @@ import { triggerHapticSelection } from "../lib/haptics";
 import { assembleGraph, computeRightNow, type RightNowPick, type RightNowStrategy } from "../lib/recommendation";
 import { toInput as toCandidateInput } from "../lib/recommendation/candidates";
 import { filterRecommendable } from "../lib/recommendation/eligibility";
+import { dedupeVenues } from "../lib/recommendation/dedupe";
 import { AnimatedNumber } from "./AnimatedNumber";
 
 // ============================================================================
@@ -95,7 +96,10 @@ export function RightNowHero({ onTakeMeThere, onPicked }: Props) {
       // Add the new exclusion (if any) to the running dismissed set
       if (extraExcludeId) dismissedRef.current.add(extraExcludeId);
 
-      const filtered = filterRecommendable(nearby, { hidden: personal?.dislikes.placeIds ?? null }).filter(
+      // Same venue dedupe as Home's list and Discover. The hero is one card,
+      // so a duplicate here does not repeat visibly — but it can hand the top
+      // slot to the worse of two listings for the same restaurant.
+      const filtered = dedupeVenues(filterRecommendable(nearby, { hidden: personal?.dislikes.placeIds ?? null })).filter(
         (r) => !dismissedRef.current.has(r.google_place_id),
       );
 

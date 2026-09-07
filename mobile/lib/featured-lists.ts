@@ -159,10 +159,12 @@ export async function buildFeaturedLists(opts: {
     // gate — see lib/recommendation/eligibility.ts. Café-shaped lists opt out
     // of the café rule, otherwise "Top 10 Cafés" would filter itself empty.
     const cafeList = row.category_slug === "cafes" || row.category_slug === "brunch";
-    const restaurants = filterRecommendable(
+    // A curated list showing the same restaurant twice reads as carelessness
+    // more than a feed does, because somebody is supposed to have chosen it.
+    const restaurants = dedupeVenues(filterRecommendable(
       (row.restaurants ?? []) as RestaurantInput[],
       { cafes: cafeList ? "allow" : "gems-only", hidden: hiddenIds },
-    );
+    ));
     const visited = restaurants.filter((r) => visitedIds.has(r.google_place_id)).length;
     lists.push({
       slug: row.category_slug,
@@ -225,6 +227,7 @@ async function loadUserVisitedIds(): Promise<Set<string>> {
 
 // Bust the cache when the user logs a new visit / item rating.
 import { onPersonalSignalInvalidate, loadPersonalSignal } from "./personal-signal";
+import { dedupeVenues } from "./recommendation/dedupe";
 import { filterRecommendable } from "./recommendation/eligibility";
 onPersonalSignalInvalidate(() => {
   visitedIdsCache = null;
