@@ -28,15 +28,21 @@ amount of care in the code substitutes for a restore point. **Pro is $25/month**
 and buys daily backups plus PITR. Verify the current retention in the dashboard
 before deciding; the tier terms change.
 
-**2. Nobody is told when something breaks.**
-Sentry receives crashes but nothing routes them anywhere. A crash at 8pm on a
-Friday should reach a phone, not wait to be noticed. Sentry alert rules take ten
-minutes and cost nothing on the free plan.
+**2. Nobody is told when something breaks. — BUILT 2026-09-07.**
+`supabase/functions/sentry-alert` receives a Sentry webhook and pushes to the
+same device that already gets the Google-budget and feedback alerts, so
+operational noise arrives in one place and one voice rather than in an inbox
+that stops being read after the third email. Authenticated by a shared secret
+in the URL path, fails closed when unset, and always answers 200 because Sentry
+disables endpoints that error. Still needs the secret set and the URL pasted
+into Sentry — see the manual steps.
 
-**3. There is no rollback runbook.**
-An OTA reaches every install within two cold starts. That is the app's biggest
-operational advantage and its sharpest edge, and the procedure for undoing a bad
-one is currently "remember how". See Part 2.
+**3. There is no rollback runbook. — BUILT 2026-09-07.**
+`scripts/rollback.sh` republishes the previous update group on every runtime,
+with no arguments and no thinking required, because at the moment you need it
+you will be reading a crash report rather than a README. `--list` shows what is
+out there, `--dry-run` prints what it would do. Nothing is destroyed; rolling
+forward again is the same command against a newer group.
 
 ### Blocking the submission itself
 
@@ -64,10 +70,16 @@ need a build. Design the response around that.
 ### The runbook
 
 **A bad OTA is live.**
-Republish the previous commit's bundle to all three runtimes — `scripts/ota.sh`
-does every runtime in one command. Do not wait to find the root cause first;
-restore the last good bundle, then diagnose. Expect two cold starts before it
-takes effect, so tell people to force-quit twice if they are waiting on it.
+
+```
+scripts/rollback.sh
+```
+
+That is the whole procedure. It republishes the previous group on every
+runtime. Restore first, diagnose second: the previous bundle is known to have
+worked and a fix written under pressure is not. Expect two cold starts before
+it takes effect, so tell people to force-quit twice if they are waiting on it.
+`scripts/rollback.sh --list` first if you need to go back further than one.
 
 **A crash spike.**
 Sentry names the release. If it is a JS crash, it is an OTA fix. If it is
