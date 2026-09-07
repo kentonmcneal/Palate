@@ -119,6 +119,78 @@ was in `places-proxy` and had been for weeks.
 
 ---
 
+## Storage: what grows, and what that costs
+
+Measured 2026-09-07 against the live database.
+
+**Total today: 28 MB of a 500 MB free tier**, across 14 accounts (3 of them
+genuinely active) and a 1,719-restaurant catalogue.
+
+| table | size | rows | grows with |
+|---|---|---|---|
+| `restaurants` | 6.2 MB | 1,719 | **metros**, not users (shared catalogue) |
+| `analytics_events` | 3.5 MB | 7,388 | **usage**, per person per day |
+| `restaurant_rating_snapshots` | 568 kB | 4,296 | catalogue size |
+| `visits` | 104 kB | 55 | meals eaten, kept forever |
+| everything else | < 250 kB each | | |
+
+### The thing people expect to be the problem is not
+
+**Visits are the data we keep forever, and they are negligible.** Somebody
+eating out four times a week logs about 208 visits a year. At the marginal
+row size that is well under a megabyte per person per decade. Ten years of a
+heavy user's actual dining history costs less than one of today's cities.
+
+**Telemetry is what grows, and it is disposable.** `analytics_events` is
+471 bytes a row including indexes, and the heaviest account on the app
+generates **84 events a day**. 71% of every row ever written is a single
+event: `rec_restaurant_viewed`, an impression logged when a card is more than
+half visible for half a second.
+
+### The retention rule is mismatched with what reads it
+
+Migration 0133 prunes analytics at 180 days. 0136 then carved out `rec_*` and
+gave it **730 days**, on the reasoning that those are the only rows that could
+ever train a learned ranker.
+
+But `FEEDBACK_WINDOW_DAYS = 60`. The recommender reads sixty days and stops.
+So we are keeping two years of impressions to feed a model that looks at two
+months, and impressions are 71% of the volume and the least informative row we
+write.
+
+Per heavy user at steady state:
+
+| | impressions kept | rows held | storage |
+|---|---|---|---|
+| today | 730 days | ~48,000 | **~23 MB** |
+| impressions at 180 days | 180 days | ~15,000 | **~7 MB** |
+
+Decision events (clicked, saved, directions opened, dismissed) stay at 730
+days under either policy. They are the rows with signal in them and there are
+55 of them in the entire history of the app.
+
+**Effect on the free tier**, after leaving room for a ten-metro catalogue:
+roughly **18 heavy users today, roughly 60 with the change.** For users at a
+more typical 15 events a day it is closer to 100 today and 300 after.
+
+### What I would do
+
+1. **Cut impression retention to 180 days**, matching every other event. It
+   deletes **zero rows today** (the oldest event on the app is 129 days old),
+   so it is a policy change that takes effect in two months, not a deletion.
+2. **Roll impressions up before pruning**, so the funnel keeps its history as
+   monthly counts rather than raw rows. One row per user per month instead of
+   1,800.
+3. When the free tier does run out, **Supabase Pro is $25/month and raises the
+   ceiling to 8 GB**, about sixteen times the headroom. That is the real
+   answer to "what if we grow": this is a $25 problem, not an architecture
+   problem, and the retention change decides whether you meet it at 20 users
+   or at 300.
+
+Neither 1 nor 2 is done. Both are cheap and neither costs money to run.
+
+---
+
 ## How close is launch
 
 **The app is ready. The operations around it are not.** Honest read: two to
