@@ -403,11 +403,6 @@ async function handleScanAll(admin: ReturnType<typeof createClient>, body: any) 
   const perUser: Array<{ user_id: string; imported?: number; error?: string }> = [];
 
   for (const { user_id } of users) {
-    if (await budgetSpent(admin)) {
-      perUser.push({ user_id, error: "google_budget_spent" });
-      failed++;
-      continue;
-    }
     try {
       const result = await runScan(admin, user_id, sinceDays);
       imported += result.imported ?? 0;
@@ -646,38 +641,50 @@ async function createImportedVisit(
 // ---------------------------------------------------------------------------
 // Google Places metering
 // ---------------------------------------------------------------------------
-// This function called Google uncapped while places-proxy has been metered and
-// kill-switched since migration 0033. That was survivable while the only
-// trigger was a human tapping "Rescan"; it is not once a scheduled scan can
-// fan out across every connected inbox. Same counter, same daily cap, same
-// kill switch — one budget for the whole project, not one per caller.
-
-const GOOGLE_DAILY_CALL_CAP = Number(Deno.env.get("GOOGLE_DAILY_CALL_CAP") ?? 2000);
+// This function's lookup is FREE, and the metering did not know that.
+//
+// It asks Google for `places.id` and nothing else, which is the Text Search
+// IDs-Only SKU: unlimited, no per-request charge, no monthly allowance to
+// exhaust. Every other Google call in this project asks for rating, price and
+// opening hours, which lands in the Pro tier and is billed past 5,000 a month.
+//
+// Both were counted against the same 1,500/day budget and the same kill
+// switch. Two consequences, both wrong. A nightly scan across many inboxes
+// could trip the switch on calls that cost nothing, blacking out Home,
+// Discover and passive venue resolution, which DO cost money and DO need the
+// protection. And the budget the switch protects was being reported as spent
+// when most of it had not been.
+//
+// So the lookup is still recorded, under its own source, because knowing the
+// volume matters. It is simply no longer charged.
 
 function todayUTC(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-async function budgetSpent(admin: ReturnType<typeof createClient>): Promise<boolean> {
-  try {
-    const { data } = await admin
-      .from("google_usage_counter")
-      .select("tripped")
-      .eq("day", todayUTC())
-      .maybeSingle();
-    return (data as any)?.tripped === true;
-  } catch {
-    // Fail OPEN on a metering read error: a database blip should not silently
-    // stop importing people's receipts. The counter below still records the
-    // call, so the cap re-asserts itself on the next request.
-    return false;
-  }
-}
+// No budget gate here, deliberately. The only Google call this function makes
+// is free, so there is nothing to protect, and gating a free call on the paid
+// budget was the bug. Volume is bounded anyway: Gmail returns at most 100
+// messages per scan and each message yields at most one lookup.
+//
+// If Google ever starts charging for the IDs-Only SKU, the gate comes back
+// here and bump_google_usage goes back into recordFreeLookup below.
 
-async function meterGoogleCall(admin: ReturnType<typeof createClient>): Promise<void> {
+/**
+ * Record a free lookup. Telemetry only: no bump_google_usage, so it cannot
+ * move the paid counter or trip the kill switch.
+ *
+ * The source is `google_free` rather than `google` so api_usage_daily can
+ * still answer "how much did we spend" by summing the paid sources alone,
+ * and "how hard are we leaning on Gmail" separately.
+ */
+async function recordFreeLookup(admin: ReturnType<typeof createClient>): Promise<void> {
   try {
-    await admin.rpc("bump_google_usage", { p_day: todayUTC(), p_cap: GOOGLE_DAILY_CALL_CAP });
-    await admin.rpc("record_api_usage", { p_day: todayUTC(), p_action: "gmail_place_lookup", p_source: "google" });
+    await admin.rpc("record_api_usage", {
+      p_day: todayUTC(),
+      p_action: "gmail_place_lookup",
+      p_source: "google_free",
+    });
   } catch {
     /* metering must never break the import */
   }
@@ -699,8 +706,11 @@ async function placeIdForName(
     if ((known as any)?.google_place_id) return (known as any).google_place_id;
   } catch { /* fall through to the metered lookup */ }
 
-  if (await budgetSpent(admin)) return null;
-  await meterGoogleCall(admin);
+  // Deliberately not gated on the paid budget: this SKU is free, so a day
+  // where Home and Discover have exhausted the paid cap is no reason to stop
+  // turning somebody's receipts into visits. The scan is bounded by Gmail
+  // itself, which returns at most 100 messages per run.
+  await recordFreeLookup(admin);
 
   try {
     const r = await fetch("https://places.googleapis.com/v1/places:searchText", {
