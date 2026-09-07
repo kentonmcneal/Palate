@@ -28,6 +28,7 @@ import type { TasteGraph } from "./taste-graph";
 import type { RestaurantInput } from "./types";
 import { shareOf } from "./taste-graph";
 import { capByKey } from "./reranking";
+import { uniqueByBrand } from "./brand";
 import { isStretch } from "./candidates";
 import { isResting } from "./feedback";
 import { dislikePenalty } from "../dislikes";
@@ -60,14 +61,28 @@ export function shortlist<T>(items: T[], opts: ShortlistOptions<T>): Shortlist<T
 
   // 1. Rest — unless resting would leave the list short.
   const fresh = items.filter((t) => !isResting(g.feedbackByPlace, idOf(t)));
-  const base = fresh.length >= size ? fresh : items;
+  const rested = fresh.length >= size ? fresh : items;
 
-  // 2. Cap.
+  // 2. One location per restaurant. Ranked by compatibility, the top three
+  //    nearby were Huey's Poplar, Huey's Southwind and Hueys Germantown: the
+  //    same place three times, as the whole recommendation. The cuisine cap
+  //    below cannot catch it, because three locations of one restaurant are
+  //    one cuisine.
+  //
+  //    Same guard as the rest rule above: a pool too thin to fill the list
+  //    without repeating a brand repeats the brand rather than coming back
+  //    short. Better to say Huey's twice than to say nothing.
+  const nameOf = (t: T) => opts.toInput(t).name;
+  const chainOf = (t: T) => opts.toInput(t).chain_name;
+  const oneEach = uniqueByBrand(rested, nameOf, chainOf);
+  const base = oneEach.length >= size ? oneEach : rested;
+
+  // 3. Cap.
   const thin = g.dataDepth === "low";
   const cap = thin ? 1 : 2;
   const exploit = capByKey(base, cuisineOf, cap, size);
 
-  // 3. Explore.
+  // 4. Explore.
   if (opts.explore === false || thin || exploit.length < size || size < 2) {
     return { picks: exploit, exploreIndex: null };
   }
