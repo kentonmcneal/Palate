@@ -1,6 +1,7 @@
 import { View, StyleSheet } from "react-native";
 import { SHARE_DOMAIN } from "../lib/share-target";
 import { LinearGradient } from "expo-linear-gradient";
+import { cuisineHue } from "./PlaceArt";
 import { colors, radius } from "../theme";
 import type { Wrapped } from "../lib/wrapped";
 import { CanvasText } from "./CanvasText";
@@ -41,15 +42,23 @@ export function WrappedCard({
   const rangeLabel = stats ? stats.rangeLabel : formatRange(data.week_start, data.week_end);
   const eyebrow = stats ? stats.eyebrow : "YOUR PALATE THIS WEEK";
 
+  // The top cuisine when one is known, else the card falls back to the seed,
+  // which keeps a person's card stable rather than recolouring it each week.
+  const hue = cuisineHue(topCuisines?.[0]?.name ?? data.top_category, data.id);
+
   return (
     <View style={styles.card} collapsable={false}>
+      {/* Hued to what the person eats, like the story card. Two cards showing
+          the same week in two different palettes is the kind of inconsistency
+          that reads as unfinished — this one kept the flat charcoal when the
+          story card stopped being charcoal. */}
       <LinearGradient
-        colors={["#1A1A1A", "#0E0E0E"]}
+        colors={[shade(hue, 0.72), shade(hue, 0.88)]}
         style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
       />
-      <View style={styles.glowRed} />
+      <View style={[styles.glowRed, { backgroundColor: hue }]} />
 
       <View style={styles.row}>
         <View style={styles.logoBox}>
@@ -132,6 +141,15 @@ const ON_DARK = {
   faintLabel: "rgba(255,255,255,0.42)",
   hairline: "rgba(255,255,255,0.14)",
 } as const;
+
+/** Darken toward black so both gradient stops are obviously one hue. */
+function shade(hex: string, amount: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.round(((n >> 16) & 255) * (1 - amount));
+  const g = Math.round(((n >> 8) & 255) * (1 - amount));
+  const b = Math.round((n & 255) * (1 - amount));
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+}
 
 const styles = StyleSheet.create({
   card: {
@@ -221,9 +239,7 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: 8,
-    borderBottomColor: ON_DARK.hairline,
-    borderBottomWidth: 1,
+    paddingVertical: 9,
   },
   topName: { color: ON_DARK.primary, fontSize: 16 },
   topRank: { color: ON_DARK.label },

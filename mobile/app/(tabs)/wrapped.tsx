@@ -444,7 +444,10 @@ export default function WrappedTab() {
             )}
             <Button title="Post to Feed" variant="ghost" onPress={shareToFeed} />
             <Spacer size={8} />
-            <Button title="Invite a friend to compare palates" onPress={inviteFriend} />
+            {/* Ghost, not red. Sharing is what this screen is for; two full-red
+                buttons made the reader choose between two primaries, which is
+                the same problem the seven-button stack had in smaller form. */}
+            <Button title="Invite a friend to compare palates" variant="ghost" onPress={inviteFriend} />
             <Spacer size={12} />
             <Pressable onPress={generate} hitSlop={10} accessibilityRole="button">
               <Text style={styles.quietAction}>{loading ? "Refreshing…" : "Refresh"}</Text>
