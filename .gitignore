@@ -14,3 +14,6 @@ dist
 
 # Claude Code personal permission grants (machine-local, not committed)
 .claude/settings.local.json
+
+# Written by scripts/ota.sh while app.json is mid-swap.
+.ota-running
