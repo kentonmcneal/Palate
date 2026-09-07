@@ -13,8 +13,45 @@ describe("brandKey", () => {
   it("groups the locations that caused this", () => {
     const k = brandKey("Huey's Poplar");
     expect(brandKey("Huey's Southwind")).toBe(k);
-    expect(brandKey("Hueys Germantown")).toBe(k);
     expect(brandKey("Huey's Olive Branch")).toBe(k);
+    expect(brandKey("Huey's Midtown")).toBe(k);
+  });
+
+  // Measured over all 1,719 catalogue rows. Written down as behaviour rather
+  // than left to be rediscovered, because both are deliberate trades.
+  it("does not group an apostrophe-less name on its own evidence", () => {
+    // Standing alone, "Hueys Germantown" is just a word ending in s. Treating
+    // every such word as a brand merged seven unrelated "Memphis ..." places
+    // and five "Tacos ..." ones across the full catalogue.
+    expect(brandKey("Hueys Germantown")).not.toBe(brandKey("Huey's Poplar"));
+  });
+
+  it("adopts a brand only when that possessive is spelled out nearby", () => {
+    const known = new Set(["hueys"]);
+    expect(brandKey("Hueys Germantown", null, known)).toBe(brandKey("Huey's Poplar"));
+    // The rule cannot invent a brand: nothing is ever named "Memphi's" or
+    // "Taco's", so those words never enter the known set in the first place.
+    expect(brandKey("Memphis Chess Club", null, known)).not.toBe(brandKey("Memphis BBQ Company", null, known));
+    expect(brandKey("Tacos 4 Life", null, known)).not.toBe(brandKey("Tacos La Fogata", null, known));
+  });
+
+  it("knowingly groups unrelated restaurants that share a common first name", () => {
+    // Tony's Pizza Napoletana and Tony's Takos are different places. The
+    // shortlist offers one of them instead of both, out of ~200 candidates,
+    // and neither disappears from search or Discover.
+    expect(brandKey("Tony's Takos")).toBe(brandKey("Tony's Pizza Napoletana"));
+  });
+
+  it("keeps city and category words apart, which is where the loose rule failed", () => {
+    expect(brandKey("Memphis BBQ Company")).not.toBe(brandKey("Memphis Chess Club"));
+    expect(brandKey("Tacos 4 Life")).not.toBe(brandKey("Tacos La Fogata"));
+    expect(brandKey("Southern Social")).not.toBe(brandKey("Southern Hands Homestyle Cooking"));
+  });
+
+  it("still folds true duplicates and true second locations", () => {
+    expect(brandKey("Taziki's @ Mendenhall")).toBe(brandKey("Taziki's Mediterranean Cafe - Germantown"));
+    expect(brandKey("Memphis Pizza Cafe")).toBe(brandKey("Memphis Pizza Cafe"));
+    expect(brandKey("Maciel's tortas & tacos （downtown）")).toBe(brandKey("maciel's (bartlett)"));
   });
 
   it("uses chain_name when the classifier set one", () => {
