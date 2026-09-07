@@ -121,17 +121,28 @@ serve(async (req) => {
 
     // Per-user cap on every Google-backed action, here rather than inside
     // handleNearby only: search has no cache and was per-user unbounded.
-    if ((action === "nearby" || action === "details" || action === "search") && await overUserCap(adminClient, user.id)) {
-      return json({ error: "rate_limited" }, 429);
-    }
+    //
+    // Being over your own cap DEGRADES you to the catalogue. It does not shut
+    // you out. The old behaviour was a 429 — a hard failure on the heaviest
+    // phone in the beta, arriving at exactly the hour that phone is used most,
+    // while the machinery to answer from our own rows sat right there serving
+    // the global kill switch. The cap exists to stop one account spending the
+    // shared budget, and refusing the call achieves that just as well as
+    // breaking the screen does.
+    const capped = (action === "nearby" || action === "details" || action === "search")
+      && await overUserCap(adminClient, user.id);
+    // Recorded under its own action key so this is visible in telemetry
+    // rather than silently indistinguishable from a cache hit.
+    if (capped) await recordUsage(adminClient, `${action}:user_cap`, "cache");
+
     if (action === "nearby") {
-      return await handleNearby(body, user.id, adminClient);
+      return await handleNearby(body, user.id, adminClient, capped);
     }
     if (action === "details") {
-      return await handleDetails(body, user.id, adminClient);
+      return await handleDetails(body, user.id, adminClient, capped);
     }
     if (action === "search") {
-      return await handleSearch(body, user.id, adminClient);
+      return await handleSearch(body, user.id, adminClient, capped);
     }
     if (action === "blurb") {
       return await handleBlurb(body, adminClient);
@@ -188,6 +199,7 @@ async function handleNearby(
   body: { lat?: number; lng?: number; radius_m?: number },
   userId: string,
   admin: ReturnType<typeof createClient>,
+  capped: boolean,
 ) {
   const { lat, lng } = body;
   const radius = Math.min(body.radius_m ?? NEARBY_DEFAULT_RADIUS_M, NEARBY_MAX_RADIUS_M);
@@ -195,18 +207,17 @@ async function handleNearby(
     return json({ error: "lat/lng required" }, 400);
   }
 
-  // Per-user ceiling on Google-backed calls. This used to count
-  // location_events, a table nothing writes, so there was no per-user cap at
-  // all — one enthusiastic phone could spend the whole daily budget. Found by
-  // the code review. proxy_calls (0106) is written on every Google-backed
-  // call below; cache hits are free and uncounted.
-  if (await overUserCap(admin, userId)) {
-    return json({ error: "rate_limited" }, 429);
-  }
-
-  // Kill-switch: if today's Google budget is spent, serve best-effort results
-  // from the cached restaurants instead of calling Google.
-  if (await isTripped(admin)) {
+  // Two ceilings, one answer. `capped` is this account's own daily/burst
+  // limit, decided in the entry point; `isTripped` is the shared daily budget.
+  // Either one means: do not call Google, serve best-effort results from the
+  // cached restaurants.
+  //
+  // The per-user count used to read location_events, a table nothing writes,
+  // so there was no per-user cap at all and one enthusiastic phone could spend
+  // the whole daily budget. Found by the code review. proxy_calls (0106) is
+  // written on every Google-backed call below; cache hits are free and
+  // uncounted.
+  if (capped || await isTripped(admin)) {
     const places = await degradedNearby(admin, lat, lng, radius);
     await recordUsage(admin, `nearby:${radius}`, "cache");
     return json({ places, degraded: true });
@@ -348,6 +359,7 @@ async function handleDetails(
   body: { place_id?: string },
   userId: string,
   admin: ReturnType<typeof createClient>,
+  capped: boolean,
 ) {
   const placeId = body.place_id;
   if (!placeId) return json({ error: "place_id required" }, 400);
@@ -370,9 +382,10 @@ async function handleDetails(
     return json({ place: cached });
   }
 
-  // Kill-switch: budget spent — return the stale cached row if we have one,
-  // rather than paying Google for a refresh. Only 503 when we have nothing.
-  if (await isTripped(admin)) {
+  // Budget spent, shared or this account's own — return the stale cached row
+  // if we have one, rather than paying Google for a refresh. Only 503 when we
+  // have nothing at all to show.
+  if (capped || await isTripped(admin)) {
     if (cached) {
       await recordUsage(admin, "details", "cache");
       return json({ place: cached, degraded: true });
@@ -407,13 +420,15 @@ async function handleSearch(
   body: { query?: string; lat?: number; lng?: number },
   userId: string,
   admin: ReturnType<typeof createClient>,
+  capped: boolean,
 ) {
   if (!body.query) return json({ error: "query required" }, 400);
 
-  // Kill-switch: text search is a relevance-ranked query we can't faithfully
-  // serve from the DB, so when the budget is spent we return empty with a
-  // degraded flag rather than a low-quality guess.
-  if (await isTripped(admin)) {
+  // Text search is a relevance-ranked query we can't faithfully serve from
+  // the DB, so when the budget is spent — shared or this account's own — we
+  // return empty with a degraded flag rather than a low-quality guess. The
+  // caller has `searchCatalogue`, which is free, for this case.
+  if (capped || await isTripped(admin)) {
     await recordUsage(admin, "search", "cache");
     return json({ places: [], degraded: true });
   }

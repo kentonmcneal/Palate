@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { readFunctionError } from "./function-error";
 
 export type Restaurant = {
   id?: string;
@@ -24,10 +25,24 @@ export type Restaurant = {
   ineligibility_reason?: string | null;
 };
 
-/** Calls the places-proxy edge function with a typed body. */
+/**
+ * Calls the places-proxy edge function with a typed body.
+ *
+ * The error path matters more than it looks. supabase-js turns every non-2xx
+ * into a FunctionsHttpError whose message is the fixed string "Edge Function
+ * returned a non-2xx status code", and the proxy's own reply — `rate_limited`,
+ * `places_failed`, `temporarily_unavailable` — is on `error.context`, unread.
+ *
+ * The map screen has shipped a written-out message for the rate-limit case
+ * since it was added, guarded by `msg.includes("rate_limited")`, and that
+ * substring could never appear: the proxy returns rate_limited as a 429, so
+ * the thrown message was always the generic sentence. Every capped user saw
+ * "check your connection" instead. Reading the body is what makes the message
+ * the founder already wrote actually reachable.
+ */
 async function callProxy<T>(body: object): Promise<T> {
   const { data, error } = await supabase.functions.invoke("places-proxy", { body });
-  if (error) throw error;
+  if (error) throw new Error(await readFunctionError(error));
   if (data && typeof data === "object" && "error" in data) {
     throw new Error(String((data as { error: unknown }).error));
   }

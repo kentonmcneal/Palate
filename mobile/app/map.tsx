@@ -119,12 +119,18 @@ export default function FullscreenMap() {
     } catch (e: any) {
       // Keep previous markers, but tell the user why nothing new loaded
       // instead of failing silently (the old behavior looked like a freeze).
-      const msg = String(e?.message ?? e ?? "");
-      setFetchError(
-        msg.includes("rate_limited")
-          ? "Slow down a sec. Too many map moves, so new spots will load shortly."
-          : "Couldn't load this area. Check your connection and try again.",
-      );
+      // There used to be a branch here for "rate_limited", written for the
+      // case where panning the map spent this account's Google allowance. It
+      // could never fire: the proxy answered that case with a 429, and a 429
+      // reaches supabase-js as the fixed sentence "Edge Function returned a
+      // non-2xx status code", so the substring was never present and every
+      // capped person was told to check their connection instead.
+      //
+      // It is gone rather than fixed, because the proxy no longer refuses a
+      // capped account at all — it serves the same catalogue-backed results
+      // the global kill switch serves. Panning too fast now costs freshness,
+      // not the screen. What reaches here is a genuine failure.
+      setFetchError("Couldn't load this area. Check your connection and try again.");
     } finally {
       setLoading(false);
       setRefetching(false);

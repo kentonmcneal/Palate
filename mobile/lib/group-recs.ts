@@ -9,6 +9,7 @@
 // ============================================================================
 
 import { supabase } from "./supabase";
+import { readFunctionError } from "./function-error";
 
 export type GroupPick = {
   google_place_id: string;
@@ -50,7 +51,7 @@ export async function loadGroupRecs(input: {
       cuisine: input.cuisine ?? null,
     },
   });
-  if (error) throw error;
+  if (error) throw new Error(await readFunctionError(error));
   return (data ?? { picks: [] }) as GroupResult;
 }
 

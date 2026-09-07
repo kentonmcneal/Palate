@@ -159,7 +159,7 @@ export async function previewGmailImport(sinceDays = 90): Promise<ImportPreview>
   const { data, error } = await supabase.functions.invoke("gmail-import", {
     body: { action: "preview", since_days: sinceDays },
   });
-  if (error) throw error;
+  if (error) throw new Error(await readFunctionError(error));
   if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
   return data as ImportPreview;
 }
@@ -185,7 +185,7 @@ export async function commitGmailImport(messageIds: string[]): Promise<{ importe
   const { data, error } = await supabase.functions.invoke("gmail-import", {
     body: { action: "commit", message_ids: messageIds },
   });
-  if (error) throw error;
+  if (error) throw new Error(await readFunctionError(error));
   if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
   return data as { imported: number; skipped: number };
 }
