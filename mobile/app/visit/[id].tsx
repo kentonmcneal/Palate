@@ -25,7 +25,7 @@ import { supabase } from "../../lib/supabase";
 import {
   recentVisits,
   updateVisit,
-  deleteVisit,
+  deleteVisitWithUndo,
   attachPhotoToVisit,
   type Visit,
 } from "../../lib/visits";
@@ -162,14 +162,34 @@ export default function VisitDetailScreen() {
   }
 
   function confirmDelete() {
-    Alert.alert("Delete this visit?", "This can't be undone.", [
+    // The copy used to say "This can't be undone", which was true only because
+    // nothing called deleteVisitWithUndo — written months ago, complete, and
+    // never wired to anything. A visit is not a row in a list: it feeds the
+    // taste graph, and a mistaken tap here quietly costs a person a piece of
+    // what the app knows about them.
+    //
+    // The undo is an Alert rather than a toast on purpose. Alerts are what
+    // this screen already uses, so there is no new component and no layout to
+    // get wrong, and the restore reinserts with the original id so attached
+    // photos still point at it.
+    Alert.alert("Delete this visit?", "You will get one chance to undo it.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete", style: "destructive",
         onPress: async () => {
           try {
-            await deleteVisit(visitId);
-            router.back();
+            const { undo } = await deleteVisitWithUndo(visitId);
+            Alert.alert("Visit deleted", "", [
+              {
+                text: "Undo",
+                onPress: () => {
+                  void undo()
+                    .then(() => Alert.alert("Restored", "The visit is back."))
+                    .catch(() => Alert.alert("Couldn't undo", "The visit stayed deleted."));
+                },
+              },
+              { text: "Done", style: "cancel", onPress: () => router.back() },
+            ]);
           } catch (e: any) {
             Alert.alert("Couldn't delete", e?.message ?? "Try again");
           }

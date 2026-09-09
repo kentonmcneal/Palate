@@ -357,11 +357,6 @@ export async function attachPhotoToVisit(visitId: string, fileUri: string): Prom
   return url;
 }
 
-export async function deleteVisit(id: string) {
-  const { error } = await supabase.from("visits").delete().eq("id", id);
-  if (error) throw error;
-}
-
 /**
  * Soft-delete-with-undo: stash the row contents, delete it, return a
  * function that re-creates it. Caller is responsible for showing UI within
