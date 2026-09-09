@@ -25,11 +25,11 @@ const RANKED_SURFACES = [
   "lib/recommendation/candidates.ts",
 ];
 
-// components/RightNowHero.tsx is NOT on that list and must not be: it is
-// rendered nowhere. It was removed from Home on purpose, because it and the
-// first ranked pick were repeatedly the same restaurant, and the file was left
-// behind. Listing it here would have made this suite assert coverage of a
-// screen nobody sees, which is a worse kind of green than a missing test.
+// There used to be a components/RightNowHero.tsx on this list, and it should
+// never have been: it was rendered nowhere. It came off Home on purpose —
+// it and the first ranked pick were repeatedly the same restaurant — and the
+// file sat there for months afterwards. Asserting dedupe on a screen nobody
+// sees is a worse kind of green than a missing test. The file is deleted now.
 
 /** Files that build a pool for SEARCH, where collapsing is wrong. */
 const EXEMPT = ["lib/cuisine-catalogue.ts"];
@@ -49,12 +49,12 @@ describe("venue dedupe covers every ranked surface", () => {
     }
   });
 
-  it("only claims surfaces that are actually rendered", () => {
-    // If RightNowHero is ever brought back, this fails and someone has to
-    // decide whether it belongs on the list above.
-    const app = fs.readFileSync(path.join(ROOT, "app/(tabs)/index.tsx"), "utf8");
-    const rendered = /<RightNowHero[\s/>]/.test(app);
-    expect(rendered).toBe(false);
+  it("only claims surfaces that exist", () => {
+    // Every named surface must be a real file. A renamed or deleted component
+    // should fail loudly here rather than quietly stop being checked.
+    for (const rel of RANKED_SURFACES) {
+      expect(fs.existsSync(path.join(ROOT, rel))).toBe(true);
+    }
   });
 
   it("names surfaces that exist, so a rename cannot empty this suite", () => {

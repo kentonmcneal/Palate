@@ -25,7 +25,7 @@ import { explainRightNow, type RightNowExplanation } from "./explanations";
 import { distanceKm } from "../match-score";
 
 // Build the legacy `.match` shim (same data, old field name) so existing
-// UI components like RightNowHero / StretchPick / RestaurantCompatibilityCard
+// UI components like StretchPick / RestaurantCompatibilityCard
 // keep working. This must mirror buildRankedRestaurant in ./index.ts.
 function legacyMatch(graph: TasteGraph, r: RestaurantInput, contextFit: number) {
   const compat = computeCompatibility(graph, r);

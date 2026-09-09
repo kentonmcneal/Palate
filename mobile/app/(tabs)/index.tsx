@@ -305,7 +305,7 @@ export default function Home() {
             asks what the user wants RIGHT NOW rather than inferring it from
             what they did last month.
 
-            RightNowHero is gone rather than sitting above this: it and the
+            The old right-now hero is gone rather than sitting above this: it and the
             first ranked pick were repeatedly the same restaurant, which was
             raised as a bug, and a mood-driven list answers the same question
             with the user's own input attached. */}

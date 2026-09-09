@@ -36,7 +36,7 @@ export function StretchPick() {
     try {
       const here = await getEffectiveLocation().catch(() => null);
       if (!here) return;
-      // Share the nearby cache with RightNowHero — they both fetch the same
+      // Share the nearby cache with Home's list: both fetch the same
       // bucket, so one Google call covers both components.
       let nearby = await getCachedNearby(here.lat, here.lng, RADIUS_M);
       if (!nearby) {
