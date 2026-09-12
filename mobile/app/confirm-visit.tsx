@@ -7,7 +7,7 @@ import { Button, Spacer } from "../components/Button";
 import { colors, spacing, type } from "../theme";
 import { saveVisit, recordPromptDecision, rewardCopy } from "../lib/visits";
 import { track } from "../lib/analytics";
-import { removeFromInbox } from "../lib/passive-confirm";
+import { removeFromInbox , stopOf } from "../lib/passive-confirm";
 import { openInAppleMaps, openInGoogleMaps } from "../lib/maps";
 import { FirstVisitCelebration } from "../components/FirstVisitCelebration";
 import { VisitCelebration } from "../components/VisitCelebration";
@@ -78,7 +78,7 @@ export default function ConfirmVisit() {
     setBusy(true);
     try {
       const result = await saveVisit({ googlePlaceId: params.place_id as string, source: "auto" });
-      await recordPromptDecision(params.place_id as string, "confirmed");
+      await recordPromptDecision(params.place_id as string, "confirmed", await stopOf({ inboxId: params.inbox_id }));
       void track("confirm_yes", { place_id: params.place_id, ...detectionProps });
       await clearInboxIfNeeded();
       if (result.isFirstVisit) {
@@ -110,19 +110,19 @@ export default function ConfirmVisit() {
   }
 
   async function handleNotNow() {
-    await recordPromptDecision(params.place_id as string, "dismissed");
+    await recordPromptDecision(params.place_id as string, "dismissed", await stopOf({ inboxId: params.inbox_id }));
     void track("confirm_no", { place_id: params.place_id, ...detectionProps });
     await clearInboxIfNeeded();
     router.back();
   }
 
   async function handleSkipToday() {
-    await recordPromptDecision(params.place_id as string, "skip_today");
+    await recordPromptDecision(params.place_id as string, "skip_today", await stopOf({ inboxId: params.inbox_id }));
     router.back();
   }
 
   async function handleWrong() {
-    await recordPromptDecision(params.place_id as string, "wrong_place");
+    await recordPromptDecision(params.place_id as string, "wrong_place", await stopOf({ inboxId: params.inbox_id }));
     void track("confirm_corrected", { place_id: params.place_id, ...detectionProps });
     setShowAlts(true);
   }
@@ -131,7 +131,7 @@ export default function ConfirmVisit() {
     setBusy(true);
     try {
       const result = await saveVisit({ googlePlaceId: p.google_place_id, source: "auto" });
-      await recordPromptDecision(p.google_place_id, "confirmed");
+      await recordPromptDecision(p.google_place_id, "confirmed", await stopOf({ inboxId: params.inbox_id }));
       await clearInboxIfNeeded();
       if (result.isFirstVisit) {
         setCelebration({

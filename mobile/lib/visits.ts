@@ -406,6 +406,11 @@ export async function recentlyPrompted(googlePlaceId: string, withinMinutes = 36
 export async function recordPromptDecision(
   googlePlaceId: string,
   outcome: "confirmed" | "dismissed" | "wrong_place" | "ignored" | "skip_today",
+  /** Where the STOP was, not where the venue is. A refusal is evidence about
+   *  a venue AT A POSITION: the Panda Express across a Walmart car park is
+   *  wrong from inside that Walmart and right from its own doorway. Optional
+   *  so callers that do not have the stop to hand still record the decision. */
+  at?: { lat: number; lng: number } | null,
 ) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
@@ -413,6 +418,8 @@ export async function recordPromptDecision(
     user_id: user.id,
     google_place_id: googlePlaceId,
     outcome,
+    lat: at?.lat ?? null,
+    lng: at?.lng ?? null,
   });
   if (error) {
     // Reported, not thrown. The callers are the Yes, Not here and Don't ask
@@ -457,6 +464,68 @@ export async function placeRefusals(googlePlaceId: string, days = 90): Promise<n
   } catch {
     return 0;
   }
+}
+
+/**
+ * Refusals for these places recorded NEAR this stop.
+ *
+ * One query for every candidate at once rather than one per candidate: a stop
+ * has up to ten plausible venues and this runs on a background wake, where ten
+ * round trips is the difference between logging a meal and missing it.
+ *
+ * Rows written before migration 0145 have no coordinates. They are counted at
+ * the place level by `placeRefusals` and deliberately ignored here — a refusal
+ * whose position is unknown cannot be evidence about a position.
+ */
+export async function refusalsNearStop(
+  googlePlaceIds: string[],
+  at: { lat: number; lng: number },
+  radiusM = REFUSAL_RADIUS_M,
+  days = 90,
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (googlePlaceIds.length === 0) return counts;
+  try {
+    const since = new Date(Date.now() - days * 24 * 60 * 60_000).toISOString();
+    const { data, error } = await supabase
+      .from("prompt_decisions")
+      .select("google_place_id, lat, lng")
+      .in("google_place_id", googlePlaceIds)
+      .in("outcome", ["dismissed", "wrong_place"])
+      .gte("decided_at", since)
+      .not("lat", "is", null);
+    if (error || !data) return counts;
+    for (const row of data as Array<{ google_place_id: string; lat: number; lng: number }>) {
+      if (haversineMeters(at.lat, at.lng, row.lat, row.lng) > radiusM) continue;
+      counts.set(row.google_place_id, (counts.get(row.google_place_id) ?? 0) + 1);
+    }
+  } catch {
+    // A failed read counts as no refusals, so the worst case is the behaviour
+    // that existed before this did.
+  }
+  return counts;
+}
+
+/** How close a past refusal has to be to count as being about this spot.
+ *  Wider than the 75m resolve radius on purpose: the same stop is recorded
+ *  with different GPS error each time, and two fixes for one doorway can sit
+ *  100m apart in a city. */
+export const REFUSAL_RADIUS_M = 150;
+
+/** Refusals at this spot at or above this count remove the candidate outright,
+ *  rather than demoting it. Demotion was the old answer and it is not enough:
+ *  a demoted place still appears, so somebody who has said no twice keeps
+ *  being asked and simply stops trusting the prompt. */
+export const DROP_AFTER_LOCAL_REFUSALS = 2;
+
+function haversineMeters(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6371000;
+  const dLat = ((bLat - aLat) * Math.PI) / 180;
+  const dLng = ((bLng - aLng) * Math.PI) / 180;
+  const la = (aLat * Math.PI) / 180;
+  const lb = (bLat * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la) * Math.cos(lb) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
 }
 
 /** Refusals at or above this count demote the place. */

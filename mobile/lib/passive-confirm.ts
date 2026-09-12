@@ -101,6 +101,13 @@ export type InboxEntry = {
   /** Several venues within CLUSTER_RADIUS_M — ask as a multi-select rather
    *  than picking a winner and asking about it alone. */
   cluster?: boolean;
+  /** Where the STOP was, carried so a refusal can be recorded against a
+   *  position rather than a brand (migration 0145). Without these two the
+   *  location-scoped learning is dead on arrival: prompt_decisions.lat stays
+   *  null forever and nothing is ever learned about a spot. Optional because
+   *  entries written before this existed do not have them. */
+  stopLat?: number;
+  stopLng?: number;
 };
 
 /** Radius within which several venues are one decision, not several. Food
@@ -417,6 +424,8 @@ export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): 
     confidenceBand: resolved.confidenceBand,
     candidateCount: resolved.candidates.length,
     cluster: clusteredCandidates(resolved.candidates).length >= 2,
+    stopLat: resolved.raw.lat,
+    stopLng: resolved.raw.lng,
   };
 
   // A venue the user just dismissed does NOT go to the inbox. The
@@ -566,6 +575,27 @@ async function enqueue(action: QueuedAction): Promise<void> {
 }
 
 /**
+ * Where the stop behind this prompt was, if we still know.
+ *
+ * The notification actions carry only an inbox id, so the position is read
+ * back from the entry. Returns null freely — when the entry has already been
+ * removed, or predates migration 0145, the decision is still recorded, just
+ * without a position. That is the old place-level behaviour rather than a
+ * failure, and a refusal with no position is deliberately not counted as
+ * evidence about a position.
+ */
+export async function stopOf(input: { inboxId?: string }): Promise<{ lat: number; lng: number } | null> {
+  if (!input.inboxId) return null;
+  try {
+    const entry = (await getInbox()).find((e) => e.id === input.inboxId);
+    if (entry?.stopLat == null || entry?.stopLng == null) return null;
+    return { lat: entry.stopLat, lng: entry.stopLng };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Log a visit from a notification action, with no screen mounted.
  * Returns true when the write landed, false when it was queued for retry.
  */
@@ -577,7 +607,7 @@ export async function confirmVisitById(input: {
   const { saveVisit, recordPromptDecision } = await import("./visits");
   try {
     await saveVisit({ googlePlaceId: input.placeId, source: "auto" });
-    await recordPromptDecision(input.placeId, "confirmed").catch(() => {});
+    await recordPromptDecision(input.placeId, "confirmed", await stopOf(input)).catch(() => {});
     if (input.inboxId) await removeFromInbox(input.inboxId).catch(() => {});
     void track("confirm_yes", { place_id: input.placeId, source: "notification_action" });
     return true;
@@ -603,7 +633,7 @@ export async function declineVisitById(input: {
 }): Promise<boolean> {
   const { recordPromptDecision } = await import("./visits");
   try {
-    await recordPromptDecision(input.placeId, "dismissed");
+    await recordPromptDecision(input.placeId, "dismissed", await stopOf(input));
     if (input.inboxId) await removeFromInbox(input.inboxId).catch(() => {});
     void track("confirm_no", { place_id: input.placeId, source: "notification_action" });
     return true;

@@ -11,6 +11,7 @@
 // ============================================================================
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { refusalsNearStop, DROP_AFTER_LOCAL_REFUSALS } from "./visits";
 import { retryLater } from "./passive-runner";
 import type { RawVisit } from "./passive-capture";
 import type { Restaurant } from "./places";
@@ -562,7 +563,24 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
   // the opening-hours check, and the personal eating pattern below.
   const endedAt = new Date(raw.departureAt ?? raw.capturedAt);
   const hour = endedAt.getHours();
-  const eligible = places.filter(isLoggableVenue);
+  const byType = places.filter(isLoggableVenue);
+
+  // What this person has already said no to, HERE. Two refusals at a spot and
+  // the venue stops being offered at that spot — dropped, not demoted. A
+  // demoted place still appears, so somebody who has answered "not here" twice
+  // keeps being asked and stops trusting the prompt altogether.
+  //
+  // Scoped to the position rather than the brand: refusing the Panda Express
+  // across a Walmart car park should teach the app nothing about a Panda
+  // Express anywhere else, and the old place-level rule taught it the opposite.
+  const refusedHere = await refusalsNearStop(
+    byType.map((p) => p.google_place_id),
+    { lat: raw.lat, lng: raw.lng },
+  );
+  const eligible = byType.filter(
+    (p) => (refusedHere.get(p.google_place_id) ?? 0) < DROP_AFTER_LOCAL_REFUSALS,
+  );
+
   const ranked = rankCandidates(raw, eligible, {
     hour,
     at: endedAt,
@@ -574,9 +592,14 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
     // before this: the detection resolved to nothing and left no trace.
     const reason = places.length === 0
       ? "no_places_returned"
-      : eligible.length === 0
+      : byType.length === 0
         ? "all_filtered_out"
-        : "ranked_empty";
+        : eligible.length === 0
+          // Not a failure. Everything in range is somewhere this person has
+          // already said they were not, at this spot. Named separately so the
+          // funnel can tell a silence we LEARNED from one we could not explain.
+          ? "all_refused_here"
+          : "ranked_empty";
     void recordMiss({
       at: Date.now(),
       reason,

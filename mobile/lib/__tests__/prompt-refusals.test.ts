@@ -185,7 +185,12 @@ describe("recordPromptDecision reports a failed insert", () => {
     await recordPromptDecision("home", "dismissed");
     expect(captureError).not.toHaveBeenCalled();
     expect(track).not.toHaveBeenCalledWith("prompt_decision_failed", expect.anything());
-    expect(mockDb.calls).toContainEqual(["insert", [{ user_id: "u1", google_place_id: "home", outcome: "dismissed" }]]);
+    // lat/lng ride along from 0145. Null when the caller has no stop to hand,
+    // which keeps the row valid as the coarse place-level signal it always was.
+    expect(mockDb.calls).toContainEqual([
+      "insert",
+      [{ user_id: "u1", google_place_id: "home", outcome: "dismissed", lat: null, lng: null }],
+    ]);
   });
 });
 

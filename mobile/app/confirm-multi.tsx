@@ -7,7 +7,7 @@ import { Button, Spacer } from "../components/Button";
 import { colors, spacing, type, radius } from "../theme";
 import { saveVisit, recordPromptDecision } from "../lib/visits";
 import { track } from "../lib/analytics";
-import { removeFromInbox } from "../lib/passive-confirm";
+import { removeFromInbox , stopOf } from "../lib/passive-confirm";
 import { triggerHapticSelection, triggerHapticSuccess } from "../lib/haptics";
 import { VisitCelebration } from "../components/VisitCelebration";
 import type { Restaurant } from "../lib/places";
@@ -87,7 +87,7 @@ export default function ConfirmMulti() {
       // visits when you ate at two counters.
       for (const id of checked) {
         await saveVisit({ googlePlaceId: id, source: "auto" });
-        await recordPromptDecision(id, "confirmed").catch(() => {});
+        await recordPromptDecision(id, "confirmed", await stopOf({ inboxId: params.inbox_id })).catch(() => {});
       }
       // Deliberately records NOTHING for the unchecked places.
       //
@@ -127,7 +127,7 @@ export default function ConfirmMulti() {
     // Blacklisting a whole block because none of it was right at 5:43pm is how
     // the founder walked into two restaurants at 6:37pm and heard nothing.
     if (params.place_id) {
-      await recordPromptDecision(params.place_id as string, "dismissed").catch(() => {});
+      await recordPromptDecision(params.place_id as string, "dismissed", await stopOf({ inboxId: params.inbox_id })).catch(() => {});
     }
     void track("confirm_multi_none", {
       place_id: params.place_id,

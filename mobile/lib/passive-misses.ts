@@ -25,7 +25,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const KEY = "palate.passive.misses";
 const MAX_ENTRIES = 20;
 
-export type MissReason = "no_places_returned" | "all_filtered_out" | "ranked_empty";
+export type MissReason =
+  | "no_places_returned"
+  | "all_filtered_out"
+  | "ranked_empty"
+  // Everything in range was refused by this person AT THIS SPOT. A silence we
+  // learned rather than one we could not explain, and worth telling apart in
+  // the funnel: the first is the loop working, the second is a bug.
+  | "all_refused_here";
 
 export type PassiveMiss = {
   at: number;
@@ -73,5 +80,7 @@ export function describeMiss(m: PassiveMiss): string {
       return `${m.placesFound} nearby, all rejected as non-dining`;
     case "ranked_empty":
       return `${m.loggableCount} loggable but ranking returned none`;
+    case "all_refused_here":
+      return `${m.placesFound} nearby, all already refused at this spot`;
   }
 }
