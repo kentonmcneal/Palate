@@ -350,6 +350,15 @@ const NOT_A_DINING_STOP = new Set([
   "lounge_gated",
   "hotel",
   "hotel_generic",
+  // Added 2026-09-12 by diffing this set against the reasons the classifier
+  // actually emits. `entertainment_venue` existed in the data and was missing
+  // here, so a cinema could be offered as somewhere you ate — which is the
+  // same call already made for `event_venue` two lines up.
+  //
+  // `nightlife` and `lounge_nightlife` were in that diff too and are staying
+  // OUT of this set on purpose: the test above says bars are places people
+  // eat, and it is right. A diff finds differences, not mistakes.
+  "entertainment_venue",
 ]);
 
 /**
