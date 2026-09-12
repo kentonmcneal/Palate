@@ -43,6 +43,9 @@ export type Digest = {
   medium: DigestEntry[];
   low: DigestEntry[];
   total: number;
+  /** Stops in the window this digest chose not to ask about, because the list
+   *  would have been too long to answer. They stay in the inbox. */
+  heldBack?: number;
 };
 
 /**
@@ -168,6 +171,48 @@ export function entriesForDigest(
  * silently expired. That is the founder's "I hit Visits and it's asking for
  * the same info".
  */
+/**
+ * How many stops one digest may ask about.
+ *
+ * There was no limit. On an ordinary day that is fine, because there are two
+ * or three. On a travel day the founder's phone produced 141 detections and
+ * the digest listed every resolved one of them — which is what "on my way to
+ * the airport I got hit with like 10 restaurants" actually was. Not ten
+ * notifications: one notification opening onto a list nobody can answer.
+ *
+ * A person will answer a handful of questions about their own day and will
+ * abandon a form. Six is roughly the most anyone will work through, and the
+ * ones that do not fit are not lost — they stay in the inbox and the next
+ * digest can ask, by which time they are usually stale enough not to matter.
+ *
+ * Confidence decides who makes the cut, not time, because the alternative is
+ * asking about the first six stops of the morning and never about dinner.
+ */
+export const MAX_DIGEST_ASKS = 6;
+
+/** Keep the most answerable entries, newest first within a band. High before
+ *  medium before low: a guess somebody can confirm at a glance beats an
+ *  ambiguous one they have to think about, and thinking is what makes a list
+ *  get abandoned. */
+function capAsks(
+  high: DigestEntry[], medium: DigestEntry[], low: DigestEntry[],
+): { high: DigestEntry[]; medium: DigestEntry[]; low: DigestEntry[]; dropped: number } {
+  let budget = MAX_DIGEST_ASKS;
+  const take = <T>(xs: T[]): T[] => {
+    const kept = xs.slice(0, Math.max(0, budget));
+    budget -= kept.length;
+    return kept;
+  };
+  const keptHigh = take(high);
+  const keptMedium = take(medium);
+  const keptLow = take(low);
+  const dropped =
+    (high.length - keptHigh.length) +
+    (medium.length - keptMedium.length) +
+    (low.length - keptLow.length);
+  return { high: keptHigh, medium: keptMedium, low: keptLow, dropped };
+}
+
 export function buildDigest(
   entries: InboxEntry[],
   now = new Date(),
@@ -176,12 +221,22 @@ export function buildDigest(
   const windowed = opts.windowed ?? true;
   const source = windowed ? entriesForDigest(entries, now, opts.pattern) : entries;
   const pending = source.map(toDigestEntry);
+  const capped = capAsks(
+    pending.filter((e) => e.band === "high").sort(byTime),
+    pending.filter((e) => e.band === "medium").sort(byTime),
+    pending.filter((e) => e.band === "low").sort(byTime),
+  );
   return {
     date: now.toISOString().slice(0, 10),
-    high: pending.filter((e) => e.band === "high").sort(byTime),
-    medium: pending.filter((e) => e.band === "medium").sort(byTime),
-    low: pending.filter((e) => e.band === "low").sort(byTime),
-    total: pending.length,
+    high: capped.high,
+    medium: capped.medium,
+    low: capped.low,
+    // `total` counts what was ASKED, not what was detected, because every
+    // caller uses it to decide whether there is anything to show. The stops
+    // that did not fit are still in the inbox.
+    total: capped.high.length + capped.medium.length + capped.low.length,
+    /** How many stops the window held that this digest did not ask about. */
+    heldBack: capped.dropped,
   };
 }
 
