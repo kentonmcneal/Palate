@@ -60,6 +60,30 @@ export function resolveRadius(raw: RawVisit): number {
 const CLUSTER_HISTORY_KEY = "palate.passive.clusterHistory";
 const CLUSTER_RADIUS_M = 60;
 const CLUSTER_MIN_HITS = 3;
+
+// ----------------------------------------------------------------------------
+// Travel
+// ----------------------------------------------------------------------------
+// Home/work suppression is learned from clusters of places somebody keeps
+// returning to. Leave the city and there are no clusters, so suppression stops
+// firing entirely — at exactly the moment detection volume explodes, because
+// everything is unfamiliar and nothing is filtered.
+//
+// Measured on the founder's own week away: 987 detections in seven days, 7
+// logged visits, and one restaurant near where he was staying resolved 24
+// times. Nothing was wrong with the detector. It simply had nothing to
+// suppress against.
+//
+// So being away is treated as its own mode with two changes, in opposite
+// directions:
+//
+//   • a longer minimum dwell, because away from home almost every stop is
+//     somewhere new, and five minutes is how long a queue takes;
+//   • a LOWER bar for learning where you are sleeping, because a hotel has to
+//     be recognised in two nights rather than three or the trip is over first.
+const TRAVEL_RADIUS_KM = 50;
+const TRAVEL_MIN_DWELL_MIN = 12;
+const TRAVEL_CLUSTER_MIN_HITS = 2;
 const CACHE_STATS_KEY = "palate.passive.cacheStats";
 
 export type QualifyOutcome =
@@ -182,15 +206,47 @@ export function isWorkHours(hour: number, weekday: boolean): boolean {
   return hour >= 9 && hour < 17;
 }
 
+/**
+ * Away from every place this person is known to return to.
+ *
+ * Pure so it can be tested without AsyncStorage. Returns false when there is no
+ * history at all: a brand-new account is not "travelling", it is simply new,
+ * and holding it to the stricter bar would hide its first real meals.
+ */
+export function isAwayFromKnownAreas(
+  lat: number,
+  lng: number,
+  history: readonly ClusterPoint[],
+  radiusKm = TRAVEL_RADIUS_KM,
+): boolean {
+  if (history.length === 0) return false;
+  return !history.some((p) => distanceMeters(lat, lng, p.lat, p.lng) <= radiusKm * 1000);
+}
+
+/** The dwell floor for this stop. Longer when away, for the reason above. */
+export function minDwellFor(away: boolean): number {
+  return away ? TRAVEL_MIN_DWELL_MIN : MIN_DWELL_MIN;
+}
+
+/** How many sightings before a cluster counts as home or work. Lower when
+ *  away, so a hotel is recognised inside a short trip. */
+export function clusterHitsFor(away: boolean): number {
+  return away ? TRAVEL_CLUSTER_MIN_HITS : CLUSTER_MIN_HITS;
+}
+
 export async function isHomeOrWorkSuppressed(raw: RawVisit): Promise<boolean> {
   const history = await loadClusterHistory();
+  const away = isAwayFromKnownAreas(raw.lat, raw.lng, history);
+  const hits = clusterHitsFor(away);
   const near = history.filter((p) => distanceMeters(raw.lat, raw.lng, p.lat, p.lng) <= CLUSTER_RADIUS_M);
-  if (near.length < CLUSTER_MIN_HITS) return false;
+  if (near.length < hits) return false;
   const overnight = near.filter(isOvernight).length;
   const work = near.filter((p) => isWorkHours(p.hour, p.weekday)).length;
   // If the recurring cluster is dominated by sleep hours or the 9–5 weekday
-  // block, treat it as home/work and suppress.
-  return overnight >= CLUSTER_MIN_HITS || work >= CLUSTER_MIN_HITS;
+  // block, treat it as home/work and suppress. Away from home the bar is two
+  // rather than three, so the place somebody is sleeping stops being offered
+  // as a restaurant by the second night.
+  return overnight >= hits || work >= hits;
 }
 
 // ----------------------------------------------------------------------------
@@ -200,7 +256,8 @@ export async function isHomeOrWorkSuppressed(raw: RawVisit): Promise<boolean> {
 export async function qualifyVisit(raw: RawVisit): Promise<QualifyOutcome> {
   const dwell = dwellMinutes(raw);
   if (dwell == null) return { ok: false, reason: "open-visit" };
-  if (dwell < MIN_DWELL_MIN) return { ok: false, reason: "dwell-too-short" };
+  const away = isAwayFromKnownAreas(raw.lat, raw.lng, await loadClusterHistory());
+  if (dwell < minDwellFor(away)) return { ok: false, reason: "dwell-too-short" };
   if (dwell > MAX_DWELL_MIN) return { ok: false, reason: "dwell-too-long" };
   if (raw.horizontalAccuracy > accuracyBound(raw)) return { ok: false, reason: "low-accuracy" };
   if (await isHomeOrWorkSuppressed(raw)) return { ok: false, reason: "home-work-suppressed" };
