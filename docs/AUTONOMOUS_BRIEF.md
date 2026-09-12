@@ -119,29 +119,38 @@ placement or the model learns people like whoever paid.
 
 ---
 
-## Stop and wait
+## Blocked work goes last, and asks once
 
-Do not attempt these, and do not work around them:
+Some tasks need the founder's own accounts. He does not want to be interrupted
+as each one comes up. So:
 
-- Apple Developer, App Store Connect — his identity and 2FA
-- Cloudflare DNS (`palate.app` → Vercel)
-- GitHub Actions secrets, Supabase dashboard settings, Sentry config
-- Anything that spends money
-- Anything needing his phone: tapping Connect Gmail, rating visits
+**Do the free queue first, all of it.** When an item needs something below,
+skip it, write it on the list, and keep going down. Only when the free queue is
+exhausted, present every blocked item together, once, with the exact value
+needed for each. One interruption, not seven.
 
-When the queue reaches one of these, skip it, note it, and continue down. Do
-not stall the whole queue on a blocked item.
+| needs | what for |
+|---|---|
+| Apple ID | Nothing, if EAS keeps syncing capabilities. Otherwise one Developer-portal login. |
+| Supabase dashboard | Auth → Apple → Client IDs = `app.palate.ios`. Secret Key stays EMPTY: the native `signInWithIdToken` flow does not use it. |
+| `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ZONE_ID` | `palate.app` → Vercel, then flip `SHARE_DOMAIN`. Scoped to one zone, exported in his shell, never pasted into a conversation. |
+| GitHub secrets | `SUPABASE_DB_URL`, `BACKUP_PASSPHRASE` for nightly backups. |
+| Supabase secret | `SENTRY_WEBHOOK_SECRET` for crash alerts. |
+| A spend ceiling | The classifier backfill. Nothing is spent without it. |
+| His phone | Tapping Connect Gmail, rating visits. |
+
+**Never take a credential into the conversation.** A scoped token exported in
+his own shell and read from the environment is fine — that is how the Supabase
+anon key and the classifier eval already work. An Apple ID is not scopeable and
+is not acceptable at any time: it is his legal identity, it carries 2FA, and
+actions taken with it are attributable to him.
 
 ---
 
-## One-time grants that would unblock the rest
+## How to report
 
-If the founder wants the blocked half to run too, these are the only decisions
-needed, and they can all be made at once:
+At the end of each queue item: what changed, the evidence label, the test
+count, and whether it shipped. Not before starting one, and not a plan — the
+plan is this file.
 
-1. A ceiling for classifier spend (e.g. "up to $25, no further approval").
-2. The three Apple Developer steps, done once (§2 of the manual steps).
-3. `palate.app` pointed at Vercel.
-4. Two GitHub secrets for backups, one Supabase secret for crash alerts.
-
-Nothing else in the roadmap requires him.
+At the end of the free queue: the blocked list above, filled in, once.
