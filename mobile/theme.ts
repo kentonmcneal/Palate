@@ -39,13 +39,27 @@ export const colors = {
 // Secondary palette — warm, on-brand category hues for cuisine tags, trending
 // shelves, and data viz. Previously these surfaces were all mono; this gives
 // them a legible, ownable color language that doesn't fight the red.
+// One family, six steps. The keys are unchanged so nothing at the call sites
+// moves; only the hues do.
+//
+// The six used to be genuinely different colours — pine green, plum purple,
+// olive — which gave every cuisine its own identity and gave the app six
+// identities. The founder's call on 2026-09-12: keep everything coloured, in
+// the terracotta palette the app had before the split. So these are now a warm
+// ramp around the original red (#E0473C) and terracotta (#C2603A): they still
+// tell one cuisine from another at a glance, and they no longer look like six
+// different apps sharing a tab bar.
+//
+// Names kept rather than renamed to hex-accurate ones (nothing here is pine or
+// plum now) because they are referenced in a dozen components and a rename is
+// churn that would make this diff unreadable. The value is the decision.
 export const categoryColors = {
-  terracotta: "#C2603A",
-  saffron: "#D99A2B",
-  olive: "#7C7A3E",
-  pine: "#3C7A72",
-  plum: "#7A3C5A",
-  clay: "#A8553C",
+  terracotta: "#C2603A",  // the anchor
+  saffron: "#D9873A",     // warm amber, still reads as gold on a star
+  olive: "#A8663C",       // toasted, was a green
+  pine: "#8F4331",        // deep rust, was a teal
+  plum: "#B04A3C",        // brick red, was a purple
+  clay: "#C98150",        // sand, the lightest step
 };
 
 export const spacing = {
