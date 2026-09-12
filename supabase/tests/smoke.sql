@@ -154,4 +154,41 @@ begin
   end if;
 end $$;
 
+-- ----------------------------------------------------------------------------
+-- 0144: helpers that exist to serve one wrapper are not API endpoints.
+--
+-- Postgres grants EXECUTE to PUBLIC by default and Supabase maps anon and
+-- authenticated into it, so a function is public the moment it is created
+-- unless somebody says otherwise. generate_weekly_wrapped_for is the reason
+-- this block exists: SECURITY DEFINER, no auth.uid() in its body, returning a
+-- named user's visits, top restaurant and personality to anyone holding their
+-- uuid and the anon key. Verified against production before the fix — an
+-- unauthenticated call returned the function's own P0001, which is proof it
+-- ran — and after it, 42501.
+-- ----------------------------------------------------------------------------
+do $$
+declare fn text; grantee text;
+begin
+  foreach fn in array array[
+    'public.generate_weekly_wrapped_for(uuid, date)',
+    'public.broadcast_recipients(uuid)',
+    'public.refresh_chain_brands()',
+    'public.get_waitlist_count()'
+  ] loop
+    foreach grantee in array array['public', 'anon', 'authenticated'] loop
+      if has_function_privilege(grantee, fn, 'execute') then
+        raise exception '% is executable by % — see migration 0144', fn, grantee;
+      end if;
+    end loop;
+  end loop;
+end $$;
+
+-- The guarded wrapper must stay open, or Wrapped silently stops generating.
+do $$
+begin
+  if not has_function_privilege('authenticated', 'public.generate_weekly_wrapped(date)', 'execute') then
+    raise exception 'generate_weekly_wrapped lost its grant to authenticated';
+  end if;
+end $$;
+
 rollback;
