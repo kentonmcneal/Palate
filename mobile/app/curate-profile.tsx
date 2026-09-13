@@ -7,7 +7,7 @@ import { colors, spacing, type } from "../theme";
 import { Button, Spacer } from "../components/Button";
 import { track } from "../lib/analytics";
 import { listVisitsForCuration, setVisitVisibility } from "../lib/visits";
-import { defaultVisitVisibility, visibilityReasonLabel } from "../lib/visit-visibility";
+import { defaultVisitVisibility, visibilityReasonLabel, visibilityStateLabel } from "../lib/visit-visibility";
 
 // Curating the public profile.
 //
@@ -70,6 +70,11 @@ export default function CurateProfile() {
         </Text>
         <Spacer />
         <Text style={type.micro}>{shown} OF {rows.length} SHOWN</Text>
+        {rows.length > 0 && (
+          <Text style={styles.hint}>
+            Tap a visit to edit or delete it.
+          </Text>
+        )}
 
         {rows.length === 0 && (
           <View style={styles.card}>
@@ -82,18 +87,33 @@ export default function CurateProfile() {
             const suggestion = defaultVisitVisibility(row.restaurant as never);
             return (
               <View key={row.id} style={styles.row}>
-                <View style={{ flex: 1, paddingRight: 12 }}>
+                {/* Tappable, because this was the only screen a tester could
+                    find that lists her visits -- and it had no way through to
+                    any of them. She logged a restaurant by accident and could
+                    not work out how to remove it; delete-with-undo has existed
+                    on the visit screen the whole time, with nothing linking
+                    here to there. */}
+                <Pressable
+                  style={{ flex: 1, paddingRight: 12 }}
+                  onPress={() => router.push(`/visit/${row.id}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${row.restaurant?.name ?? "this visit"}`}
+                >
                   <Text style={styles.name}>{row.restaurant?.name ?? "Unknown place"}</Text>
                   <Text style={styles.meta}>
                     {new Date(row.visited_at).toLocaleDateString()}
-                    {/* Explain the suggestion only when it disagrees with the
-                        current state, so the hint is information rather than
-                        noise on every row. */}
+                    {/* State FIRST, always -- this line used to carry only the
+                        default's reasoning, and only when it disagreed with the
+                        switch, so it contradicted both the toggle and the
+                        counter above every time it showed. The reason is now a
+                        trailing clause, and it is still only worth saying when
+                        the current state differs from what we suggested. */}
+                    {` · ${visibilityStateLabel(row.is_public)}`}
                     {row.is_public !== suggestion.isPublic
                       ? ` · ${visibilityReasonLabel(suggestion.reason)}`
                       : ""}
                   </Text>
-                </View>
+                </Pressable>
                 <Switch
                   value={row.is_public}
                   disabled={pending.has(row.id)}
@@ -129,6 +149,7 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center",
     borderBottomWidth: 1, borderBottomColor: colors.line, paddingVertical: 14,
   },
+  hint: { fontSize: 13, color: colors.mute, marginTop: 6 },
   name: { ...type.subtitle, color: colors.ink },
   meta: { ...type.small, color: colors.mute, marginTop: 2 },
 });

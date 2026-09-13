@@ -63,10 +63,31 @@ export function defaultVisitVisibility(place: Restaurant | null | undefined): Vi
 }
 
 /** Copy for the curation surface, so the reason is legible rather than magic. */
+/**
+ * Why the DEFAULT for this visit was what it was — phrased as a reason, never
+ * as a statement of current state.
+ *
+ * The previous version returned "Shown on your profile" / "Routine stop, hidden
+ * from your profile by default", and curate-profile rendered it ONLY when the
+ * current toggle disagreed with the suggestion. So the sentence was guaranteed
+ * to contradict the switch beside it and the counter above it, every single
+ * time it appeared: a screen reading "0 OF 2 SHOWN" with both toggles off, and
+ * underneath a restaurant, the words "Shown on your profile".
+ *
+ * Reported by a tester who could not tell whether her visit was public. She was
+ * not being picky; the app was telling her the opposite of the truth.
+ *
+ * The caller now states the real state first and appends this as the reason.
+ */
 export function visibilityReasonLabel(reason: VisibilityDefault["reason"]): string {
   switch (reason) {
-    case "routine": return "Routine stop, hidden from your profile by default";
-    case "chain": return "Chain, hidden from your profile by default";
-    default: return "Shown on your profile";
+    case "routine": return "routine stops are hidden by default";
+    case "chain":   return "chains are hidden by default";
+    default:        return "shown by default";
   }
+}
+
+/** What is actually true right now, for the row's first clause. */
+export function visibilityStateLabel(isPublic: boolean): string {
+  return isPublic ? "Shown on your profile" : "Hidden from your profile";
 }

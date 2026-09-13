@@ -33,17 +33,28 @@ export async function submitFeedback(input: {
   // Optional screenshot -> private bucket, one folder per user (matches the
   // avatar upload pattern: RN needs the arrayBuffer, not a bare file:// blob).
   let screenshotPath: string | null = null;
+  let screenshotUploadFailed = false;
   if (input.screenshotUri) {
     const ext = (input.screenshotUri.split(".").pop() || "jpg").toLowerCase().slice(0, 4);
     const path = `${user.id}/${Date.now()}.${ext}`;
     const resp = await fetch(input.screenshotUri);
     const buf = await resp.arrayBuffer();
-    const { error: upErr } = await supabase.storage.from("feedback").upload(path, buf, {
-      contentType: ext === "png" ? "image/png" : "image/jpeg",
-      upsert: false,
-    });
-    if (upErr) throw upErr;
-    screenshotPath = path;
+    try {
+      const { error: upErr } = await supabase.storage.from("feedback").upload(path, buf, {
+        contentType: ext === "png" ? "image/png" : "image/jpeg",
+        upsert: false,
+      });
+      if (upErr) throw upErr;
+      screenshotPath = path;
+    } catch (_) {
+      // The words are the report; the screenshot is a garnish. This used to
+      // `throw upErr` and take the whole message down with it, so a storage
+      // hiccup meant somebody typed out a bug and got an error dialog for
+      // their trouble -- and we never learned what they were trying to say.
+      // File it without the image and note that the image was lost, rather
+      // than losing both.
+      screenshotUploadFailed = true;
+    }
   }
 
   const { error } = await supabase.from("feedback").insert({
@@ -55,7 +66,13 @@ export async function submitFeedback(input: {
     platform: Platform.OS,
     device: Device.modelName ?? null,
     os_version: String(Platform.Version ?? ""),
-    context: { route: input.route ?? null, email: user.email ?? null },
+    context: {
+      route: input.route ?? null,
+      email: user.email ?? null,
+      // Visible in triage so a report that mentions "see the screenshot" with
+      // no screenshot attached is explicable rather than baffling.
+      ...(screenshotUploadFailed ? { screenshot_upload_failed: true } : {}),
+    },
   });
   if (error) throw error;
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, StyleSheet, Linking } from "react-native";
+import { View, StyleSheet, Linking, ScrollView } from "react-native";
 import { Text } from "../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -93,7 +93,11 @@ export default function NotificationsIntro() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.body}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.emoji}>🔔</Text>
         <Text style={styles.h1}>This is how Palate asks</Text>
         {/* The evening digest leads, because it is not really a notification:
@@ -130,7 +134,12 @@ export default function NotificationsIntro() {
             likely to want off. It has its own switch in Settings.
           </Text>
         </View>
-        <View style={{ flex: 1 }} />
+      </ScrollView>
+      {/* Outside the scroller. Same fix as passive-capture-intro: this was a
+          fixed View with a flex:1 spacer, so the three cards pushed both
+          buttons off the bottom at larger Dynamic Type -- on the screen whose
+          entire job is getting permission. */}
+      <View style={styles.footer}>
         <Button title="Turn on notifications" onPress={turnOn} loading={busy} />
         <Spacer />
         <Button title="Not now" variant="ghost" onPress={notNow} />
@@ -141,7 +150,8 @@ export default function NotificationsIntro() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.paper },
-  body: { flex: 1, padding: spacing.lg, paddingBottom: spacing.xl },
+  body: { flexGrow: 1, padding: spacing.lg, paddingBottom: spacing.md },
+  footer: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, paddingTop: spacing.sm },
   emoji: { fontSize: 40, marginBottom: spacing.lg },
   h1: { ...type.display, color: colors.ink },
   p: { ...type.body, color: colors.mute, marginTop: spacing.md },

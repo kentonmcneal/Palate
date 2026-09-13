@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, StyleSheet, Alert, Linking } from "react-native";
+import { View, StyleSheet, Alert, Linking, ScrollView } from "react-native";
 import { Text } from "../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -103,109 +103,121 @@ export default function PassiveCaptureIntro() {
 
   if (step === "needs-settings") {
     return (
-      <Screen>
-        <View style={{ flex: 1, justifyContent: "center" }}>
-          <Text style={styles.emoji}>⚙️</Text>
-          <Text style={styles.h1}>Background logging is still off</Text>
-          <Text style={styles.p}>
-            iOS is holding location to "While Using the App." You can switch it to Always in
-            Settings → Palate → Location, or skip it and keep logging meals yourself.
-          </Text>
-        </View>
-        <View>
-          <Button title="Open iOS Settings" onPress={() => Linking.openSettings()} />
-          <Spacer />
-          <Button title="Not now" variant="ghost" onPress={onNotNow} />
-        </View>
+      <Screen footer={<>
+        <Button title="Open iOS Settings" onPress={() => Linking.openSettings()} />
+        <Spacer />
+        <Button title="Not now" variant="ghost" onPress={onNotNow} />
+        </>}>
+        <Text style={styles.emoji}>⚙️</Text>
+        <Text style={styles.h1}>Background logging is still off</Text>
+        <Text style={styles.p}>
+          iOS is holding location to "While Using the App." You can switch it to Always in
+          Settings → Palate → Location, or skip it and keep logging meals yourself.
+        </Text>
       </Screen>
     );
   }
 
   if (step === "done") {
     return (
-      <Screen>
-        <View style={{ flex: 1, justifyContent: "center" }}>
-          <Text style={styles.emoji}>✅</Text>
-          <Text style={styles.h1}>You're set. Go eat.</Text>
-          <Text style={styles.p}>
-            Next time you spend a while at a restaurant, we'll ask if you ate there. One tap and
-            it's logged. Nothing is saved until you confirm it.
+      <Screen footer={<>
+        <Button title="Done" onPress={finish} />
+        </>}>
+        <Text style={styles.emoji}>✅</Text>
+        <Text style={styles.h1}>You're set. Go eat.</Text>
+        <Text style={styles.p}>
+          Next time you spend a while at a restaurant, we'll ask if you ate there. One tap and
+          it's logged. Nothing is saved until you confirm it.
+        </Text>
+        <Spacer />
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>One heads-up</Text>
+          <Text style={styles.cardBody}>
+            In a few days iOS will ask whether Palate can keep using your location in the
+            background, and will show you a map of where it checked. Choose "Change to
+            Always Allow". If you pick "Keep Only While Using", passive logging stops and
+            you are back to typing meals in.
           </Text>
-          <Spacer />
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>One heads-up</Text>
-            <Text style={styles.cardBody}>
-              In a few days iOS will ask whether Palate can keep using your location in the
-              background, and will show you a map of where it checked. Choose "Change to
-              Always Allow". If you pick "Keep Only While Using", passive logging stops and
-              you are back to typing meals in.
-            </Text>
-          </View>
-        </View>
-        <View>
-          <Button title="Done" onPress={finish} />
         </View>
       </Screen>
     );
   }
 
   return (
-    <Screen>
-      <View style={{ flex: 1, justifyContent: "center" }}>
-        <Text style={styles.emoji}>📍🍽️</Text>
-        <Text style={styles.h1}>Log where you ate without opening the app</Text>
-        {/* The WHY comes first now. The screen used to open with the mechanism
-            and the privacy guarantees, which answer "is this safe" but never
-            answer "why should I". Always location is the hardest permission
-            iOS has; it has to be worth something before it is safe. */}
-        <Text style={styles.p}>
-          Everything Palate gives you comes out of your history: what it
-          recommends, your weekly Wrapped, the people whose taste matches
-          yours. Typing that history in by hand is what every other app asks
-          for, and it is the thing nobody keeps doing for long.
-        </Text>
-        <Text style={styles.p}>
-          So Palate notices instead. It spots when you have spent a while at a
-          restaurant and asks you once, in the evening. One tap and the day is
-          logged.
-        </Text>
-        <Spacer />
-        <Text style={styles.bullet}>
-          • On the next screen, choose <Text style={styles.bulletStrong}>Always</Text>. Your phone is
-          in your pocket while you eat, so "While Using the App" sees almost nothing.
-        </Text>
-        <Text style={styles.bullet}>• You confirm every visit. Nothing is logged silently.</Text>
-        <Text style={styles.bullet}>• We only look at where you stopped, not everywhere you go.</Text>
-        <Text style={styles.bullet}>• Home and work are filtered out on your phone.</Text>
-        <Text style={styles.bullet}>• Turn it off anytime in Settings.</Text>
-        {/* The honest cost of saying no. Somebody who declines should know
-            what they are choosing, not discover it three weeks later. */}
-        <Text style={styles.bullet}>
-          • Say no and Palate still works. You will just be typing every meal
-          in yourself.
-        </Text>
-      </View>
-
-      <View>
-        <Button title="Enable passive logging" onPress={onEnable} loading={busy} />
-        <Spacer />
-        <Button title="Not now" variant="ghost" onPress={onNotNow} />
-      </View>
+    <Screen footer={<>
+      <Button title="Enable passive logging" onPress={onEnable} loading={busy} />
+      <Spacer />
+      <Button title="Not now" variant="ghost" onPress={onNotNow} />
+      </>}>
+      <Text style={styles.emoji}>📍🍽️</Text>
+      <Text style={styles.h1}>Log where you ate without opening the app</Text>
+      {/* The WHY comes first now. The screen used to open with the mechanism
+          and the privacy guarantees, which answer "is this safe" but never
+          answer "why should I". Always location is the hardest permission
+          iOS has; it has to be worth something before it is safe. */}
+      <Text style={styles.p}>
+        Everything Palate gives you comes out of your history: what it
+        recommends, your weekly Wrapped, the people whose taste matches
+        yours. Typing that history in by hand is what every other app asks
+        for, and it is the thing nobody keeps doing for long.
+      </Text>
+      <Text style={styles.p}>
+        So Palate notices instead. It spots when you have spent a while at a
+        restaurant and asks you once, in the evening. One tap and the day is
+        logged.
+      </Text>
+      <Spacer />
+      <Text style={styles.bullet}>
+        • On the next screen, choose <Text style={styles.bulletStrong}>Always</Text>. Your phone is
+        in your pocket while you eat, so "While Using the App" sees almost nothing.
+      </Text>
+      <Text style={styles.bullet}>• You confirm every visit. Nothing is logged silently.</Text>
+      <Text style={styles.bullet}>• We only look at where you stopped, not everywhere you go.</Text>
+      <Text style={styles.bullet}>• Home and work are filtered out on your phone.</Text>
+      <Text style={styles.bullet}>• Turn it off anytime in Settings.</Text>
+      {/* The honest cost of saying no. Somebody who declines should know
+          what they are choosing, not discover it three weeks later. */}
+      <Text style={styles.bullet}>
+        • Say no and Palate still works. You will just be typing every meal
+        in yourself.
+      </Text>
     </Screen>
   );
 }
 
-function Screen({ children }: { children: React.ReactNode }) {
+/**
+ * Content scrolls; the buttons stay put.
+ *
+ * This used to be a plain `<View style={{flex:1}}>` holding a flex:1 centred
+ * block and a footer. A View does not scroll, so on a shorter phone -- or at
+ * any larger Dynamic Type setting -- the six bullets simply drew straight over
+ * the "Not now" button, which is what a tester photographed. The permission
+ * screen for the app's central feature was unreadable and its escape hatch was
+ * covered.
+ *
+ * flexGrow:1 + justifyContent:center keeps the short variants vertically
+ * centred exactly as before, and lets the long one scroll instead of overflow.
+ */
+function Screen({ children, footer }: { children: React.ReactNode; footer?: React.ReactNode }) {
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.body}>{children}</View>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+      >
+        {children}
+      </ScrollView>
+      {footer ? <View style={styles.footer}>{footer}</View> : null}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.paper },
-  body: { flex: 1, padding: spacing.lg, paddingBottom: spacing.xl },
+  body: { flexGrow: 1, justifyContent: "center", padding: spacing.lg, paddingBottom: spacing.md },
+  // Sits outside the scroller so the buttons are always reachable.
+  footer: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, paddingTop: spacing.sm },
   emoji: { fontSize: 40, marginBottom: spacing.lg },
   h1: { ...type.display, color: colors.ink },
   p: { ...type.body, color: colors.mute, marginTop: spacing.md },

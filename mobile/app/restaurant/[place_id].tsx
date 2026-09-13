@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { LoadError } from "../../components/LoadError";
+import { CuisinePicker } from "../../components/CuisinePicker";
 import {
   View,
   StyleSheet,
@@ -89,6 +90,7 @@ export default function RestaurantDetailScreen() {
   const router = useRouter();
   const { place_id } = useLocalSearchParams<{ place_id: string }>();
   const [restaurant, setRestaurant] = useState<RestaurantRow | null>(null);
+  const [cuisinePickerOpen, setCuisinePickerOpen] = useState(false);
   // A photo someone actually took here, if there is one. Falls back to the
   // generated gradient — see lib/place-photos.ts.
   const [placePhoto, setPlacePhoto] = useState<string | null>(null);
@@ -232,29 +234,13 @@ export default function RestaurantDetailScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   // Common cuisines for the override picker. Intentionally short — covers
-  // ~80% of corrections; users with a less-common cuisine can submit again
-  // later once we add a free-text picker.
-  const CUISINE_CHOICES = [
-    "italian", "chinese", "japanese", "korean",
-    "thai", "mexican", "indian", "mediterranean",
-  ];
-
   function reportWrongCuisine() {
     if (!restaurant) return;
-    Alert.alert(
-      "What cuisine is it?",
-      "We'll update this place for everyone.",
-      [
-        ...CUISINE_CHOICES.map((c) => ({
-          text: cap(c),
-          onPress: () => submitCuisineOverride(c),
-        })),
-        { text: "Cancel", style: "cancel" as const },
-      ],
-    );
+    setCuisinePickerOpen(true);
   }
 
   async function submitCuisineOverride(cuisine: string) {
+    setCuisinePickerOpen(false);
     if (!restaurant) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -574,6 +560,13 @@ export default function RestaurantDetailScreen() {
           </>
         )}
       </ScrollView>
+
+      <CuisinePicker
+        visible={cuisinePickerOpen}
+        current={r.cuisine_type}
+        onPick={(c) => { void submitCuisineOverride(c); }}
+        onClose={() => setCuisinePickerOpen(false)}
+      />
     </SafeAreaView>
   );
 }
