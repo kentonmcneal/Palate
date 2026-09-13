@@ -176,6 +176,50 @@ export async function registerPushToken(): Promise<void> {
   }
 }
 
+/**
+ * Write the device's IANA timezone to the profile. Standalone, and called on
+ * every signed-in launch.
+ *
+ * It used to happen ONLY inside registerPushToken(), which returns early when
+ * notification permission was never granted — so anyone who declined
+ * notifications, or simply had not been asked yet, had a null timezone
+ * forever. On 2026-09-13 that was ELEVEN of eighteen accounts, three of them
+ * holding a live push token. next_sendable_at() fails closed on a null (0055,
+ * deliberately — quiet hours cannot be honoured blind), so those three could
+ * never receive a proactive push at all, and nothing anywhere said so.
+ *
+ * Timezone is not a notifications concern. It is how the server knows when
+ * somebody's day is, which matters to quiet hours, to the digest, and to any
+ * future question of the form "what did you eat on Tuesday".
+ *
+ * Silent and best-effort: a failure here must never interrupt a launch.
+ */
+export async function syncTimezone(): Promise<void> {
+  try {
+    let tz: string | null = null;
+    try {
+      tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
+    } catch {
+      return; // no resolvable zone is not something to write
+    }
+    if (!tz) return;
+
+    const { supabase } = await import("./supabase");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: prof } = await supabase
+      .from("profiles").select("timezone").eq("id", user.id).maybeSingle();
+    // Writes when it is missing AND when it has changed: somebody who moves,
+    // or who travels, should not keep the old night.
+    if (prof?.timezone === tz) return;
+
+    await supabase.from("profiles").update({ timezone: tz }).eq("id", user.id);
+  } catch (err) {
+    console.warn("[notifications] timezone sync failed", err);
+  }
+}
+
 export type PushAsk = "granted" | "denied" | "blocked";
 
 /**

@@ -37,7 +37,7 @@ import { subscribeUsernameClaimed, isUsernameClaimed } from "../lib/username-gat
 import { needsNotificationPrimer, isPrimerSeen, subscribePrimerSeen } from "../lib/notification-primer";
 import * as WebBrowser from "expo-web-browser";
 import { initObservability, captureError } from "../lib/observability";
-import { registerPushToken } from "../lib/notifications";
+import { registerPushToken, syncTimezone } from "../lib/notifications";
 import { track } from "../lib/analytics";
 import { currentPermissionState } from "../lib/passive-permissions";
 import { notificationsGranted } from "../lib/notifications";
@@ -160,7 +160,12 @@ export default function RootLayout() {
       invalidateCompatibilityCache();
       // Register push token whenever a session shows up — the first-run path
       // (permission prompt + token fetch) is the one that crashed new accounts.
-      if (s?.user) void registerPushToken().catch((e) => captureError(e, { at: "registerPushToken" }));
+      if (s?.user) {
+        void registerPushToken().catch((e) => captureError(e, { at: "registerPushToken" }));
+        // Separately from the push token: a declined-notifications account
+        // still needs a timezone, or the server cannot reason about its day.
+        void syncTimezone().catch((e) => captureError(e, { at: "syncTimezone" }));
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, []);
