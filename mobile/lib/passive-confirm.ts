@@ -493,8 +493,16 @@ export async function notifyOrInbox(resolved: ResolvedVisit, dwellMin: number): 
     // Optional on purpose: a ResolvedVisit built by an older build — or held in
     // the inbox from before scoring existed — has no confidence, and telemetry
     // must not throw on it.
-    confidence: resolved.confidence == null ? null : Number(resolved.confidence.toFixed(3)),
-    confidence_band: resolved.confidenceBand ?? null,
+    // The ENTRY's values, not the resolution's. Demotion happens a few lines
+    // above -- a place refused here before has its confidence capped and its
+    // band forced to "low" -- and logging resolved.* records the band as it
+    // was BEFORE that, so every demoted detection was filed under its
+    // pre-demotion band. That is not a cosmetic telemetry bug: calibration is
+    // computed from this event, so the demotion mechanism was invisible in the
+    // numbers used to judge whether the bands work at all.
+    confidence: entry.confidence == null ? null : Number(entry.confidence.toFixed(3)),
+    confidence_band: entry.confidenceBand ?? null,
+    demoted,
   });
 
   // Already holding this venue from a recent detection: the inbox collapsed

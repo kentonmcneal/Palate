@@ -62,17 +62,24 @@ describe("buildDigest", () => {
     expect(d.medium.map((e) => e.name)).toEqual(["coffee", "maybe"]);
   });
 
-  it("pre-checks everything it presents as a likely visit", () => {
-    // The notification counts high + medium — "2 places to confirm" — so
-    // pre-checking only high meant tapping a notification about two places and
-    // landing on a button that said "Confirm 1".
+  it("pre-checks only High", () => {
+    // This asserted that Medium was pre-checked too, to keep the tick in step
+    // with a notification that counted high + medium. The two agreed by both
+    // overclaiming: Medium is the largest band and, on live outcomes, right
+    // 36% of the time, and the digest is the ONLY confirmation path in
+    // production — one tap writes every ticked row into the diary, the taste
+    // graph, Wrapped and the public profile.
+    //
+    // A pre-tick is an answer given on somebody's behalf. High earns that at
+    // 91%; Medium does not. The notification count was changed to match the
+    // tick rather than the other way round.
     const d = buildDigest([
       entry({ id: "sure", detectedAt: at(12), confidenceBand: "high" }),
       entry({ id: "maybe", detectedAt: at(13), confidenceBand: "medium" }),
       entry({ id: "doubt", detectedAt: at(14), confidenceBand: "low" }),
     ], DAY);
     expect(d.high[0].preChecked).toBe(true);
-    expect(d.medium[0].preChecked).toBe(true);
+    expect(d.medium[0].preChecked).toBe(false);
     // Low is where ambiguous stops live, and an ambiguous entry needs you to
     // pick WHICH place first. Pre-ticking a guess is the one thing this screen
     // must never do.
@@ -85,7 +92,7 @@ describe("buildDigest", () => {
       entry({ id: "maybe", detectedAt: at(13), confidenceBand: "medium" }),
       entry({ id: "doubt", detectedAt: at(14), confidenceBand: "low" }),
     ], DAY);
-    const promised = d.high.length + d.medium.length;
+    const promised = d.high.length;
     const ticked = [...d.high, ...d.medium, ...d.low].filter((e) => e.preChecked).length;
     expect(ticked).toBe(promised);
   });
@@ -155,7 +162,10 @@ describe("digestNotificationBody", () => {
   it("asks about several places in the founder's own words", () => {
     const d = buildDigest([
       entry({ id: "Chipotle", detectedAt: at(12), confidenceBand: "high" }),
-      entry({ id: "Ruby's", detectedAt: at(19), confidenceBand: "medium" }),
+      // Both HIGH: the plural, confident title is a claim, and only High has
+      // earned one. With a medium second entry this now reads "Did you eat at
+      // Chipotle?" — one confident place, asked about the rest on the screen.
+      entry({ id: "Ruby's", detectedAt: at(19), confidenceBand: "high" }),
     ], DAY);
     expect(digestNotificationTitle(d)).toBe("Looks like you ate at 2 places today");
     expect(digestNotificationBody(d, fmt)).toMatch(/can you confirm/i);

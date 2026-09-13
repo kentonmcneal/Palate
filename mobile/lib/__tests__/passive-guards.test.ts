@@ -108,7 +108,9 @@ describe("digest fixtures", () => {
     // High and medium arrive pre-checked — the two bands the notification
     // counts. The ambiguous low entry does not: it needs a place picked first.
     expect(d.high[0].preChecked).toBe(true);
-    expect(d.medium[0].preChecked).toBe(true);
+    // Medium is shown but NOT answered on the person's behalf: 36% accurate
+    // on live outcomes, and one tap on Confirm is irreversible.
+    expect(d.medium[0].preChecked).toBe(false);
     expect(d.low[0].preChecked).toBe(false);
   });
 });

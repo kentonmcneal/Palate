@@ -129,7 +129,22 @@ function toDigestEntry(entry: InboxEntry): DigestEntry {
     // band is where ambiguous stops live, and an ambiguous entry needs you to
     // pick WHICH place before it can be confirmed at all. Pre-ticking a guess
     // is the one thing this screen must not do.
-    preChecked: band === "high" || band === "medium",
+    // HIGH ONLY.
+    //
+    // This pre-ticked Medium too, and Medium is both the largest band (108 of
+    // 262) and, measured on live outcomes, right 36% of the time. Since
+    // REALTIME_PROMPTS_ENABLED is false the digest is the ONLY confirmation
+    // path in production, and one tap on Confirm writes every ticked row into
+    // the diary, the taste graph, Wrapped and the public profile.
+    //
+    // So the default answer to "were you at this restaurant?" was yes, for a
+    // guess that is wrong two times in three, on the one screen where saying
+    // yes is irreversible. A pre-tick is a claim; Medium has not earned one.
+    // High runs at 91% and has.
+    //
+    // Sections below High are upside, not obligation: they are still shown,
+    // still one tap to accept, just not answered on the person's behalf.
+    preChecked: band === "high",
     ambiguous: (entry.candidateCount ?? 1) >= AMBIGUOUS_CANDIDATE_COUNT,
   };
 }
@@ -289,13 +304,25 @@ export function isLowOnlyDigest(digest: Digest): boolean {
  * scaffold — you remember the day by what you did, not by a count.
  */
 export function digestNotificationTitle(digest: Digest): string {
-  if (isLowOnlyDigest(digest)) return "Were you out today?";
-  const n = digest.high.length + digest.medium.length;
-  if (n === 1) {
-    const one = [...digest.high, ...digest.medium][0];
-    return `Did you eat at ${one.name}?`;
+  // The confident count is HIGH ONLY, and it has to match what the screen
+  // pre-ticks.
+  //
+  // This counted high + medium, and the digest pre-ticked the same set, so the
+  // two agreed — by both being wrong. "Looks like you ate at 2 places today"
+  // is a CLAIM, and Medium is right 36% of the time. Now that only High is
+  // pre-ticked, counting Medium here would put "2 places" on the notification
+  // and "Confirm 1" on the button, which is the mismatch the old behaviour was
+  // introduced to avoid. Fixing the count is the correct half to change: the
+  // tick and the claim should both be as confident as the evidence, not as
+  // confident as each other.
+  //
+  // A digest with nothing in High still fires — those entries are worth
+  // asking about — but it asks rather than asserts.
+  if (digest.high.length === 0) return "Were you out today?";
+  if (digest.high.length === 1) {
+    return `Did you eat at ${digest.high[0].name}?`;
   }
-  return `Looks like you ate at ${n} places today`;
+  return `Looks like you ate at ${digest.high.length} places today`;
 }
 
 export function digestNotificationBody(digest: Digest, formatTime: (ms: number) => string): string {

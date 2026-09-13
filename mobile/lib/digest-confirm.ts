@@ -93,8 +93,18 @@ export async function confirmDigest(
       // Durable now, so the entry is finished. Everything below is bookkeeping
       // and is individually swallowed: none of it may put the entry back.
       await deps.removeFromInbox(entry.id).catch(() => {});
-      await deps.recordPromptDecision(placeId, chosen ? "wrong_place" : "confirmed")
-        .catch(() => {});
+      // Against the place we GUESSED, not the one they corrected us to.
+      //
+      // placeId is the corrected venue. Recording "wrong_place" there told the
+      // learning system that the restaurant the person just confirmed eating
+      // at was a bad guess -- demoting the right answer -- while the venue we
+      // actually got wrong was never marked at all, so it stayed just as
+      // likely to be guessed again tomorrow. Exactly backwards, in the one
+      // path whose entire purpose is learning from a correction.
+      await deps.recordPromptDecision(
+        chosen ? entry.place_id : placeId,
+        chosen ? "wrong_place" : "confirmed",
+      ).catch(() => {});
       deps.track(chosen ? "confirm_corrected" : "confirm_yes", {
         place_id: placeId,
         surface: "digest",

@@ -71,8 +71,16 @@ describe("confirmDigest", () => {
     const d = deps({ saveVisit });
     await confirmDigest([entry("a")], [], { a: { google_place_id: "corrected" } }, d);
 
+    // The VISIT goes to the corrected place — that is where they ate.
     expect(saveVisit).toHaveBeenCalledWith(expect.objectContaining({ googlePlaceId: "corrected" }));
-    expect(d.recordPromptDecision).toHaveBeenCalledWith("corrected", "wrong_place");
+    // The wrong_place DECISION goes against the place we guessed, "pid-a".
+    //
+    // This asserted "corrected" and was backwards: it told the learning system
+    // that the restaurant the person had just confirmed eating at was a bad
+    // guess, demoting the right answer, while the venue we actually got wrong
+    // was never marked and stayed exactly as likely to be guessed tomorrow.
+    // In the one code path whose whole purpose is learning from a correction.
+    expect(d.recordPromptDecision).toHaveBeenCalledWith("pid-a", "wrong_place");
   });
 
   it("clears skipped entries without writing anything", async () => {
