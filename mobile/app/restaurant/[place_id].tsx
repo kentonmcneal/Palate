@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { LoadError } from "../../components/LoadError";
 import { CuisinePicker } from "../../components/CuisinePicker";
+import { saveVisit } from "../../lib/visits";
 import {
   View,
   StyleSheet,
@@ -91,6 +92,7 @@ export default function RestaurantDetailScreen() {
   const { place_id } = useLocalSearchParams<{ place_id: string }>();
   const [restaurant, setRestaurant] = useState<RestaurantRow | null>(null);
   const [cuisinePickerOpen, setCuisinePickerOpen] = useState(false);
+  const [logging, setLogging] = useState(false);
   // A photo someone actually took here, if there is one. Falls back to the
   // generated gradient — see lib/place-photos.ts.
   const [placePhoto, setPlacePhoto] = useState<string | null>(null);
@@ -234,6 +236,37 @@ export default function RestaurantDetailScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   // Common cuisines for the override picker. Intentionally short — covers
+  /**
+   * Log a visit by hand, for a place the phone never noticed.
+   *
+   * Dated today by default rather than asking for a date first: the common
+   * case is "I eat here, you just didn't catch it", and a date picker in front
+   * of that turns one tap into a form. The visit screen can move it afterwards,
+   * which is one tap further on and only for the people who need it.
+   */
+  async function logBeenHere() {
+    if (!restaurant || logging) return;
+    setLogging(true);
+    try {
+      const saved = await saveVisit({
+        googlePlaceId: place_id,
+        visitedAt: new Date(),
+        source: "manual",
+      });
+      void triggerHapticSuccess();
+      await load();
+      Alert.alert(
+        "Logged",
+        "Added to your history. Tap the visit to change the date or rate it.",
+        [{ text: "Done" }, ...(saved?.id ? [{ text: "Open it", onPress: () => router.push(`/visit/${saved.id}`) }] : [])],
+      );
+    } catch (e: any) {
+      Alert.alert("Couldn't add it", e?.message ?? "Try again.");
+    } finally {
+      setLogging(false);
+    }
+  }
+
   function reportWrongCuisine() {
     if (!restaurant) return;
     setCuisinePickerOpen(true);
@@ -528,6 +561,16 @@ export default function RestaurantDetailScreen() {
           <View style={styles.emptyState}>
             <Text style={styles.emptyGlyph}>◎</Text>
             <Text style={styles.emptyLine}>No visits here yet.</Text>
+            {/* A dead end until now: the screen stated a fact about you and
+                offered no way to change it. Passive capture only catches
+                places you go while carrying the phone with location on, so
+                "I have been here" is a normal thing to want to say — and
+                every visit logged here is a real signal into the taste graph,
+                which is the thing running short. */}
+            <Spacer size={12} />
+            <Pressable onPress={logBeenHere} disabled={logging} style={styles.beenHere} accessibilityRole="button">
+              <Text style={styles.beenHereText}>{logging ? "Adding…" : "I've been here"}</Text>
+            </Pressable>
           </View>
         ) : (
           <>
@@ -744,6 +787,11 @@ const styles = StyleSheet.create({
 
   emptyState: { alignItems: "center", paddingVertical: spacing.lg, gap: 6 },
   emptyGlyph: { fontSize: 22, color: colors.line },
+  beenHere: {
+    paddingVertical: 10, paddingHorizontal: 20, borderRadius: 999,
+    backgroundColor: colors.red,
+  },
+  beenHereText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   emptyLine: { ...type.small },
   visitCount: { ...type.subtitle, marginBottom: 10 },
   visitRow: {

@@ -1,8 +1,20 @@
 // ============================================================================
-// starter-quiz.ts — 5-question Starter Palate quiz, mobile copy of the web
-// version. Multi-axis weighted scoring → one of 9 starter personas.
-// Results land in profiles.quiz_persona / quiz_chips for use as fallback
-// when no visits exist yet.
+// starter-quiz.ts — the persona VOCABULARY. The quiz itself is gone.
+// ----------------------------------------------------------------------------
+// The 60-second starter quiz was removed: it asked five hypotheticals, and its
+// own author answered it honestly and got "The Convenience Loyalist" —
+// McDonald's, Subway, Starbucks — having picked a new spot over a familiar
+// one. It was not tunable either, because the questions confounded independent
+// axes and summed a weekday answer with a weekend one.
+//
+// New accounts are now seeded from the population instead (population-prior.ts
+// and migration 0161), which asks the database what people actually eat rather
+// than asking a stranger to predict themselves.
+//
+// What survives here is only the persona keys and labels. Accounts that took
+// the quiz still carry a quiz_persona, and it still feeds their prior and their
+// profile display — deleting the vocabulary would turn a stored value into an
+// unrenderable string for every one of them.
 // ============================================================================
 
 export type StarterPersonaKey =
@@ -31,119 +43,6 @@ export type QuizQuestion = {
   prompt: string;
   options: QuizOption[];
 };
-
-export const QUIZ_QUESTIONS: QuizQuestion[] = [
-  {
-    id: "tuesday_night",
-    prompt: "It's a Tuesday at 7:30pm. You haven't eaten yet.",
-    options: [
-      { emoji: "🥡", text: "I'm not deciding. I'm getting the thing that always hits.",
-        personaWeights: { convenience_loyalist: 3, flavor_loyalist: 1 },
-        chip: "Low decision effort",
-        feedback: "You lean routine over exploration." },
-      { emoji: "🌮", text: "Walking ten minutes for the place I've been meaning to try.",
-        personaWeights: { explorer: 3, practical_variety_seeker: 1 },
-        chip: "Try-new energy",
-        feedback: "You'd rather try than repeat." },
-      { emoji: "🥗", text: "Something healthy-ish, fast, and on the way.",
-        personaWeights: { fast_casual_regular: 3, practical_variety_seeker: 1 },
-        chip: "Healthy-ish choices",
-        feedback: "Convenience, but with intent." },
-      { emoji: "🍔", text: "I had a long day. I'm getting the thing I keep thinking about.",
-        personaWeights: { comfort_connoisseur: 3, flavor_loyalist: 2 },
-        chip: "Comfort over optics",
-        feedback: "Tonight, comfort wins. No notes." },
-    ],
-  },
-  {
-    id: "saturday_afternoon",
-    prompt: "Saturday afternoon, hungry and uncommitted.",
-    options: [
-      { emoji: "☕", text: "Same café. Same order. No surprises.",
-        personaWeights: { cafe_dweller: 3, convenience_loyalist: 1 },
-        chip: "Coffee shop loyalty",
-        feedback: "Same place, same order. Rhythm." },
-      { emoji: "📸", text: "Somewhere I'd actually want to talk about. The vibe matters.",
-        personaWeights: { explorer: 2, premium_comfort_loyalist: 2, social_diner: 1 },
-        chip: "Vibe over speed",
-        feedback: "You're picking for the story." },
-      { emoji: "⚡", text: "Whatever's open and fast. I'm not making decisions today.",
-        personaWeights: { convenience_loyalist: 3, fast_casual_regular: 1 },
-        chip: "Convenience matters",
-        feedback: "Speed is the priority." },
-      { emoji: "🥑", text: "Something fresh. I've been eating heavy all week.",
-        personaWeights: { fast_casual_regular: 3, practical_variety_seeker: 1 },
-        chip: "Bowls over brunch",
-        feedback: "On track. Even on a Saturday." },
-    ],
-  },
-  {
-    id: "best_meal",
-    prompt: "A friend asks: \"best meal you had this month?\"",
-    options: [
-      { emoji: "🔥", text: "Honestly? That one indulgent thing I can't stop thinking about.",
-        personaWeights: { comfort_connoisseur: 3, flavor_loyalist: 2 },
-        chip: "Indulgent and proud",
-        feedback: "Comfort food sticks." },
-      { emoji: "🆕", text: "A new spot a friend dragged me to. Never would have gone otherwise.",
-        personaWeights: { explorer: 3, social_diner: 2 },
-        chip: "New > known",
-        feedback: "Some best meals happen because someone else picked." },
-      { emoji: "🥣", text: "The exact bowl I get every Thursday. Don't judge.",
-        personaWeights: { convenience_loyalist: 2, fast_casual_regular: 2 },
-        chip: "Repeat-order energy",
-        feedback: "Loyalty is its own kind of love." },
-      { emoji: "🥐", text: "Long brunch with great coffee, somewhere quiet.",
-        personaWeights: { cafe_dweller: 3, premium_comfort_loyalist: 1 },
-        chip: "Slow Saturday energy",
-        feedback: "The mood is the point." },
-    ],
-  },
-  {
-    id: "the_bill",
-    prompt: "When the bill comes, you…",
-    options: [
-      { emoji: "🙋", text: "I split it. Money stuff is a vibe-killer.",
-        personaWeights: { social_diner: 3, comfort_connoisseur: 1 },
-        chip: "Tab is the table's",
-        feedback: "Food is the excuse, the table is the point." },
-      { emoji: "💸", text: "I check the math. Always.",
-        personaWeights: { convenience_loyalist: 2, practical_variety_seeker: 1 },
-        chip: "Value-aware",
-        feedback: "You know exactly where the money goes." },
-      { emoji: "✨", text: "I don't really notice. Good food is worth it.",
-        personaWeights: { premium_comfort_loyalist: 3, flavor_loyalist: 2 },
-        chip: "Quality over price",
-        feedback: "You'll pay for what you actually want." },
-      { emoji: "🍳", text: "I'd rather have spent that on groceries.",
-        personaWeights: { fast_casual_regular: 2, cafe_dweller: 1, practical_variety_seeker: 1 },
-        chip: "Cook-at-home leanings",
-        feedback: "Eating out, but the math is in your head." },
-    ],
-  },
-  {
-    id: "memorable_meal",
-    prompt: "Your last memorable meal was about…",
-    options: [
-      { emoji: "🌶️", text: "The food itself. A flavor I can't stop thinking about.",
-        personaWeights: { flavor_loyalist: 3, comfort_connoisseur: 1 },
-        chip: "Flavor-first",
-        feedback: "You don't forget a great bite." },
-      { emoji: "👯", text: "The people I was with. Honestly can't remember what I ordered.",
-        personaWeights: { social_diner: 3, explorer: 1 },
-        chip: "People > plate",
-        feedback: "Food is the canvas. The company is the painting." },
-      { emoji: "💯", text: "Trying something I'd never had before. New cuisine, new dish.",
-        personaWeights: { explorer: 3, premium_comfort_loyalist: 1 },
-        chip: "First-time energy",
-        feedback: "Novelty is the meal you remember." },
-      { emoji: "🛋️", text: "Just relaxing. Comfort food, no pressure, my favorite spot.",
-        personaWeights: { comfort_connoisseur: 2, cafe_dweller: 2, convenience_loyalist: 1 },
-        chip: "Comfort = memory",
-        feedback: "Familiar is its own kind of special." },
-    ],
-  },
-];
 
 // ----------------------------------------------------------------------------
 // Personas — copy + 3 brand recs + 1 stretch rec per persona.
@@ -274,33 +173,6 @@ export const STARTER_PERSONAS: Record<StarterPersonaKey, StarterPersona> = {
 // Scoring
 // ----------------------------------------------------------------------------
 
-export function tallyPersona(answers: QuizOption[]): StarterPersonaKey {
-  const totals: Partial<Record<StarterPersonaKey, number>> = {};
-  for (const a of answers) {
-    for (const [persona, weight] of Object.entries(a.personaWeights) as Array<[StarterPersonaKey, number]>) {
-      totals[persona] = (totals[persona] ?? 0) + weight;
-    }
-  }
-  const entries = Object.entries(totals) as Array<[StarterPersonaKey, number]>;
-  if (entries.length === 0) return "convenience_loyalist";
-  const max = Math.max(...entries.map(([, v]) => v));
-  const winners = entries.filter(([, v]) => v === max).map(([k]) => k);
-  if (winners.length > 1 && answers.length > 0) {
-    const lastWeights = answers[answers.length - 1].personaWeights;
-    const recencyMatch = winners.find((k) => (lastWeights[k] ?? 0) > 0);
-    if (recencyMatch) return recencyMatch;
-  }
-  return winners[0];
-}
 
-export function chipsFromAnswers(answers: QuizOption[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const a of answers) {
-    if (!seen.has(a.chip)) {
-      seen.add(a.chip);
-      out.push(a.chip);
-    }
-  }
-  return out.slice(0, 4);
-}
+
+

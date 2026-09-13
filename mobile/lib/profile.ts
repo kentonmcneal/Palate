@@ -216,7 +216,16 @@ export async function saveTastePreferences(cuisines: string[]): Promise<void> {
   if (!user) throw new Error("Not signed in");
   const { error } = await supabase
     .from("profiles")
-    .update({ taste_preferences: cuisines })
+    .update({
+      taste_preferences: cuisines,
+      // Onboarding is finished HERE now.
+      //
+      // It used to be set by saveQuizResult, which was fine while the quiz was
+      // in the flow and fatal the moment it left: with the quiz removed and
+      // nothing else writing the flag, every new account would have been sent
+      // back through onboarding on every single sign-in, forever.
+      onboarding_complete: true,
+    })
     .eq("id", user.id);
   if (error) throw error;
 }

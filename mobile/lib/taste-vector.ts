@@ -12,6 +12,7 @@
 
 import { supabase } from "./supabase";
 import { applyPersonaPrior } from "./persona-prior";
+import { applyPopulationPrior } from "./population-prior";
 import type { StarterPersonaKey } from "./starter-quiz";
 import { buildEatingPattern, saveEatingPattern } from "./eating-pattern";
 
@@ -173,13 +174,25 @@ export async function computeTasteVector(
     try {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("quiz_persona")
+        .select("quiz_persona, current_city")
         .maybeSingle();
       const persona = (profile?.quiz_persona as StarterPersonaKey | null) ?? null;
-      if (persona) applyPersonaPrior(v, persona);
+      if (persona) {
+        // Accounts that took the starter quiz before it was removed keep the
+        // prior they answered for. Throwing away a signal somebody actually
+        // gave us, in order to replace it with an average, would be a downgrade
+        // for them specifically.
+        applyPersonaPrior(v, persona);
+      } else {
+        // Everybody else — which is every account created from now on. Seeded
+        // from what people on Palate actually log rather than from five
+        // hypotheticals, and it sharpens on its own as visits accumulate.
+        await applyPopulationPrior(v, (profile?.current_city as string | null) ?? null);
+      }
     } catch {
-      // Persona seeding is best-effort — a missing/locked profile just means
-      // the user gets the un-seeded cold-start behavior.
+      // Seeding is best-effort — a missing or locked profile just means the
+      // user gets the un-seeded cold-start behaviour, as before any prior
+      // existed at all.
     }
   }
 

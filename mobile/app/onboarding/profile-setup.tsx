@@ -93,7 +93,7 @@ export default function ProfileSetup() {
         had_photo: !!avatarUrl,
         had_username: true,
       });
-      router.push("/onboarding/quiz");
+      router.push("/onboarding/taste-preferences");
     } catch (e: any) {
       Alert.alert("Couldn't save", e?.message ?? "Try again");
     } finally {
