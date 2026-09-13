@@ -111,6 +111,12 @@ serve(async (req) => {
     .from("restaurants")
     .select("id, google_place_id, name, types, primary_type, price_level, user_rating_count, neighborhood, cuisine_region, cuisine_subregion, occasion_tags, classification_confidence")
     .is("cuisine_type", null)
+    // Never pay to classify somewhere that can never be recommended. 265 of
+    // the 777 rows still lacking a cuisine are already marked ineligible --
+    // not_a_restaurant, non_food_primary_type, national_chain, hotel, airport,
+    // lounge_gated, captive_venue -- and this query never filtered on it, so a
+    // third of the bill was going to read grocery stores and airport lounges.
+    .is("ineligibility_reason", null)
     // Judged once. Without this, a row the model abstained on stayed null and
     // came back every ten minutes forever — a one-time $0.50 pass turned into
     // a permanent 500-calls-a-day loop. Found by the code review.
