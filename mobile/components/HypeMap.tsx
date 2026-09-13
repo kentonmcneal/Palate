@@ -4,6 +4,7 @@ import { Text } from "./Text";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { Flame } from "./Flame";
 import { colors, spacing, type, card, shadow } from "../theme";
 import { getEffectiveLocation } from "../lib/browsing-location";
 import { loadPersonalSignal } from "../lib/personal-signal";
@@ -205,12 +206,19 @@ function HeatMarker({ heat, crowd, top }: { heat: number; crowd: number; top: bo
         position: "absolute", width: size + 16, height: size + 16, borderRadius: (size + 16) / 2,
         backgroundColor: warm, opacity: fade, transform: [{ scale }],
       }} />
-      <View style={{
-        width: size, height: size, borderRadius: size / 2, backgroundColor: warm,
-        borderWidth: 2, borderColor: "#fff", alignItems: "center", justifyContent: "center",
-      }}>
-        {top && <Text style={{ fontSize: Math.max(10, size * 0.5) }}>🔥</Text>}
-      </View>
+      {top ? (
+        // The hottest place burns. It used to be a 🔥 glyph sitting inside a
+        // disc that breathed around it -- the container moved and the flame
+        // did not, which is why it read as a pulsing circle rather than as
+        // fire. The glow stays behind it as heat haze; the marker itself is
+        // now the flame.
+        <Flame size={size + 12} />
+      ) : (
+        <View style={{
+          width: size, height: size, borderRadius: size / 2, backgroundColor: warm,
+          borderWidth: 2, borderColor: "#fff", alignItems: "center", justifyContent: "center",
+        }} />
+      )}
       {Array.from({ length: crowd }).map((_, i) => {
         const angle = (i / Math.max(1, crowd)) * Math.PI * 2 + 0.6;
         const r = size / 2 + 9;

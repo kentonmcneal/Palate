@@ -30,6 +30,9 @@ export default function AdminWaitlistScreen() {
   // is_admin, on a screen nobody else can open.
   const [serverPush, setServerPush] = useState<boolean | null>(null);
   const [flipping, setFlipping] = useState(false);
+  // How many notifications are waiting. While server_push is off this only
+  // ever climbs, which is the intended behaviour and worth being able to see.
+  const [queued, setQueued] = useState<number | null>(null);
   // Tester reports. The push is the fast route and it can fail — no token, a
   // revoked permission, Expo down. This is the route that cannot.
   const [feedback, setFeedback] = useState<FeedbackRow[]>([]);
@@ -43,13 +46,45 @@ export default function AdminWaitlistScreen() {
       const admin = await isAdmin();
       setAllowed(admin);
       if (admin) {
-        setPending(await listPendingUsers());
-        setFeedback(await listFeedback(50).catch(() => []));
-        setFunnel(await loadRecFunnel(28).catch(() => null));
-        setHistory(await loadRecFunnelHistory(26).catch(() => null));
-        const { data } = await supabase
-          .from("feature_flags").select("enabled").eq("key", "server_push").maybeSingle();
-        setServerPush(Boolean(data?.enabled));
+        // Every section loads independently. This used to be a sequence of
+        // bare awaits, and listPendingUsers() had no catch -- so one failing
+        // waitlist query aborted the whole block before the feature-flag read
+        // ever ran, serverPush stayed null, and the card that renders only
+        // when it is non-null silently did not exist. The operator could not
+        // see the switch and had no way to know why. Reported as "I don't see
+        // the switch in admin".
+        const [p, fb, fn, hi, flag, q] = await Promise.all([
+          listPendingUsers().catch(() => [] as PendingUser[]),
+          listFeedback(50).catch(() => []),
+          loadRecFunnel(28).catch(() => null),
+          loadRecFunnelHistory(26).catch(() => null),
+          // Wrapped in async functions, not `.then().catch()`: a Supabase
+          // query builder is a PromiseLike, so it has `.then` but NOT
+          // `.catch`, and chaining one is a type error rather than the safety
+          // net it looks like.
+          (async (): Promise<boolean | null> => {
+            try {
+              const { data, error } = await supabase
+                .from("feature_flags").select("enabled").eq("key", "server_push").maybeSingle();
+              if (error) return null;
+              // Unknown, not "off": showing a confident "Off" for a value we
+              // could not read is how somebody flips a switch that was on.
+              return data ? Boolean(data.enabled) : null;
+            } catch { return null; }
+          })(),
+          (async (): Promise<number | null> => {
+            try {
+              const { data, error } = await supabase.rpc("admin_queued_push_count");
+              return !error && typeof data === "number" ? data : null;
+            } catch { return null; }
+          })(),
+        ]);
+        setPending(p);
+        setFeedback(fb);
+        setFunnel(fn);
+        setHistory(hi);
+        setServerPush(flag);
+        setQueued(q);
       }
     } catch (e: any) {
       Alert.alert("Couldn't load", e?.message ?? "Try again");
@@ -100,6 +135,50 @@ export default function AdminWaitlistScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
+        {/* FIRST on the screen, not buried under the waitlist, the feedback
+            list and the funnel charts. This is the operational switch -- the
+            one thing here that changes what the app does to every tester at
+            once -- and it was below three scrolls of reporting. */}
+        {!loading && allowed && (
+          <View style={styles.card}>
+            <Text style={type.subtitle}>Server push</Text>
+            <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
+              {serverPush === null
+                ? "Couldn't read the flag just now. Pull to refresh. The switch still works, and it reports the real state once it flips."
+                : serverPush
+                  ? "On. Friends' visits, joins, Wrapped, comeback nudges, and likes and comments on your posts are being sent, inside quiet hours and the daily cap."
+                  : "Off. Everything queues and expires unsent. Turn this on when you want testers to start hearing from each other."}
+            </Text>
+            {queued !== null && queued > 0 && (
+              <Text style={[type.small, { marginTop: 6, color: colors.mute }]}>
+                {queued} queued and unsent right now.
+              </Text>
+            )}
+            <Pressable
+              onPress={() => {
+                const turningOn = !serverPush;
+                Alert.alert(
+                  turningOn ? "Turn server push on?" : "Turn server push off?",
+                  turningOn
+                    ? "Every tester with a token starts receiving activity pushes."
+                    : "Queued rows stop sending immediately.",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    { text: turningOn ? "Turn on" : "Turn off", onPress: () => void flipServerPush(turningOn) },
+                  ],
+                );
+              }}
+              disabled={flipping}
+              style={[styles.approve, { marginTop: 12, alignSelf: "flex-start" }]}
+              accessibilityRole="button"
+            >
+              <Text style={styles.approveText}>
+                {flipping ? "…" : serverPush ? "Turn off" : "Turn on"}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
         {loading && (
           <View style={styles.center}>
             <ActivityIndicator color={colors.red} />
@@ -202,37 +281,6 @@ export default function AdminWaitlistScreen() {
             </View>
           );
         })()}
-
-        {!loading && allowed && serverPush !== null && (
-          <View style={styles.card}>
-            <Text style={type.subtitle}>Server push</Text>
-            <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
-              {serverPush
-                ? "On. Friends' visits, joins, Wrapped and comeback nudges are being sent, inside quiet hours and the daily cap."
-                : "Off. Everything queues and expires unsent. Turn this on when you want testers to start hearing from each other."}
-            </Text>
-            <Pressable
-              onPress={() => {
-                Alert.alert(
-                  serverPush ? "Turn server push off?" : "Turn server push on?",
-                  serverPush
-                    ? "Queued rows stop sending immediately."
-                    : "Every tester with a token starts receiving activity pushes.",
-                  [
-                    { text: "Cancel", style: "cancel" },
-                    { text: serverPush ? "Turn off" : "Turn on", onPress: () => void flipServerPush(!serverPush) },
-                  ],
-                );
-              }}
-              disabled={flipping}
-              style={[styles.approve, { marginTop: 12, alignSelf: "flex-start" }]}
-            >
-              <Text style={styles.approveText}>
-                {flipping ? "…" : serverPush ? "Turn off" : "Turn on"}
-              </Text>
-            </Pressable>
-          </View>
-        )}
 
         {!loading && allowed && funnel && (
           <View style={[styles.card, { marginBottom: 12 }]}>
