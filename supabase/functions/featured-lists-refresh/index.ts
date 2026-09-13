@@ -27,6 +27,11 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY   = Deno.env.get("GOOGLE_PLACES_API_KEY")!;
 // Shared secret the pg_cron job must send (x-cron-secret) to run refresh_all_active.
+/** A city refresh is ~22 billable Text Searches. Two a day is generous for
+ *  somebody genuinely moving between cities; anything more is a loop. */
+const REFRESH_CITY_PER_HOUR = 1;
+const REFRESH_CITY_PER_DAY = 2;
+
 const CRON_SECRET  = Deno.env.get("CRON_SECRET") ?? "";
 
 const TOP_N = 10;
@@ -158,6 +163,43 @@ serve(async (req) => {
   } else if (action === "refresh_city") {
     const { data: { user } } = await admin.auth.getUser(bearer);
     if (!user) return json({ error: "unauthorized" }, 401);
+
+    // PER-USER METER. Being signed in was the only check, and one refresh
+    // costs 15-45 Google Text Searches (15 categories x up to 3 pages). The
+    // daily Google budget is a single SHARED 1500 counter, so roughly 34-100
+    // requests from one throwaway account exhausts it for EVERYBODY until UTC
+    // midnight, degrading search to `{places: [], degraded: true}` for every
+    // real user.
+    //
+    // No attacker is required. The city key is a 0.1-degree cell (~11km), so
+    // ordinary travel manufactures new ones: nine cells cover Memphis, three
+    // cover Newport News, and 21 of 28 registered cities are `gps:` cells
+    // whose label is literally "Nearby". Adjacent cells buy near-duplicate
+    // lists off overlapping circles.
+    //
+    // Same proxy_calls table and the same shape as places-proxy's meter, with
+    // a far tighter cap because the unit of work is ~22 billable calls rather
+    // than one. A person genuinely moving between cities in a day gets two;
+    // the scheduled refresh_all_active path is unaffected and still does the
+    // real work.
+    const now = Date.now();
+    const hourAgo = new Date(now - 60 * 60 * 1000).toISOString();
+    const dayAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+    const [{ count: perHour }, { count: perDay }] = await Promise.all([
+      admin.from("proxy_calls").select("user_id", { count: "exact", head: true })
+        .eq("user_id", user.id).eq("action", "refresh_city").gte("called_at", hourAgo),
+      admin.from("proxy_calls").select("user_id", { count: "exact", head: true })
+        .eq("user_id", user.id).eq("action", "refresh_city").gte("called_at", dayAgo),
+    ]);
+    if ((perHour ?? 0) >= REFRESH_CITY_PER_HOUR || (perDay ?? 0) >= REFRESH_CITY_PER_DAY) {
+      // 429, not an error: the lists that already exist are still served, and
+      // the caller should stop asking rather than retry.
+      return json({ error: "rate_limited", retry_after_s: 3600 }, 429);
+    }
+    // Counted BEFORE the work, so a request that fails partway through is
+    // still charged. An uncounted failure is a free retry loop.
+    await admin.from("proxy_calls").insert({ user_id: user.id, action: "refresh_city" })
+      .then(() => undefined, () => undefined);
   } else {
     return json({ error: "unknown_action" }, 400);
   }
