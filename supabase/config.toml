@@ -411,3 +411,12 @@ enabled = true
 # declarative_schema_path = "./schemas"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# ----------------------------------------------------------------------------
+# receipt-ingest is called by the Cloudflare Email Worker, which has no user and
+# no session to present. It authenticates with RECEIPT_INGEST_SECRET instead —
+# checked in the handler, which fails CLOSED when the secret is unset — so the
+# platform's JWT gate would only add a requirement for the anon key, a value
+# that ships inside the app and protects nothing.
+[functions.receipt-ingest]
+verify_jwt = false

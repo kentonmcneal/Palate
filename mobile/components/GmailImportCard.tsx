@@ -8,6 +8,7 @@ import {
   getGmailStatus, exchangeGmailCode, disconnectGmail, GMAIL_SCOPES,
   type GmailStatus,
 } from "../lib/gmail";
+import { GMAIL_OAUTH_ENABLED } from "../lib/gmail-gate";
 import { triggerHapticSuccess } from "../lib/haptics";
 import { useRouter } from "expo-router";
 
@@ -117,6 +118,12 @@ export function GmailImportCard() {
   }
 
   if (!status) return null;
+
+  // Not connected, and the flow is withdrawn: say nothing rather than offer a
+  // button that walks into Google's "this app is unsafe" screen. An account
+  // that IS connected still gets the full card below — the grant already
+  // exists and importing from it costs nobody a warning.
+  if (!status.connected && !GMAIL_OAUTH_ENABLED) return null;
 
   if (!status.connected) {
     return (

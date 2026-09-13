@@ -31,6 +31,8 @@
 // somebody's entire impression of the app.
 // ============================================================================
 
+import { GMAIL_OAUTH_ENABLED } from "./gmail-gate";
+
 export type ActivationState = {
   /** "Always" location — what passive capture actually needs. */
   locationAlways: boolean;
@@ -52,7 +54,7 @@ export type ActivationState = {
 };
 
 export type NextStep = {
-  key: "location" | "notifications" | "import_review" | "gmail" | "log_one" | "friends" | "none";
+  key: "location" | "notifications" | "import_review" | "gmail" | "forward_receipts" | "log_one" | "friends" | "none";
   title: string;
   /** Why this, said in terms of what the person gets — never in feature names. */
   body: string;
@@ -110,12 +112,28 @@ export function nextStep(s: ActivationState): NextStep | null {
   }
 
   // Cold start. The account works but has nothing in it yet.
+  //
+  // This used to say "Scan my email" and open the Gmail OAuth flow. That flow
+  // asked for a RESTRICTED Google scope, so the step's actual outcome was a
+  // full-page "Google hasn't verified this app" warning — a cold-start
+  // instruction that ends in a security warning is worse than no instruction.
+  //
+  // Forwarding reaches the same destination with none of that, so the step
+  // survives; only the promise changed. GMAIL_OAUTH_ENABLED is still read here
+  // so that turning OAuth back on restores the stronger wording rather than
+  // leaving a stale one behind.
+  //
+  // The import_review branch above is deliberately NOT gated: an account that
+  // connected before the gate still has mail waiting, and abandoning it there
+  // is exactly the wasteful state that branch exists to prevent.
   if (s.visitCount === 0 && !s.gmailConnected) {
     return {
-      key: "gmail",
+      key: GMAIL_OAUTH_ENABLED ? "gmail" : "forward_receipts",
       title: "Start from what you've already eaten",
-      body: "Reservation and delivery confirmations in your email become visits. You'll see everything we find before anything is saved.",
-      cta: "Scan my email",
+      body: GMAIL_OAUTH_ENABLED
+        ? "Reservation and delivery confirmations in your email become visits. You'll see everything we find before anything is saved."
+        : "Forward one reservation or delivery confirmation and it becomes a visit. Nothing is saved until you've looked at it.",
+      cta: GMAIL_OAUTH_ENABLED ? "Scan my email" : "Get my forwarding address",
       route: "/import-email",
     };
   }

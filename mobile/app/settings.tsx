@@ -28,6 +28,7 @@ import { isFriendActivityPushEnabled, setFriendActivityPushEnabled } from "../li
 
 import { generateInviteLink, inviteShareMessage, getMyReferralCount } from "../lib/referrals";
 import { GmailImportCard } from "../components/GmailImportCard";
+import { ForwardReceiptsCard } from "../components/ForwardReceiptsCard";
 import { isFlagEnabled } from "../lib/flags";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { isAdmin } from "../lib/waitlist";
@@ -185,6 +186,9 @@ export default function Settings() {
             triangle, next to a card repeating the same words back at you.
             An action you might need is worth one line of a settings screen. */}
         <Section title="Bring in your history">
+          <ForwardReceiptsCard />
+          {/* Renders only for accounts that connected before the OAuth flow was
+              withdrawn — they still have a grant, and it still imports. */}
           <GmailImportCard />
           <Note>
             Reservation and delivery confirmations become visits, so Palate knows

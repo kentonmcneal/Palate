@@ -20,6 +20,7 @@ import {
   parseReceipt,
   nameKey,
   type ParsedReceipt as SharedReceipt,
+  senderDomain,
 } from "../_shared/receipt-parser.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -43,15 +44,6 @@ const corsHeaders = {
 // these so we only fetch what we can use.
 
 /** Domain of a `From:` header, or null when it does not look like one. */
-export function senderDomain(from: string | null | undefined): string | null {
-  const m = /<?([^<>\s@]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})>?/.exec(from ?? "");
-  if (!m) return null;
-  const host = m[2].toLowerCase();
-  // Collapse the sending subdomain: em.opentable.com and mgs.opentable.com are
-  // one platform, and three rows for one answer is a worse answer.
-  const parts = host.split(".");
-  return parts.length > 2 ? parts.slice(-2).join(".") : host;
-}
 
 async function recordSenderMiss(admin: any, from: string | null | undefined) {
   const domain = senderDomain(from);

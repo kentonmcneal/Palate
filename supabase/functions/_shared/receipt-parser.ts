@@ -313,3 +313,21 @@ export function parseReceipt(input: ParseInput): ParsedReceipt | null {
 export function nameKey(name: string): string {
   return name.toLowerCase().replace(/['’]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 }
+
+/**
+ * The platform that sent a receipt, from its From header.
+ *
+ * Lives here rather than in gmail-import because receipt-ingest needs the
+ * identical answer: the two paths must agree on what counts as OpenTable, or
+ * the same restaurant arrives twice under two different senders depending on
+ * whether it came through OAuth or through a forward.
+ */
+export function senderDomain(from: string | null | undefined): string | null {
+  const m = /<?([^<>\s@]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})>?/.exec(from ?? "");
+  if (!m) return null;
+  const host = m[2].toLowerCase();
+  // Collapse the sending subdomain: em.opentable.com and mgs.opentable.com are
+  // one platform, and three rows for one answer is a worse answer.
+  const parts = host.split(".");
+  return parts.length > 2 ? parts.slice(-2).join(".") : host;
+}

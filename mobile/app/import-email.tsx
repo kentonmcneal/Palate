@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Button, Spacer } from "../components/Button";
 import { GmailImportCard } from "../components/GmailImportCard";
+import { ForwardReceiptsCard } from "../components/ForwardReceiptsCard";
 import { colors, spacing, type } from "../theme";
 
 /**
@@ -51,6 +52,8 @@ export default function ImportEmail() {
         </Text>
 
         <Spacer size={24} />
+        <ForwardReceiptsCard />
+        <Spacer size={16} />
         <GmailImportCard />
 
         <Spacer size={24} />

@@ -49,9 +49,14 @@ describe("nextStep", () => {
     expect(partial?.body).toMatch(/[Bb]ackground/);
   });
 
+  // The KEY moves with whichever import path is switched on (gmail-gate.ts);
+  // what must not change is that a cold account is offered an import before it
+  // is asked to type a restaurant in by hand.
   it("offers email import to a cold account before asking it to type", () => {
     const step = nextStep(s({ visitCount: 0, gmailConnected: false }));
-    expect(step?.key).toBe("gmail");
+    expect(["gmail", "forward_receipts"]).toContain(step?.key);
+    expect(step?.route).toBe("/import-email");
+    expect(step?.key).not.toBe("log_one");
   });
 
   it("asks for a manual log only once the automatic routes are exhausted", () => {

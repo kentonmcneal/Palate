@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Share } from "react-native";
 import { InviteCard } from "./InviteCard";
-import { GmailConnectCard } from "./GmailConnectCard";
+import { ForwardReceiptsCard } from "./ForwardReceiptsCard";
 import { RateVisitsCard } from "./RateVisitsCard";
 import { Text } from "./Text";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -620,7 +620,7 @@ export function ProfileBody({ targetId }: { targetId: string }) {
             it when somebody accepts. Each renders nothing once there is
             nothing left to ask. */}
         {mine && <RateVisitsCard />}
-        {mine && <GmailConnectCard />}
+        {mine && <ForwardReceiptsCard />}
         {mine && <InviteCard displayName={displayName} />}
       </ScrollView>
 
