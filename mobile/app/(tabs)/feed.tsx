@@ -29,6 +29,7 @@ import { placeFacts } from "../../lib/place-facts";
 import { FONT_CAP } from "../../lib/a11y";
 import { colors, categoryColors, radius, shadow, spacing, type } from "../../theme";
 import { listFeed, toggleLike, type FeedEvent } from "../../lib/feed";
+import { CommentsSheet } from "../../components/CommentsSheet";
 import { loadView } from "../../lib/load-state";
 import { LoadError } from "../../components/LoadError";
 import { reportContent, blockUser, REPORT_REASONS } from "../../lib/moderation";
@@ -86,6 +87,10 @@ export default function FeedTab() {
   }
   function removeEvent(id: string) {
     setEvents((curr) => curr.filter((e) => e.id !== id));
+  }
+  /** The sheet knows the real count; the card should not guess it. */
+  function setCommentCount(eventId: string, n: number) {
+    setEvents((curr) => curr.map((e) => (e.id === eventId ? { ...e, commentCount: n } : e)));
   }
 
   async function handleLike(ev: FeedEvent) {
@@ -196,6 +201,7 @@ export default function FeedTab() {
                 isSelf={ev.user_id === myId}
                 graph={graph}
                 onLike={() => handleLike(ev)}
+                onCommentCount={(n) => setCommentCount(ev.id, n)}
                 onBlockedUser={removeUser}
                 onReportedEvent={removeEvent}
               />
@@ -208,15 +214,17 @@ export default function FeedTab() {
 }
 
 function FeedRow({
-  event, isSelf, graph, onLike, onBlockedUser, onReportedEvent,
+  event, isSelf, graph, onLike, onCommentCount, onBlockedUser, onReportedEvent,
 }: {
   event: FeedEvent;
   isSelf: boolean;
   graph: TasteGraph | null;
   onLike: () => void;
+  onCommentCount: (n: number) => void;
   onBlockedUser: (userId: string) => void;
   onReportedEvent: (eventId: string) => void;
 }) {
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const router = useRouter();
   // No email fallback any more — `list_feed` does not return one, on purpose.
   const name = event.user?.display_name
@@ -306,11 +314,34 @@ function FeedRow({
             {event.iLiked ? "🔥 Kudos" : "Kudos"}{event.likeCount > 0 ? ` · ${event.likeCount}` : ""}
           </Text>
         </Pressable>
+        {/* Kudos says "seen". This is the half that asks a question back —
+            and it is the only affordance on a card that can start a
+            conversation, so it sits right beside kudos rather than behind
+            the ••• menu. */}
+        <Pressable
+          onPress={() => setCommentsOpen(true)}
+          style={styles.kudos}
+          accessibilityRole="button"
+          accessibilityLabel={event.commentCount > 0
+            ? `${event.commentCount} comments`
+            : "Add a comment"}
+        >
+          <Text style={styles.kudosText}>
+            {event.commentCount > 0 ? `Comments · ${event.commentCount}` : "Comment"}
+          </Text>
+        </Pressable>
         {event.kind === "visit_logged" && !isSelf && event.restaurant?.google_place_id
           && (event.viewerVisitCount ?? 0) === 0 && (
           <SaveButton placeId={event.restaurant.google_place_id} />
         )}
       </View>
+      <CommentsSheet
+        eventId={event.id}
+        visible={commentsOpen}
+        onClose={() => setCommentsOpen(false)}
+        onCountChange={onCommentCount}
+        onBlockedUser={onBlockedUser}
+      />
     </View>
     </View>
   );
