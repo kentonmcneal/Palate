@@ -56,6 +56,14 @@ screen the user already drives by hand.
    Catch-all, not a single address: every user's address is
    `receipts+<their token>@…` and those are not enumerable in advance.
 
+**Leave "Subaddressing" OFF.** It governs whether `receipts+tag@` is delivered to
+a rule written for plain `receipts@`. We use catch-all, which takes every local
+part anyway, and turning it on risks Cloudflare normalising the address and
+stripping the `+token` that *is* the identity. The Worker no longer depends on
+the setting either way — `recipientWithTag()` takes the first of the envelope
+address, `Delivered-To`, `X-Original-To`, `To:`, or the `Received` trace that
+still carries a tag.
+
 `RECEIPT_INGEST_SECRET` is already set on Supabase. The function fails **closed**
 when it is unset — an unconfigured endpoint refuses everything rather than
 accepting anything.

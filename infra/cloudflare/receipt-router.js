@@ -35,6 +35,7 @@ export default {
     try {
       const raw = await readCapped(message.raw, MAX_BYTES);
       const text = extractPlainText(raw);
+      const to = recipientWithTag(message, raw);
 
       const res = await fetch(env.INGEST_URL, {
         method: "POST",
@@ -43,7 +44,7 @@ export default {
           "x-ingest-secret": env.INGEST_SECRET,
         },
         body: JSON.stringify({
-          to: message.to,
+          to,
           from: message.headers.get("from") || message.from,
           subject: message.headers.get("subject") || "",
           date: message.headers.get("date") || null,
@@ -56,6 +57,35 @@ export default {
     }
   },
 };
+
+/**
+ * The recipient address INCLUDING its +tag, which is the whole identity.
+ *
+ * `message.to` is the envelope recipient and normally carries the tag intact
+ * under a catch-all route. But Cloudflare has a "Subaddressing" setting whose
+ * interaction with catch-all I have not tested, and if it ever normalises
+ * receipts+<token>@ down to receipts@ the token is gone and every forward from
+ * every user lands as no_token_in_address.
+ *
+ * So: take the first candidate that actually has a +tag, and only fall back to
+ * the bare envelope address if none do. Costs nothing, and makes the toggle in
+ * the dashboard stop mattering.
+ */
+function recipientWithTag(message, raw) {
+  const candidates = [
+    message.to,
+    message.headers.get("delivered-to"),
+    message.headers.get("x-original-to"),
+    message.headers.get("to"),
+  ];
+  for (const c of candidates) {
+    if (c && /[^<>\s@]+\+[^<>\s@]+@/.test(c)) return c;
+  }
+  // Last resort: the original RCPT TO as it appeared in the received headers.
+  const m = /^Received:[\s\S]*?\bfor\s+<([^>]+\+[^>]+)>/im.exec((raw || "").slice(0, 4000));
+  if (m) return m[1];
+  return message.to;
+}
 
 async function readCapped(stream, limit) {
   const reader = stream.getReader();
