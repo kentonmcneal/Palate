@@ -14,7 +14,6 @@ import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
 import { sendMagicLink, verifyEmailCode, signInWithGoogleIdToken, signInWithAppleIdToken } from "../lib/auth";
 import { hasCompletedOnboarding } from "../lib/profile";
-import { isApproved } from "../lib/waitlist";
 import { track } from "../lib/analytics";
 import { recordReferral } from "../lib/referrals";
 
@@ -118,7 +117,8 @@ export default function SignIn() {
   }, [gResponse]);
 
   // Post-authentication routing, shared by the email-code and Google paths:
-  // claim a pending referral, then gate on waitlist approval before onboarding.
+  // claim a pending referral, then send returning users to the tabs and new
+  // ones to onboarding.
   async function finishSignIn() {
     // Claim a referral if the user arrived via a ?ref= link (handled by
     // expo-linking — works for universal links + custom-scheme deep links).
@@ -137,11 +137,16 @@ export default function SignIn() {
     // dedicated onboarding-complete flag (backfilled for pre-quiz accounts)
     // rather than quiz_persona alone — older accounts have a null persona and
     // were being wrongly re-sent through the wizard on re-login.
-    // Waitlist gate first — unapproved accounts land on the waitlist, not the app.
-    if (!(await isApproved())) {
-      router.replace("/waitlist");
-      return;
-    }
+    //
+    // The waitlist check that used to sit here is gone. Migration 0061 set
+    // approval_status to default 'approved' and backfilled everyone, and
+    // isApproved() additionally fails OPEN on any error — so the branch could
+    // not be reached, while still costing a network round trip on the critical
+    // path of every single sign-in.
+    //
+    // Re-closing the gate means putting this guard back and flipping the
+    // column default, exactly as 0061 describes. The /waitlist screen and the
+    // admin approval queue are deliberately left in place for that.
     const done = await hasCompletedOnboarding();
     router.replace(done ? "/(tabs)" : "/onboarding/welcome");
   }
