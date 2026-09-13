@@ -84,14 +84,34 @@ export function confirmParamsFor(entry: InboxEntry) {
 export const AMBIGUOUS_CANDIDATE_COUNT = 2;
 
 /**
- * Band an entry. Entries written before scoring existed carry no confidence;
- * they are treated as Medium — shown, never pre-checked. Silently promoting
- * unscored history to High would pre-check guesses.
+ * Band an entry. An entry with NO confidence at all lands in Low.
+ *
+ * It used to land in Medium, reasoning that promoting unscored history to High
+ * would pre-check guesses. Right instinct, wrong floor: it put entries we know
+ * NOTHING about in the same bucket as entries we scored and found middling,
+ * and the measured result is that Medium performs WORSE than Low.
+ *
+ * From live prompt outcomes:
+ *
+ *   high    20 confirmed /  2 refused   91%
+ *   medium  24 confirmed / 43 refused   36%
+ *   low     14 confirmed / 17 refused   45%
+ *   unbanded 2 confirmed / 30 refused    6%
+ *
+ * Low outranking Medium is not noise, it is this line. A scored-weak entry has
+ * evidence behind it; an unscored one has none, and the unbanded column is what
+ * those are actually worth. Mixing them dragged Medium below the band beneath
+ * it and made the whole ladder unreadable — you cannot calibrate a threshold
+ * when one bucket is two populations.
+ *
+ * Low is the honest floor: still shown, never pre-checked, asked last, and the
+ * first thing dropped when the digest's budget runs out. That is the correct
+ * treatment for a detection we cannot vouch for.
  */
 export function bandFor(entry: InboxEntry): ConfidenceBand {
   if (entry.confidenceBand) return entry.confidenceBand as ConfidenceBand;
   if (typeof entry.confidence === "number") return confidenceBand(entry.confidence);
-  return "medium";
+  return "low";
 }
 
 function toDigestEntry(entry: InboxEntry): DigestEntry {

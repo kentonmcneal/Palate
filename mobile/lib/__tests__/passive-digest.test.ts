@@ -27,10 +27,23 @@ describe("bandFor", () => {
     expect(bandFor(entry({ id: "b", detectedAt: at(12), confidence: 0.2 }))).toBe("low");
   });
 
-  it("treats unscored history as Medium, never High", () => {
-    // Entries written before scoring existed. Promoting them to High would
-    // pre-check a guess nobody ever evaluated.
-    expect(bandFor(entry({ id: "old", detectedAt: at(12) }))).toBe("medium");
+  it("puts an unscored entry in Low, not Medium", () => {
+    // Entries written before scoring existed, carrying no confidence at all.
+    //
+    // This asserted "medium" until live outcomes showed why that was wrong:
+    // Medium ran at 36% while Low ran at 45%, because Medium was two
+    // populations — entries we scored and found middling, and entries we knew
+    // nothing about. Unbanded prompts resolve 2 confirmed to 30 refused, which
+    // is what an unscored entry is actually worth.
+    //
+    // The original intent survives: never promoted to High, never pre-checked.
+    // Only the floor moved, and it moved onto evidence.
+    expect(bandFor(entry({ id: "old", detectedAt: at(12) }))).toBe("low");
+  });
+
+  it("still never promotes an unscored entry to High", () => {
+    // The property the previous version of this test was protecting.
+    expect(bandFor(entry({ id: "old2", detectedAt: at(12) }))).not.toBe("high");
   });
 });
 
