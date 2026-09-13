@@ -27,6 +27,47 @@
 import { supabase } from "./supabase";
 import type { InboxEntry } from "./passive-confirm";
 
+/**
+ * The subset of an InboxEntry that may leave the phone.
+ *
+ * A WHITELIST, and it must stay one. This used to be `payload: e`, spreading
+ * the entire entry — and `stopLat`/`stopLng` were added to InboxEntry later
+ * (migration 0145, so a refusal could be recorded against a position rather
+ * than a brand). Nobody revisited this line, so the moment those two fields
+ * existed they began travelling: the exact raw-location-before-confirmation
+ * leak the header of this file promises does not happen.
+ *
+ * That is why it is a whitelist. A blacklist, or a spread-and-delete, is one
+ * future field away from the same bug — and the next person adding a field to
+ * InboxEntry will not think about this file either.
+ *
+ * Every coordinate that remains belongs to a RESTAURANT and is already public
+ * in public.restaurants. Where the PERSON stood is not here.
+ *
+ * Cost of the fix: after a reinstall, a restored entry cannot record a
+ * location-scoped refusal, because the stop position is gone. It degrades to a
+ * brand-scoped one. That is the correct trade — the learning is a nicety, the
+ * privacy property is a promise.
+ */
+function mirrorPayload(e: InboxEntry): Record<string, unknown> {
+  return {
+    id: e.id,
+    place_id: e.place_id,
+    name: e.name,
+    address: e.address,
+    alternates: e.alternates,
+    detectedAt: e.detectedAt,
+    dwellMin: e.dwellMin,
+    accuracyM: e.accuracyM,
+    source: e.source,
+    confidence: e.confidence,
+    confidenceBand: e.confidenceBand,
+    candidateCount: e.candidateCount,
+    cluster: e.cluster,
+    // stopLat / stopLng deliberately absent. See above.
+  };
+}
+
 /** Push the whole inbox up. Idempotent on (user_id, entry_id). */
 export async function mirrorInbox(entries: InboxEntry[]): Promise<void> {
   try {
@@ -45,7 +86,7 @@ export async function mirrorInbox(entries: InboxEntry[]): Promise<void> {
       entries.map((e) => ({
         user_id: user.id,
         entry_id: e.id,
-        payload: e as unknown as Record<string, unknown>,
+        payload: mirrorPayload(e),
         detected_at: new Date(e.detectedAt).toISOString(),
       })),
       { onConflict: "user_id,entry_id" },
