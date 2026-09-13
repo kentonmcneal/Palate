@@ -21,10 +21,17 @@ import { FONT_CAP } from "../lib/a11y";
 import { triggerHapticSuccess, triggerHapticSelection } from "../lib/haptics";
 import {
   forwardingAddress, pendingReceipts, acceptReceipt, rejectReceipt,
-  type PendingReceipt,
+  FORWARDING_LIVE, type PendingReceipt,
 } from "../lib/receipt-forwarding";
 
 export function ForwardReceiptsCard() {
+  // Nothing is listening at the domain yet — see FORWARDING_LIVE. Showing the
+  // address now would hand people a bounce.
+  if (!FORWARDING_LIVE) return null;
+  return <ForwardReceiptsCardBody />;
+}
+
+function ForwardReceiptsCardBody() {
   const [address, setAddress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingReceipt[]>([]);

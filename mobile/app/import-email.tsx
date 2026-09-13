@@ -5,6 +5,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Button, Spacer } from "../components/Button";
 import { GmailImportCard } from "../components/GmailImportCard";
 import { ForwardReceiptsCard } from "../components/ForwardReceiptsCard";
+import { FORWARDING_LIVE } from "../lib/receipt-forwarding";
 import { colors, spacing, type } from "../theme";
 
 /**
@@ -53,8 +54,18 @@ export default function ImportEmail() {
 
         <Spacer size={24} />
         <ForwardReceiptsCard />
-        <Spacer size={16} />
         <GmailImportCard />
+        {!FORWARDING_LIVE && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Not quite ready</Text>
+            <Text style={styles.cardBody}>
+              Email import is being switched over to forwarding, which does not
+              require handing Palate access to your mailbox. In the meantime,
+              Palate learns from where you actually go — turn on background
+              location and it will start noticing meals on its own.
+            </Text>
+          </View>
+        )}
 
         <Spacer size={24} />
         <View style={styles.card}>

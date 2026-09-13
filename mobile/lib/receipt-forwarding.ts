@@ -35,6 +35,19 @@ import { saveVisit } from "./visits";
  */
 export const RECEIPT_DOMAIN = "your-palate.com";
 
+/**
+ * Whether the Cloudflare side is actually wired up (docs/RECEIPT_FORWARDING.md,
+ * steps 1-4). Off until it is.
+ *
+ * Everything from the Worker inwards is deployed and proven, but a domain with
+ * no Email Routing route has nothing listening: the address would BOUNCE. An
+ * address that bounces is a worse first impression than the Google warning this
+ * whole path exists to avoid, so the card stays hidden rather than shipping a
+ * promise the DNS cannot keep. One constant, then an OTA, the moment the four
+ * Cloudflare steps are done.
+ */
+export const FORWARDING_LIVE = false;
+
 export type PendingReceipt = {
   id: string;
   restaurantName: string;

@@ -29,6 +29,8 @@ import { isFriendActivityPushEnabled, setFriendActivityPushEnabled } from "../li
 import { generateInviteLink, inviteShareMessage, getMyReferralCount } from "../lib/referrals";
 import { GmailImportCard } from "../components/GmailImportCard";
 import { ForwardReceiptsCard } from "../components/ForwardReceiptsCard";
+import { FORWARDING_LIVE } from "../lib/receipt-forwarding";
+import { getGmailStatus } from "../lib/gmail";
 import { isFlagEnabled } from "../lib/flags";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { isAdmin } from "../lib/waitlist";
@@ -185,16 +187,7 @@ export default function Settings() {
             taps down behind a heading that did not say email — and behind a
             triangle, next to a card repeating the same words back at you.
             An action you might need is worth one line of a settings screen. */}
-        <Section title="Bring in your history">
-          <ForwardReceiptsCard />
-          {/* Renders only for accounts that connected before the OAuth flow was
-              withdrawn — they still have a grant, and it still imports. */}
-          <GmailImportCard />
-          <Note>
-            Reservation and delivery confirmations become visits, so Palate knows
-            your taste before you log anything.
-          </Note>
-        </Section>
+        <ImportSection />
 
         <Section title="Friends">
           <Button
@@ -501,6 +494,36 @@ function PassiveInboxEntry() {
       <Button title="Recent visits to confirm" onPress={() => router.push("/passive-inbox" as never)} />
       <Note>Stops we noticed, waiting for a quick confirm.</Note>
     </CollapsibleSection>
+  );
+}
+
+/**
+ * "Bring in your history", but only when there is history to bring.
+ *
+ * Both cards inside can render nothing right now: forwarding is waiting on DNS
+ * (FORWARDING_LIVE), and the Gmail card appears only for accounts that
+ * connected before the OAuth flow was withdrawn. A heading with a paragraph of
+ * explanation and no control underneath is exactly the dead-path shape we keep
+ * finding and removing, so the section goes with its contents.
+ */
+function ImportSection() {
+  const [hasGmail, setHasGmail] = useState(false);
+  useEffect(() => {
+    // A status we cannot read is not a reason to show an empty section.
+    void getGmailStatus().then((g) => setHasGmail(Boolean(g.connected))).catch(() => setHasGmail(false));
+  }, []);
+
+  if (!FORWARDING_LIVE && !hasGmail) return null;
+
+  return (
+    <Section title="Bring in your history">
+      <ForwardReceiptsCard />
+      <GmailImportCard />
+      <Note>
+        Reservation and delivery confirmations become visits, so Palate knows
+        your taste before you log anything.
+      </Note>
+    </Section>
   );
 }
 
