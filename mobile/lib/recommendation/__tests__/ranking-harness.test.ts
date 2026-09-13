@@ -5,6 +5,7 @@ import { scoreRestaurant } from "../scoring";
 import { capByKey } from "../reranking";
 import { venueOpenAt } from "../../opening-hours";
 import type { TasteGraph } from "../taste-graph";
+import { toInput } from "../candidates";
 import type { RestaurantInput } from "../types";
 import { EMPTY_DISLIKES } from "../../dislikes";
 
@@ -70,27 +71,16 @@ export function founderGraph(): TasteGraph {
 }
 
 export function poolAsInputs(): RestaurantInput[] {
-  return (pool as any[]).map((r) => ({
-    google_place_id: r.google_place_id,
-    name: r.name,
-    cuisine_type: r.cuisine_type,
-    cuisine_region: r.cuisine_region,
-    cuisine_subregion: r.cuisine_subregion,
-    format_class: r.format_class,
-    price_level: r.price_level,
-    rating: r.rating,
-    user_rating_count: r.user_rating_count,
-    neighborhood: r.neighborhood,
-    latitude: r.latitude,
-    longitude: r.longitude,
-    chain_name: r.chain_name,
-    is_chain_brand: r.is_chain_brand,
-    primary_type: r.primary_type,
-    types: r.types,
-    dish_family: r.dish_family,
-    regular_opening_hours: r.regular_opening_hours,
-  })) as RestaurantInput[];
+  // The SHIPPED mapper, deliberately.
+  //
+  // This used to declare its own, carrying every field — which is why the
+  // "no closed restaurant in the top ten" guard below stayed green for the
+  // whole life of the feature while the real mapper dropped
+  // regular_opening_hours and served closed restaurants on Home. A harness
+  // that maps better than production tests a product nobody ships.
+  return (pool as any[]).map(toInput);
 }
+
 
 function ranked() {
   const g = founderGraph();

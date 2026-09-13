@@ -108,26 +108,15 @@ function toRecommendation(
   here: { lat: number; lng: number },
   personal: { visitsByPlaceId: Map<string, number> } | null,
 ): RestaurantRecommendation {
-  const input = {
-    google_place_id: p.google_place_id,
-    name: p.name,
-    cuisine_type: p.cuisine_type ?? null,
-    cuisine_region: p.cuisine_region ?? null,
-    cuisine_subregion: p.cuisine_subregion ?? null,
-    format_class: p.format_class ?? null,
-    occasion_tags: p.occasion_tags ?? null,
-    flavor_tags: p.flavor_tags ?? null,
-    dish_family: p.dish_family ?? null,
-    cultural_context: p.cultural_context ?? null,
-    neighborhood: p.neighborhood ?? null,
-    price_level: p.price_level ?? null,
-    rating: p.rating ?? null,
-    user_rating_count: p.user_rating_count ?? null,
-    latitude: p.latitude ?? null,
-    longitude: p.longitude ?? null,
-    // The field nothing read. scoreContext sinks a closed restaurant by 40.
-    regular_opening_hours: p.regular_opening_hours ?? null,
-  };
+  // The SHARED mapper. This block was a fifth hand-rolled copy that carried
+  // regular_opening_hours but dropped `tags`, `vibe`, `primary_type` and
+  // `types` — so hasAesthetic() and tagSignal(), worth up to +16 of a roughly
+  // [-25,+32] gemAdjustment, were permanently zero on the MAIN SCREEN. Iris
+  // scores gem 32 / final 105 with its tags and 16 / 89 without: the
+  // gems-first policy the whole product is built on ran at half strength
+  // exactly where it matters most.
+  const input = toInput(p);
+
   const compat = getCompatibility(graph, input);
   // The ranking score. compat.score is the headline % and stays context-free;
   // this is what the ORDER uses, and it is where distance, time of day,

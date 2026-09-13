@@ -144,6 +144,35 @@ function poolBy(arr: RestaurantInput[], pred: (r: RestaurantInput) => boolean): 
   return arr.filter(pred);
 }
 
+/**
+ * THE mapper. Every surface that turns a restaurant row into a scorer input
+ * goes through this one.
+ *
+ * There were four of these, hand-rolled, and no two agreed. The damage was not
+ * theoretical:
+ *
+ *   • This one omitted `regular_opening_hours`, so venueOpenAt() always
+ *     returned null and shortlist's open-venue filter was a no-op that had
+ *     never once excluded anything. Home's explore row picked a CLOSED
+ *     restaurant in 20 of 150 simulated loads, clustered at 08:30 and 22:30.
+ *   • It omitted `business_status`, so a permanently closed venue was
+ *     indistinguishable from an open one.
+ *   • RecommendationsCard's mapper carried hours but dropped `tags`, `vibe`,
+ *     `primary_type` and `types`, so hasAesthetic() and tagSignal() — up to
+ *     +16 of a roughly [-25,+32] gemAdjustment — were permanently zero on the
+ *     main screen. The gems-first policy the product is built on ran at half
+ *     strength exactly where it matters most.
+ *
+ * And the repo's own guard could not see any of it, because the ranking
+ * harness defined a FIFTH mapper that carried everything. Same fixture, same
+ * scorer, same clock: the harness's mapper yields 0 closed restaurants in the
+ * top ten, the shipped one yields 2. The guard had been green for the entire
+ * life of the feature by testing code that does not ship.
+ *
+ * mapper-completeness.test.ts now fails if this drops a field the type
+ * declares, so the next field added cannot be silently forgotten by four
+ * places at once.
+ */
 export function toInput(p: any): RestaurantInput {
   return {
     dish_family: (p as any).dish_family ?? null,
@@ -168,5 +197,10 @@ export function toInput(p: any): RestaurantInput {
     chain_name: p.chain_name ?? null,
     primary_type: p.primary_type ?? null,
     types: p.types ?? null,
+    // The three that were missing. Hours and status gate whether a place can
+    // be recommended at all; is_chain_brand feeds the gem adjustment.
+    regular_opening_hours: p.regular_opening_hours ?? null,
+    business_status: p.business_status ?? null,
+    is_chain_brand: p.is_chain_brand ?? null,
   };
 }

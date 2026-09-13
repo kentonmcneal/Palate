@@ -32,6 +32,7 @@ import { distanceKm, formatDistance } from "../../lib/match-score";
 import { newRequestId } from "../../lib/recommendation-events";
 import { currentSessionId } from "../../lib/recommendation-events";
 import { trackSlate } from "../../lib/recommendation/slate";
+import { toInput } from "../../lib/recommendation/candidates";
 import { ImpressionScrollView } from "../../components/Impressions";
 import { filterRecommendable } from "../../lib/recommendation/eligibility";
 import { isStretch } from "../../lib/recommendation";
@@ -964,26 +965,6 @@ function List({ items, surface, emptyMsg, onHide, requestId, slot, mood }: {
       ))}
     </View>
   );
-}
-function toInput(p: Restaurant): RestaurantInput {
-  return {
-    dish_family: (p as any).dish_family ?? null,
-    google_place_id: p.google_place_id,
-    name: p.name,
-    cuisine_type: p.cuisine_type ?? null,
-    cuisine_region: (p as any).cuisine_region ?? null,
-    cuisine_subregion: (p as any).cuisine_subregion ?? null,
-    format_class: (p as any).format_class ?? null,
-    occasion_tags: (p as any).occasion_tags ?? null,
-    flavor_tags: (p as any).flavor_tags ?? null,
-    cultural_context: (p as any).cultural_context ?? null,
-    neighborhood: p.neighborhood ?? null,
-    price_level: p.price_level ?? null,
-    rating: p.rating ?? null,
-    user_rating_count: (p as any).user_rating_count ?? null,
-    latitude: p.latitude ?? null,
-    longitude: p.longitude ?? null,
-  };
 }
 
 const styles = StyleSheet.create({
