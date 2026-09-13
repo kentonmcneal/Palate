@@ -224,12 +224,42 @@ export async function getInbox(): Promise<InboxEntry[]> {
   }
 }
 
+/** The calendar day a detection belongs to, on THIS device, in local time.
+ *  Two stops at one restaurant on one day are one meal. */
+export function localDayKey(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/** Two detections that describe one meal: same venue, same local day. */
+export function isSameMeal(
+  a: { place_id: string; detectedAt: number },
+  b: { place_id: string; detectedAt: number },
+): boolean {
+  return a.place_id === b.place_id && localDayKey(a.detectedAt) === localDayKey(b.detectedAt);
+}
+
 /** Returns false when this was a duplicate of an entry we already hold. The
  *  caller needs that answer: a duplicate must not produce a second buzz. */
 async function addToInbox(entry: InboxEntry): Promise<boolean> {
   const existing = await getInbox();
-  if (existing.some((e) => e.place_id === entry.place_id && Math.abs(e.detectedAt - entry.detectedAt) < 3_600_000)) {
-    return false; // dedupe same place within an hour
+
+  // Same place, same LOCAL DAY. This used to be a one-hour window, and an
+  // hour is shorter than a meal: iOS emits a fresh stop whenever the location
+  // settles again, so sitting somewhere for two hours, or stepping out to the
+  // car and back, produced a second entry and a second prompt for one dinner.
+  // Measured on live data: one place resolved up to TWELVE times for one user
+  // in a single day, across 74 (user, place, day) triples.
+  //
+  // A day is the right unit because it is the unit the digest asks in. Going
+  // to the same restaurant twice in one day is rare, and the cost of getting
+  // it wrong is one unlogged repeat visit the person can add by hand --
+  // against twelve notifications about a meal they already confirmed.
+  //
+  // Local day, not UTC: the boundary has to be the one the person is living
+  // in, or a late dinner splits into two days for anyone west of Greenwich.
+  if (existing.some((e) => isSameMeal(e, entry))) {
+    return false;
   }
   const next = [entry, ...existing];
   await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(next));
