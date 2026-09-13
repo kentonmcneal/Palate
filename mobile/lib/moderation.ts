@@ -21,7 +21,7 @@ export const REPORT_REASONS: { key: ReportReason; label: string }[] = [
 export async function reportContent(input: {
   // 'comment' joins the set in 0146. content_reports.target_type is free text,
   // so this needed no migration — but the union is what stops a typo.
-  targetType: "feed_event" | "profile" | "comment";
+  targetType: "feed_event" | "profile" | "comment" | "dm_thread";
   targetId: string;
   targetUserId?: string | null;
   reason: ReportReason;

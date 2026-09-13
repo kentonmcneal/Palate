@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  View, StyleSheet, Pressable, ScrollView, ActivityIndicator,
+  View, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert,
   KeyboardAvoidingView, Platform,
 } from "react-native";
 import { Text } from "../../components/Text";
@@ -12,6 +12,7 @@ import {
   listMessages, listThreads, sendMessage, markRead, subscribeToThread, type DmMessage,
 } from "../../lib/messages";
 import { supabase } from "../../lib/supabase";
+import { reportContent, blockUser, REPORT_REASONS } from "../../lib/moderation";
 
 // ============================================================================
 // thread — one conversation.
@@ -110,9 +111,79 @@ export default function ThreadScreen() {
     }
   }
 
+  function openThreadMenu() {
+    if (!otherId) return;
+    Alert.alert(otherName, undefined, [
+      {
+        text: "Report this conversation",
+        onPress: () => Alert.alert("Report", "Why are you reporting this?", [
+          ...REPORT_REASONS.map((r) => ({
+            text: r.label,
+            onPress: async () => {
+              try {
+                await reportContent({
+                  targetType: "dm_thread",
+                  targetId: threadId || otherId,
+                  targetUserId: otherId,
+                  reason: r.key,
+                });
+                Alert.alert("Thanks", "We'll take a look.");
+              } catch (e: any) {
+                Alert.alert("Couldn't report", e?.message ?? "Try again.");
+              }
+            },
+          })),
+          { text: "Cancel", style: "cancel" },
+        ]),
+      },
+      {
+        text: "Block this person",
+        style: "destructive",
+        onPress: () => Alert.alert(
+          `Block ${otherName}?`,
+          "You won't see each other anywhere on Palate, and they can't message you.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Block",
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  await blockUser(otherId);
+                  // Out of the conversation, not just back to it: staying in a
+                  // thread with somebody you have just blocked is the one
+                  // screen this should never leave you on.
+                  router.replace("/messages");
+                } catch (e: any) {
+                  Alert.alert("Couldn't block", e?.message ?? "Try again.");
+                }
+              },
+            },
+          ],
+        ),
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-      <Stack.Screen options={{ title: otherName }} />
+      {/* Report and block, in the header.
+          Apple Guideline 1.2 requires a way to report objectionable content
+          and block the person producing it, on EVERY user-generated surface.
+          The feed has both; this screen had neither, and a private message is
+          where harassment actually happens — there is no audience to shame
+          somebody out of it and nobody else can flag it for you. */}
+      <Stack.Screen
+        options={{
+          title: otherName,
+          headerRight: () => (
+            <Pressable onPress={openThreadMenu} hitSlop={12} accessibilityLabel="Conversation options">
+              <Text style={styles.menuDots}>•••</Text>
+            </Pressable>
+          ),
+        }}
+      />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -170,6 +241,7 @@ export default function ThreadScreen() {
 }
 
 const styles = StyleSheet.create({
+  menuDots: { color: colors.mute, fontSize: 15, letterSpacing: 1, paddingHorizontal: 4 },
   safe: { flex: 1, backgroundColor: colors.paper },
   body: { padding: spacing.lg, gap: 8 },
   empty: { ...type.small, textAlign: "center", marginTop: spacing.xl },
