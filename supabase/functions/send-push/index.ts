@@ -51,7 +51,17 @@ const MAX_PER_USER_PER_DAY = 3;
 // no limit at all, because an unbounded path is a way to buzz somebody
 // forever, and because the DM send RPC's own rate limits should be the first
 // thing to stop that, not this.
-const DIRECT_TYPES = new Set(["dm_message"]);
+// A comment on your post, or a reply to your comment, is correspondence by the
+// same argument: someone wrote to you, by name, and is waiting. Left out of
+// this set they compete with "somebody you follow ate somewhere" for three
+// slots a day, so a reply can be deferred twenty-four hours or dropped at
+// expiry while a broadcast goes out ahead of it. That is the wrong way round,
+// and it is the mistake this comment block was already written to prevent.
+//
+// LIKES ARE NOT HERE, deliberately. A heart is a reaction, not a message. It
+// is exactly the ambient stream the daily cap exists to ration, and fifteen
+// people liking a post should not cost somebody fifteen buzzes.
+const DIRECT_TYPES = new Set(["dm_message", "post_comment", "comment_reply"]);
 const MAX_DIRECT_PER_USER_PER_DAY = 25;
 
 function isDirect(row: { data?: Record<string, unknown> | null }): boolean {
