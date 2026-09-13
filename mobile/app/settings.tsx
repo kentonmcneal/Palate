@@ -31,6 +31,7 @@ import { GmailImportCard } from "../components/GmailImportCard";
 import { ForwardReceiptsCard } from "../components/ForwardReceiptsCard";
 import { FORWARDING_LIVE } from "../lib/receipt-forwarding";
 import { getSocialPushPrefs, setSocialPushPref } from "../lib/social-notifications";
+import { readFunctionError } from "../lib/function-error";
 import { getGmailStatus } from "../lib/gmail";
 import { isFlagEnabled } from "../lib/flags";
 import { CollapsibleSection } from "../components/CollapsibleSection";
@@ -156,16 +157,27 @@ export default function Settings() {
   function deleteAccount() {
     Alert.alert(
       "Delete account?",
-      "This wipes everything: account, visits, location events. You can't undo this.",
+      "This wipes everything: your account, visits, location events, and every photo you uploaded. You can't undo this.",
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete forever",
           style: "destructive",
           onPress: async () => {
-            const { error } = await supabase.rpc("delete_my_account");
+            // The edge function, not the RPC directly. delete_my_account()
+            // clears the ROWS but physically cannot clear the FILES: Supabase
+            // refuses direct DML against storage.objects, so photos outlived
+            // the accounts that made them. The function deletes the objects
+            // through the Storage API with the service role and then calls the
+            // same RPC, in that order, so a failure halfway leaves an account
+            // missing photos rather than photos missing an account.
+            //
+            // Server-side because a client-side list-and-remove is skippable
+            // by force-quitting mid-flow, and a deletion you can interrupt is
+            // not a deletion.
+            const { error } = await supabase.functions.invoke("delete-account", { body: {} });
             if (error) {
-              Alert.alert("Failed", error.message);
+              Alert.alert("Failed", await readFunctionError(error));
             } else {
               await signOut();
               router.replace("/sign-in");
