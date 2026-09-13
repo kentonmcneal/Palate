@@ -50,6 +50,8 @@ export type FeedEvent = {
   likeCount: number;
   /** Replies under this post, blocked authors already subtracted (0146). */
   commentCount: number;
+  /** The two most recent top-level comments, for the inline preview (0148). */
+  topComments: Array<{ id: string; body: string; author: string; user_id: string }>;
   // The card's numbers (0096). Null on posts that are not visits, or legacy
   // posts whose visit row is gone.
   visitedAt: string | null;
@@ -101,6 +103,7 @@ export async function listFeed(limit = 50): Promise<FeedEvent[]> {
       iLiked: Boolean(e.i_liked),
       likeCount: e.like_count ?? 0,
       commentCount: e.comment_count ?? 0,
+      topComments: Array.isArray(e.top_comments) ? e.top_comments : [],
       visitedAt: e.visited_at ?? null,
       mealType: e.meal_type ?? null,
       photoUrl: e.photo_url ?? null,

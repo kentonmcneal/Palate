@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Image } from "react-native";
 import { computeTasteVector } from "../../lib/taste-vector";
 import { loadPersonalSignal } from "../../lib/personal-signal";
@@ -30,6 +30,7 @@ import { FONT_CAP } from "../../lib/a11y";
 import { colors, categoryColors, radius, shadow, spacing, type } from "../../theme";
 import { listFeed, toggleLike, type FeedEvent } from "../../lib/feed";
 import { CommentsSheet } from "../../components/CommentsSheet";
+import { HeartButton, HeartBurst } from "../../components/HeartButton";
 import { loadView } from "../../lib/load-state";
 import { LoadError } from "../../components/LoadError";
 import { reportContent, blockUser, REPORT_REASONS } from "../../lib/moderation";
@@ -38,6 +39,9 @@ import { supabase } from "../../lib/supabase";
 export default function FeedTab() {
   const router = useRouter();
   const [events, setEvents] = useState<FeedEvent[]>([]);
+  // ONE sheet for the whole screen, holding whichever post is open. It used to
+  // be one <Modal> per FeedRow -- fifty posts, fifty modals.
+  const [openComments, setOpenComments] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [myId, setMyId] = useState<string | null>(null);
@@ -89,9 +93,9 @@ export default function FeedTab() {
     setEvents((curr) => curr.filter((e) => e.id !== id));
   }
   /** The sheet knows the real count; the card should not guess it. */
-  function setCommentCount(eventId: string, n: number) {
+  const setCommentCount = useCallback((eventId: string, n: number) => {
     setEvents((curr) => curr.map((e) => (e.id === eventId ? { ...e, commentCount: n } : e)));
-  }
+  }, []);
 
   async function handleLike(ev: FeedEvent) {
     // Optimistic update
@@ -201,7 +205,7 @@ export default function FeedTab() {
                 isSelf={ev.user_id === myId}
                 graph={graph}
                 onLike={() => handleLike(ev)}
-                onCommentCount={(n) => setCommentCount(ev.id, n)}
+                onOpenComments={() => setOpenComments(ev.id)}
                 onBlockedUser={removeUser}
                 onReportedEvent={removeEvent}
               />
@@ -209,23 +213,46 @@ export default function FeedTab() {
           </View>
         ))}
       </ScrollView>
+
+      {/* One sheet for the screen, not one per row. */}
+      <CommentsSheet
+        eventId={openComments}
+        visible={openComments !== null}
+        onClose={() => setOpenComments(null)}
+        onCountChange={setCommentCount}
+        onBlockedUser={removeUser}
+      />
     </SafeAreaView>
   );
 }
 
 function FeedRow({
-  event, isSelf, graph, onLike, onCommentCount, onBlockedUser, onReportedEvent,
+  event, isSelf, graph, onLike, onOpenComments, onBlockedUser, onReportedEvent,
 }: {
   event: FeedEvent;
   isSelf: boolean;
   graph: TasteGraph | null;
   onLike: () => void;
-  onCommentCount: (n: number) => void;
+  onOpenComments: () => void;
   onBlockedUser: (userId: string) => void;
   onReportedEvent: (eventId: string) => void;
 }) {
-  const [commentsOpen, setCommentsOpen] = useState(false);
   const router = useRouter();
+  const [burst, setBurst] = useState(0);
+  const lastTap = useRef(0);
+
+  function handleDoubleTap() {
+    const now = Date.now();
+    if (now - lastTap.current < 280) {
+      lastTap.current = 0;
+      setBurst((n) => n + 1);
+      // Only ever ADDS a like. See the comment at the call site.
+      if (!event.iLiked) onLike();
+      return;
+    }
+    lastTap.current = now;
+  }
+
   // No email fallback any more — `list_feed` does not return one, on purpose.
   const name = event.user?.display_name
     || (event.user?.username ? `@${event.user.username}` : "Someone");
@@ -302,46 +329,67 @@ function FeedRow({
         )}
       </View>
 
-      {event.kind === "visit_logged"
-        ? <VisitCard event={event} isSelf={isSelf} graph={graph} hue={hue ?? colors.ink} />
-        : <FeedBody event={event} />}
+      {/* Double tap the post to like it, with the heart blooming over it —
+          the other half of Instagram's like, and the half people reach for
+          without being told. A second double tap does NOT unlike: on
+          Instagram it is idempotent, because the gesture is "I love this",
+          not a toggle, and taking a like away by accident is the one outcome
+          the animation cannot walk back. */}
+      <Pressable onPress={handleDoubleTap}>
+        {event.kind === "visit_logged"
+          ? <VisitCard event={event} isSelf={isSelf} graph={graph} hue={hue ?? colors.ink} />
+          : <FeedBody event={event} />}
+        <HeartBurst trigger={burst} />
+      </Pressable>
 
       <View style={styles.actions}>
-        {/* Kudos, not a heart. Strava's word for "I saw this and it counts",
-            which is what a like on somebody's dinner actually means. */}
-        <Pressable onPress={onLike} style={[styles.kudos, event.iLiked && styles.kudosActive]} accessibilityRole="button">
-          <Text style={[styles.kudosText, event.iLiked && styles.kudosTextActive]}>
-            {event.iLiked ? "🔥 Kudos" : "Kudos"}{event.likeCount > 0 ? ` · ${event.likeCount}` : ""}
-          </Text>
-        </Pressable>
-        {/* Kudos says "seen". This is the half that asks a question back —
-            and it is the only affordance on a card that can start a
-            conversation, so it sits right beside kudos rather than behind
-            the ••• menu. */}
+        {/* Heart first, comment second — the order everyone already has muscle
+            memory for. The count lives beside the glyph, not in the label. */}
+        <HeartButton liked={event.iLiked} count={event.likeCount} onToggle={onLike} />
+
         <Pressable
-          onPress={() => setCommentsOpen(true)}
-          style={styles.kudos}
+          onPress={onOpenComments}
+          hitSlop={10}
+          style={styles.commentBtn}
           accessibilityRole="button"
-          accessibilityLabel={event.commentCount > 0
-            ? `${event.commentCount} comments`
-            : "Add a comment"}
+          accessibilityLabel={event.commentCount > 0 ? `${event.commentCount} comments` : "Add a comment"}
         >
-          <Text style={styles.kudosText}>
-            {event.commentCount > 0 ? `Comments · ${event.commentCount}` : "Comment"}
-          </Text>
+          <Text style={styles.commentGlyph}>🗨</Text>
+          {event.commentCount > 0 && <Text style={styles.commentCount}>{event.commentCount}</Text>}
         </Pressable>
+
+        <View style={{ flex: 1 }} />
         {event.kind === "visit_logged" && !isSelf && event.restaurant?.google_place_id
           && (event.viewerVisitCount ?? 0) === 0 && (
           <SaveButton placeId={event.restaurant.google_place_id} />
         )}
       </View>
-      <CommentsSheet
-        eventId={event.id}
-        visible={commentsOpen}
-        onClose={() => setCommentsOpen(false)}
-        onCountChange={onCommentCount}
-        onBlockedUser={onBlockedUser}
-      />
+
+      {/* The first two comments, inline. A bare "3 comments" is a number you
+          have to tap to find out whether tapping was worth it; two lines of
+          what people actually said is what makes a feed read like a
+          conversation. */}
+      {event.topComments.length > 0 && (
+        <View style={styles.preview}>
+          {event.commentCount > event.topComments.length && (
+            <Pressable onPress={onOpenComments} hitSlop={6}>
+              <Text style={styles.viewAll}>
+                View all {event.commentCount} comments
+              </Text>
+            </Pressable>
+          )}
+          {event.topComments.map((c) => (
+            <Pressable key={c.id} onPress={onOpenComments}>
+              <Text style={styles.previewLine} numberOfLines={2}>
+                <Text style={styles.previewWho}>{c.author}</Text>
+                {"  "}
+                <Text style={styles.previewBody}>{c.body}</Text>
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
     </View>
     </View>
   );
@@ -656,13 +704,16 @@ const styles = StyleSheet.create({
   // Controls on a white card fill with wash; paper here was a grey blot on
   // white. Active is the soft red tint with the darker red text that clears
   // AA at 13px, not the brand red, which is for the Save CTA beside it.
-  kudos: {
-    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999,
-    borderWidth: 1, borderColor: colors.wash, backgroundColor: colors.wash,
-  },
-  kudosActive: { borderColor: colors.redTintBorder, backgroundColor: colors.redTint },
-  kudosText: { fontSize: 13, fontWeight: "700", color: colors.ink },
-  kudosTextActive: { color: colors.redText },
+  // Ladder sizes only — type-scale.test.ts guards app/(tabs), and it caught
+  // four raw values here on the first run.
+  commentBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
+  commentGlyph: { ...type.stat, color: colors.ink },
+  commentCount: { ...type.small, fontWeight: "700", color: colors.ink },
+  preview: { marginTop: 10, gap: 4 },
+  viewAll: { ...type.small, color: colors.mute, fontWeight: "600" },
+  previewLine: { ...type.small, lineHeight: 19 },
+  previewWho: { fontWeight: "700", color: colors.ink },
+  previewBody: { color: colors.ink },
   save: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: colors.red },
   // Wash, not faint: a saved Save on a white card was white on white and
   // read as an outline only.

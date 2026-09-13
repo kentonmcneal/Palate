@@ -19,9 +19,14 @@ export const COMMENT_MAX_LENGTH = 500;
 export type FeedComment = {
   id: string;
   feedEventId: string;
+  /** The comment this answers. One level only -- see 0148. */
+  parentId: string | null;
   userId: string;
   body: string;
   createdAt: string;
+  likeCount: number;
+  iLiked: boolean;
+  replyCount: number;
   author: {
     displayName: string | null;
     username: string | null;
@@ -31,7 +36,7 @@ export type FeedComment = {
   canDelete: boolean;
 };
 
-export async function listComments(eventId: string, limit = 100): Promise<FeedComment[]> {
+export async function listComments(eventId: string, limit = 200): Promise<FeedComment[]> {
   const { data, error } = await supabase.rpc("list_feed_comments", {
     p_event_id: eventId,
     p_limit: limit,
@@ -40,9 +45,13 @@ export async function listComments(eventId: string, limit = 100): Promise<FeedCo
   return (data ?? []).map((c: any) => ({
     id: c.id,
     feedEventId: c.feed_event_id,
+    parentId: c.parent_id ?? null,
     userId: c.user_id,
     body: c.body,
     createdAt: c.created_at,
+    likeCount: c.like_count ?? 0,
+    iLiked: Boolean(c.i_liked),
+    replyCount: c.reply_count ?? 0,
     author: {
       displayName: c.author_display_name ?? null,
       username: c.author_username ?? null,
@@ -53,7 +62,11 @@ export async function listComments(eventId: string, limit = 100): Promise<FeedCo
 }
 
 /** Returns the created comment so the caller can render it without a refetch. */
-export async function addComment(eventId: string, body: string): Promise<FeedComment> {
+export async function addComment(
+  eventId: string,
+  body: string,
+  parentId?: string | null,
+): Promise<FeedComment> {
   const trimmed = body.trim();
   if (!trimmed) throw new Error("Say something first.");
   if (trimmed.length > COMMENT_MAX_LENGTH) {
@@ -64,8 +77,8 @@ export async function addComment(eventId: string, body: string): Promise<FeedCom
 
   const { data, error } = await supabase
     .from("feed_comments")
-    .insert({ feed_event_id: eventId, user_id: user.id, body: trimmed })
-    .select("id, feed_event_id, user_id, body, created_at")
+    .insert({ feed_event_id: eventId, user_id: user.id, body: trimmed, parent_id: parentId ?? null })
+    .select("id, feed_event_id, parent_id, user_id, body, created_at")
     .single();
   if (error) throw error;
 
@@ -81,9 +94,13 @@ export async function addComment(eventId: string, body: string): Promise<FeedCom
   return {
     id: data.id,
     feedEventId: data.feed_event_id,
+    parentId: data.parent_id ?? null,
     userId: data.user_id,
     body: data.body,
     createdAt: data.created_at,
+    likeCount: 0,
+    iLiked: false,
+    replyCount: 0,
     author: {
       displayName: me?.display_name ?? null,
       username: me?.username ?? null,
@@ -106,4 +123,44 @@ export async function deleteComment(commentId: string): Promise<boolean> {
     .select("id");
   if (error) throw error;
   return (data?.length ?? 0) > 0;
+}
+
+/**
+ * Heart or unheart a comment. Mirrors toggleLike for posts: the caller has
+ * already flipped its own state optimistically, so this only has to make the
+ * server agree, and a failure is the caller's cue to put it back.
+ */
+export async function toggleCommentLike(commentId: string, currentlyLiked: boolean): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Please sign in.");
+
+  if (currentlyLiked) {
+    const { error } = await supabase
+      .from("feed_comment_likes")
+      .delete()
+      .eq("comment_id", commentId)
+      .eq("user_id", user.id);
+    if (error) throw error;
+    return;
+  }
+
+  const { error } = await supabase
+    .from("feed_comment_likes")
+    .insert({ comment_id: commentId, user_id: user.id });
+  // Already liked (double tap, or two devices) is the desired end state, not a
+  // failure. 23505 is the primary key doing its job.
+  if (error && (error as any).code !== "23505") throw error;
+}
+
+/** Top-level comments, each with its replies immediately after it. */
+export function threadComments(all: FeedComment[]): Array<{ comment: FeedComment; replies: FeedComment[] }> {
+  const roots = all.filter((c) => !c.parentId);
+  const byParent = new Map<string, FeedComment[]>();
+  for (const c of all) {
+    if (!c.parentId) continue;
+    const arr = byParent.get(c.parentId) ?? [];
+    arr.push(c);
+    byParent.set(c.parentId, arr);
+  }
+  return roots.map((comment) => ({ comment, replies: byParent.get(comment.id) ?? [] }));
 }

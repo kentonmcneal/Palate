@@ -30,6 +30,7 @@ import { generateInviteLink, inviteShareMessage, getMyReferralCount } from "../l
 import { GmailImportCard } from "../components/GmailImportCard";
 import { ForwardReceiptsCard } from "../components/ForwardReceiptsCard";
 import { FORWARDING_LIVE } from "../lib/receipt-forwarding";
+import { getSocialPushPrefs, setSocialPushPref } from "../lib/social-notifications";
 import { getGmailStatus } from "../lib/gmail";
 import { isFlagEnabled } from "../lib/flags";
 import { CollapsibleSection } from "../components/CollapsibleSection";
@@ -56,6 +57,8 @@ export default function Settings() {
   const [screenshotPrompt, setScreenshotPrompt] = useState(true);
   const [discoveryPings, setDiscoveryPings] = useState(true);
   const [friendPush, setFriendPush] = useState(true);
+  const [likePush, setLikePush] = useState(true);
+  const [commentPush, setCommentPush] = useState(true);
   const [referralCount, setReferralCount] = useState(0);
 
   useEffect(() => {
@@ -65,6 +68,9 @@ export default function Settings() {
     isScreenshotPromptEnabled().then(setScreenshotPrompt);
     areDiscoveryPingsEnabled().then(setDiscoveryPings);
     isFriendActivityPushEnabled().then(setFriendPush);
+    getSocialPushPrefs()
+      .then((p) => { setLikePush(p.likes); setCommentPush(p.comments); })
+      .catch(() => {});
     getMyReferralCount().then(setReferralCount).catch(() => {});
   }, []);
 
@@ -255,6 +261,30 @@ export default function Settings() {
             }
           />
           <Note>New people joining, Wrapped results, and friends&apos; visits. Your own activity is only shared as far as your profile visibility allows.</Note>
+          <Row
+            label="Likes on your posts"
+            right={
+              <Switch
+                value={likePush}
+                onValueChange={(v) => { setLikePush(v); void setSocialPushPref("likes", v).catch(() => setLikePush(!v)); }}
+                thumbColor={likePush ? colors.red : "#fff"}
+                trackColor={{ true: colors.redTintBorder, false: colors.line }}
+              />
+            }
+          />
+          <Note>When someone hearts a post of yours, or a comment you left.</Note>
+          <Row
+            label="Comments and replies"
+            right={
+              <Switch
+                value={commentPush}
+                onValueChange={(v) => { setCommentPush(v); void setSocialPushPref("comments", v).catch(() => setCommentPush(!v)); }}
+                thumbColor={commentPush ? colors.red : "#fff"}
+                trackColor={{ true: colors.redTintBorder, false: colors.line }}
+              />
+            }
+          />
+          <Note>When someone comments on your post or answers a comment of yours. Never more than the daily cap, and never during quiet hours.</Note>
           <Row
             label="Weekend picks"
             right={
