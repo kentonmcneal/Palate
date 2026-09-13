@@ -4,6 +4,7 @@ import { Text } from "./Text";
 import { colors, spacing, type } from "../theme";
 import { Confetti } from "./Confetti";
 import { generateInviteLink } from "../lib/referrals";
+import { requestFullNotificationPermission } from "../lib/notifications";
 
 type Props = {
   visible: boolean;
@@ -39,6 +40,29 @@ export function FirstVisitCelebration({ visible, restaurantName, onDismiss }: Pr
       opacity.setValue(0);
     }
   }, [visible, scale, opacity]);
+
+  /**
+   * The one moment worth spending iOS's single notification dialog on.
+   *
+   * Onboarding asks PROVISIONALLY (see ensureNotificationPermission), which is
+   * silent and delivers quietly. This is where we go for the loud version:
+   * they have just logged their first visit, the confetti is on screen, and
+   * the thing we want permission to send — the evening question — is the
+   * obvious next step rather than an abstraction.
+   *
+   * Asking before this point is asking a stranger for their attention. Asking
+   * here is asking somebody who just used the product.
+   *
+   * Fire-and-forget with a catch: a permission prompt must never take down a
+   * celebration, and a refusal is not an error.
+   */
+  useEffect(() => {
+    if (!visible) return;
+    const t = setTimeout(() => {
+      void requestFullNotificationPermission().catch(() => {});
+    }, 2200); // after the confetti, before they dismiss
+    return () => clearTimeout(t);
+  }, [visible]);
 
   async function handleShare() {
     try {

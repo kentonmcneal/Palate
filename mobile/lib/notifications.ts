@@ -42,16 +42,70 @@ export async function isReminderEnabled(): Promise<boolean> {
 }
 
 /**
- * Ensure notification permission (request once if undetermined). Used by passive
- * capture so a later-detected visit can actually prompt. Returns whether granted.
+ * Ensure notification permission. Used by passive capture so a later-detected
+ * visit can actually prompt. Returns whether we may send anything at all.
+ *
+ * Asks PROVISIONALLY, which is the important part.
+ *
+ * iOS gives exactly one shot at the normal permission dialog. Tap "Don't
+ * Allow" and it is gone for good — no second ask, Settings only. We were
+ * spending that one shot during onboarding, before the app had done anything
+ * worth being notified about, and roughly half the people who saw it said no
+ * and could never be asked again.
+ *
+ * Provisional authorisation is granted silently, with no dialog. Notifications
+ * are delivered QUIETLY: no sound, no banner, no lock-screen interruption —
+ * they land in Notification Center, and the first one carries "Keep" and "Turn
+ * Off" buttons. Tapping Keep upgrades to the full, loud permission.
+ *
+ * The trade is real and worth stating: quiet delivery to ~everyone, instead of
+ * loud delivery to the minority who said yes and permanent silence from the
+ * rest. For the evening digest — the only route a detected meal has to reach a
+ * person — reaching everyone quietly beats reaching 40% loudly, and the
+ * digest is exactly the kind of thing someone taps Keep on.
+ *
+ * A provisional grant reports as granted, which is correct: we may send.
  */
 export async function ensureNotificationPermission(): Promise<boolean> {
   const Notifications = await loadNotificationsLib();
   if (!Notifications) return false;
   const perm = await Notifications.getPermissionsAsync();
   if (perm.granted) return true;
+  // canAskAgain false means they already declined the real dialog at some
+  // point. Provisional cannot rescue that, and asking again does nothing but
+  // record another denial.
   if (!perm.canAskAgain) return false;
-  const ask = await Notifications.requestPermissionsAsync();
+  const ask = await Notifications.requestPermissionsAsync({
+    ios: {
+      allowAlert: true,
+      allowBadge: true,
+      allowSound: true,
+      // The whole point. Without this iOS shows the one-shot dialog.
+      allowProvisional: true,
+    },
+  });
+  return ask.granted;
+}
+
+/**
+ * Ask for the FULL, loud permission — a real dialog, and the one shot.
+ *
+ * Deliberately separate from the provisional path above, and deliberately not
+ * called during onboarding. Call this at a moment the person has just got
+ * something out of the app, where "yes" is the obvious answer: after their
+ * first confirmed visit, or when they turn on a reminder they chose.
+ *
+ * Returns false when already declined for good, so callers can route to
+ * Settings rather than pretend.
+ */
+export async function requestFullNotificationPermission(): Promise<boolean> {
+  const Notifications = await loadNotificationsLib();
+  if (!Notifications) return false;
+  const perm = await Notifications.getPermissionsAsync();
+  if (!perm.canAskAgain) return false;
+  const ask = await Notifications.requestPermissionsAsync({
+    ios: { allowAlert: true, allowBadge: true, allowSound: true },
+  });
   return ask.granted;
 }
 

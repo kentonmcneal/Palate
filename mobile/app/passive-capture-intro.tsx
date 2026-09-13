@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, StyleSheet, Alert, Linking, ScrollView } from "react-native";
+import { View, StyleSheet, Alert, Linking, ScrollView, Pressable } from "react-native";
 import { Text } from "../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -31,6 +31,7 @@ export default function PassiveCaptureIntro() {
   const { next } = useLocalSearchParams<{ next?: string }>();
   const [step, setStep] = useState<Step>("value");
   const [busy, setBusy] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
 
   useEffect(() => {
     void track("perm_prescreen_shown");
@@ -151,36 +152,41 @@ export default function PassiveCaptureIntro() {
       </>}>
       <Text style={styles.emoji}>📍🍽️</Text>
       <Text style={styles.h1}>Log where you ate without opening the app</Text>
-      {/* The WHY comes first now. The screen used to open with the mechanism
-          and the privacy guarantees, which answer "is this safe" but never
-          answer "why should I". Always location is the hardest permission
-          iOS has; it has to be worth something before it is safe. */}
+      {/* 260 words became 58.
+          The cut paragraph argued for the product to somebody who has already
+          downloaded it. What survives is the mechanism in one sentence and the
+          three facts that change what they do on the very next screen.
+          The privacy reasoning is not deleted, it is one tap away: taxing
+          everybody to reassure the few who want the detail is how a permission
+          screen reaches 260 words and converts three people in nine. */}
       <Text style={styles.p}>
-        Everything Palate gives you comes out of your history: what it
-        recommends, your weekly Wrapped, the people whose taste matches
-        yours. Typing that history in by hand is what every other app asks
-        for, and it is the thing nobody keeps doing for long.
-      </Text>
-      <Text style={styles.p}>
-        So Palate notices instead. It spots when you have spent a while at a
-        restaurant and asks you once, in the evening. One tap and the day is
-        logged.
+        Palate notices when you have spent a while at a restaurant, then asks
+        you once in the evening. One tap and the day is logged.
       </Text>
       <Spacer />
       <Text style={styles.bullet}>
-        • On the next screen, choose <Text style={styles.bulletStrong}>Always</Text>. Your phone is
-        in your pocket while you eat, so "While Using the App" sees almost nothing.
+        • Choose <Text style={styles.bulletStrong}>Always</Text>. Your phone is in your pocket
+        while you eat, so "While Using the App" sees almost nothing.
       </Text>
-      <Text style={styles.bullet}>• You confirm every visit. Nothing is logged silently.</Text>
-      <Text style={styles.bullet}>• We only look at where you stopped, not everywhere you go.</Text>
+      <Text style={styles.bullet}>• Nothing is saved until you confirm it.</Text>
       <Text style={styles.bullet}>• Home and work are filtered out on your phone.</Text>
-      <Text style={styles.bullet}>• Turn it off anytime in Settings.</Text>
-      {/* The honest cost of saying no. Somebody who declines should know
-          what they are choosing, not discover it three weeks later. */}
-      <Text style={styles.bullet}>
-        • Say no and Palate still works. You will just be typing every meal
-        in yourself.
-      </Text>
+      <Spacer />
+      <Pressable onPress={() => setShowDetail((v) => !v)} hitSlop={8}>
+        <Text style={styles.moreLink}>
+          {showDetail ? "Hide the detail" : "What Palate can and cannot see"}
+        </Text>
+      </Pressable>
+      {showDetail && (
+        <View style={styles.detail}>
+          <Text style={styles.bullet}>• We only look at where you stopped, not everywhere you go.</Text>
+          <Text style={styles.bullet}>• Your location never leaves your phone until you confirm a visit.</Text>
+          <Text style={styles.bullet}>• Turn it off anytime in Settings.</Text>
+          <Text style={styles.bullet}>
+            • Say no and Palate still works. You will just be typing every meal
+            in yourself.
+          </Text>
+        </View>
+      )}
     </Screen>
   );
 }
@@ -223,6 +229,8 @@ const styles = StyleSheet.create({
   p: { ...type.body, color: colors.mute, marginTop: spacing.md },
   bulletStrong: { fontWeight: "800", color: colors.ink },
   bullet: { ...type.body, color: colors.ink, marginTop: 8 },
+  moreLink: { ...type.body, color: colors.redText, fontWeight: "700" },
+  detail: { marginTop: 4 },
   card: {
     borderColor: colors.line,
     borderWidth: 1,
