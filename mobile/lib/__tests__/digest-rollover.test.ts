@@ -1,4 +1,9 @@
-import { buildDigest, digestWindowStart, entriesForDigest } from "../passive-digest";
+import {
+  buildDigest,
+  digestWindowStart,
+  entriesForDigest,
+  DIGEST_WINDOW_GRACE_MIN,
+} from "../passive-digest";
 import type { InboxEntry } from "../passive-confirm";
 import { buildEatingPattern } from "../eating-pattern";
 
@@ -40,12 +45,18 @@ describe("digest rollover", () => {
   });
 
   it("opens the window at the previous digest hour, whatever time it is asked", () => {
-    // Before today's 8:30pm the live window is the one that opened at
+    // Before today's digest the live window is the one that opened at
     // yesterday's — otherwise a morning check would show nothing at all.
-    expect(digestWindowStart(new Date("2026-09-02T10:00:00")).toISOString())
-      .toBe(new Date("2026-08-31T21:00:00").toISOString());
-    expect(digestWindowStart(new Date("2026-09-02T22:00:00")).toISOString())
-      .toBe(new Date("2026-09-01T21:00:00").toISOString());
+    //
+    // Anchored to the previous digest moment MINUS the straddle grace: a meal
+    // finishing minutes before a digest cannot be written before it fires, and
+    // without the grace it fell before the next window too and was never asked
+    // about. See DIGEST_WINDOW_GRACE_MIN.
+    const grace = DIGEST_WINDOW_GRACE_MIN * 60 * 1000;
+    expect(digestWindowStart(new Date("2026-09-02T10:00:00")).getTime())
+      .toBe(new Date("2026-08-31T21:00:00").getTime() - grace);
+    expect(digestWindowStart(new Date("2026-09-02T22:00:00")).getTime())
+      .toBe(new Date("2026-09-01T21:00:00").getTime() - grace);
   });
 
   it("holds a lunch logged this morning until the evening digest", () => {
@@ -125,9 +136,16 @@ describe("weekday schedule", () => {
     // Sunday's 9pm digest reaches back to Saturday's slot, which is 00:00
     // Sunday — twenty-one hours. A fixed 24h subtraction would reach into
     // Saturday morning and re-ask about a night already covered.
+    //
+    // The straddle grace moves the boundary back by minutes, not hours, so it
+    // lands late on Saturday evening. The property that matters is unchanged:
+    // it must NOT reach into Saturday daytime.
     const start = digestWindowStart(new Date("2026-09-06T21:30:00"));
-    expect(start.getDate()).toBe(6);
-    expect(start.getHours()).toBe(0);
+    const saturdayMidnight = new Date("2026-09-06T00:00:00");
+    expect(saturdayMidnight.getTime() - start.getTime())
+      .toBe(DIGEST_WINDOW_GRACE_MIN * 60 * 1000);
+    expect(start.getDate()).toBe(5);
+    expect(start.getHours()).toBeGreaterThanOrEqual(23);
   });
 });
 

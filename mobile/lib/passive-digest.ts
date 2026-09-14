@@ -153,6 +153,35 @@ const byTime = (a: DigestEntry, b: DigestEntry) => a.detectedAt - b.detectedAt;
  * again at 11pm shows the same set, instead of items falling off the top as the
  * clock moves.
  */
+/**
+ * How far BEFORE the previous digest moment the window reaches.
+ *
+ * A stop is not detected until it ENDS, and the entry is only written after
+ * resolution — a venue lookup, sometimes a network round trip. So a meal
+ * finishing a few minutes before the digest hour cannot physically be in the
+ * inbox when that digest fires, and under a window that started exactly at the
+ * previous digest moment it then fell BEFORE the next window too. Detected too
+ * late for one notification and too early for the next: never asked about, and
+ * silently expired at 48 hours.
+ *
+ * This is not hypothetical. On 2026-09-13 the founder ate at 20:57 local. The
+ * entry was written at 21:00:19 — nineteen seconds after the 21:00 digest had
+ * already fired with nothing to say. The next evening's window opened at 21:00
+ * the previous day, three minutes AFTER his meal, so it was excluded again.
+ * That is the "never got a notification asking did you eat here" report.
+ *
+ * The grace closes it by giving a straddling entry exactly one more chance.
+ * It cannot produce repeat nagging: answering an entry REMOVES it from the
+ * inbox, so the only entries the grace can re-admit are ones still unanswered,
+ * and they fall out of the window the night after.
+ *
+ * Twenty minutes is sized against the lag it exists to cover (three minutes in
+ * the observed case) with room for a slow resolve, and is far short of the
+ * ~26-hour cycle it sits inside.
+ */
+export const DIGEST_WINDOW_GRACE_MIN = 20;
+const DIGEST_WINDOW_GRACE_MS = DIGEST_WINDOW_GRACE_MIN * 60 * 1000;
+
 export function digestWindowStart(now: Date, pattern?: EatingPattern | null): Date {
   // The most recent digest moment at or before `now` — today's if it has
   // passed, otherwise yesterday's.
@@ -166,7 +195,7 @@ export function digestWindowStart(now: Date, pattern?: EatingPattern | null): Da
   // 11pm opened Friday at 9pm, and that is 26 hours, not 24.
   const prevDay = new Date(anchorDay);
   prevDay.setDate(prevDay.getDate() - 1);
-  return digestMomentOn(prevDay, pattern);
+  return new Date(digestMomentOn(prevDay, pattern).getTime() - DIGEST_WINDOW_GRACE_MS);
 }
 
 /** Entries detected within the current digest window. */
