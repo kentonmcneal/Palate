@@ -479,9 +479,9 @@ it takes two launches to apply: one to download, the next to run.
 
 Server-side work needed no OTA and is already live.
 
-**Drain, since the retry: 11 good, 1 bad**, against a baseline of 21 good / 48
-bad (30%). At the old rate that result is on the order of one in a quarter
-million, so the improvement is real rather than encouraging. There has been
+**Drain, since the retry: 13 good, 1 bad**, against a baseline of 21 good / 48
+bad (30%). At the old rate a run like that is astronomically unlikely, so the
+improvement is real rather than encouraging. There has been
 exactly one failure, at 07:00, and it names its own step: the kill-switch read,
 timing out after all three retries.
 
