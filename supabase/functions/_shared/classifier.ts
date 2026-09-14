@@ -843,6 +843,19 @@ const NON_RESTAURANT_TYPES = new Set([
 const RESTAURANT_TYPES = new Set([
   "restaurant", "meal_takeaway", "meal_delivery", "cafe", "coffee_shop",
   "bakery", "bar", "wine_bar", "pub", "ice_cream_shop", "dessert_restaurant",
+  // Places you eat that Google names "_shop" rather than "_restaurant".
+  //
+  // dessert_shop was missing, so Insomnia Cookies came back
+  // `not_a_restaurant` — which passive capture treats as NOT A DINING STOP and
+  // filters out of candidates entirely. A real meal on Winchester Road offered
+  // Sonic and China Taste and never mentioned the cookie shop between them,
+  // which the person said they would have accepted.
+  //
+  // The comment forty lines above this one records noticing that exact gap in
+  // the CUISINE map and fixing it there. Nobody carried it across to the map
+  // that decides whether a place is food at all. Same word, two lists.
+  "dessert_shop", "donut_shop", "cake_shop", "bagel_shop",
+  "sandwich_shop", "juice_shop", "tea_house", "deli",
 ]);
 
 function hasRestaurantType(types: string[]): boolean {

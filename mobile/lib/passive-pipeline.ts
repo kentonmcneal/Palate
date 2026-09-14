@@ -18,7 +18,7 @@ import type { Restaurant } from "./places";
 import { supabase } from "./supabase";
 import { nearbyRestaurantsDetailed, nearbyRestaurants } from "./places";
 import { getCachedNearby, setCachedNearby } from "./nearby-cache";
-import { confidenceScore, confidenceBand, type ConfidenceBand } from "./passive-confidence";
+import { confidenceScore, confidenceBand, dwellFit, type ConfidenceBand } from "./passive-confidence";
 import { loadEatingPattern, patternFit } from "./eating-pattern";
 import { venueOpenAt } from "./opening-hours";
 import { recordMiss } from "./passive-misses";
@@ -321,6 +321,13 @@ export const RANK_WEIGHTS = {
   mealFit: 20,
   /** Pushed down, not removed — see the comment at the call site. */
   closed: 120,
+  /**
+   * How much a mismatch between stop LENGTH and venue FORMAT can move a
+   * candidate. Sized against popularityMax (25) on purpose: a drive-through
+   * that somebody sat at for 25 minutes must be able to lose to the sit-down
+   * place next door even when it has twenty times the reviews.
+   */
+  dwellFitMax: 30,
 };
 
 function popularityBoost(count: number | null | undefined): number {
@@ -440,6 +447,11 @@ export type RankContext = {
   at?: Date;
   /** google_place_ids the user has already logged a visit to. */
   visitedPlaceIds?: Set<string>;
+  /**
+   * How long the stop lasted. Optional because an older caller may not pass
+   * it, and a missing dwell must mean "no opinion" rather than "bad fit".
+   */
+  dwellMin?: number | null;
 };
 
 /**
@@ -467,8 +479,29 @@ export function rankCandidates(
       // resolvable stop into no-venue-found.
       const closedPenalty =
         ctx.at && venueOpenAt(p.regular_opening_hours, ctx.at) === false ? RANK_WEIGHTS.closed : 0;
+      // Does the LENGTH of this stop suit this kind of venue?
+      //
+      // Without this the ranker was dist - visited - popularity - mealFit, and
+      // popularity decided every positional tie. On Winchester Road a
+      // 25-minute stop resolved to Sonic Drive-In (1,346 reviews) instead of
+      // China Taste 52m away (62 reviews), where the person had actually
+      // eaten. Accuracy was 34m, so distance could never separate them — and
+      // the ranker handed the tie to the busiest chain in the strip mall.
+      //
+      // In practice that meant: the more of a chain a place is, the more often
+      // it gets credited with your meals. Exactly backwards for a product
+      // whose thesis is finding the independent.
+      //
+      // Dwell was the discriminating signal sitting unused. It was fed to
+      // confidenceScore, but confidenceScore only ever ran on ranked[0] — it
+      // SCORES the winner, it does not PICK one. So the evidence never
+      // reached the decision.
+      const fitPenalty = ctx.dwellMin == null
+        ? 0
+        : (1 - dwellFit(ctx.dwellMin, p)) * RANK_WEIGHTS.dwellFitMax;
       const score =
-        dist - visited - popularityBoost(p.user_rating_count) - mealFitBoost(p, window) + closedPenalty;
+        dist - visited - popularityBoost(p.user_rating_count) - mealFitBoost(p, window)
+        + closedPenalty + fitPenalty;
       return { p, score };
     })
     .sort((a, b) => a.score - b.score)
@@ -584,6 +617,7 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
   const ranked = rankCandidates(raw, eligible, {
     hour,
     at: endedAt,
+    dwellMin: dwellMinutes(raw),
     visitedPlaceIds: await visitedPlaceIdsAmong(eligible.map((p) => p.google_place_id)),
   });
 

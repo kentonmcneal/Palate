@@ -67,6 +67,72 @@ export function dwellScore(dwellMin: number): number {
   return clamp01(Math.log(1 + dwellMin / 5) / scale);
 }
 
+/**
+ * How long you STAY at a kind of place, in minutes: [typical low, typical high].
+ *
+ * Dwell was scored in isolation — longer always meant more confident, for every
+ * venue on earth. That threw away the single most discriminating signal
+ * available when two candidates sit on top of each other.
+ *
+ * The case that exposed it: a 25-minute stop on Winchester Road, resolved to
+ * Sonic Drive-In (52m away, 1,346 Google reviews) instead of China Taste (the
+ * sit-down Chinese place the person actually ate at, 62 reviews). GPS accuracy
+ * was 34m, so POSITION could not separate them and never will. But twenty-five
+ * minutes at a drive-through is barely plausible, and twenty-five minutes at a
+ * sit-down restaurant is simply what dinner is. The evidence to break that tie
+ * was right there, unweighted.
+ *
+ * Ranges are deliberately wide and the penalty deliberately soft: this is a
+ * tiebreaker between venues a GPS fix cannot separate, not a rule about how
+ * people are allowed to eat. Somebody CAN sit in a Sonic car park for an hour.
+ */
+const DWELL_FIT_BY_FORMAT: Record<string, [number, number]> = {
+  // A drive-through or counter order. Tight on purpose: this is the band the
+  // whole fix turns on, and [3,20] was too generous to separate a 25-minute
+  // dinner from a burger run, which is the case that exposed the bug.
+  quick_service: [2, 12],
+  fast_casual:   [5, 30],
+  cafe:          [5, 90],
+  bakery:        [3, 20],
+  casual_dining: [20, 120],
+  fine_dining:   [45, 180],
+  bar:           [30, 180],
+};
+
+/** Google primary types that mean "you do not sit down here". */
+const DRIVE_THROUGH_TYPES = ["fast_food_restaurant", "meal_takeaway", "drive_through"];
+
+/**
+ * Multiplier on dwell evidence: does this stop LENGTH suit this kind of venue?
+ *
+ * 1.0 when the dwell sits in the venue's normal range, falling to DWELL_FIT_FLOOR
+ * the further outside it goes. Never zero — hours, formats and Google's own
+ * typing are all imperfect, and a hard zero makes a wrong classification
+ * unrecoverable.
+ */
+export const DWELL_FIT_FLOOR = 0.45;
+
+export function dwellFit(dwellMin: number, place: Restaurant): number {
+  const types = [place.primary_type, ...(place.types ?? [])].filter(Boolean) as string[];
+  const format = (place as { format_class?: string | null }).format_class ?? null;
+
+  let range = format ? DWELL_FIT_BY_FORMAT[format] : undefined;
+  if (!range && types.some((t) => DRIVE_THROUGH_TYPES.includes(t))) {
+    range = DWELL_FIT_BY_FORMAT.quick_service;
+  }
+  // Nothing known about the format is not evidence against anything.
+  if (!range) return 1;
+
+  const [lo, hi] = range;
+  if (dwellMin >= lo && dwellMin <= hi) return 1;
+
+  // How far outside, as a fraction of the range's own width, so a wide band
+  // (a bar) forgives more than a narrow one (a drive-through).
+  const width = Math.max(1, hi - lo);
+  const over = dwellMin > hi ? (dwellMin - hi) / width : (lo - dwellMin) / width;
+  return clamp01(Math.max(DWELL_FIT_FLOOR, 1 - over * 0.55));
+}
+
 export function accuracyScore(accuracyM: number): number {
   const span = ACCURACY_WORST_M - ACCURACY_BEST_M;
   return clamp01(1 - (accuracyM - ACCURACY_BEST_M) / span);
@@ -148,7 +214,8 @@ export function blendedMealFit(place: Restaurant, hour: number, patternFit?: num
 export function confidenceScore(input: ConfidenceInput): number {
   const w = CONFIDENCE_WEIGHTS;
   const evidence =
-    w.dwell * dwellScore(input.dwellMin) +
+    // Dwell, discounted by whether that LENGTH suits this kind of venue.
+    w.dwell * dwellScore(input.dwellMin) * dwellFit(input.dwellMin, input.place) +
     w.accuracy * accuracyScore(input.accuracyM) +
     w.mealFit * blendedMealFit(input.place, input.hour, input.patternFit) +
     w.priorVisits * priorVisitScore(input.visitedBefore) +
