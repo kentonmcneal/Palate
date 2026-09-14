@@ -154,6 +154,19 @@ export function usualLastMealHour(p: EatingPattern | null, weekendNight: boolean
  * eating-day axis they sit past 23, so the clamp lands them at the latest
  * slot rather than reading "1am" as an early night.
  */
+/**
+ * NOT CURRENTLY WIRED. The digest hour is a fixed table (passive-digest.ts):
+ * 9pm, midnight after Friday and Saturday.
+ *
+ * This shifted the fire time to an hour after a person's usual last meal, and
+ * it worked — which was the problem. A Sunday digest scheduled for 11pm while
+ * somebody sat waiting at nine is personalisation beating predictability, on
+ * the one notification the whole product depends on.
+ *
+ * Kept, with its tests, because "later on the nights YOU eat later" is a good
+ * idea badly timed: it belongs behind a setting somebody opted into, not as a
+ * silent default. Delete it if that never happens.
+ */
 export function personalDigestHour(p: EatingPattern | null, day: Date, fallback: number): number {
   if (!p || p.total < MIN_VISITS_FOR_DIGEST) return fallback;
   const dow = day.getDay();

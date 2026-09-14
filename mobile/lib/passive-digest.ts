@@ -27,7 +27,7 @@
 import type { InboxEntry } from "./passive-confirm";
 import type { ConfidenceBand } from "./passive-confidence";
 import { confidenceBand, HIGH_BAND_MIN } from "./passive-confidence";
-import { loadEatingPattern, personalDigestHour, type EatingPattern } from "./eating-pattern";
+import { loadEatingPattern, type EatingPattern } from "./eating-pattern";
 
 export type DigestEntry = InboxEntry & {
   band: ConfidenceBand;
