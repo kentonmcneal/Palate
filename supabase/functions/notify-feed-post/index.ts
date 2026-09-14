@@ -66,14 +66,34 @@ serve(async (req) => {
     // Only the event owner is allowed to trigger pushes for their own event
     if (event.user_id !== me) return json({ error: "forbidden" }, 403);
 
-    const { data: poster } = await admin
-      .from("profiles")
-      .select("display_name, email")
-      .eq("id", me)
-      .maybeSingle();
+    // The POSTER's visibility, read alongside their name.
+    //
+    // 0057 set the contract: what arrives on YOUR phone is the notification
+    // toggle, what you BROADCAST is profile_visibility. This function never
+    // read the poster's, so a private account's feed post was pushed to every
+    // one of its followers. The same omission was found and fixed in the
+    // friend-visit trigger the same morning (migration 0171) — it is the same
+    // mistake in the other half of the social layer.
+    const { data: poster, error: posterErr } = await retryRead(() =>
+      admin
+        .from("profiles")
+        .select("display_name, email, profile_visibility")
+        .eq("id", me)
+        .maybeSingle()
+    );
+    if (posterErr) return json({ error: "poster read failed", detail: errText(posterErr) }, 500);
+    const posterRow = poster as
+      { display_name?: string | null; email?: string | null; profile_visibility?: string | null } | null;
+
+    // Fails CLOSED on an unknown visibility: broadcasting is the irreversible
+    // direction, so an absent row means do not broadcast.
+    if ((posterRow?.profile_visibility ?? "private") === "private") {
+      return json({ skipped: "poster is private", sent: 0 });
+    }
+
     const posterName =
-      poster?.display_name ||
-      (poster?.email ? poster.email.split("@")[0] : "Someone");
+      posterRow?.display_name ||
+      (posterRow?.email ? posterRow.email.split("@")[0] : "Someone");
 
     // The poster's FOLLOWERS. Under the old mutual-accept model this was the
     // accepted-friendship set; a post now reaches whoever chose to hear about
@@ -97,14 +117,22 @@ serve(async (req) => {
     const { data: tokens, error: tokenErr } = await retryRead(() =>
       admin
         .from("profiles")
-        .select("id, push_token, profile_visibility")
+        .select("id, push_token, push_social_activity")
         .in("id", friendIds)
         .not("push_token", "is", null)
     );
     if (tokenErr) return json({ error: "token read failed", detail: errText(tokenErr) }, 500);
 
-    const recipients = ((tokens ?? []) as { push_token: string | null; profile_visibility: string }[])
-      .filter((t) => t.profile_visibility !== "private")
+    // Filtered on the RECIPIENT's notification preference, not their
+    // visibility. This read `profile_visibility !== "private"`, which is the
+    // wrong axis in both directions: it silenced private accounts' own
+    // notifications — visibility governs what you SHOW, never what you may
+    // hear — while doing nothing about the poster, who is the one broadcasting.
+    // push_social_activity is the control 0057 defines for what arrives on your
+    // phone, and it is what every other push path already checks.
+    const recipients = ((tokens ?? []) as
+      { push_token: string | null; push_social_activity: boolean | null }[])
+      .filter((t) => t.push_social_activity !== false)
       .map((t) => t.push_token as string);
 
     if (recipients.length === 0) return json({ sent: 0 });
