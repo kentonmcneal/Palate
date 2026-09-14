@@ -479,10 +479,10 @@ it takes two launches to apply: one to download, the next to run.
 
 Server-side work needed no OTA and is already live.
 
-**Drain, since the retry:** 5 good, 1 bad, against a baseline of 21 good / 48
-bad. Six samples is still six samples — but five-or-better out of six is about
-a 1% outcome at the old 30% rate, so this is now evidence of improvement rather
-than just encouraging. The single failure was the labelled one at 07:00.
+**Drain, since the retry:** 8 good, 1 bad, against a baseline of 21 good / 48
+bad (30%). Eight-or-better out of nine is on the order of a 0.04% outcome at
+the old rate, so the improvement is real rather than encouraging. The single
+failure was the labelled one at 07:00, and it names the kill-switch read.
 
 **Friend-visit reach, checked precisely.** My migration's proof counted
 eligible followers WITHOUT the timezone condition the trigger actually applies,
@@ -605,6 +605,14 @@ late dinner was landing in that gap.
 The window now opens 20 minutes before the previous digest moment. It cannot
 nag: answering removes an entry from the inbox, so the only entries the grace
 re-admits are ones still unanswered, and they fall out the night after.
+
+**How often this bites: 2 of the 20 pending entries, across all users.** That
+is worth stating carefully, because 20 minutes out of a ~26-hour cycle is 1.3%
+of the clock and this is 10% of the entries. The gap is not sampled uniformly —
+it sits exactly where dinners finish, which is why a boundary that looks like a
+rounding detail was swallowing real meals. (One of the two, from 09-11, is
+already past the client's 48-hour expiry; the server row just has not been
+pruned yet. Only yours is still answerable.)
 
 **Your Sonic entry should be asked about tonight.** It expires 2026-09-15
 20:57, tonight's digest is inside the grace window, and the OTA is published —
