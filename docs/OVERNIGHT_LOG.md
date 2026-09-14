@@ -639,6 +639,46 @@ to Sonic Drive-In. It was detected at 01:57 UTC and the dwellFit fix shipped at
 When you are asked tonight, "wrong place" is the honest answer — the ranking
 fix applies to new detections, not to one already written.
 
+## 12b. The comment feature, verified against live data rather than assumed
+
+I built the feed comments and hearts earlier and had never actually exercised
+them against production. There is real usage now — 65 feed events, 2 comments,
+3 likes, 1 comment-like — so I ran the RPCs as real users.
+
+`list_feed(20)` returns 20 rows with `comment_count` and `top_comments`
+agreeing (1 comment -> 1 top comment), and `like_count` / `i_liked` populated.
+`list_feed_comments` returns the comment with its author, like count, i_liked
+and reply flag.
+
+**The visibility gate bites**, which is the part worth proving rather than
+reading. Flipping the post owner's visibility inside a transaction I rolled
+back:
+
+| owner | non-follower sees |
+|---|---|
+| public | 1 (correct — a public feed is viewable by any signed-in user) |
+| private | **0** |
+| friends | **0** |
+| friends | 1 *to the owner themselves* |
+
+and `anon` is refused the function outright ("permission denied for function
+list_feed_comments") rather than returning an empty set, so there is no
+anonymous read path at all.
+
+I changed a real person's `profile_visibility` three times to run that, and
+re-read the table afterwards to confirm it came back to 18 public / 1 private.
+
+## 12c. No other stale readers of the retired table
+
+0170's second fault was reading `friendships`, which 0116 retired. I swept for
+others rather than assuming it was the only one: three live functions still
+mention it, and all three are fine. `block_user` deletes follows in BOTH
+directions and cleans up legacy friendship rows deliberately;
+`friendships_parties_immutable` is a trigger on that table itself; and
+`list_friendships` is not called by the client at all. No views and no RLS
+policies reference it. `enqueue_friend_visit_push` really was the only one
+depending on it for live behaviour.
+
 ## 11a. The same bug, but pointed at money
 
 Having found that a discarded read error in send-push was destroying
