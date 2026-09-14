@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
   inputOver: { borderWidth: 1, borderColor: colors.red },
   send: {
     paddingHorizontal: 16, paddingVertical: 11,
-    borderRadius: 999, backgroundColor: colors.red,
+    borderRadius: 999, backgroundColor: colors.primaryFill,
   },
   sendOff: { opacity: 0.4 },
   sendText: { color: "#fff", fontWeight: "700", fontSize: 14 },

@@ -14,6 +14,18 @@ export const colors = {
   // Darker red strictly for small red TEXT on light backgrounds (WCAG AA).
   redText: "#C13A2F",
   primary: "#E0473C",
+  /**
+   * The red a WHITE LABEL may sit on. #E0473C is 4.09:1 against white, which
+   * fails WCAG AA for text (4.5:1) — every primary button in the app failed,
+   * measured, not guessed. This is 5.37:1.
+   *
+   * Separate from `red` on purpose. `red` stays the brand accent for fills
+   * that carry no text — the heart, the flame, a checked box, a rail — where
+   * the rule is 3:1 for non-text and 4.09 already clears it. Darkening the
+   * brand everywhere to fix a text problem would be a design decision, not a
+   * bug fix.
+   */
+  primaryFill: "#C13A2F",
   primaryText: "#C13A2F",
   // Soft tint for selected chips / gentle accent surfaces.
   redTint: "#FDECEA",

@@ -289,7 +289,7 @@ export default function RestaurantDetailScreen() {
           field: "cuisine_type",
           value: cuisine,
         },
-        { onConflict: "restaurant_id,field" },
+        { onConflict: "restaurant_id,field,user_id" },
       );
     if (error) {
       Alert.alert("Couldn't update cuisine", humanizeSupabaseError(error));
@@ -789,7 +789,7 @@ const styles = StyleSheet.create({
   emptyGlyph: { fontSize: 22, color: colors.line },
   beenHere: {
     paddingVertical: 10, paddingHorizontal: 20, borderRadius: 999,
-    backgroundColor: colors.red,
+    backgroundColor: colors.primaryFill,
   },
   beenHereText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   emptyLine: { ...type.small },

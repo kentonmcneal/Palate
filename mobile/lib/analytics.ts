@@ -41,6 +41,7 @@
 // ============================================================================
 
 import { supabase } from "./supabase";
+import { captureError } from "./observability";
 
 export async function track(
   event: string,
@@ -48,11 +49,27 @@ export async function track(
 ): Promise<void> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from("analytics_events").insert({
+    const { error } = await supabase.from("analytics_events").insert({
       user_id: user?.id ?? null,
       event,
       props,
     });
+    // READ THE ERROR. supabase-js `.insert()` RESOLVES with `{ error }` rather
+    // than throwing, so the catch below can never fire on a rejected write and
+    // ignoring the return value makes an RLS regression completely silent.
+    //
+    // That is exactly what happened: migration 0110 narrowed the INSERT policy
+    // to `authenticated`, and every pre-sign-in event — the whole top of the
+    // funnel, where the app loses the most people — was discarded for eight
+    // days with nothing anywhere reporting it. "Wrap it in a catch and log"
+    // would not have surfaced this, because there was nothing to catch.
+    if (error) {
+      // Not thrown: analytics must never block UX. But it reaches Sentry, so
+      // the next time a policy change silently drops events, somebody knows.
+      captureError(new Error(`analytics insert rejected: ${error.message}`), {
+        at: "track", event,
+      });
+    }
   } catch {
     // Silent — analytics must never block UX.
   }

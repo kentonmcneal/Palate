@@ -32,6 +32,7 @@
 // ============================================================================
 
 import { GMAIL_OAUTH_ENABLED } from "./gmail-gate";
+import { FORWARDING_LIVE } from "./receipt-forwarding";
 
 export type ActivationState = {
   /** "Always" location — what passive capture actually needs. */
@@ -126,7 +127,14 @@ export function nextStep(s: ActivationState): NextStep | null {
   // The import_review branch above is deliberately NOT gated: an account that
   // connected before the gate still has mail waiting, and abandoning it there
   // is exactly the wasteful state that branch exists to prevent.
-  if (s.visitCount === 0 && !s.gmailConnected) {
+  // Gated on BOTH import paths, not just Gmail.
+  //
+  // This checked GMAIL_OAUTH_ENABLED and offered "Get my forwarding address"
+  // when it was false — but forwarding is behind FORWARDING_LIVE, which is
+  // also false, so the CTA promised an address and landed on a screen with an
+  // apology and no control. The guard already existed one file over in
+  // settings.tsx; it was never carried here.
+  if (s.visitCount === 0 && !s.gmailConnected && (GMAIL_OAUTH_ENABLED || FORWARDING_LIVE)) {
     return {
       key: GMAIL_OAUTH_ENABLED ? "gmail" : "forward_receipts",
       title: "Start from what you've already eaten",

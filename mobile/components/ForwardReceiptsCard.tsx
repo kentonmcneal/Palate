@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
   },
   address: { fontSize: 15, fontWeight: "700", color: colors.ink },
   copy: {
-    alignSelf: "flex-start", backgroundColor: colors.red,
+    alignSelf: "flex-start", backgroundColor: colors.primaryFill,
     paddingVertical: 10, paddingHorizontal: 18, borderRadius: 999,
   },
   copyText: { color: "#fff", fontWeight: "700", fontSize: 14 },
@@ -202,6 +202,6 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12, color: colors.mute, marginTop: 2 },
   no: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: colors.wash },
   noText: { fontSize: 13, fontWeight: "600", color: colors.mute },
-  yes: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 999, backgroundColor: colors.red },
+  yes: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 999, backgroundColor: colors.primaryFill },
   yesText: { fontSize: 13, fontWeight: "700", color: "#fff" },
 });

@@ -1,3 +1,5 @@
+import { GMAIL_OAUTH_ENABLED } from "../gmail-gate";
+import { FORWARDING_LIVE } from "../receipt-forwarding";
 import { nextStep, wrappedPromise, type ActivationState } from "../next-step";
 
 const base: ActivationState = {
@@ -49,15 +51,27 @@ describe("nextStep", () => {
     expect(partial?.body).toMatch(/[Bb]ackground/);
   });
 
-  // The KEY moves with whichever import path is switched on (gmail-gate.ts);
-  // what must not change is that a cold account is offered an import before it
-  // is asked to type a restaurant in by hand.
-  it("offers email import to a cold account before asking it to type", () => {
+  // A cold account is offered an import ONLY when an import path actually
+  // works. Both are currently dark — Gmail OAuth is withdrawn
+  // (GMAIL_OAUTH_ENABLED) and forwarding waits on DNS (FORWARDING_LIVE) — so
+  // the honest next step is the manual one.
+  //
+  // This asserted the CTA was always offered, which is how "Get my forwarding
+  // address" ended up pointing at a screen containing an apology and no
+  // control: the step was gated on Gmail alone and nobody carried the
+  // forwarding guard across from settings.tsx.
+  it("never offers an import route that goes nowhere", () => {
     const step = nextStep(s({ visitCount: 0, gmailConnected: false }));
-    expect(["gmail", "forward_receipts"]).toContain(step?.key);
-    expect(step?.route).toBe("/import-email");
-    expect(step?.key).not.toBe("log_one");
+    const importOffered = step?.key === "gmail" || step?.key === "forward_receipts";
+    if (importOffered) {
+      expect(GMAIL_OAUTH_ENABLED || FORWARDING_LIVE).toBe(true);
+      expect(step?.route).toBe("/import-email");
+    } else {
+      // Falls through to something a person can actually do.
+      expect(step?.key).toBe("log_one");
+    }
   });
+
 
   it("asks for a manual log only once the automatic routes are exhausted", () => {
     // Hand-entering history is the Beli labour our whole approach exists to

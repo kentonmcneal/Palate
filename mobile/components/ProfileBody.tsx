@@ -3,6 +3,7 @@ import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Shar
 import { InviteCard } from "./InviteCard";
 import { ForwardReceiptsCard } from "./ForwardReceiptsCard";
 import { RateVisitsCard } from "./RateVisitsCard";
+import { captureError } from "../lib/observability";
 import { Text } from "./Text";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Avatar } from "./Avatar";
@@ -39,6 +40,8 @@ export function ProfileBody({ targetId }: { targetId: string }) {
   const router = useRouter();
 
   const [snapshot, setSnapshot] = useState<FriendProfileSnapshot | null>(null);
+
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [match, setMatch] = useState<PalateMatch | null>(null);
@@ -81,10 +84,20 @@ export function ProfileBody({ targetId }: { targetId: string }) {
         getFriendProfileSnapshot(targetId),
         isBlocked(targetId),
       ]);
+      setLoadError(null);
       setSnapshot(snap);
       setBlocked(isB);
     } catch (e: any) {
-      console.warn("snapshot load", e?.message);
+      // captureError, not console.warn.
+      //
+      // This was the only swallowed catch left in app/ or components/, and it
+      // guards get_friend_profile_snapshot — the one RPC this project's notes
+      // record as having failed silently for sixty-five migrations. A
+      // server-side regression here renders "Profile not found." on every
+      // profile in the app, which looks exactly like mass account deletion,
+      // with no Sentry event to say otherwise.
+      captureError(e, { at: "ProfileBody.snapshot", targetId });
+      setLoadError(e?.message ?? "Couldn't load this profile.");
     } finally {
       setLoading(false);
     }
@@ -208,7 +221,17 @@ export function ProfileBody({ targetId }: { targetId: string }) {
 
         {!loading && !snapshot && (
           <View style={styles.empty}>
-            <Text style={type.subtitle}>Profile not found.</Text>
+            {/* A failure and an absence are different sentences. "Profile not
+                found" for a request that errored tells somebody their friend
+                deleted their account, and offers no way to find out otherwise. */}
+            <Text style={type.subtitle}>
+              {loadError ? "Couldn't load this profile." : "Profile not found."}
+            </Text>
+            {loadError && (
+              <Pressable onPress={() => { void load(); }} hitSlop={10} style={{ marginTop: 10 }}>
+                <Text style={[type.body, { color: colors.redText, fontWeight: "700" }]}>Try again</Text>
+              </Pressable>
+            )}
           </View>
         )}
 

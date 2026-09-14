@@ -65,7 +65,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 22,
   },
-  primary: { backgroundColor: colors.primary },
+  // primaryFill, not primary: white-on-#E0473C measures 4.09:1 and fails
+  // WCAG AA. See theme.ts.
+  primary: { backgroundColor: colors.primaryFill },
   secondary: { backgroundColor: colors.ink },
   ghost: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.line },
   danger: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.red },
