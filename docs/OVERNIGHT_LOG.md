@@ -470,9 +470,10 @@ it takes two launches to apply: one to download, the next to run.
 
 Server-side work needed no OTA and is already live.
 
-**Drain, since the retry:** 4 good, 1 bad. Baseline was 21 good / 48 bad. Five
-samples is still five samples, so treat that as "materially better, not
-measured".
+**Drain, since the retry:** 5 good, 1 bad, against a baseline of 21 good / 48
+bad. Six samples is still six samples — but five-or-better out of six is about
+a 1% outcome at the old 30% rate, so this is now evidence of improvement rather
+than just encouraging. The single failure was the labelled one at 07:00.
 
 **Friend-visit reach, checked precisely.** My migration's proof counted
 eligible followers WITHOUT the timezone condition the trigger actually applies,
@@ -482,6 +483,43 @@ the claim stands, but it stood by luck rather than by construction. The
 end-to-end test enqueued 2 rather than 3 because that particular actor has two
 followers, not three — the numbers are consistent, and I checked rather than
 letting two different figures sit in the log unexplained.
+
+## 12a. Also checked, also not a bug
+
+Four things I went after in this stretch and did not find anything wrong with.
+Recording them so nobody spends the morning re-deriving them.
+
+- **Winchester Road is fully explained and fixed**, by last night's own commit,
+  which I read rather than re-deriving. `dessert_shop` was missing from
+  `RESTAURANT_TYPES`, so Insomnia Cookies classified as `not_a_restaurant` —
+  which passive capture treats as not-a-dining-stop and filters BEFORE ranking.
+  It was never a candidate rather than ranked low. 0163 repaired the rows, and I
+  confirmed against the live catalogue: all four Insomnia Cookies rows now read
+  `national_chain`, which `isLoggableVenue` admits deliberately.
+
+- **A Chili's on Winchester Road is flagged `airport`**, which excludes it from
+  capture, and I was ready to call that a misclassification of the same family.
+  It is not: Memphis International Airport is itself on Winchester Road. Swept
+  all 43 captive-venue exclusions for rows with no airport or hotel signal in
+  name or address — exactly one borderline case (Social Oak, `lounge_gated`,
+  primary_type `restaurant`), and no hotel misclassifications at all.
+
+- **The comment and like notification toggles work.** `enqueue_social_push`
+  gates on `push_post_likes` / `push_post_comments` (both default true), plus
+  self-notification, block, token and quiet-hours checks, and both are wired
+  into settings. This is the one part of last night's notification work that
+  was correct end to end.
+
+- **Two "below the line" audit items are genuinely done**: ProfileBody now uses
+  `captureError` rather than swallowing into `console.warn`, and next-step gates
+  the forwarding CTA on `FORWARDING_LIVE` as well as `GMAIL_OAUTH_ENABLED`.
+
+- **Trigger functions are executable by anon**, all fourteen of them, which
+  looked alarming for about a minute. Postgres refuses a direct call outright
+  ("trigger functions can only be called as triggers", 0A000), so it is not
+  reachable, and it is the project-wide default rather than anything new. I
+  tested the call rather than reasoning about it, and did not churn a migration
+  to "harden" something inert.
 
 ## 11a. The same bug, but pointed at money
 
