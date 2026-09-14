@@ -80,7 +80,27 @@ describe("confirmDigest", () => {
     // guess, demoting the right answer, while the venue we actually got wrong
     // was never marked and stayed exactly as likely to be guessed tomorrow.
     // In the one code path whose whole purpose is learning from a correction.
-    expect(d.recordPromptDecision).toHaveBeenCalledWith("pid-a", "wrong_place");
+    expect(d.recordPromptDecision).toHaveBeenCalledWith("pid-a", "wrong_place", null);
+  });
+
+  it("records the decision against the STOP POSITION, not just the brand", () => {
+    // Every prompt_decision ever written had a null lat and lng — 110 rows,
+    // none with a position — because ConfirmableEntry did not declare the
+    // coordinates and confirmDigest never passed them on. The realtime confirm
+    // screens DO pass a position, but REALTIME_PROMPTS_ENABLED is false, so
+    // the only path that runs in production was the only one that dropped it.
+    //
+    // Without a position, a refusal is evidence about a BRAND rather than
+    // about a brand at a place: "not the Panda Express" instead of "not the
+    // Panda Express from inside this Walmart car park".
+    return (async () => {
+      const d = deps();
+      const withStop = { ...entry("a"), stopLat: 35.05116, stopLng: -89.81519 };
+      await confirmDigest([], [withStop as never], {}, d);
+      expect(d.recordPromptDecision).toHaveBeenCalledWith(
+        "pid-a", "dismissed", { lat: 35.05116, lng: -89.81519 },
+      );
+    })();
   });
 
   it("clears skipped entries without writing anything", async () => {

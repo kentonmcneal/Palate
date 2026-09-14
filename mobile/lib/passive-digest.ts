@@ -119,31 +119,12 @@ function toDigestEntry(entry: InboxEntry): DigestEntry {
   return {
     ...entry,
     band,
-    // High AND medium arrive ticked. The notification that brought you here
-    // counts both — "2 places to confirm" is high + medium — so pre-checking
-    // only high meant tapping a notification about two places and landing on a
-    // button that said "Confirm 1". The screen now agrees with the thing that
-    // opened it.
-    //
-    // Low stays unticked, and that is not symmetry for its own sake: the low
-    // band is where ambiguous stops live, and an ambiguous entry needs you to
-    // pick WHICH place before it can be confirmed at all. Pre-ticking a guess
-    // is the one thing this screen must not do.
-    // HIGH ONLY.
-    //
-    // This pre-ticked Medium too, and Medium is both the largest band (108 of
-    // 262) and, measured on live outcomes, right 36% of the time. Since
-    // REALTIME_PROMPTS_ENABLED is false the digest is the ONLY confirmation
-    // path in production, and one tap on Confirm writes every ticked row into
-    // the diary, the taste graph, Wrapped and the public profile.
-    //
-    // So the default answer to "were you at this restaurant?" was yes, for a
-    // guess that is wrong two times in three, on the one screen where saying
-    // yes is irreversible. A pre-tick is a claim; Medium has not earned one.
-    // High runs at 91% and has.
-    //
-    // Sections below High are upside, not obligation: they are still shown,
-    // still one tap to accept, just not answered on the person's behalf.
+    // HIGH ONLY. A pre-tick is an answer given on somebody's behalf, and the
+    // digest is the only confirmation path in production — one tap on Confirm
+    // writes every ticked row into the diary, the taste graph, Wrapped and the
+    // public profile, irreversibly. High earns that; Medium, the largest band,
+    // does not. The notification's count was changed to match this rather than
+    // the other way round.
     preChecked: band === "high",
     ambiguous: (entry.candidateCount ?? 1) >= AMBIGUOUS_CANDIDATE_COUNT,
   };

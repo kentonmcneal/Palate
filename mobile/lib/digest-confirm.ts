@@ -25,6 +25,22 @@ export type ConfirmableEntry = {
   confidence?: number | null;
   dwellMin?: number;
   candidateCount?: number | null;
+  /**
+   * Where the STOP was. Carried so a refusal is recorded against a POSITION
+   * rather than a brand — the Panda Express across a Walmart car park is the
+   * wrong answer from inside that Walmart and the right one from its own
+   * doorway (migration 0145).
+   *
+   * This type did not declare them and confirmDigest never passed them on, so
+   * every prompt_decision ever written has a null lat and lng: 110 rows, none
+   * with a position. The realtime confirm screens DO pass a position, but
+   * REALTIME_PROMPTS_ENABLED is false, so the only path that runs in
+   * production was the only one that dropped it. 0145's own comment predicted
+   * exactly this — "prompt_decisions.lat stays null forever and nothing is
+   * ever learned about a spot" — and it was right for three days.
+   */
+  stopLat?: number | null;
+  stopLng?: number | null;
 };
 
 /** Mirrors passive-confirm's outcome union without importing it (avoids a cycle). */
@@ -36,11 +52,24 @@ export type ConfirmDeps = {
   saveVisit: (a: { googlePlaceId: string; visitedAt: Date; source: "auto" })
     => Promise<{ id?: string } | null>;
   removeFromInbox: (id: string) => Promise<void>;
-  recordPromptDecision: (placeId: string, decision: PromptOutcome) => Promise<void>;
+  recordPromptDecision: (
+    placeId: string,
+    decision: PromptOutcome,
+    at?: { lat: number; lng: number } | null,
+  ) => Promise<void>;
   track: (name: string, props?: Record<string, unknown>) => void;
   /** Optional: only needed when the caller collected a reaction. */
   rateVisit?: (visitId: string, rating: VisitRating) => Promise<void>;
 };
+
+/** The stop position, when the entry carries one. Entries written before 0145
+ *  do not, and a missing position must mean "record it without one" rather
+ *  than dropping the decision entirely. */
+function stopOf(e: ConfirmableEntry): { lat: number; lng: number } | null {
+  return typeof e.stopLat === "number" && typeof e.stopLng === "number"
+    ? { lat: e.stopLat, lng: e.stopLng }
+    : null;
+}
 
 export type ConfirmResult = {
   /** Visit ids written, in order. */
@@ -104,6 +133,7 @@ export async function confirmDigest(
       await deps.recordPromptDecision(
         chosen ? entry.place_id : placeId,
         chosen ? "wrong_place" : "confirmed",
+        stopOf(entry),
       ).catch(() => {});
       deps.track(chosen ? "confirm_corrected" : "confirm_yes", {
         place_id: placeId,
@@ -131,7 +161,7 @@ export async function confirmDigest(
       confidence: entry.confidence ?? null,
       confidence_band: entry.band,
     });
-    await deps.recordPromptDecision(entry.place_id, "dismissed").catch(() => {});
+    await deps.recordPromptDecision(entry.place_id, "dismissed", stopOf(entry)).catch(() => {});
     await deps.removeFromInbox(entry.id).catch(() => {});
   }
 
