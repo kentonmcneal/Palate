@@ -18,6 +18,7 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { errText } from "../_shared/err-text.ts";
 import {
   type GooglePlace as ClassifierPlace,
   googleToRestaurantRow,
@@ -299,7 +300,7 @@ serve(async (req) => {
             results.push({ city: c.city_key, error: "google_daily_cap_reached" });
             break;
           }
-          results.push({ city: c.city_key, error: String(e) });
+          results.push({ city: c.city_key, error: errText(e) });
         }
       }
       return json({
@@ -313,7 +314,7 @@ serve(async (req) => {
     return json({ error: "unknown_action" }, 400);
   } catch (e) {
     console.error("featured-lists-refresh failed", e);
-    return json({ error: "internal", detail: String(e) }, 500);
+    return json({ error: "internal", detail: errText(e) }, 500);
   }
 });
 

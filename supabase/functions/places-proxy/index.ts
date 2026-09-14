@@ -17,6 +17,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import Anthropic from "npm:@anthropic-ai/sdk@0.32.1";
+import { errText } from "../_shared/err-text.ts";
 import {
   CLASSIFIER_VERSION,
   deriveClassification,
@@ -150,7 +151,7 @@ serve(async (req) => {
     return json({ error: "unknown action" }, 400);
   } catch (e) {
     console.error(e);
-    return json({ error: String(e) }, 500);
+    return json({ error: errText(e) }, 500);
   }
 });
 
@@ -563,7 +564,7 @@ async function handleBlurb(
     return json({ blurb });
   } catch (e) {
     console.error("blurb generation failed", e);
-    return json({ error: String(e) }, 500);
+    return json({ error: errText(e) }, 500);
   }
 }
 

@@ -15,6 +15,7 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { errText } from "../_shared/err-text.ts";
 import {
   RECEIPT_SENDERS as SHARED_SENDERS,
   parseReceipt,
@@ -134,9 +135,10 @@ serve(async (req) => {
     // Named, so an exception in a handler is never mistaken for an auth
     // rejection. String(err) on its own produced bare messages like
     // "Unauthorized" that read exactly like the 401 above and sent us
-    // hunting through the wrong layer.
-    const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-    return json({ error: "unhandled_exception", detail }, 500);
+    // hunting through the wrong layer. errText() keeps that name-first
+    // behaviour and also handles the plain-object errors supabase-js throws,
+    // which String() renders as "[object Object]".
+    return json({ error: "unhandled_exception", detail: errText(err) }, 500);
   }
 });
 
@@ -469,7 +471,7 @@ async function handleScanAll(admin: ReturnType<typeof createClient>, body: any) 
       perUser.push({ user_id, imported: result.imported ?? 0 });
     } catch (e) {
       failed++;
-      perUser.push({ user_id, error: String(e) });
+      perUser.push({ user_id, error: errText(e) });
     }
   }
 

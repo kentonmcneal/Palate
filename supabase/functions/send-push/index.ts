@@ -29,6 +29,7 @@ import {
   type PushClass,
   type QuotaRow,
 } from "../_shared/push-quota.ts";
+import { errText } from "../_shared/err-text.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -40,31 +41,6 @@ const EXPO_BATCH = 100;
 const MAX_PER_RUN = 400;
 /** A row that has failed this many times is left alone for a human. */
 const MAX_ATTEMPTS = 4;
-/**
- * Turn anything thrown into something a human can act on.
- *
- * `String(e)` was here, and on a PostgrestError — a plain object, no custom
- * toString — it produces the literal text "[object Object]". Twenty-one
- * crashed drains in six hours all reported exactly that, so the failure was
- * visible and undiagnosable at the same time. Errors that cost nothing to
- * record and say nothing are worse than no error handling: they look handled.
- */
-function errText(e: unknown): string {
-  if (e == null) return "unknown";
-  if (typeof e === "string") return e;
-  const o = e as Record<string, unknown>;
-  // PostgrestError and friends: message plus the fields that identify it.
-  const parts = [o.message, o.code, o.details, o.hint]
-    .filter((v) => typeof v === "string" && v.length > 0);
-  if (parts.length) return parts.join(" | ");
-  if (e instanceof Error) return `${e.name}: ${e.message}`;
-  try {
-    return JSON.stringify(e);
-  } catch {
-    return Object.prototype.toString.call(e);
-  }
-}
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",

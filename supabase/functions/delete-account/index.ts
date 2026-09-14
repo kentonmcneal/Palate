@@ -24,6 +24,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
+import { errText } from "../_shared/err-text.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -88,7 +89,7 @@ serve(async (req) => {
   } catch (e) {
     // Refuse to proceed. Deleting the rows now would strand the files with
     // nothing left to identify them by, which is worse than not deleting yet.
-    return json({ error: "storage_delete_failed", detail: String(e), removed }, 500);
+    return json({ error: "storage_delete_failed", detail: errText(e), removed }, 500);
   }
 
   // The RPC reads auth.uid(), so it has to run as the user, not as the admin.
