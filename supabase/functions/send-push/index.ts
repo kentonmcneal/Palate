@@ -30,6 +30,7 @@ import {
   type QuotaRow,
 } from "../_shared/push-quota.ts";
 import { errText } from "../_shared/err-text.ts";
+import { retryRead } from "../_shared/retry.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -96,11 +97,9 @@ serve(async (req) => {
     // function reported "server_push disabled" — with the flag demonstrably
     // enabled in the database. Twenty-seven runs in six hours said the switch
     // was off while it was on, and nothing anywhere contradicted them.
-    const { data: flag, error: flagErr } = await admin
-      .from("feature_flags")
-      .select("enabled")
-      .eq("key", "server_push")
-      .maybeSingle();
+    const { data: flag, error: flagErr } = await retryRead<{ enabled: boolean }>(() =>
+      admin.from("feature_flags").select("enabled").eq("key", "server_push").maybeSingle()
+    );
     if (flagErr) {
       console.error("send-push: cannot read server_push flag", flagErr);
       return json({ error: "server_push unreadable", detail: errText(flagErr) }, 500);
@@ -112,17 +111,19 @@ serve(async (req) => {
       return json({ skipped: "server_push disabled", sent: 0 });
     }
 
-    const { data: due, error: dueErr } = await admin
-      .from("push_outbox")
-      .select("id, user_id, title, body, data, attempts, expires_at")
-      .is("sent_at", null)
-      .lte("send_after", new Date().toISOString())
-      .lt("attempts", MAX_ATTEMPTS)
-      .order("send_after", { ascending: true })
-      .limit(MAX_PER_RUN);
+    const { data: due, error: dueErr } = await retryRead<OutboxRow[]>(() =>
+      admin
+        .from("push_outbox")
+        .select("id, user_id, title, body, data, attempts, expires_at")
+        .is("sent_at", null)
+        .lte("send_after", new Date().toISOString())
+        .lt("attempts", MAX_ATTEMPTS)
+        .order("send_after", { ascending: true })
+        .limit(MAX_PER_RUN)
+    );
     if (dueErr) return json({ error: "due query failed", detail: errText(dueErr) }, 500);
 
-    const rows = (due ?? []) as OutboxRow[];
+    const rows = due ?? [];
     if (rows.length === 0) return json({ sent: 0, pending: 0 });
 
     // Drop perishable rows rather than sending stale news. Without this, the
@@ -149,11 +150,19 @@ serve(async (req) => {
     // enqueue time, because what matters is what a person actually receives,
     // not what we intended to send them.
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-    const { data: recent } = await admin
-      .from("push_outbox")
-      .select("user_id, data")
-      .not("sent_at", "is", null)
-      .gte("sent_at", since);
+    // Guarded: on a failed read every count is zero, so every ceiling silently
+    // stops applying and a rate-limited user gets the firehose the caps exist
+    // to prevent. Abort and retry next tick rather than over-send.
+    const { data: recent, error: recentErr } = await retryRead<
+      { user_id: string; data?: Record<string, unknown> | null }[]
+    >(() =>
+      admin
+        .from("push_outbox")
+        .select("user_id, data")
+        .not("sent_at", "is", null)
+        .gte("sent_at", since)
+    );
+    if (recentErr) return json({ error: "quota tally failed", detail: errText(recentErr) }, 500);
     // Counted in separate buckets per class. One shared counter would mean a
     // busy day of correspondence silently suppressing the ambient feed, and a
     // burst of signups suppressing both — each class starving the others for
@@ -163,7 +172,7 @@ serve(async (req) => {
       announce: new Map(),
       ambient: new Map(),
     };
-    for (const r of (recent ?? []) as { user_id: string; data?: Record<string, unknown> | null }[]) {
+    for (const r of recent ?? []) {
       const m = sentByClass[classOf(r)];
       m.set(r.user_id, (m.get(r.user_id) ?? 0) + 1);
     }
@@ -192,13 +201,12 @@ serve(async (req) => {
     // attempts = MAX_ATTEMPTS and error "no push token". Real pushes to people
     // who do have a token would be thrown away, and the outbox would record a
     // confident, wrong reason. Better to abort the run and retry next tick.
-    const { data: profiles, error: profErr } = await admin
-      .from("profiles")
-      .select("id, push_token")
-      .in("id", userIds);
+    const { data: profiles, error: profErr } = await retryRead<{ id: string; push_token: string | null }[]>(
+      () => admin.from("profiles").select("id, push_token").in("id", userIds)
+    );
     if (profErr) return json({ error: "profile read failed", detail: errText(profErr) }, 500);
     const tokenByUser = new Map<string, string>();
-    for (const p of (profiles ?? []) as { id: string; push_token: string | null }[]) {
+    for (const p of profiles ?? []) {
       if (p.push_token) tokenByUser.set(p.id, p.push_token);
     }
 
