@@ -12,8 +12,15 @@
 // feature_flags.server_push, which gates user-facing notifications and is
 // deliberately off. An operational alert to one device is not a product push.
 //
-// Called by an after-insert trigger on public.feedback via pg_net, carrying
-// x-cron-secret from Vault. Never called by a client.
+// Called by an after-insert trigger via pg_net, carrying x-cron-secret from
+// Vault. Never called by a client.
+//
+// Handles TWO tables, because they want the same delivery and differ only in
+// what the alert says: public.feedback (feedback_id) and
+// public.content_reports (report_id). Moderation reports sat behind a
+// published 24-hour SLA with no mechanism at all — no trigger, no admin
+// screen, no reader but a local script — so a report nobody read looked
+// identical to one nobody filed.
 // ============================================================================
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
@@ -40,16 +47,19 @@ serve(async (req) => {
     return json({ error: "unauthorized" }, 401);
   }
 
-  let body: { feedback_id?: string };
+  let body: { feedback_id?: string; report_id?: string };
   try {
     body = await req.json();
   } catch {
     return json({ error: "bad_json" }, 400);
   }
-  const id = body.feedback_id;
-  if (!id) return json({ error: "missing feedback_id" }, 400);
+  const id = body.feedback_id ?? body.report_id;
+  if (!id) return json({ error: "missing feedback_id or report_id" }, 400);
+  const isReport = !body.feedback_id && !!body.report_id;
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+
+  if (isReport) return await notifyReport(admin, id);
 
   const { data: row, error } = await admin
     .from("feedback")
@@ -98,3 +108,55 @@ serve(async (req) => {
 
   return json({ ok: true, unread: count ?? null });
 });
+
+/**
+ * A moderation report. Deliberately says WHAT was reported and WHY, and never
+ * the reporter's identity or the free-text note — the alert lands on a lock
+ * screen, and the point is "go and look", not "read the case here".
+ */
+async function notifyReport(
+  admin: ReturnType<typeof createClient>,
+  id: string,
+): Promise<Response> {
+  const { data: row, error } = await admin
+    .from("content_reports")
+    .select("id, target_type, target_id, reason, status, created_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) return json({ error: error.message }, 500);
+  if (!row) return json({ skipped: "no such report" });
+
+  if (!ALERT_PUSH_TOKEN) {
+    // Say so rather than returning a quiet 200 that reads as success. The row
+    // is safely stored either way; only the alert is lost.
+    return json({ ok: false, skipped: "ALERT_PUSH_TOKEN not set" });
+  }
+
+  const { count } = await admin
+    .from("content_reports")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "open");
+
+  const reason = String(row.reason ?? "other");
+  const what = String(row.target_type ?? "content");
+  const outstanding = count && count > 1 ? `  ·  ${count} open` : "";
+
+  try {
+    await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({
+        to: ALERT_PUSH_TOKEN,
+        // The clock in the title because the Terms promise 24 hours.
+        title: `🚩 Report · ${reason}${outstanding}`,
+        body: `A ${what} was reported. Terms promise review within 24 hours.`,
+        priority: "high",
+        sound: "default",
+        data: { type: "content_report", report_id: row.id, target_type: what },
+      }),
+    });
+  } catch (_) {
+    return json({ ok: false, skipped: "expo push failed" });
+  }
+  return json({ ok: true, open: count ?? null });
+}
