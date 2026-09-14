@@ -11,6 +11,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 import { errText } from "../_shared/err-text.ts";
+import { retryRead } from "../_shared/retry.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -42,8 +43,16 @@ serve(async (req) => {
     // straight to Expo and ignored it: a second push path that bypassed quiet
     // hours, the cap and every preference. Found by the code review.
     {
-      const { data: flag } = await admin.from("feature_flags").select("enabled").eq("key", "server_push").maybeSingle();
-      if (!flag?.enabled) return json({ skipped: "server_push disabled", sent: 0 });
+      // Distinguished from a read failure on purpose. Discarding the error
+      // here renders an unreadable flag as "the switch is off" — the exact lie
+      // that hid a broken push drain for weeks.
+      const { data: flag, error: flagErr } = await retryRead(() =>
+        admin.from("feature_flags").select("enabled").eq("key", "server_push").maybeSingle()
+      );
+      if (flagErr) return json({ error: "server_push unreadable", detail: errText(flagErr) }, 500);
+      if (!(flag as { enabled?: boolean } | null)?.enabled) {
+        return json({ skipped: "server_push disabled", sent: 0 });
+      }
     }
 
     // Look up the event + caller display
@@ -70,24 +79,31 @@ serve(async (req) => {
     // accepted-friendship set; a post now reaches whoever chose to hear about
     // it, which is what following means. Visibility is still enforced by RLS
     // on feed_events; the same gate is replicated below.
-    const { data: followers } = await admin
-      .from("follows")
-      .select("follower_id")
-      .eq("followee_id", me);
+    // Guarded: a failed read leaves friendIds empty, and the function then
+    // returns { sent: 0 } — a success indistinguishable from "nobody follows
+    // this person". Silence that reports itself as normal is the hardest kind
+    // of failure to find.
+    const { data: followers, error: followErr } = await retryRead(() =>
+      admin.from("follows").select("follower_id").eq("followee_id", me)
+    );
+    if (followErr) return json({ error: "follower read failed", detail: errText(followErr) }, 500);
 
-    const friendIds = (followers ?? [])
-      .map((f: { follower_id: string }) => f.follower_id)
+    const friendIds = ((followers ?? []) as { follower_id: string }[])
+      .map((f) => f.follower_id)
       .filter(Boolean);
 
     if (friendIds.length === 0) return json({ sent: 0 });
 
-    const { data: tokens } = await admin
-      .from("profiles")
-      .select("id, push_token, profile_visibility")
-      .in("id", friendIds)
-      .not("push_token", "is", null);
+    const { data: tokens, error: tokenErr } = await retryRead(() =>
+      admin
+        .from("profiles")
+        .select("id, push_token, profile_visibility")
+        .in("id", friendIds)
+        .not("push_token", "is", null)
+    );
+    if (tokenErr) return json({ error: "token read failed", detail: errText(tokenErr) }, 500);
 
-    const recipients = (tokens ?? [])
+    const recipients = ((tokens ?? []) as { push_token: string | null; profile_visibility: string }[])
       .filter((t) => t.profile_visibility !== "private")
       .map((t) => t.push_token as string);
 

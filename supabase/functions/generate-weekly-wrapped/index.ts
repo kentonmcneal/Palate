@@ -9,6 +9,8 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
+import { errText } from "../_shared/err-text.ts";
+import { retryRead } from "../_shared/retry.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
@@ -80,8 +82,17 @@ serve(async (req) => {
     // straight to Expo and ignored it: a second push path that bypassed quiet
     // hours, the cap and every preference. Found by the code review.
     {
-      const { data: flag } = await admin.from("feature_flags").select("enabled").eq("key", "server_push").maybeSingle();
-      if (!flag?.enabled) return json({ generated, pushed: 0, skipped: "server_push disabled", users: ids.length });
+      // An unreadable flag is not the same as a disabled one; reporting them
+      // identically is how a broken push path stays invisible.
+      const { data: flag, error: flagErr } = await retryRead(() =>
+        admin.from("feature_flags").select("enabled").eq("key", "server_push").maybeSingle()
+      );
+      if (flagErr) {
+        return json({ generated, pushed: 0, error: "server_push unreadable", detail: errText(flagErr) }, 500);
+      }
+      if (!(flag as { enabled?: boolean } | null)?.enabled) {
+        return json({ generated, pushed: 0, skipped: "server_push disabled", users: ids.length });
+      }
     }
   let pushed = 0;
   for (let i = 0; i < tokens.length; i += 100) {
