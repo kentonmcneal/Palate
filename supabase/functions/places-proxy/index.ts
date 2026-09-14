@@ -18,6 +18,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import Anthropic from "npm:@anthropic-ai/sdk@0.32.1";
 import { errText } from "../_shared/err-text.ts";
+import { retryRead } from "../_shared/retry.ts";
 import {
   CLASSIFIER_VERSION,
   deriveClassification,
@@ -179,16 +180,25 @@ async function countUserCall(admin: ReturnType<typeof createClient>, userId: str
 // cuisine backfill, the blurb and details paths here go live too — and they
 // had no meter at all. Same daily-counter table as Google, its own cap.
 const LLM_DAILY_CAP = 300;
+// FAILS CLOSED, for the same reason as isTripped: a discarded read error made
+// `?? 0` mean "nothing spent today", which opens the budget rather than closing
+// it. A missing row still legitimately means no spend yet.
 async function llmBudgetSpent(admin: ReturnType<typeof createClient>): Promise<boolean> {
   const day = new Date().toISOString().slice(0, 10);
-  const { data } = await admin
-    .from("api_usage_daily")
-    .select("count")
-    .eq("day", day)
-    .eq("action", "llm_proxy")
-    .eq("source", "anthropic")
-    .maybeSingle();
-  return ((data as { count?: number } | null)?.count ?? 0) >= LLM_DAILY_CAP;
+  const res = await retryRead(() =>
+    admin
+      .from("api_usage_daily")
+      .select("count")
+      .eq("day", day)
+      .eq("action", "llm_proxy")
+      .eq("source", "anthropic")
+      .maybeSingle()
+  );
+  if (res.error) {
+    console.error("places-proxy: cannot read LLM budget, refusing to spend", errText(res.error));
+    return true;
+  }
+  return ((res.data as { count?: number } | null)?.count ?? 0) >= LLM_DAILY_CAP;
 }
 async function recordLlmCall(admin: ReturnType<typeof createClient>): Promise<void> {
   await admin.rpc("record_api_usage", { p_day: new Date().toISOString().slice(0, 10), p_action: "llm_proxy", p_source: "anthropic" });
@@ -678,23 +688,45 @@ async function sendAlertPush(title: string, body: string) {
 }
 
 // True when today's billable-call budget is already spent.
+//
+// FAILS CLOSED. This read used to discard its error, and `data?.tripped ===
+// true` renders a failed read as `false` — "budget not spent" — so a transient
+// timeout silently reopened the kill switch and let billable Google calls
+// through. The guard was enforced by the read happening to succeed.
+//
+// The distinction that matters: a MISSING ROW is not an error. The counter row
+// is created on the day's first call, so no row legitimately means no spend
+// yet, and that must stay open. Only an actual read failure closes the gate.
+//
+// Failing closed costs a degraded result for one request. Failing open costs
+// money, silently, against a cap whose entire purpose is to stop that.
 async function isTripped(admin: ReturnType<typeof createClient>): Promise<boolean> {
-  const { data } = await admin
-    .from("google_usage_counter")
-    .select("tripped")
-    .eq("day", todayUTC())
-    .maybeSingle();
-  return data?.tripped === true;
+  const res = await retryRead(() =>
+    admin.from("google_usage_counter").select("tripped").eq("day", todayUTC()).maybeSingle()
+  );
+  if (res.error) {
+    console.error("places-proxy: cannot read kill switch, refusing to spend", errText(res.error));
+    return true;
+  }
+  return (res.data as { tripped?: boolean } | null)?.tripped === true;
 }
 
 // Count one billable Google call and fire the 80% / tripped alerts exactly
 // once each (the RPC reports which caller crossed the threshold).
 async function reserveGoogleCall(admin: ReturnType<typeof createClient>) {
   try {
-    const { data } = await admin.rpc("bump_google_usage", {
-      p_day: todayUTC(),
-      p_cap: GOOGLE_DAILY_CALL_CAP,
-    });
+    // Retried and logged. A silently failed bump is an uncounted billable call,
+    // and enough of them mean the daily cap is never reached at all.
+    const { data, error: bumpErr } = await retryRead(() =>
+      admin.rpc("bump_google_usage", {
+        p_day: todayUTC(),
+        p_cap: GOOGLE_DAILY_CALL_CAP,
+      })
+    );
+    if (bumpErr) {
+      console.error("places-proxy: BILLABLE CALL NOT COUNTED", errText(bumpErr));
+      return;
+    }
     const row = Array.isArray(data) ? data[0] : data;
     if (!row) return;
     if (row.crossed_warn) {
