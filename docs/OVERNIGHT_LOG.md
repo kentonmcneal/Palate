@@ -500,6 +500,43 @@ end-to-end test enqueued 2 rather than 3 because that particular actor has two
 followers, not three — the numbers are consistent, and I checked rather than
 letting two different figures sit in the log unexplained.
 
+## 11b. What I could NOT verify, and why it is still safe
+
+Being exact about the limits of tonight's verification, because "deployed" is
+not "exercised".
+
+**places-proxy's new meter has not served a real request.** It is the hot path
+for actual users and the riskiest thing I touched. It boots (a call without
+auth reaches the auth gate and returns 401, which a failed `_shared` import
+would not), but `proxy_calls` shows **zero** rows since the deploy — it is
+2:49am Central and nobody is using the app. Morning traffic is the first real
+test.
+
+I could not manufacture one honestly: calling it needs a real user JWT, and
+minting or handling a user credential to test my own change is not something I
+will do. The other paths using the same count-based helper are unreachable too
+— `featured-lists-refresh`'s cron path needs the secret, and
+classify-cuisine-backfill returns at its ANTHROPIC_KEY check before ever
+reaching its gates.
+
+**What makes that acceptable rather than a gamble** is the failure mode, which
+I worked through rather than hoped about:
+
+```
+return (minute.count ?? 0) >= USER_CAP_PER_MINUTE || (day.count ?? 0) >= ...
+```
+
+If `count` were somehow missing at runtime, that expression is `false` — not
+capped — and the user is served exactly as they were before tonight. A
+plumbing bug there degrades to the PRE-EXISTING behaviour, not to broken
+service. The only path that degrades a user's results is a genuine read error,
+which is the change's whole point. So the worst case is that the new protection
+silently does not protect, not that the app stops working.
+
+The jest tests do prove `count` survives `retryRead` on both a clean read and a
+retry — but those run against a mock, and I am not going to let a mock stand in
+for production and call it verified.
+
 ## 12a. Also checked, also not a bug
 
 Four things I went after in this stretch and did not find anything wrong with.
