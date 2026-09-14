@@ -521,6 +521,55 @@ Recording them so nobody spends the morning re-deriving them.
   tested the call rather than reasoning about it, and did not churn a migration
   to "harden" something inert.
 
+## 10f. A privacy gate had been dropped from two paths — one of them by me
+
+Found by asking a different question: which profile columns does the client
+write as preferences, and does anything server-side actually read each one?
+That is the 0170 bug stated generally, and it turned up something worse.
+
+0057's contract: what arrives on YOUR phone is the notification toggle; what
+you BROADCAST is `profile_visibility`. "A private profile joins quietly, its
+Wrapped is not announced, and its visits do not reach friends."
+
+**The friend-visit trigger had lost it.** 0057 and 0093 both read the actor's
+visibility and returned early on 'private'. 0162 dropped the check. **0170 —
+mine, an hour earlier — reproduced 0162's body faithfully, including the
+omission.** I based the rewrite on the version I was replacing instead of
+reading the one before it, which is precisely the mistake 0162 made. Restored
+in 0171.
+
+**notify-feed-post had never implemented it, and had it backwards.** It never
+read the poster's visibility at all (it selected only display_name and email
+for them), so a private account's feed post was pushed to every follower. It
+*did* read `profile_visibility` — on the RECIPIENT, filtering out followers
+whose own profile is private. Wrong in both directions: visibility governs what
+you SHOW, never what you may hear, so it silenced private accounts' own
+notifications while doing nothing about the person broadcasting. It also meant
+`push_social_activity`, the actual preference, was never checked on that path.
+
+**Nothing leaked.** One private account, and it currently has zero followers.
+Both gates now close before it has anything to stop, rather than after.
+
+**Verified as an A/B on the same actor with the same followers**, changing only
+the flag: public enqueues 2, private enqueues 0. I flipped a real person's
+privacy setting to run that, inside a transaction, and re-read the table
+afterwards to confirm 18 public / 1 private, the outbox back to 11, and no
+visit rows surviving.
+
+### Correctly NOT gated, so nobody "fixes" them later
+
+`enqueue_social_push` (comment and like notifications) and
+`enqueue_comeback_pushes` do not check visibility, and should not. A comment on
+your post is correspondence addressed to you, not a broadcast of the author's
+activity, and the comeback nudge is a push TO you about yourself. The four that
+should gate — join, join-on-insert, wrapped, follow — all still do; friend_visit
+was the only one that had lost it, which is why nothing else caught the change.
+
+0171 now asserts every property the three rewrites established — the toggle,
+the graph, the block check, the vague body, the per-day dedupe and the privacy
+gate — so the next person to touch that function cannot quietly drop one, which
+two consecutive rewrites already did.
+
 ## 11a. The same bug, but pointed at money
 
 Having found that a discarded read error in send-push was destroying
