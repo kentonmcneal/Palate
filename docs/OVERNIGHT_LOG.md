@@ -235,6 +235,77 @@ The quota bug below is real and worth fixing on its own, but a drain that only
 works a third of the time is the larger part of the answer, and I would not
 have believed the quota numbers if I had not found this too.
 
+## 10a. The root cause, as far as I got it
+
+Once the drain could report properly, the first real failure read
+`{"error":"Gateway Timeout"}`. That is supabase-js receiving a **504 from
+PostgREST** — a bare message with empty code/details/hint, which is exactly the
+shape supabase-js produces for a non-JSON error response.
+
+**It is not the database.** I checked rather than assumed: 15 of 60 connections
+in use, no query running longer than a moment, `statement_timeout` at 2 min,
+and the hot tables are trivial (push_outbox 45 live rows, feature_flags 7). The
+instance is idle. The timeout is upstream of Postgres, in the edge-runtime to
+PostgREST path.
+
+**I cannot tell whether this affects other functions**, and I want to be exact
+about why rather than imply send-push is special. The only other cron running
+often enough to compare is `classify-cuisine-backfill`, which has a perfect
+record of 36/36 — but it returns at its `ANTHROPIC_API_KEY` check on line 73,
+*before it ever touches the database*. Its success rate is evidence of nothing.
+send-push is simply the only scheduled job currently exercising that path.
+
+That matters, because the user-facing functions — places-proxy, group-recs,
+notify-feed-post, delete-account — all hit the database on every call. If the
+flakiness is platform-wide rather than specific to this one function, users have
+been hitting it too. **I have no way to check**: `proxy_calls` records
+(user_id, action, called_at) and no status, so it is a rate-limit ledger and not
+an error log. There is no telemetry for edge-function failures anywhere. That
+gap is worth closing, and it is a bigger change than I should make unattended.
+
+**For you:** the 504s themselves are the one thing here I could not fix or
+explain, and they are worth raising with Supabase. Everything below is
+mitigation, not a cure.
+
+### What I did about it
+
+All four of the drain's reads now go through `retryRead` — 3 tries, 250ms
+linear backoff. A cron that runs every five minutes and abandons the run on the
+first 504 is barely retrying at all, since each tick starts from scratch with
+the same odds; retrying inside the run turns three independent coin flips into
+one much better one. Reads only: a write that timed out may well have been
+applied. Permissions and schema errors fail fast instead of being retried into a
+slower identical failure.
+
+`retryRead` takes a thunk, not a query builder, because a PostgREST builder is
+a thenable that settles once — passing one would re-await the same failure
+forever, a retry loop that cannot retry. There is a test for exactly that.
+
+## 10b. The unguarded read that was destroying notifications
+
+This is the worst thing I found tonight, and it follows directly from the 504s.
+
+The profile lookup discarded its error. A failed read yields `profiles === null`,
+so the token map is empty, so **every row in the batch** falls into the tokenless
+branch — which retires them permanently with `attempts = MAX_ATTEMPTS` and the
+error `"no push token"`. A transient timeout was being written down as a
+confident, terminal, false fact about the recipient.
+
+Proven, not inferred. User `a6d005d3` received a push successfully at
+**17:35:09** on 2026-09-13, and their `post_comment` notification at **18:05:56**
+was retired thirty minutes later as "no push token". They had a token the whole
+time — I checked their full outbox history rather than just their current
+profile, because a token present *now* would not have proved it was present
+*then*. Two real notifications were destroyed: a comment on a post and a like
+on a comment.
+
+At roughly a third of runs failing, an unguarded read on that path is a steady
+shredder of real pushes. It now aborts the run and retries on the next tick.
+
+The 24h quota tally was unguarded in the same way, with a milder failure: on a
+failed read every count is zero, so every daily ceiling silently stops applying
+and a rate-limited user gets precisely the firehose the caps exist to prevent.
+
 ## 11. Announcements were starving the social loop
 
 Separate defect, same sweep. Over nine days the outbox delivered **sixteen
