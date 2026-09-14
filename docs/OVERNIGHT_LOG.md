@@ -306,6 +306,41 @@ The 24h quota tally was unguarded in the same way, with a milder failure: on a
 failed read every count is zero, so every daily ceiling silently stops applying
 and a rate-limited user gets precisely the firehose the caps exist to prevent.
 
+## 10c. What the instrumentation caught, and what it did not
+
+After the retry went in, the drain ran 06:45, 06:50, 06:55 clean and then
+returned this at 07:00:
+
+```
+{"error":"server_push unreadable","detail":"Gateway Timeout"}
+```
+
+Three things at once, and all three are the point of having done the
+instrumentation first:
+
+- **The step label works.** It is the KILL-SWITCH READ that times out — the
+  first fatal PostgREST call in the run. Not the due query, not the profile
+  read.
+- **It survived all three retries.** So the 504 is not a momentary blip; it
+  persists across a 250ms and a 500ms backoff.
+- **It no longer lies.** That exact failure, this morning, returned HTTP 200
+  `{"skipped":"server_push disabled"}`. Twenty-seven times.
+
+**Do not read the success rate as fixed.** Since the retry: 3 good, 1 bad, on
+four samples. The baseline was 21 good and 48 bad over six hours. Four samples
+against a 30% baseline is suggestive and nothing more — I am not going to
+convert it into a percentage and imply I measured something I did not.
+
+A failed tick now costs five minutes, not a lost notification: nothing is
+marked, nothing is retired, and the next tick picks the rows up. That is the
+part that actually matters, and it is true regardless of how the rate settles.
+
+**I did not tune the retry further**, though it was tempting. I do not know how
+long a 504 takes to come back, so I cannot size a backoff without guessing, and
+three attempts already risk approaching pg_net's 30s ceiling. Guessing at
+numbers and calling it a fix is what produced the original bug. The 504s want
+Supabase's attention, not more of mine.
+
 ## 11. Announcements were starving the social loop
 
 Separate defect, same sweep. Over nine days the outbox delivered **sixteen
