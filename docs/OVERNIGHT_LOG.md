@@ -178,7 +178,105 @@ is passive capture — and not something to redesign unattended.
 
 ---
 
-## 10. Not done, and why
+## 10. The push drain is failing most of the time
+
+This is the biggest thing I found, and I found it by accident — a routine
+health sweep of the outbox, not by looking for it.
+
+**The drain succeeds about a third of the time.** Over the six hours to 06:25
+it ran 69 times: 21 worked, 27 reported `server_push disabled`, and 21 returned
+HTTP 500 `{"error":"[object Object]"}`. The flag is `enabled = true` and has
+been since 2026-09-02.
+
+I checked that all three response shapes really are the same job rather than
+assuming it: `ok + falseOff + err` comes to **exactly twelve in every full
+hour**, which is the `*/5` schedule. Three shapes, one cron.
+
+It is chronic, not a spike — every hour in the window looks the same. I cannot
+see further back than six hours because pg_net prunes `net._http_response`.
+
+### Why it went unnoticed for so long
+
+Both failure modes lie, and they lie in the direction of looking fine.
+
+- The kill-switch read **discarded its error**. `const { data: flag }` — a
+  failed read leaves `flag === null`, and `!flag?.enabled` reports that as the
+  switch being off. Twenty-seven runs asserted the switch was off while it was
+  demonstrably on, in a 200 response, which no alert would ever fire on.
+- `String(e)` on a PostgrestError — a plain object with no custom `toString` —
+  produces the literal `"[object Object]"`. Twenty-one crashes were visible and
+  undiagnosable at the same time.
+- The expiry sweep discarded its error too. `.update()` **resolves** with
+  `{ error }` rather than throwing, so a sweep that never ran looked exactly
+  like one that did. That is the same rule I wrote into the audit prompt and
+  have now been bitten by twice.
+
+### What I have and have not fixed
+
+Fixed and deployed: the reporting. `errText()` prefers message/code/details/
+hint, the kill switch now distinguishes unreadable from missing from genuinely
+off, and the sweep logs its error. **This changes no behaviour and fixes no
+crash.** It is the prerequisite for diagnosing one — the root cause cannot be
+read through `"[object Object]"`, and I was not willing to guess at it and call
+that a fix.
+
+Not fixed: the actual failure. I have hypotheses (transient PostgREST reads
+failing from the edge runtime is the shape of it, since both the flag read and
+the due query are plain reads and both fail) but no evidence, and this CLI has
+no `functions logs` subcommand, so the response body is my only channel. The
+next failing run carries a real message. I deliberately did not trigger the
+drain by hand to force one: it is an outward-facing send, and the cron does it
+every five minutes anyway.
+
+### What this cost
+
+This is very likely the real reason friend-visit pushes have not been arriving.
+The quota bug below is real and worth fixing on its own, but a drain that only
+works a third of the time is the larger part of the answer, and I would not
+have believed the quota numbers if I had not found this too.
+
+## 11. Announcements were starving the social loop
+
+Separate defect, same sweep. Over nine days the outbox delivered **sixteen
+"someone joined Palate" pushes and exactly one "someone you follow ate
+somewhere"**, with ten of the latter dropped. The two most recent drops each
+had three sent pushes in the preceding 24h, all three `user_joined`.
+
+Eight of the ten drops were *not* this, and I checked before claiming
+otherwise: they have `prior_sent = 0` and expired while `server_push` was off,
+which the pre-flag sweep does deliberately so that flipping the switch does not
+deliver a week of backlog. Working as designed. Only the last two are the bug.
+
+`user_joined` is the only type that fans out to the whole user base on a single
+event, so its volume grows as (signups x users) while every other type grows
+with the recipient's own graph. In a shared daily budget it is structurally
+guaranteed to crowd out everything else, and strictly more so as the app grows
+— the exact opposite of what a launch needs.
+
+Fixed: announcements get their own ceiling of one a day; surplus is dropped
+rather than deferred; and a scarce slot now goes to the row that dies soonest
+rather than the one that arrived first, so a 72h announcement no longer
+outranks a 12h friend visit. Logic extracted to `_shared/push-quota.ts` with
+twelve tests.
+
+**The test was wrong first.** My reproduction case passed with the bug
+reintroduced, because it hand-placed counts in a named bucket instead of
+routing them through `classOf` — it was asserting its own setup. Rewired to
+build the tally the way `send-push` does, then re-verified it fails when
+announcements are collapsed back into the shared bucket. That is twice this
+week I have written a test that asserted a null rather than a claim.
+
+## 12. Checked, not a bug
+
+- **Three users have a push token but no timezone**, and have never had a
+  single push enqueued — `next_sendable_at(null, …)` returns NULL and every
+  enqueue site skips them. I was about to write this up as a new finding before
+  checking: it was already found and fixed on 2026-09-13, and the docstring on
+  `syncTimezone()` describes these same three accounts. It is wired into
+  `_layout.tsx`, guarded by a test, and shipped. Those three simply have not
+  relaunched the app since. Verify the artifact, not the intent.
+
+## 13. Not done, and why
 
 - **Personalised novelty appetite ("weekend warrior").** Computable, but at 66
   visits with 13 repeats total it would be fitting noise. The brief I was given
