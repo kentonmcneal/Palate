@@ -113,7 +113,7 @@ export default function PrivacyPage() {
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tightish">7. Security</h2>
         <p className="mt-3 leading-relaxed text-palate-ink">
-          All traffic is HTTPS. The database enforces row-level security: a user cannot read another user's visits, even given a bug in our app. Profile photos, meal photos, and feedback screenshots live in access-controlled storage. Our Google Places API key never touches your phone — it lives only on our server.
+          All traffic is HTTPS. The database enforces row-level security: a user cannot read another user's visits, even given a bug in our app. Meal photos and feedback screenshots live in private storage: they are readable only by you, through short-lived links the app requests on your behalf. Profile pictures are served from a public URL, the way profile pictures usually are. Anyone holding that exact link can view the image, so treat your profile picture as public. Nobody can browse or list our stored files. Our Google Places API key never touches your phone — it lives only on our server.
         </p>
 
         <h2 className="mt-10 text-2xl font-semibold tracking-tightish">8. Children</h2>
