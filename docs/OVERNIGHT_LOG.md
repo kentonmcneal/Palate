@@ -459,6 +459,30 @@ comment tripped the check looking for it. Strips comments now. That is the
 third time tonight a check I wrote asserted the wrong thing, and the second
 time this week a guard tripped on its own prose.
 
+## 10e. Shipped, and the numbers as they actually stand
+
+**OTA published** to all four live runtimes (0.1.10 / 0.1.9 / 0.1.8 / 0.1.7),
+group b2e39164 on 0.1.10. Carries the onboarding scroll fixes. Verified
+afterwards that app.json was restored to 0.1.10, no lock file survived and the
+tree is clean — that script rewrites the version three times and a stray commit
+mid-loop is a known way to silently mis-set a future build's runtime. Remember
+it takes two launches to apply: one to download, the next to run.
+
+Server-side work needed no OTA and is already live.
+
+**Drain, since the retry:** 4 good, 1 bad. Baseline was 21 good / 48 bad. Five
+samples is still five samples, so treat that as "materially better, not
+measured".
+
+**Friend-visit reach, checked precisely.** My migration's proof counted
+eligible followers WITHOUT the timezone condition the trigger actually applies,
+which is a looser test than the thing it was asserting. I went back and ran
+both: 3 either way, because all three eligible followers have a timezone. So
+the claim stands, but it stood by luck rather than by construction. The
+end-to-end test enqueued 2 rather than 3 because that particular actor has two
+followers, not three — the numbers are consistent, and I checked rather than
+letting two different figures sit in the log unexplained.
+
 ## 11a. The same bug, but pointed at money
 
 Having found that a discarded read error in send-push was destroying
