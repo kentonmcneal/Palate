@@ -46,9 +46,10 @@ forward again is the same command against a newer group.
 
 ### Blocking the submission itself
 
-- **Sign in with Apple** — built (0.1.10), waiting on three account steps.
+- **Sign in with Apple** — built (0.1.10), waiting on ONE dashboard step.
   Guideline 4.8 makes it a rejection, not a risk, because Google sign-in is
   offered and an emailed code cannot keep an address private.
+  See "Unblocking Sign in with Apple" below — it is smaller than it looks.
 - **Gmail** — a reviewer tapping Connect Gmail gets a 502 today. Guideline 2.1,
   non-functioning feature. Flag it off for the review build regardless: it
   cannot serve more than 100 users while the Google consent screen is
@@ -171,3 +172,59 @@ marking it and the feedback loop learns from it as though it were organic — th
 model starts believing people like whoever paid. The slate schema is where that
 flag belongs and it is one field. Do it before the first paid placement, not
 after.
+
+---
+
+## Unblocking Sign in with Apple
+
+`GET /auth/v1/settings` still returns `"apple": false`, so every tap on the
+Apple button fails. This is the last hard release blocker that is not waiting
+on Apple to approve something.
+
+**It is one dashboard step, not three, and it needs no Apple private key.**
+That is worth stating plainly because the usual Apple setup guides describe the
+*web* OAuth flow, which does need a Services ID, Team ID, Key ID and a `.p8`
+secret. This app does not use that flow. `lib/auth.ts` calls
+`supabase.auth.signInWithIdToken({ provider: "apple", token, nonce })` — the
+NATIVE flow, where iOS itself issues the identity token and Supabase only has
+to recognise which app it came from.
+
+### The step
+
+Supabase Dashboard → Authentication → Providers → **Apple** → enable, and put
+the bundle identifier in **Client IDs**:
+
+```
+app.palate.ios
+```
+
+Save. That is the whole thing. Leave the Secret Key fields empty — they belong
+to the web flow.
+
+### Why nothing else is needed
+
+- **No rebuild.** `usesAppleSignIn: true` and `expo-apple-authentication` both
+  landed on 2026-09-07, and the current TestFlight binary is 0.1.10 build 33,
+  finished 2026-09-12. The entitlement and the native module are already in the
+  shipped app, so this cannot be fixed by an OTA and does not need one — it is
+  a server-side switch that the existing build will pick up immediately.
+- **No Apple capability step, probably.** EAS manages credentials, and a build
+  carrying the Sign In with Apple entitlement would have failed to sign if the
+  capability were not enabled on the `app.palate.ios` App ID. Build 33 signed
+  and shipped, so it is almost certainly already on. If sign-in still fails
+  after the dashboard change, that is the first place to look: Apple Developer
+  → Identifiers → app.palate.ios → Sign In with Apple.
+- **The nonce is already handled.** Apple embeds the SHA-256 of a random string
+  in the token and Supabase is handed the raw string to compare, which is what
+  stops a captured token being replayed. That is done properly in `auth.ts`.
+
+### How to check it worked
+
+```bash
+curl -s https://oxzsspbojeyeelbjqjdx.supabase.co/auth/v1/settings \
+  -H "apikey: <anon key>" | python3 -m json.tool | grep -A2 external
+```
+
+`"apple": true` means the provider is live. Then tap the button on a real
+device — the simulator cannot complete Sign in with Apple.
+
