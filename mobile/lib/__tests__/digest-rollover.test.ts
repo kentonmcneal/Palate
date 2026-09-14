@@ -154,3 +154,35 @@ describe("the hour is fixed, not personalised", () => {
     expect(withPattern.getTime()).toBe(without.getTime());
   });
 });
+
+describe("a low-confidence night waits, but only once", () => {
+  const { digestTimeFor, buildDigest } = require("../passive-digest");
+  const lowEntry = (id: string, at: Date) => ({
+    id, place_id: id, name: id, address: "", alternates: [],
+    detectedAt: at.getTime(), dwellMin: 12, confidenceBand: "low",
+  });
+
+  it("defers tonight's low-only digest to tomorrow", () => {
+    const now = new Date("2026-09-07T19:00:00");          // Monday evening
+    const d = buildDigest([lowEntry("a", new Date("2026-09-07T13:00:00"))], now);
+    const when = digestTimeFor(now, null, d);
+    expect(when.getDate()).toBe(8);                        // Tuesday
+  });
+
+  it("but asks on the second night rather than letting it expire", () => {
+    // Inbox entries die at 48 hours. A second deferral does not delay the
+    // question, it cancels it — and silence on ambiguous days is the exact
+    // complaint that made low-only digests sendable in the first place.
+    const now = new Date("2026-09-08T19:00:00");           // Tuesday evening
+    const d = buildDigest([lowEntry("a", new Date("2026-09-07T13:00:00"))], now);
+    const when = digestTimeFor(now, null, d);
+    expect(when.getDate()).toBe(8);                        // tonight, not Wednesday
+  });
+
+  it("never defers a digest that has something it can name", () => {
+    const now = new Date("2026-09-07T19:00:00");
+    const sure = { ...lowEntry("b", new Date("2026-09-07T13:00:00")), confidenceBand: "high" };
+    const d = buildDigest([sure], now);
+    expect(digestTimeFor(now, null, d).getDate()).toBe(7);
+  });
+});

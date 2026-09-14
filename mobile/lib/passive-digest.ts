@@ -427,6 +427,28 @@ const DIGEST_NOTIF_ID_KEY = "palate.passive.digestNotifId";
  * A capture at 11pm does not get a digest — it rolls into tomorrow's, which is
  * better than buzzing someone at midnight about dinner.
  */
+/**
+ * Has anything in this digest already sat through a slot?
+ *
+ * The deferral above may only ever happen ONCE. Inbox entries expire at 48
+ * hours (INBOX_EXPIRY_HOURS), so a second deferral does not delay a question,
+ * it cancels it: two consecutive ambiguous days and those stops are dropped
+ * having never been asked about. That is precisely the failure
+ * isDigestWorthSending was widened to fix -- "a day made entirely of
+ * low-confidence stops said NOTHING" -- and deferring twice walks back into it
+ * through a different door.
+ *
+ * Twenty hours rather than twenty-four: the slot moves between 21:00 and
+ * 00:00, so a strict day would let a Friday entry miss Saturday's later slot
+ * and then expire.
+ */
+const DEFER_ONCE_AFTER_MS = 20 * 3_600_000;
+
+export function hasWaitedADay(digest: Digest, now: Date): boolean {
+  const all = [...digest.high, ...digest.medium, ...digest.low];
+  return all.some((e) => now.getTime() - e.detectedAt >= DEFER_ONCE_AFTER_MS);
+}
+
 export function digestTimeFor(
   now: Date,
   pattern?: EatingPattern | null,
@@ -444,7 +466,7 @@ export function digestTimeFor(
   // Scheduling nothing is how entries used to sit in the inbox forever:
   // rescheduleDigest only runs when a new capture lands, so a quiet tomorrow
   // meant nobody was ever asked at all.
-  if (digest && isLowOnlyDigest(digest)) {
+  if (digest && isLowOnlyDigest(digest) && !hasWaitedADay(digest, now)) {
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const slot = digestMomentOn(tomorrow, pattern);
