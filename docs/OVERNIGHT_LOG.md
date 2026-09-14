@@ -30,6 +30,15 @@ first by accident — a routine health sweep — and the other two by pulling on
    received a push at 17:35 had their comment notification destroyed at 18:05
    with that reason.
 
+4. **A privacy gate had been dropped from two broadcast paths.** §10f. Private
+   profiles are supposed not to broadcast — 0057 says so explicitly. The
+   friend-visit trigger lost that check in 0162, and **my own fix an hour
+   earlier carried the omission forward**, because I rewrote from the version I
+   was replacing instead of reading the one before it. notify-feed-post had it
+   backwards entirely: it checked the recipient's visibility, never the
+   poster's. Nothing leaked — the one private account has no followers — and
+   both are closed now, verified by A/B on the same actor.
+
 **The one thing I could not fix** is the cause underneath #2: PostgREST
 returning 504 Gateway Timeout to the cron's calls. The database is idle (15 of
 60 connections, no slow queries), so it is upstream. Worth raising with
