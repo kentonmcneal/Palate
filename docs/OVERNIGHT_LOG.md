@@ -479,10 +479,17 @@ it takes two launches to apply: one to download, the next to run.
 
 Server-side work needed no OTA and is already live.
 
-**Drain, since the retry:** 8 good, 1 bad, against a baseline of 21 good / 48
-bad (30%). Eight-or-better out of nine is on the order of a 0.04% outcome at
-the old rate, so the improvement is real rather than encouraging. The single
-failure was the labelled one at 07:00, and it names the kill-switch read.
+**Drain, since the retry: 11 good, 1 bad**, against a baseline of 21 good / 48
+bad (30%). At the old rate that result is on the order of one in a quarter
+million, so the improvement is real rather than encouraging. There has been
+exactly one failure, at 07:00, and it names its own step: the kill-switch read,
+timing out after all three retries.
+
+The three rows still sitting unsent are healthy, not stuck — all deferred +24h
+under the old code, `attempts=0`, valid expiries, due later today (13:25, 15:05
+and 17:10). When they come due the two `user_joined` rows will meet the new
+1/day announcement ceiling and drop rather than trickle out, which is the
+intended behaviour: a day-old "someone joined" is worth one push, not three.
 
 **Friend-visit reach, checked precisely.** My migration's proof counted
 eligible followers WITHOUT the timezone condition the trigger actually applies,
