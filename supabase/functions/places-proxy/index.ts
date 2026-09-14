@@ -161,18 +161,33 @@ serve(async (req) => {
 // global budget has left.
 const USER_CAP_PER_MINUTE = NEARBY_RATE_LIMIT_MAX;
 const USER_CAP_PER_DAY = 120;
+// FAILS CLOSED. `?? 0` on a failed count read means "this user has made no
+// calls today", which switches the cap off at the moment it stops being able
+// to see. Treat an unreadable meter as a reached cap: the caller gets cached
+// or degraded results, which is the same thing they would get at the cap, and
+// nobody can spend the shared budget while the meter is blind.
 async function overUserCap(admin: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
   const now = Date.now();
   const minuteAgo = new Date(now - NEARBY_RATE_LIMIT_SECONDS * 1000).toISOString();
   const dayAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
-  const [{ count: perMinute }, { count: perDay }] = await Promise.all([
-    admin.from("proxy_calls").select("user_id", { count: "exact", head: true }).eq("user_id", userId).gte("called_at", minuteAgo),
-    admin.from("proxy_calls").select("user_id", { count: "exact", head: true }).eq("user_id", userId).gte("called_at", dayAgo),
+  const [minute, day] = await Promise.all([
+    retryRead(() => admin.from("proxy_calls").select("user_id", { count: "exact", head: true }).eq("user_id", userId).gte("called_at", minuteAgo)),
+    retryRead(() => admin.from("proxy_calls").select("user_id", { count: "exact", head: true }).eq("user_id", userId).gte("called_at", dayAgo)),
   ]);
-  return (perMinute ?? 0) >= USER_CAP_PER_MINUTE || (perDay ?? 0) >= USER_CAP_PER_DAY;
+  if (minute.error || day.error) {
+    console.error("places-proxy: per-user meter unreadable, treating as capped",
+      errText(minute.error ?? day.error));
+    return true;
+  }
+  return (minute.count ?? 0) >= USER_CAP_PER_MINUTE || (day.count ?? 0) >= USER_CAP_PER_DAY;
 }
 async function countUserCall(admin: ReturnType<typeof createClient>, userId: string, action: string): Promise<void> {
-  await admin.from("proxy_calls").insert({ user_id: userId, action }).then(() => undefined, () => undefined);
+  // Failure was swallowed entirely. An uncounted call is a call the meter will
+  // never charge for, so enough of them mean the cap is never reached at all.
+  // Still non-fatal — the global kill switch is the real ceiling — but no
+  // longer invisible.
+  const { error } = await admin.from("proxy_calls").insert({ user_id: userId, action });
+  if (error) console.error("places-proxy: user call not metered", errText(error));
 }
 
 // ----- LLM budget ---------------------------------------------------------

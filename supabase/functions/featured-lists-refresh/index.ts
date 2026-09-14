@@ -19,6 +19,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { errText } from "../_shared/err-text.ts";
+import { retryRead } from "../_shared/retry.ts";
 import {
   type GooglePlace as ClassifierPlace,
   googleToRestaurantRow,
@@ -186,13 +187,22 @@ serve(async (req) => {
     const now = Date.now();
     const hourAgo = new Date(now - 60 * 60 * 1000).toISOString();
     const dayAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
-    const [{ count: perHour }, { count: perDay }] = await Promise.all([
-      admin.from("proxy_calls").select("user_id", { count: "exact", head: true })
-        .eq("user_id", user.id).eq("action", "refresh_city").gte("called_at", hourAgo),
-      admin.from("proxy_calls").select("user_id", { count: "exact", head: true })
-        .eq("user_id", user.id).eq("action", "refresh_city").gte("called_at", dayAgo),
+    // FAILS CLOSED: `?? 0` on a failed count read means "no calls yet", which
+    // turns the meter off exactly when it cannot see. One unit of work here is
+    // ~22 billable Google searches against a SHARED daily budget, so a blind
+    // meter is the expensive way to be wrong.
+    const [hour, day] = await Promise.all([
+      retryRead(() => admin.from("proxy_calls").select("user_id", { count: "exact", head: true })
+        .eq("user_id", user.id).eq("action", "refresh_city").gte("called_at", hourAgo)),
+      retryRead(() => admin.from("proxy_calls").select("user_id", { count: "exact", head: true })
+        .eq("user_id", user.id).eq("action", "refresh_city").gte("called_at", dayAgo)),
     ]);
-    if ((perHour ?? 0) >= REFRESH_CITY_PER_HOUR || (perDay ?? 0) >= REFRESH_CITY_PER_DAY) {
+    if (hour.error || day.error) {
+      console.error("featured-lists: meter unreadable, refusing to spend",
+        errText(hour.error ?? day.error));
+      return json({ error: "rate_limited", retry_after_s: 3600 }, 429);
+    }
+    if ((hour.count ?? 0) >= REFRESH_CITY_PER_HOUR || (day.count ?? 0) >= REFRESH_CITY_PER_DAY) {
       // 429, not an error: the lists that already exist are still served, and
       // the caller should stop asking rather than retry.
       return json({ error: "rate_limited", retry_after_s: 3600 }, 429);
