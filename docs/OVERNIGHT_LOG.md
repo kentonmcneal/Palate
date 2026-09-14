@@ -4,6 +4,49 @@ Ranked by what most deserves attention in the morning.
 
 ---
 
+## Read this first
+
+The notification system was not working, in three independent ways. I found the
+first by accident — a routine health sweep — and the other two by pulling on it.
+
+1. **The friend-visit push could not reach anybody.** §10d. The thing you asked
+   for last night. 0162 fixed the wording and the dedupe correctly, then gated
+   the recipient query on a column retired a hundred migrations ago. Your
+   settings switch writes `push_social_activity`; the trigger read
+   `push_friend_activity`. It was on for all nineteen accounts and delivered
+   nothing. Fixed and verified end to end in 0170 — one visit now enqueues two
+   notifications where it enqueued zero.
+
+2. **The drain only worked about a third of the time.** §10. Over six hours it
+   ran 69 times and succeeded 21. Twenty-seven runs reported "server_push
+   disabled" while the flag was demonstrably enabled, and twenty-one returned
+   `{"error":"[object Object]"}`. Both failure modes lied, in the direction of
+   looking fine, which is why it survived. Reads now retry; failures now say
+   what failed.
+
+3. **A transient read error was destroying real notifications.** §10b. An
+   unguarded profile lookup meant a timeout made everyone look tokenless, and
+   those rows were retired permanently as "no push token". Proven: a user who
+   received a push at 17:35 had their comment notification destroyed at 18:05
+   with that reason.
+
+**The one thing I could not fix** is the cause underneath #2: PostgREST
+returning 504 Gateway Timeout to the cron's calls. The database is idle (15 of
+60 connections, no slow queries), so it is upstream. Worth raising with
+Supabase. Everything I did there is mitigation.
+
+**The same bug class, pointed at money** (§11a): the classifier's $10 ceiling
+and the Google kill switch both failed OPEN on a read error — `?? 0` turning an
+unreadable total into "nothing spent yet". Nothing has been spent and nothing
+starts spending from this; `ANTHROPIC_API_KEY` is still unset. But that fix
+needed to exist before you ever set it.
+
+Also shipped: onboarding steps that lost their buttons at one notch above
+default text size (§ below, audit #9), and a moderation mechanism behind your
+published 24-hour SLA, which previously had none (audit #6).
+
+---
+
 ## 1. I shipped a change today on a number I had been told not to trust, and reverted it
 
 **What happened.** Earlier I moved unscored inbox entries from the Medium band
