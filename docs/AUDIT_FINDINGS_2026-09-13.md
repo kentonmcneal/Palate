@@ -12,6 +12,52 @@ Nothing here has been edited; it is the report as written.
 
 # Palate — Final Pre-Release Audit
 
+## Status as of 2026-09-14
+
+Every item below was re-checked against the LIVE database and the shipped code,
+not against notes — three of them had been recorded as done by someone and one
+of those was wrong, so the check was worth doing.
+
+| # | Item | State |
+|---|---|---|
+| 1 | Photos enumerable / survive deletion | fixed (0167 + delete-account fn) |
+| 2 | Privacy policy describes a different app | fixed |
+| 3 | Sign in with Apple dead on arrival | **one dashboard step, yours** — see PUBLIC_LAUNCH.md |
+| 4 | Two ACLs reset themselves | fixed, and the systemic half now asserted |
+| 5 | Global Google counter / mintable city key | fixed (per-user meter present) |
+| 6 | 24h moderation SLA with no mechanism | fixed (0169) |
+| 7 | Four hand-rolled mappers | fixed — one shared `toInput`, harness imports it |
+| 8 | Digest pre-ticks a band it should not | fixed, all three parts |
+| 9 | Onboarding loses its buttons | fixed |
+| 10 | Share links lead to a beta | **blocked** — no App Store URL exists yet |
+| 11 | Degraded search reads as "does not exist" | fixed |
+| 12 | Two UTC bucketing bugs | fixed (both on `local_date`) |
+| 13 | Five below-the-line items | all five fixed |
+
+**Two remain, and neither is code.** #3 is a Supabase dashboard toggle plus the
+bundle id — smaller than this document implies, because the app uses the native
+`id_token` flow, not web OAuth, so no Apple private key is involved and no
+rebuild is needed. #10 cannot be done until an App Store listing exists; a
+guard now fails the build if only ONE of the two invite destinations is
+migrated, which is the expensive way to get launch day wrong.
+
+### What doing #4 properly turned up
+
+#4's last line asked for "one systemic fix with a permanent assertion, not nine
+tickets". Taking that literally — enumerating `pg_proc` instead of pinning five
+names — immediately found **`are_friends(a, b)`**: SECURITY DEFINER, no guard of
+any kind, EXECUTE held by `anon`, answering "are these two people friends?" for
+any pair to anyone holding the key that ships inside the app.
+
+It was not new. `docs/REVIEW_2026-09-05.md` had already called it "a friendship
+oracle for any signed-in user" nine days earlier. It survived because the check
+that would have caught it listed five functions by name and this was not one of
+them. Closed in 0172; the enumeration now lives in `supabase/tests/smoke.sql`
+alongside the deny-list, and was verified to trip by re-granting the hole inside
+a rolled-back transaction.
+
+---
+
 ## Verdict
 
 **Not yet — but the gate is four items long and none of them is a rewrite.** Sign in with Apple is disabled server-side while the app renders Apple's own button as the top sign-in control, so the reviewer's first tap returns `provider_disabled`; the published privacy policy omits the race/ethnicity data the app collects; two Postgres ACLs let any anon or signed-in caller write shared data; and the invite links in the shipping binary point at a TestFlight beta. Three of those four are config or copy changes, not code. Everything else on this list can ship and be fixed in the first two weeks.
