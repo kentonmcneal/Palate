@@ -41,6 +41,9 @@ export type ConfirmableEntry = {
    */
   stopLat?: number | null;
   stopLng?: number | null;
+  /** GPS accuracy of the stop, in metres. The strongest predictor of a bad
+   *  attribution and, until now, absent from every confirmation event. */
+  accuracyM?: number | null;
 };
 
 /** Mirrors passive-confirm's outcome union without importing it (avoids a cycle). */
@@ -61,6 +64,38 @@ export type ConfirmDeps = {
   /** Optional: only needed when the caller collected a reaction. */
   rateVisit?: (visitId: string, rating: VisitRating) => Promise<void>;
 };
+
+/**
+ * The detection facts behind one confirmation. THE SAME SHAPE for a capture
+ * and for a refusal.
+ *
+ * They were not the same. confirm_yes carried dwell_min and candidate_count;
+ * confirm_no carried neither, and neither carried accuracy_m. So all 48
+ * refusals on record are featureless: you can count them, and you can learn
+ * nothing from them.
+ *
+ * That is the blocker on improving attribution at all. Calibration is a
+ * comparison between the guesses people accepted and the guesses they
+ * rejected, and half of that comparison was never written down. It is why the
+ * only usable answer to "what does a wrong guess look like" today is "we do
+ * not know".
+ *
+ * One function, so the two can no longer drift apart.
+ */
+function detectionProps(e: ConfirmableEntry, placeId: string): Record<string, unknown> {
+  return {
+    place_id: placeId,
+    surface: "digest",
+    confidence: e.confidence ?? null,
+    confidence_band: e.band ?? null,
+    dwell_min: e.dwellMin != null ? Math.round(e.dwellMin) : null,
+    candidate_count: e.candidateCount ?? null,
+    accuracy_m: e.accuracyM != null ? Math.round(e.accuracyM) : null,
+    // Whether the stop position travelled with the decision. Null here means
+    // location-scoped learning got nothing from this one.
+    has_position: typeof e.stopLat === "number" && typeof e.stopLng === "number",
+  };
+}
 
 /** The stop position, when the entry carries one. Entries written before 0145
  *  do not, and a missing position must mean "record it without one" rather
@@ -135,14 +170,7 @@ export async function confirmDigest(
         chosen ? "wrong_place" : "confirmed",
         stopOf(entry),
       ).catch(() => {});
-      deps.track(chosen ? "confirm_corrected" : "confirm_yes", {
-        place_id: placeId,
-        surface: "digest",
-        confidence: entry.confidence ?? null,
-        confidence_band: entry.band,
-        dwell_min: entry.dwellMin != null ? Math.round(entry.dwellMin) : null,
-        candidate_count: entry.candidateCount ?? null,
-      });
+      deps.track(chosen ? "confirm_corrected" : "confirm_yes", detectionProps(entry, placeId));
     } catch {
       // Kept in the inbox on purpose. One bad save must not lose the rest of
       // the day, and it must not lose itself either.
@@ -155,12 +183,7 @@ export async function confirmDigest(
   // threshold is too generous. Nothing is written for these, so there is no
   // save that can fail and removal is unconditional.
   for (const entry of skipped) {
-    deps.track("confirm_no", {
-      place_id: entry.place_id,
-      surface: "digest",
-      confidence: entry.confidence ?? null,
-      confidence_band: entry.band,
-    });
+    deps.track("confirm_no", detectionProps(entry, entry.place_id));
     await deps.recordPromptDecision(entry.place_id, "dismissed", stopOf(entry)).catch(() => {});
     await deps.removeFromInbox(entry.id).catch(() => {});
   }

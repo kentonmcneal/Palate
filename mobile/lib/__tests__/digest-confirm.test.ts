@@ -179,3 +179,62 @@ describe("ratings at confirm time", () => {
     expect(rated).toEqual([["v-gRIGHT", "loved"]]);
   });
 });
+
+describe("a refusal is as analysable as a capture", () => {
+  // All 48 refusals on record are featureless. confirm_yes carried dwell_min
+  // and candidate_count; confirm_no carried neither, and neither carried
+  // accuracy_m. Calibration is a comparison between the guesses people
+  // accepted and the ones they rejected, and half of it was never written
+  // down — which is why the only honest answer to "what does a wrong guess
+  // look like" is currently "we do not know".
+  const FIELDS = [
+    "place_id", "surface", "confidence", "confidence_band",
+    "dwell_min", "candidate_count", "accuracy_m", "has_position",
+  ];
+
+  const rich = (id: string) => ({
+    ...entry(id),
+    dwellMin: 25,
+    candidateCount: 3,
+    accuracyM: 34,
+    stopLat: 35.05116,
+    stopLng: -89.81519,
+  });
+
+  it("sends the same fields on confirm_yes and confirm_no", async () => {
+    const yes = deps();
+    await confirmDigest([rich("a") as never], [], {}, yes);
+    const no = deps();
+    await confirmDigest([], [rich("b") as never], {}, no);
+
+    const call = (d: ReturnType<typeof deps>, name: string) =>
+      (d.track as jest.Mock).mock.calls.find((c) => c[0] === name)?.[1] ?? {};
+
+    const yesProps = call(yes, "confirm_yes");
+    const noProps = call(no, "confirm_no");
+
+    for (const f of FIELDS) {
+      expect(Object.keys(yesProps)).toContain(f);
+      expect(Object.keys(noProps)).toContain(f);
+    }
+    // Same shape, so the two cannot drift apart again.
+    expect(Object.keys(noProps).sort()).toEqual(Object.keys(yesProps).sort());
+  });
+
+  it("carries the detection facts rather than nulls when the entry has them", async () => {
+    const d = deps();
+    await confirmDigest([], [rich("c") as never], {}, d);
+    const props = (d.track as jest.Mock).mock.calls.find((c) => c[0] === "confirm_no")![1];
+    expect(props.dwell_min).toBe(25);
+    expect(props.candidate_count).toBe(3);
+    expect(props.accuracy_m).toBe(34);
+    expect(props.has_position).toBe(true);
+  });
+
+  it("reports has_position false when the stop coordinates are missing", async () => {
+    const d = deps();
+    await confirmDigest([], [entry("d") as never], {}, d);
+    const props = (d.track as jest.Mock).mock.calls.find((c) => c[0] === "confirm_no")![1];
+    expect(props.has_position).toBe(false);
+  });
+});
