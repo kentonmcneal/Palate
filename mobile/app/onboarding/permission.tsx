@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, StyleSheet, Alert, Linking } from "react-native";
+import { View, ScrollView, StyleSheet, Alert, Linking } from "react-native";
 import { Text } from "../../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -63,7 +63,16 @@ export default function Permission() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.body}>
+      {/* Scrolls. A plain View does not, so at any larger Dynamic Type setting
+          the card simply drew over the buttons below it and the screen's only
+          escape hatch went off-screen. Same fix, and same reason, as
+          passive-capture-intro. The CTA stays OUTSIDE the scroller so the
+          buttons are reachable no matter how tall the copy gets. */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.h1}>Allow location</Text>
         <Spacer />
         <Text style={styles.p}>
@@ -86,7 +95,7 @@ export default function Permission() {
             yourself. We never sell your location, and you can turn it off any time.
           </Text>
         </View>
-      </View>
+      </ScrollView>
       <View style={styles.cta}>
         <Button title="Allow location" onPress={handleAllow} loading={loading} />
         <Spacer />
@@ -101,8 +110,8 @@ export default function Permission() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.paper, justifyContent: "space-between" },
-  body: { padding: spacing.lg, paddingTop: spacing.xxl },
+  safe: { flex: 1, backgroundColor: colors.paper },
+  body: { flexGrow: 1, padding: spacing.lg, paddingTop: spacing.xxl },
   cta: { padding: spacing.lg },
   h1: { ...type.display, color: colors.ink },
   p: { ...type.body, color: colors.mute, lineHeight: 24 },

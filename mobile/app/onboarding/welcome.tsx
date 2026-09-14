@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { View, StyleSheet, Animated, Easing } from "react-native";
+import { View, ScrollView, StyleSheet, Animated, Easing } from "react-native";
 import { Text } from "../../components/Text";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -40,8 +40,17 @@ export default function Welcome() {
       {/* Subtle red glow behind the headline */}
       <View style={styles.glow} />
 
-      <SafeAreaView style={{ flex: 1, justifyContent: "space-between" }}>
-        <Animated.View style={[styles.body, { opacity: fade, transform: [{ translateY: lift }] }]}>
+      <SafeAreaView style={{ flex: 1 }}>
+        {/* Scrolls, for the same reason as the rest of the funnel: a plain
+            View does not, and at a larger Dynamic Type setting the headline
+            block grows until "Get started" is pushed off the bottom. The CTA
+            stays OUTSIDE the scroller so it is always reachable. */}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.bodyScroll}
+          showsVerticalScrollIndicator={false}
+        >
+          <Animated.View style={[styles.body, { opacity: fade, transform: [{ translateY: lift }] }]}>
           <Logo size={LOGO_SIZE.hero} />
           <Spacer size={36} />
           <Text style={styles.eyebrow}>WELCOME TO PALATE</Text>
@@ -52,7 +61,8 @@ export default function Welcome() {
           <Text style={styles.p}>
             Every visit you log sharpens your taste profile. Every recommendation gets closer to what you'd actually pick.
           </Text>
-        </Animated.View>
+          </Animated.View>
+        </ScrollView>
 
         <Animated.View style={[styles.cta, { opacity: fade }]}>
           <Button title="Get started" onPress={() => router.push("/onboarding/profile-setup")} />
@@ -74,6 +84,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.red,
     opacity: 0.12,
   },
+  bodyScroll: { flexGrow: 1, justifyContent: "center" },
   body: { padding: spacing.lg, paddingTop: spacing.xxl, marginTop: spacing.xl },
   cta: { padding: spacing.lg },
   eyebrow: { color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: "700", letterSpacing: 2 },

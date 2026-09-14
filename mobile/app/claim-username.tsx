@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, StyleSheet, Alert } from "react-native";
+import { View, ScrollView, StyleSheet, Alert } from "react-native";
 import { Text } from "../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -72,7 +72,17 @@ export default function ClaimUsername() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.body}>
+      {/* Scrolls. A plain View does not, so at a larger Dynamic Type setting the
+          handle field drew over the only button on a required step. The CTA
+          stays OUTSIDE the scroller. keyboardShouldPersistTaps because this
+          screen autoFocuses a text field: without it the first tap on Continue
+          is swallowed dismissing the keyboard, and the button appears dead. */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.h1}>Pick your handle.</Text>
         <Spacer size={10} />
         <Text style={styles.p}>
@@ -88,7 +98,7 @@ export default function ClaimUsername() {
           error={error}
           autoFocus
         />
-      </View>
+      </ScrollView>
 
       <View style={styles.cta}>
         <Button title={saving ? "Saving…" : "Continue"} onPress={save} loading={saving} />
@@ -98,8 +108,8 @@ export default function ClaimUsername() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.paper, justifyContent: "space-between" },
-  body: { padding: spacing.lg, paddingTop: spacing.xxl },
+  safe: { flex: 1, backgroundColor: colors.paper },
+  body: { flexGrow: 1, padding: spacing.lg, paddingTop: spacing.xxl },
   cta: { padding: spacing.lg },
   h1: { ...type.display, fontSize: 30, lineHeight: 35 },
   p: { ...type.body, color: colors.mute, lineHeight: 23 },

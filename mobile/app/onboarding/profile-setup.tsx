@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, StyleSheet, Pressable, Alert, Linking } from "react-native";
+import { View, ScrollView, StyleSheet, Pressable, Alert, Linking } from "react-native";
 import { TextInput } from "../../components/TextInput";
 import { Text } from "../../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -103,7 +103,18 @@ export default function ProfileSetup() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.body}>
+      {/* Scrolls. A plain View does not, so at a larger Dynamic Type setting
+          the helper text drew over the only button on a required step. The CTA
+          stays OUTSIDE the scroller so it is always reachable.
+          keyboardShouldPersistTaps because this screen has a text field: without
+          it the first tap on the button while the keyboard is up is swallowed
+          dismissing the keyboard, and the button appears dead. */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.h1}>Make it yours.</Text>
         <Spacer size={8} />
         <Text style={styles.p}>
@@ -148,7 +159,7 @@ export default function ProfileSetup() {
           Tap the photo to upload one. We never share your photo with anyone outside
           your friends.
         </Text>
-      </View>
+      </ScrollView>
 
       <View style={styles.cta}>
         {/* No "Skip for now". The handle is required, so offering a way past
@@ -160,8 +171,8 @@ export default function ProfileSetup() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.paper, justifyContent: "space-between" },
-  body: { padding: spacing.lg, paddingTop: spacing.xxl },
+  safe: { flex: 1, backgroundColor: colors.paper },
+  body: { flexGrow: 1, padding: spacing.lg, paddingTop: spacing.xxl },
   cta: { padding: spacing.lg },
   h1: { ...type.display, color: colors.ink },
   p: { ...type.body, color: colors.mute, lineHeight: 24 },

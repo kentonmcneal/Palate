@@ -1,4 +1,4 @@
-import { View, StyleSheet } from "react-native";
+import { View, ScrollView, StyleSheet } from "react-native";
 import { Text } from "../../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -9,14 +9,22 @@ export default function WhyLocation() {
   const router = useRouter();
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.body}>
+      {/* Scrolls. A plain View does not, so at any larger Dynamic Type setting
+          the copy simply drew over the buttons below it. Same fix, and same
+          reason, as passive-capture-intro. The CTA stays OUTSIDE the scroller
+          so it is reachable no matter how tall the copy gets. */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.h1}>Why location?</Text>
         <Spacer />
         <Bullet emoji="📍" text="Palate uses your location only to detect nearby restaurants when the app is open." />
         <Bullet emoji="🙋" text="We always ask before we save a visit. You can say no, or pick the right place." />
         <Bullet emoji="🔕" text="Pause tracking anytime in Settings. Your past visits stay, and nothing new is recorded." />
         <Bullet emoji="🗑️" text="Delete a single visit, your whole history, or your entire account whenever you want." />
-      </View>
+      </ScrollView>
       <View style={styles.cta}>
         <Button title="Continue" onPress={() => router.push("/onboarding/permission")} />
       </View>
@@ -34,8 +42,8 @@ function Bullet({ emoji, text }: { emoji: string; text: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.paper, justifyContent: "space-between" },
-  body: { padding: spacing.lg, paddingTop: spacing.xxl },
+  safe: { flex: 1, backgroundColor: colors.paper },
+  body: { flexGrow: 1, padding: spacing.lg, paddingTop: spacing.xxl },
   cta: { padding: spacing.lg },
   h1: { ...type.display, color: colors.ink },
   bullet: { flexDirection: "row", gap: 14, alignItems: "flex-start", marginTop: spacing.lg },
