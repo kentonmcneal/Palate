@@ -169,16 +169,43 @@ export async function computeRightNow(opts: RightNowOptions): Promise<RightNowRe
   // and says so in the event stream.
   const rightNowPick: RankedRestaurant | null = exploit[0]?.restaurant ?? null;
 
-  // ---- Stretch slot: pick the MOST NOVEL adjacent option ----
-  // Per latest feedback, Stretch is "outside your usual" — so we pick the
-  // LOWEST compat among stretch candidates (real exploration lives there).
-  // High-compat picks already win Right Now + the recs list.
+  // ---- Stretch slot: the BEST of the adjacent options ----
+  //
+  // The novelty comes from the POOL, not from the sort. The filter below
+  // already restricts this to stretch candidates — places outside the usual
+  // pattern — so every option here is a stretch by construction.
+  //
+  // This used to sort ASCENDING, deliberately, reasoning that "outside your
+  // usual" meant picking the lowest-compatibility option because "real
+  // exploration lives there". The effect was to serve the worst member of an
+  // already-novel set: not the most adventurous choice, just the one this
+  // person is least likely to enjoy. A stretch you dislike does not teach
+  // anybody anything — it teaches them to stop tapping the stretch card.
+  //
+  // Sorting descending picks the best thing you have not tried. That is what
+  // discovery is for, and it is also what makes the slot's outcomes readable:
+  // if the best adjacent option still gets refused, that is a real signal
+  // about the pool rather than about the sort.
+  //
+  // Note this also resolves a contradiction the audit flagged: the Discover
+  // tab sorts descending while this sorted ascending, and the two comments
+  // each claimed to be the intended behaviour.
   const stretchScored = scored
     .filter((s) =>
       s.pool === "stretch_adjacent" ||
       s.restaurant.score.recommendationType === "stretch")
     .filter((s) => s.restaurant.google_place_id !== rightNowPick?.google_place_id)
-    .sort((a, b) => a.restaurant.score.compatibilityScore - b.restaurant.score.compatibilityScore);
+    // finalScore, not compatibilityScore.
+    //
+    // compatibilityScore is context-FREE by definition (types.ts:5) — no
+    // distance, no time of day, no open-now. Sorting on it is why this card
+    // "consults no context at all" and could serve somewhere shut. finalScore
+    // is the same compatibility weighted at 0.6, plus the context the Right
+    // Now slot beside it already respects.
+    //
+    // So this still ranks by compatibility, as asked — it just stops
+    // recommending the best match in a locked building.
+    .sort((a, b) => b.restaurant.score.finalScore - a.restaurant.score.finalScore);
   const stretchPick = stretchScored[0]?.restaurant ?? null;
 
   return {
