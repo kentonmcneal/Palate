@@ -115,6 +115,71 @@ begin
   end loop;
 end $$;
 
+-- ----------------------------------------------------------------------------
+-- The same question asked structurally, instead of five names at a time.
+--
+-- The list above is a DENY-LIST: those five must never be anon-reachable, full
+-- stop, whether or not they inspect auth.uid(). It stays.
+--
+-- This block is the other half. A 2026-09-05 review noted that pinning five of
+-- fifty-six definer functions by hand leaves the rest unwatched, and that the
+-- fix is to enumerate pg_proc against a commented allowlist. It was right: on
+-- 2026-09-14 there were 32 anon-executable SECURITY DEFINER functions, and
+-- are_friends() among them had no guard at all — a friendship oracle for
+-- anyone holding the anon key, which the same review had already written down
+-- nine days earlier and nobody had closed. Enumerating found it again in
+-- seconds. Migration 0172 closed it.
+--
+-- The rule: an anon-reachable definer function must limit ITSELF, either by
+-- testing profiles.is_admin or by keying off auth.uid() — which is NULL for
+-- anon and therefore self-limiting. Anything else has to earn a line in the
+-- allowlist below, with the reason written down.
+--
+-- Trigger functions are excluded: Postgres refuses to call one directly at all
+-- ("trigger functions can only be called as triggers", SQLSTATE 0A000), so
+-- their grants are inert. Fourteen of the thirty-two were those.
+do $$
+declare
+  fn record;
+  offenders text := '';
+  n int := 0;
+  -- Legitimately reachable before a session exists. Keep this SHORT, and say
+  -- why each one is here.
+  allowed text[] := array[
+    -- The public waitlist page calls this with the anon key and a referral
+    -- code it already holds: landing/lib/waitlist.ts. It returns a count for
+    -- a code you must already know, and nothing else.
+    'waitlist_referral_count'
+  ];
+begin
+  for fn in
+    select p.proname as name,
+           pg_get_function_identity_arguments(p.oid) as args,
+           regexp_replace(pg_get_functiondef(p.oid), '--[^\n]*', '', 'g') as body
+      from pg_proc p
+      join pg_namespace ns on ns.oid = p.pronamespace
+      join pg_type t on t.oid = p.prorettype
+     where ns.nspname = 'public'
+       and p.prosecdef
+       and p.prokind = 'f'
+       and t.typname <> 'trigger'
+       and has_function_privilege('anon', p.oid, 'execute')
+       and not (p.proname = any(allowed))
+     order by p.proname
+  loop
+    if not (fn.body ~ 'is_admin' or fn.body ~ 'auth\.uid\(\)') then
+      n := n + 1;
+      offenders := offenders || format(E'\n    %s(%s)', fn.name, fn.args);
+    end if;
+  end loop;
+
+  if n > 0 then
+    raise exception
+      E'% SECURITY DEFINER function(s) are anon-executable with no self-guard:%\n  Either make them check auth.uid()/is_admin, revoke EXECUTE from anon, or add them to the allowlist in smoke.sql with a reason. See migration 0172.',
+      n, offenders;
+  end if;
+end $$;
+
 -- palate_overlap_rank answers "who eats like this person" for any id passed to
 -- it, so it is callable only from palate_matches, which runs as its owner.
 do $$
