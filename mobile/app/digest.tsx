@@ -104,10 +104,14 @@ export default function DigestScreen() {
     try {
       // The ordering that keeps a failed save from silently deleting the entry
       // lives in lib/digest-confirm.ts, where it can be tested.
+      // No `as never`. Those casts are why two separate bugs shipped: the stop
+      // coordinates and the detection facts were both present on DigestEntry
+      // and both silently dropped at this boundary, because a cast to `never`
+      // tells the compiler not to check the one place where it mattered.
       const { savedIds, failed } = await confirmDigest(
-        confirmed as never,
-        skipped as never,
-        resolvedChoice as never,
+        confirmed,
+        skipped,
+        resolvedChoice,
         { saveVisit, removeFromInbox, recordPromptDecision, track, rateVisit },
         ratings,
       );
