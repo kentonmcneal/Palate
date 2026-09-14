@@ -337,6 +337,68 @@ build the tally the way `send-push` does, then re-verified it fails when
 announcements are collapsed back into the shared bucket. That is twice this
 week I have written a test that asserted a null rather than a claim.
 
+## 11a. The same bug, but pointed at money
+
+Having found that a discarded read error in send-push was destroying
+notifications, I swept for the pattern. It is in the spend guards, and there it
+does not cost notifications.
+
+**The classifier's $10 ceiling was failing OPEN.** All three gates in
+`classify-cuisine-backfill` read with the error discarded:
+
+```
+const { data: spentRaw } = await admin.rpc("llm_spend_total_usd", ...)
+let spentUsd = Number(spentRaw ?? 0)
+if (spentUsd >= LLM_LIFETIME_CAP_USD) return skipped
+```
+
+A failed read is null, `?? 0` turns that into "nothing spent yet", and the gate
+opens. Same for the daily cap and the lifetime call cap. The ceiling was not
+enforced by the ceiling — it was enforced by the read happening to succeed. The
+in-loop recheck uses a locally accumulated total, so a run whose opening read
+failed starts from $0 and can spend the entire ceiling again on top of whatever
+was already spent, once per failure, on a cron that fires every ten minutes.
+
+**Nothing has been spent and nothing starts spending from this.**
+`ANTHROPIC_API_KEY` is still unset, and the function returns at that check,
+which sits ahead of every gate I touched. This is the fix that needs to be in
+place *before* you ever set that key — which, as agreed, is the thing that
+starts the backfill.
+
+**The Google kill switch was failing open too**, and that one is live:
+
+```
+const { data } = await admin.from("google_usage_counter").select("tripped")...
+return data?.tripped === true;      // a failed read reads as "not tripped"
+```
+
+Both now read with retries and return "spend nothing" on a read failure. The
+distinction that mattered: a MISSING ROW is not an error — the counter row is
+created on the day's first call, so no row legitimately means no spend yet and
+must stay open. Only a real read failure closes the gate.
+
+**Scope, honestly.** `tripped` has never been true on any recorded day, so this
+fail-open has not yet cost a cent. It is a hole that would have opened at
+exactly the moment it mattered — when the cap was finally reached. And I
+checked whether billable calls had been going uncounted rather than assuming:
+`google_usage_counter.billable_calls` and the summed `api_usage_daily` google
+rows are two independent counters, and they agree **exactly** on all eight
+recorded days. Nothing has been lost.
+
+That last result also cuts against my own theory. places-proxy hits the
+database on every request and its metering is perfect over eight days, so
+edge-to-PostgREST is not broadly broken. Whatever the 504s are, they look
+specific to the cron invocation path rather than to every function — which
+weakens the "users are hitting this too" worry I raised above. I am leaving both
+the worry and this correction in, because I could not settle it either way.
+
+### Not done
+
+A failed Google reservation still lets the call proceed uncounted rather than
+degrading the response. Correct reservation semantics would degrade, but that
+means restructuring three call sites with different fallbacks each, on the paid
+hot path. Not an unattended change.
+
 ## 12. Checked, not a bug
 
 - **Three users have a push token but no timezone**, and have never had a
