@@ -84,34 +84,39 @@ export function confirmParamsFor(entry: InboxEntry) {
 export const AMBIGUOUS_CANDIDATE_COUNT = 2;
 
 /**
- * Band an entry. An entry with NO confidence at all lands in Low.
+ * Band an entry. An entry with NO confidence at all lands in MEDIUM.
  *
- * It used to land in Medium, reasoning that promoting unscored history to High
- * would pre-check guesses. Right instinct, wrong floor: it put entries we know
- * NOTHING about in the same bucket as entries we scored and found middling,
- * and the measured result is that Medium performs WORSE than Low.
+ * This was changed to Low earlier today and the change was wrong. It was made
+ * on the reading that Medium (36%) underperformed Low (45%), which would have
+ * meant Medium held two populations — scored-middling and unknown — and that
+ * the unknowns belonged lower.
  *
- * From live prompt outcomes:
+ * That measurement was invalid, and the audit that produced it said so in its
+ * own disagreements section: it joined visit_resolved to prompt_decisions, and
+ * visit_resolved logs the PRE-demotion band while the digest acts on the
+ * POST-demotion one. I used the number anyway.
  *
- *   high    20 confirmed /  2 refused   91%
- *   medium  24 confirmed / 43 refused   36%
- *   low     14 confirmed / 17 refused   45%
- *   unbanded 2 confirmed / 30 refused    6%
+ * Re-derived from confirm_yes / confirm_corrected / confirm_no, which carry
+ * the band actually DISPLAYED, counting a correction as a capture because the
+ * meal happened and only the name was wrong:
  *
- * Low outranking Medium is not noise, it is this line. A scored-weak entry has
- * evidence behind it; an unscored one has none, and the unbanded column is what
- * those are actually worth. Mixing them dragged Medium below the band beneath
- * it and made the whole ladder unreadable — you cannot calibrate a threshold
- * when one bucket is two populations.
+ *   high      12 captured / 13 refused   48%
+ *   unbanded   3 captured /  6 refused   33%
+ *   medium     6 captured / 17 refused   26%
+ *   low        0 captured / 12 refused    0%
  *
- * Low is the honest floor: still shown, never pre-checked, asked last, and the
- * first thing dropped when the digest's budget runs out. That is the correct
- * treatment for a detection we cannot vouch for.
+ * Monotonic, and the anomaly disappears. Unscored entries are not the worst
+ * band — they sit between Medium and High. Low is where NOTHING has ever been
+ * captured, and putting unknowns there was demoting them into silence.
+ *
+ * So the original instinct stands: shown, never pre-checked, never silently
+ * promoted to High. Sample sizes are small (25 High decisions in total) and
+ * none of these numbers should be quoted as settled.
  */
 export function bandFor(entry: InboxEntry): ConfidenceBand {
   if (entry.confidenceBand) return entry.confidenceBand as ConfidenceBand;
   if (typeof entry.confidence === "number") return confidenceBand(entry.confidence);
-  return "low";
+  return "medium";
 }
 
 function toDigestEntry(entry: InboxEntry): DigestEntry {

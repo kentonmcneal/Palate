@@ -27,24 +27,20 @@ describe("bandFor", () => {
     expect(bandFor(entry({ id: "b", detectedAt: at(12), confidence: 0.2 }))).toBe("low");
   });
 
-  it("puts an unscored entry in Low, not Medium", () => {
-    // Entries written before scoring existed, carrying no confidence at all.
+  it("puts an unscored entry in Medium, and never in High", () => {
+    // Briefly changed to Low, on a measurement that was invalid: it joined
+    // visit_resolved (which logs the PRE-demotion band) to prompt_decisions,
+    // while the digest acts on the POST-demotion band.
     //
-    // This asserted "medium" until live outcomes showed why that was wrong:
-    // Medium ran at 36% while Low ran at 45%, because Medium was two
-    // populations — entries we scored and found middling, and entries we knew
-    // nothing about. Unbanded prompts resolve 2 confirmed to 30 refused, which
-    // is what an unscored entry is actually worth.
-    //
-    // The original intent survives: never promoted to High, never pre-checked.
-    // Only the floor moved, and it moved onto evidence.
-    expect(bandFor(entry({ id: "old", detectedAt: at(12) }))).toBe("low");
-  });
-
-  it("still never promotes an unscored entry to High", () => {
-    // The property the previous version of this test was protecting.
+    // Re-derived from the events carrying the DISPLAYED band, the ordering is
+    // monotonic — high 48%, unbanded 33%, medium 26%, low 0% — so unscored
+    // entries sit between Medium and High, and Low is where nothing has ever
+    // been captured at all. Demoting unknowns to Low was demoting them into
+    // silence.
+    expect(bandFor(entry({ id: "old", detectedAt: at(12) }))).toBe("medium");
     expect(bandFor(entry({ id: "old2", detectedAt: at(12) }))).not.toBe("high");
   });
+
 });
 
 describe("buildDigest", () => {
