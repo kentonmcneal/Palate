@@ -20,6 +20,16 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
+// Per-class daily ceilings and the admission rules live in _shared/push-quota
+// so they can be tested. See that file for why announcements are rationed
+// separately from the ambient feed — production evidence, not taste.
+import {
+  admit,
+  classOf,
+  type PushClass,
+  type QuotaRow,
+} from "../_shared/push-quota.ts";
+
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
@@ -30,45 +40,6 @@ const EXPO_BATCH = 100;
 const MAX_PER_RUN = 400;
 /** A row that has failed this many times is left alone for a human. */
 const MAX_ATTEMPTS = 4;
-/** At most one proactive push per user per day, regardless of what queued. */
-// Was 1. A single social push per day meant that with two friends who both
-// ate out, you heard about one of them and the other arrived tomorrow as
-// stale news. Three is still a cap, not a firehose, and it is the number at
-// which a beta of fourteen people can actually see each other's activity.
-const MAX_PER_USER_PER_DAY = 3;
-
-// A message from a person is not ambient activity, and the cap above was
-// counting it as if it were.
-//
-// MAX_PER_USER_PER_DAY exists to stop "somebody you follow ate somewhere"
-// becoming a firehose. Applied indiscriminately it means three of those
-// broadcasts, and then a real direct message from a real person is deferred
-// twenty-four hours or dropped at expiry. That is the wrong way round: the
-// ambient stream is the thing worth rationing, and correspondence is the thing
-// worth delivering.
-//
-// So direct types get their own, much higher ceiling — a ceiling rather than
-// no limit at all, because an unbounded path is a way to buzz somebody
-// forever, and because the DM send RPC's own rate limits should be the first
-// thing to stop that, not this.
-// A comment on your post, or a reply to your comment, is correspondence by the
-// same argument: someone wrote to you, by name, and is waiting. Left out of
-// this set they compete with "somebody you follow ate somewhere" for three
-// slots a day, so a reply can be deferred twenty-four hours or dropped at
-// expiry while a broadcast goes out ahead of it. That is the wrong way round,
-// and it is the mistake this comment block was already written to prevent.
-//
-// LIKES ARE NOT HERE, deliberately. A heart is a reaction, not a message. It
-// is exactly the ambient stream the daily cap exists to ration, and fifteen
-// people liking a post should not cost somebody fifteen buzzes.
-const DIRECT_TYPES = new Set(["dm_message", "post_comment", "comment_reply"]);
-const MAX_DIRECT_PER_USER_PER_DAY = 25;
-
-function isDirect(row: { data?: Record<string, unknown> | null }): boolean {
-  const t = row.data?.type;
-  return typeof t === "string" && DIRECT_TYPES.has(t);
-}
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -167,39 +138,24 @@ serve(async (req) => {
       .select("user_id, data")
       .not("sent_at", "is", null)
       .gte("sent_at", since);
-    // Counted in two separate buckets. One shared counter would mean a busy
-    // day of correspondence silently suppressing the ambient feed, and three
-    // ambient pushes suppressing correspondence — each class starving the
-    // other for reasons that have nothing to do with the other.
-    const sentToday = new Map<string, number>();
-    const sentDirectToday = new Map<string, number>();
+    // Counted in separate buckets per class. One shared counter would mean a
+    // busy day of correspondence silently suppressing the ambient feed, and a
+    // burst of signups suppressing both — each class starving the others for
+    // reasons that have nothing to do with the other.
+    const sentByClass: Record<PushClass, Map<string, number>> = {
+      direct: new Map(),
+      announce: new Map(),
+      ambient: new Map(),
+    };
     for (const r of (recent ?? []) as { user_id: string; data?: Record<string, unknown> | null }[]) {
-      const m = isDirect(r) ? sentDirectToday : sentToday;
+      const m = sentByClass[classOf(r)];
       m.set(r.user_id, (m.get(r.user_id) ?? 0) + 1);
     }
 
-    const eligible: OutboxRow[] = [];
-    const deferred: string[] = [];
-    // A Map, not a Set: the set saturated at one, so a user with eight due
-    // rows at the 08:00 drain got all eight. Found by the code review.
-    const admittedThisRun = new Map<string, number>();
-    const admittedDirectThisRun = new Map<string, number>();
-    const expireNow: string[] = [];
-    for (const r of live) {
-      const direct = isDirect(r);
-      const sentMap = direct ? sentDirectToday : sentToday;
-      const runMap = direct ? admittedDirectThisRun : admittedThisRun;
-      const ceiling = direct ? MAX_DIRECT_PER_USER_PER_DAY : MAX_PER_USER_PER_DAY;
-      const already = (sentMap.get(r.user_id) ?? 0) + (runMap.get(r.user_id) ?? 0);
-      if (already >= ceiling) {
-        // Deferring past the row's own expiry is a slower way of dropping it.
-        if (r.expires_at && new Date(r.expires_at).getTime() < Date.now() + 24 * 3600 * 1000) expireNow.push(r.id);
-        else deferred.push(r.id);
-        continue;
-      }
-      runMap.set(r.user_id, (runMap.get(r.user_id) ?? 0) + 1);
-      eligible.push(r);
-    }
+    const verdict = admit(live as QuotaRow[], sentByClass, Date.now());
+    const eligible = verdict.admit as OutboxRow[];
+    const deferred = verdict.defer;
+    const expireNow = verdict.expire;
 
     if (deferred.length) {
       await admin
