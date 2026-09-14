@@ -104,7 +104,81 @@ pre-tick), and whether people see the digest at all (see §3).
 
 ---
 
-## 5. Not done, and why
+## 5. The cast that hid both of the above
+
+`digest.tsx` called `confirmDigest(confirmed as never, skipped as never, …)`.
+Both §2 and §4's telemetry gap lived behind that one line: the fields were
+present on `DigestEntry`, declared on both sides, and erased at the boundary
+because a cast to `never` tells the compiler not to check.
+
+**Removing all three casts compiled clean on the first try.** They were never
+needed for anything.
+
+Swept the rest of the codebase: every other `as never` is on `router.push`, an
+expo-router typed-routes workaround that hides no payload. This was the only
+one erasing data. Guarded, and the guard was run against a restored cast.
+
+---
+
+## 6. Half the calibration data has never been written down
+
+`confirm_yes` carried `dwell_min` and `candidate_count`. `confirm_no` carried
+neither. **Neither carried `accuracy_m` at all.**
+
+So all 48 refusals on record are featureless. Querying them returns
+`candidate_count = null` for every one and zero rows in every accuracy bucket —
+which reads like an absence of bad guesses rather than an absence of data, and
+is exactly how you conclude the attribution is fine when it is 48%.
+
+Both outcomes now emit one shape from one function, carrying accuracy and
+whether the stop position travelled. This writes no new data by itself; it
+means that in a week there will be something to calibrate *against*. `dwellFit`
+is currently tuned on exactly one real case because one real case is all the
+evidence that existed.
+
+---
+
+## 7. Two things I checked, expected to be bugs, and were not
+
+Recorded because a night that only lists confirmed bugs is misleading about how
+the time went.
+
+- **`dwell-too-long` rejects 109 stops a week.** I expected a ceiling cutting
+  off long dinners. It is 4 hours — those are homes, offices and long stays,
+  not meals. Correct as written.
+- **`rec_pool` looked like it recorded nothing** (`pool = ?` on all 221 rows).
+  My query was wrong, not the telemetry: the key is `source`, and it records
+  properly. **210 of 221 candidate pools come from the free catalogue** and
+  only 11 needed Google, which is good cost behaviour. The recommendation
+  instrumentation is in better shape than the capture instrumentation.
+
+---
+
+## 8. Today's mapper fix does bite
+
+`regular_opening_hours` was missing from the shipped `RestaurantInput` mapper,
+so the open-venue filter had never excluded anything. Now that it is carried,
+it only helps for rows that actually have hours — **86% of eligible restaurants
+do** (3,658 of 4,262), and 85% have `business_status`. So the fix is real
+rather than theoretical.
+
+---
+
+## 9. What the recommendation numbers say
+
+14 days, 5 users: **1,958 impressions → 13 clicks → 8 map opens → 2 saves.**
+
+Impressions are deduped one-per-place-per-surface per 10 minutes, so 0.66% is
+a real click-through rate and not inflated by re-renders. I checked that before
+quoting it.
+
+I did not act on this. It is a product question — what the cards say, what they
+promise, whether tapping is even the intended action in a product whose thesis
+is passive capture — and not something to redesign unattended.
+
+---
+
+## 10. Not done, and why
 
 - **Personalised novelty appetite ("weekend warrior").** Computable, but at 66
   visits with 13 repeats total it would be fitting noise. The brief I was given
