@@ -372,6 +372,50 @@ build the tally the way `send-push` does, then re-verified it fails when
 announcements are collapsed back into the shared bucket. That is twice this
 week I have written a test that asserted a null rather than a claim.
 
+## 10d. The friend-visit notification could not reach anybody
+
+The thing you actually asked for last night, and it was dead. I found it by
+reading the LIVE function definition rather than the migration that wrote it.
+
+0162 — written last night to satisfy "one notification when they confirm,
+saying Allyson just ate at a new spot" — got the dedupe and the vague body
+right. Both are preserved. Its recipient query had two faults:
+
+**The wrong toggle.** 0055 gated this on `push_friend_activity`. 0057 replaced
+that with `push_social_activity` and migrated the values across. 0093 kept the
+new column. 0162 rewrote the function and silently reverted to the old one.
+Measured: `push_social_activity` is default TRUE and true for all 19 accounts;
+`push_friend_activity` is default FALSE and false for all 19. So the WHERE
+matched nobody.
+
+The sharpest way to say it: **the settings switch was wired to a column the
+trigger did not read.** `lib/friend-push.ts` reads and writes
+`push_social_activity`, and its own header lists "a friend's visit" as one of
+the three events it governs. It was on for all nineteen people and delivered
+nothing. Turning it off would have changed nothing either.
+
+**The wrong graph.** It read `public.friendships`, which 0116 retired in favour
+of follows and left "unread, so this is reversible for one release".
+friendships: 3 rows, 1 accepted, newest 2026-09-05. follows: 15 rows, newest
+2026-09-13. Every other social trigger and notify-feed-post had moved. This one
+had not, so even with the right toggle it fanned out over a dead table.
+
+Fixed in 0170. Audience is now followers, matching the rest of the social layer
+— which is a one-way relationship, and exactly why 0162's vagueness is kept:
+the push says somewhere new, never where.
+
+**Verified end to end, not by reading.** Inserting one real visit takes
+friend_visit rows from 11 to 13 with the right title, body and per-day key.
+Before, zero. The test ran inside a transaction I rolled back, then I re-read
+both tables to confirm the count returned to 11 and no visit survived — a
+verification that wakes you at 2am is not a verification I should run.
+
+The first version of the migration's proof failed on its own documentation:
+the body explains why `push_friend_activity` is retired, so naming it in a
+comment tripped the check looking for it. Strips comments now. That is the
+third time tonight a check I wrote asserted the wrong thing, and the second
+time this week a guard tripped on its own prose.
+
 ## 11a. The same bug, but pointed at money
 
 Having found that a discarded read error in send-push was destroying
