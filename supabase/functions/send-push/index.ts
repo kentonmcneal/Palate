@@ -40,6 +40,31 @@ const EXPO_BATCH = 100;
 const MAX_PER_RUN = 400;
 /** A row that has failed this many times is left alone for a human. */
 const MAX_ATTEMPTS = 4;
+/**
+ * Turn anything thrown into something a human can act on.
+ *
+ * `String(e)` was here, and on a PostgrestError — a plain object, no custom
+ * toString — it produces the literal text "[object Object]". Twenty-one
+ * crashed drains in six hours all reported exactly that, so the failure was
+ * visible and undiagnosable at the same time. Errors that cost nothing to
+ * record and say nothing are worse than no error handling: they look handled.
+ */
+function errText(e: unknown): string {
+  if (e == null) return "unknown";
+  if (typeof e === "string") return e;
+  const o = e as Record<string, unknown>;
+  // PostgrestError and friends: message plus the fields that identify it.
+  const parts = [o.message, o.code, o.details, o.hint]
+    .filter((v) => typeof v === "string" && v.length > 0);
+  if (parts.length) return parts.join(" | ");
+  if (e instanceof Error) return `${e.name}: ${e.message}`;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return Object.prototype.toString.call(e);
+  }
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -79,20 +104,35 @@ serve(async (req) => {
     // Expire perishable rows BEFORE the switch check. With the sweep after
     // it, nothing aged out while server_push was off, and flipping it on
     // would have delivered weeks of "X joined" in one go.
-    await admin
+    // .update() RESOLVES with { error }; it does not throw. Discarding that
+    // error means a sweep that never ran looks identical to one that did.
+    const { error: sweepErr } = await admin
       .from("push_outbox")
       .update({ error: "expired", attempts: MAX_ATTEMPTS })
       .is("sent_at", null)
       .lt("attempts", MAX_ATTEMPTS)
       .not("expires_at", "is", null)
       .lt("expires_at", new Date().toISOString());
+    if (sweepErr) console.error("send-push: expiry sweep failed", sweepErr);
 
-    const { data: flag } = await admin
+    // Still fails CLOSED, but says WHICH closed state it is. The error was
+    // being discarded here, so a failed read produced flag === null and the
+    // function reported "server_push disabled" — with the flag demonstrably
+    // enabled in the database. Twenty-seven runs in six hours said the switch
+    // was off while it was on, and nothing anywhere contradicted them.
+    const { data: flag, error: flagErr } = await admin
       .from("feature_flags")
       .select("enabled")
       .eq("key", "server_push")
       .maybeSingle();
-    if (!flag?.enabled) {
+    if (flagErr) {
+      console.error("send-push: cannot read server_push flag", flagErr);
+      return json({ error: "server_push unreadable", detail: errText(flagErr) }, 500);
+    }
+    if (!flag) {
+      return json({ error: "server_push flag missing", sent: 0 }, 500);
+    }
+    if (!flag.enabled) {
       return json({ skipped: "server_push disabled", sent: 0 });
     }
 
@@ -215,7 +255,7 @@ serve(async (req) => {
       } catch (e) {
         // Network failure: leave the rows unsent, bump attempts, try next run.
         for (const r of slice) {
-          failed.push({ id: r.id, error: String(e), attempts: r.attempts + 1 });
+          failed.push({ id: r.id, error: errText(e), attempts: r.attempts + 1 });
         }
         continue;
       }
@@ -264,7 +304,7 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("send-push failed", e);
-    return json({ error: String(e) }, 500);
+    return json({ error: errText(e) }, 500);
   }
 });
 
