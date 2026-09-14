@@ -615,9 +615,16 @@ already past the client's 48-hour expiry; the server row just has not been
 pruned yet. Only yours is still answerable.)
 
 **Your Sonic entry should be asked about tonight.** It expires 2026-09-15
-20:57, tonight's digest is inside the grace window, and the OTA is published —
-so it needs your phone to have launched twice before 9pm. That is the one piece
-I cannot do from here.
+20:57, tonight's digest is inside the grace window, and the OTA is published.
+
+I checked the delivery chain rather than assuming it, because a fix that cannot
+reach the scheduler is not a fix: `rescheduleDigest` runs on every launch AND
+every foreground — it is deliberately written as a self-heal for exactly this
+("the inbox sat there with nobody ever asked about it"). So once the update
+applies, the next time you open the app it cancels and rewrites the schedule
+from the current inbox, the straddled entry is now inside the window, and the
+notification lands at 21:00. The only part I cannot do from here is the two
+launches Expo needs to apply an update: one to download it, the next to run it.
 
 And it is the Winchester Road meal: band medium, dwell 25.2 minutes, resolved
 to Sonic Drive-In. It was detected at 01:57 UTC and the dwellFit fix shipped at
