@@ -17,3 +17,8 @@ dist
 
 # Written by scripts/ota.sh while app.json is mid-swap.
 .ota-running
+
+# TypeScript incremental build cache. Regenerated on every build; it churned
+# a diff on every commit for no benefit.
+landing/tsconfig.tsbuildinfo
+*.tsbuildinfo
