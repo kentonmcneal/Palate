@@ -120,7 +120,7 @@ serve(async (req) => {
       .lt("attempts", MAX_ATTEMPTS)
       .order("send_after", { ascending: true })
       .limit(MAX_PER_RUN);
-    if (dueErr) throw dueErr;
+    if (dueErr) return json({ error: "due query failed", detail: errText(dueErr) }, 500);
 
     const rows = (due ?? []) as OutboxRow[];
     if (rows.length === 0) return json({ sent: 0, pending: 0 });
@@ -186,10 +186,17 @@ serve(async (req) => {
 
     // Resolve tokens.
     const userIds = [...new Set(eligible.map((r) => r.user_id))];
-    const { data: profiles } = await admin
+    // Guarded, because the failure mode here DESTROYS DATA rather than merely
+    // logging badly: a failed read yields profiles === null, every row then
+    // looks tokenless, and the tokenless branch retires them permanently with
+    // attempts = MAX_ATTEMPTS and error "no push token". Real pushes to people
+    // who do have a token would be thrown away, and the outbox would record a
+    // confident, wrong reason. Better to abort the run and retry next tick.
+    const { data: profiles, error: profErr } = await admin
       .from("profiles")
       .select("id, push_token")
       .in("id", userIds);
+    if (profErr) return json({ error: "profile read failed", detail: errText(profErr) }, 500);
     const tokenByUser = new Map<string, string>();
     for (const p of (profiles ?? []) as { id: string; push_token: string | null }[]) {
       if (p.push_token) tokenByUser.set(p.id, p.push_token);
@@ -280,7 +287,7 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("send-push failed", e);
-    return json({ error: errText(e) }, 500);
+    return json({ error: "unhandled", detail: errText(e) }, 500);
   }
 });
 
