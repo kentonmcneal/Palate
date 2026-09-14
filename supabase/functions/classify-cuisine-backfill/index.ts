@@ -16,6 +16,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import Anthropic from "npm:@anthropic-ai/sdk@0.32.1";
 import { classifyWithLLM, type LLMInput } from "../_shared/llm-classifier.ts";
 import { CLASSIFIER_VERSION } from "../_shared/classifier.ts";
+import { errText } from "../_shared/err-text.ts";
+import { retryRead } from "../_shared/retry.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -79,31 +81,72 @@ serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-  // Daily cap, counted from api_usage_log rows this function wrote today.
+  // EVERY GATE BELOW FAILS CLOSED.
+  //
+  // All three of these reads used to discard their error, and each one decides
+  // whether it is allowed to spend money. A failed read yielded null, `?? 0`
+  // turned that into "nothing spent yet", and the gate opened. The ceiling was
+  // not enforced by the ceiling; it was enforced by the read happening to
+  // succeed.
+  //
+  // That is not theoretical on this project. On 2026-09-14 the push drain was
+  // found taking 504s from PostgREST on roughly a third of its runs. A gate
+  // that opens on a transient timeout, attached to a cron that fires every ten
+  // minutes, can spend the whole ceiling again on each failure.
+  //
+  // So: read with retries, and on a read that still fails, REFUSE TO RUN. A
+  // backfill that skips a cycle costs nothing. A backfill that spends because
+  // it could not find out how much it had already spent costs real money.
   const day = new Date().toISOString().slice(0, 10);
-  const { data: usage } = await admin
-    .from("api_usage_daily")
-    .select("count")
-    .eq("day", day)
-    .eq("action", "llm_cuisine_backfill")
-    .eq("source", "anthropic")
-    .maybeSingle();
-  const usedToday = usage?.count ?? 0;
+  const usageRead = await retryRead(() =>
+    admin
+      .from("api_usage_daily")
+      .select("count")
+      .eq("day", day)
+      .eq("action", "llm_cuisine_backfill")
+      .eq("source", "anthropic")
+      .maybeSingle()
+  );
+  if (usageRead.error) {
+    return json({ error: "daily usage unreadable", detail: errText(usageRead.error), processed: 0 }, 500);
+  }
+  const usedToday = usageRead.data?.count ?? 0;
   if (usedToday >= LLM_DAILY_CAP) {
     return json({ skipped: "daily cap reached", used_today: usedToday, processed: 0 });
   }
 
   // The money gate. Checked BEFORE any row is fetched, and again inside the
   // loop, so a long batch cannot run past the ceiling between checks.
-  const { data: spentRaw } = await admin.rpc("llm_spend_total_usd", { p_action: "llm_cuisine_backfill" });
-  let spentUsd = Number(spentRaw ?? 0);
-  const { count: lifetimeCalls } = await admin
-    .from("llm_spend").select("*", { count: "exact", head: true })
-    .eq("action", "llm_cuisine_backfill");
+  const spentRead = await retryRead(() =>
+    admin.rpc("llm_spend_total_usd", { p_action: "llm_cuisine_backfill" })
+  );
+  if (spentRead.error) {
+    return json({ error: "spend total unreadable", detail: errText(spentRead.error), processed: 0 }, 500);
+  }
+  let spentUsd = Number(spentRead.data ?? 0);
+  if (!Number.isFinite(spentUsd)) {
+    // A non-numeric total must never coerce to a permissive 0.
+    return json({ error: "spend total not a number", detail: String(spentRead.data), processed: 0 }, 500);
+  }
+  // retryRead returns the ORIGINAL supabase-js result, so `count` survives.
+  // A helper that forwarded only { data, error } would drop it and leave this
+  // gate permanently unreadable.
+  const callsRead = await retryRead(() =>
+    admin.from("llm_spend").select("*", { count: "exact", head: true })
+      .eq("action", "llm_cuisine_backfill")
+  );
+  if (callsRead.error) {
+    return json({ error: "call count unreadable", detail: errText(callsRead.error), processed: 0 }, 500);
+  }
+  const lifetimeCalls = callsRead.count;
+  if (typeof lifetimeCalls !== "number") {
+    // Never fall back to 0 here: 0 means "spend freely".
+    return json({ error: "call count missing", processed: 0 }, 500);
+  }
   if (spentUsd >= LLM_LIFETIME_CAP_USD) {
     return json({ skipped: "lifetime spend cap reached", spent_usd: spentUsd, cap_usd: LLM_LIFETIME_CAP_USD, processed: 0 });
   }
-  if ((lifetimeCalls ?? 0) >= LLM_LIFETIME_CAP_CALLS) {
+  if (lifetimeCalls >= LLM_LIFETIME_CAP_CALLS) {
     return json({ skipped: "lifetime call cap reached", calls: lifetimeCalls, processed: 0 });
   }
 

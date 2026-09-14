@@ -93,3 +93,34 @@ describe("retryRead", () => {
     expect(waits).toEqual([100, 200]);
   });
 });
+
+// The regression that made this helper's shape matter: a head-count query puts
+// the number on `count`, not `data`. A helper that forwarded only
+// { data, error } dropped it, and the classifier's lifetime-call gate — a
+// money gate — read undefined and refused to run forever.
+describe("retryRead preserves the whole supabase-js result", () => {
+  it("keeps count from a head-count query", async () => {
+    const run = () => Promise.resolve({ data: null, error: null, count: 42, status: 200 } as never);
+    const r = await retryRead(run, { sleep: noSleep });
+    expect((r as unknown as { count: number }).count).toBe(42);
+    expect((r as unknown as { status: number }).status).toBe(200);
+  });
+
+  it("keeps count across a retry", async () => {
+    let n = 0;
+    const run = () => {
+      if (++n === 1) return Promise.resolve({ data: null, error: GATEWAY, count: null } as never);
+      return Promise.resolve({ data: null, error: null, count: 7 } as never);
+    };
+    const r = await retryRead(run, { sleep: noSleep });
+    expect((r as unknown as { count: number }).count).toBe(7);
+    expect(r.attempts).toBe(2);
+  });
+
+  it("still reports the error object after exhausting tries", async () => {
+    const run = () => Promise.resolve({ data: null, error: GATEWAY, count: null } as never);
+    const r = await retryRead(run, { tries: 2, sleep: noSleep });
+    expect(r.error).toBe(GATEWAY);
+    expect(r.attempts).toBe(2);
+  });
+});

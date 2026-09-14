@@ -38,37 +38,42 @@ function isTransient(err: unknown): boolean {
   );
 }
 
-export type Attempted<T> = { data: T | null; error: unknown; attempts: number };
-
 /**
  * Run a supabase-js read up to `tries` times, backing off between attempts.
  *
+ * Returns the ORIGINAL result object, not a reshaped one. supabase-js puts
+ * different things on it depending on the query — `count` for a head count,
+ * `status`, `statusText` — and a helper that forwarded only { data, error }
+ * would silently drop them. That is not hypothetical: the first version of
+ * this file did exactly that, and it turned the classifier's lifetime-call
+ * gate into a permanent 500 because `count` never arrived.
+ *
  * Takes a THUNK rather than a builder, because a PostgREST query builder is a
  * thenable that can only be awaited once — reusing one would silently return
- * the first result forever.
+ * the first result forever, a retry loop that cannot retry.
  */
-export async function retryRead<T>(
-  run: () => PromiseLike<{ data: T | null; error: unknown }>,
+export async function retryRead<R extends { error: unknown }>(
+  run: () => PromiseLike<R>,
   opts: { tries?: number; baseDelayMs?: number; sleep?: (ms: number) => Promise<void> } = {},
-): Promise<Attempted<T>> {
+): Promise<R & { attempts: number }> {
   const tries = opts.tries ?? 3;
   const base = opts.baseDelayMs ?? 250;
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
 
-  let last: unknown = null;
+  let last: R | null = null;
   for (let attempt = 1; attempt <= tries; attempt++) {
-    let res: { data: T | null; error: unknown };
+    let res: R;
     try {
       res = await run();
     } catch (thrown) {
       // supabase-js normally resolves with { error }, but a network failure
       // below it can still throw. Treat both the same way.
-      res = { data: null, error: thrown };
+      res = { data: null, error: thrown } as unknown as R;
     }
-    if (!res.error) return { data: res.data, error: null, attempts: attempt };
-    last = res.error;
+    last = res;
+    if (!res.error) return Object.assign({}, res, { attempts: attempt });
     if (!isTransient(res.error) || attempt === tries) break;
     await sleep(base * attempt);
   }
-  return { data: null, error: last, attempts: tries };
+  return Object.assign({}, last as R, { attempts: tries });
 }

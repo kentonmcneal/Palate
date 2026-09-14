@@ -97,7 +97,7 @@ serve(async (req) => {
     // function reported "server_push disabled" — with the flag demonstrably
     // enabled in the database. Twenty-seven runs in six hours said the switch
     // was off while it was on, and nothing anywhere contradicted them.
-    const { data: flag, error: flagErr } = await retryRead<{ enabled: boolean }>(() =>
+    const { data: flag, error: flagErr } = await retryRead(() =>
       admin.from("feature_flags").select("enabled").eq("key", "server_push").maybeSingle()
     );
     if (flagErr) {
@@ -111,7 +111,7 @@ serve(async (req) => {
       return json({ skipped: "server_push disabled", sent: 0 });
     }
 
-    const { data: due, error: dueErr } = await retryRead<OutboxRow[]>(() =>
+    const { data: due, error: dueErr } = await retryRead(() =>
       admin
         .from("push_outbox")
         .select("id, user_id, title, body, data, attempts, expires_at")
@@ -153,9 +153,7 @@ serve(async (req) => {
     // Guarded: on a failed read every count is zero, so every ceiling silently
     // stops applying and a rate-limited user gets the firehose the caps exist
     // to prevent. Abort and retry next tick rather than over-send.
-    const { data: recent, error: recentErr } = await retryRead<
-      { user_id: string; data?: Record<string, unknown> | null }[]
-    >(() =>
+    const { data: recent, error: recentErr } = await retryRead(() =>
       admin
         .from("push_outbox")
         .select("user_id, data")
@@ -201,7 +199,7 @@ serve(async (req) => {
     // attempts = MAX_ATTEMPTS and error "no push token". Real pushes to people
     // who do have a token would be thrown away, and the outbox would record a
     // confident, wrong reason. Better to abort the run and retry next tick.
-    const { data: profiles, error: profErr } = await retryRead<{ id: string; push_token: string | null }[]>(
+    const { data: profiles, error: profErr } = await retryRead(
       () => admin.from("profiles").select("id, push_token").in("id", userIds)
     );
     if (profErr) return json({ error: "profile read failed", detail: errText(profErr) }, 500);
