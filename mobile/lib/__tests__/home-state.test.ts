@@ -96,26 +96,23 @@ describe("homeState priority", () => {
 
 // The hour Home quotes has to be the hour the digest actually fires for this
 // person. An early eater is asked at eight, so "ready at 9pm" would be a lie.
-describe("personal digest hour on Home", () => {
-  const hourly: number[] = new Array(24).fill(0);
-  hourly[18] = 30;
-  const earlyEater = buildEatingPattern(hourly, new Array(7).fill(0));
+describe("the digest hour Home quotes", () => {
+  // Home used to quote a PERSONALISED hour, shifted to an hour after that
+  // person's usual last meal. It is why a Sunday digest was scheduled for 11pm
+  // while the founder was still waiting at nine. The hour is fixed now — 9pm,
+  // or midnight after Friday and Saturday — and Home says the same thing the
+  // scheduler does, to everyone.
+  const earlyEater = { total: 40, byHour: { 18: 25, 19: 15 }, weekend: {} };
 
-  it("quotes this person's hour, not the default", () => {
-    const s = homeState(inputs({ pattern: earlyEater }), at(14));
+  it("quotes the fixed hour, whatever the person's pattern says", () => {
+    const s = homeState(inputs({ pattern: earlyEater as never }), at(14));
     expect(s.kind).toBe("waiting");
-    if (s.kind === "waiting") expect(s.body).toContain("8pm");
+    expect((s as { body: string }).body).toContain("9pm");
   });
 
-  it("switches out of waiting at that hour", () => {
-    expect(homeState(inputs({ pattern: earlyEater }), at(19, 59)).kind).toBe("waiting");
-    expect(homeState(inputs({ pattern: earlyEater }), at(20, 0)).kind).toBe("steady");
-  });
-
-  it("keeps the default when no pattern is stored", () => {
-    const s = homeState(inputs({ pattern: null }), at(14));
-    if (s.kind === "waiting") expect(s.body).toContain("9pm");
-    expect(homeState(inputs({ pattern: null }), at(20, 30)).kind).toBe("waiting");
+  it("is still waiting an hour before it, pattern or not", () => {
+    const s = homeState(inputs({ pattern: earlyEater as never }), at(20));
+    expect(s.kind).toBe("waiting");
   });
 });
 

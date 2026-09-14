@@ -370,15 +370,23 @@ import * as Notifications from "expo-notifications";
 import { cancelScheduledOfKind } from "./notification-dedupe";
 import { track } from "./analytics";
 
-// The digest fires later on the nights people actually eat later — Friday and
-// Saturday, the two nights a table is still full at 10pm. Sunday sits
-// with the weekdays: Sunday dinner is an early meal in a way Saturday night is
-// not. One table, so moving a night is a one-line change and every consumer —
-// the scheduler, the window, and the Home copy — moves with it.
+// WHEN THE DIGEST FIRES. Fixed, by weekday, and no longer negotiable.
 //
-// This table is the DEFAULT. It answers for an account with fewer than ten
-// visits; past that, digestHourOn asks the person's own eating pattern first
-// and only falls back here when the pattern has nothing to say.
+// 9pm every night except Friday and Saturday, which fire at midnight — the two
+// nights a table is still full at eleven. Sunday sits with the weekdays:
+// Sunday dinner is an early meal in a way Saturday night is not.
+//
+// 24, not 0, for the weekend nights. Date.setHours(24) rolls to 00:00 the NEXT
+// morning, which is what "Friday at midnight" means to a person: the end of
+// Friday, not the start of it. Writing 0 here would fire the Friday digest
+// twenty-four hours early, covering Thursday.
+//
+// THE PERSONAL HOUR IS GONE. digestHourOn used to ask personalDigestHour
+// first, which shifted the fire time to an hour after that individual's usual
+// last meal. It is why a Sunday digest was scheduled for 11pm and the founder
+// was still waiting at nine — the schedule was personalised past the point of
+// being predictable, and a notification you cannot anticipate is one you stop
+// trusting. A fixed time is a promise the app can keep.
 //
 // Index is JS getDay(): 0 = Sunday.
 export const DIGEST_HOUR_BY_WEEKDAY: readonly number[] = [
@@ -387,8 +395,8 @@ export const DIGEST_HOUR_BY_WEEKDAY: readonly number[] = [
   21, // Tue
   21, // Wed
   21, // Thu
-  23, // Fri
-  23, // Sat
+  24, // Fri -> Saturday 00:00
+  24, // Sat -> Sunday 00:00
 ];
 export const DIGEST_MINUTE = 0;
 
@@ -398,8 +406,10 @@ export const DIGEST_MINUTE = 0;
  * (or with null, meaning "none stored") get the default, so nothing that
  * compiled before this parameter existed changes behaviour.
  */
-export function digestHourOn(day: Date, pattern?: EatingPattern | null): number {
-  return personalDigestHour(pattern ?? null, day, DIGEST_HOUR_BY_WEEKDAY[day.getDay()]);
+export function digestHourOn(day: Date, _pattern?: EatingPattern | null): number {
+  // The pattern argument is kept so every existing caller still compiles, and
+  // ignored: see the table above. A predictable hour beats a personalised one.
+  return DIGEST_HOUR_BY_WEEKDAY[day.getDay()];
 }
 
 /** The digest moment on the calendar day `day` falls in. */
@@ -417,7 +427,29 @@ const DIGEST_NOTIF_ID_KEY = "palate.passive.digestNotifId";
  * A capture at 11pm does not get a digest — it rolls into tomorrow's, which is
  * better than buzzing someone at midnight about dinner.
  */
-export function digestTimeFor(now: Date, pattern?: EatingPattern | null): Date {
+export function digestTimeFor(
+  now: Date,
+  pattern?: EatingPattern | null,
+  digest?: Digest,
+): Date {
+  // Nothing worth confirming tonight: carry it to tomorrow's slot.
+  //
+  // A low-only digest is a day of ambiguous stops — places we could not name
+  // with any confidence. Asking "were you out today?" at 9pm and being wrong
+  // is how a person learns to ignore the one notification the whole product
+  // depends on. Given another day those same entries are usually joined by
+  // something we CAN name, and then they get asked alongside it.
+  //
+  // Deferred by MOVING the notification, never by declining to schedule one.
+  // Scheduling nothing is how entries used to sit in the inbox forever:
+  // rescheduleDigest only runs when a new capture lands, so a quiet tomorrow
+  // meant nobody was ever asked at all.
+  if (digest && isLowOnlyDigest(digest)) {
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const slot = digestMomentOn(tomorrow, pattern);
+    if (slot.getTime() > now.getTime()) return slot;
+  }
   const at = digestMomentOn(now, pattern);
   // Past tonight's slot, roll to tomorrow's rather than returning null.
   //
@@ -455,7 +487,7 @@ export async function scheduleDigest(
   // called from the passive pipeline, which may be running in the background.
   const pattern = await loadEatingPattern();
   const digest = buildDigest(entries, now, { pattern });
-  const when = digestTimeFor(now, pattern);
+  const when = digestTimeFor(now, pattern, digest);
 
   const previous = await getStoredId();
   if (previous) {
