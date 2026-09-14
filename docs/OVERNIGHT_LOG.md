@@ -579,6 +579,44 @@ the graph, the block check, the vague body, the per-day dedupe and the privacy
 gate — so the next person to touch that function cannot quietly drop one, which
 two consecutive rewrites already did.
 
+## 10g. The 9pm notification you never got — the data says why
+
+You reported: "it's 9:00 central and never got a notification asking did you
+eat here today." I went looking at your actual inbox rather than at the
+notification code, and the answer is not where I expected.
+
+**You had exactly one entry on 2026-09-13.** The stop ended at **20:57:16**
+local and the entry was written at **21:00:19** — nineteen seconds after the
+21:00 digest had already fired. At 21:00:00 your inbox was empty, so the digest
+correctly said nothing, under your own rule that it should only send if there
+is something to confirm. That part worked.
+
+**The bug is what happened next.** The window opened at the previous digest
+moment exactly, so the following evening's window began at 21:00:00 on the
+13th — three minutes AFTER your meal. Detected too late for one notification
+and too early for the next. It was still sitting there unasked when I found it
+this morning, and would have expired at 48 hours having never been shown.
+
+It is structural rather than bad luck: a stop is not detected until it ENDS,
+and the entry is only written after resolution, so a meal finishing shortly
+before the digest hour can never be in the inbox when that digest fires. Every
+late dinner was landing in that gap.
+
+The window now opens 20 minutes before the previous digest moment. It cannot
+nag: answering removes an entry from the inbox, so the only entries the grace
+re-admits are ones still unanswered, and they fall out the night after.
+
+**Your Sonic entry should be asked about tonight.** It expires 2026-09-15
+20:57, tonight's digest is inside the grace window, and the OTA is published —
+so it needs your phone to have launched twice before 9pm. That is the one piece
+I cannot do from here.
+
+And it is the Winchester Road meal: band medium, dwell 25.2 minutes, resolved
+to Sonic Drive-In. It was detected at 01:57 UTC and the dwellFit fix shipped at
+03:08 UTC, so that entry predates the fix and still carries the wrong venue.
+When you are asked tonight, "wrong place" is the honest answer — the ranking
+fix applies to new detections, not to one already written.
+
 ## 11a. The same bug, but pointed at money
 
 Having found that a discarded read error in send-push was destroying
