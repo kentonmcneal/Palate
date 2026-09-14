@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Button, Spacer } from "../../components/Button";
 import { colors, spacing, type } from "../../theme";
-import { searchRestaurants, searchRestaurantsLocal, type Restaurant } from "../../lib/places";
+import { searchRestaurantsDetailed, searchRestaurantsLocal, type Restaurant } from "../../lib/places";
 import { useSuggestions } from "../../lib/use-suggestions";
 import { saveVisit, rewardCopy } from "../../lib/visits";
 import { getCurrentLocation } from "../../lib/location";
@@ -17,6 +17,7 @@ export default function AddTab() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Restaurant[]>([]);
+  const [degraded, setDegraded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [celebration, setCelebration] = useState<{ name: string } | null>(null);
   const [burst, setBurst] = useState(0);
@@ -56,7 +57,11 @@ export default function AddTab() {
       } catch {
         // location not granted — search without bias
       }
-      const r = await searchRestaurants(query.trim(), near);
+      const { places: r, degraded } = await searchRestaurantsDetailed(query.trim(), near);
+      // An empty list from a degraded search means we did not look, not that
+      // the place is not there. Saying "nothing by that name" would be the app
+      // denying a restaurant exists because a budget somewhere ran out.
+      setDegraded(degraded && r.length === 0);
       setResults(r);
     } catch (e: any) {
       Alert.alert("Search failed", e.message ?? "Try again");
@@ -126,7 +131,9 @@ export default function AddTab() {
         )}
         {!suggesting && !loading && query.trim().length >= 2 && showing.length === 0 && (
           <Text style={type.small}>
-            Nothing by that name in our list yet. Tap Search to look it up.
+            {degraded
+              ? "Wider search is resting until tomorrow. You can still add it by name from Search later."
+              : "Nothing by that name in our list yet. Tap Search to look it up."}
           </Text>
         )}
         <FlatList

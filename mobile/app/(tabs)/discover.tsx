@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { Spacer } from "../../components/Button";
 import { colors, spacing, type, shadow, categoryColors } from "../../theme";
-import { nearbyRestaurants, searchRestaurants, searchRestaurantsLocal, type Restaurant } from "../../lib/places";
+import { nearbyRestaurants, searchRestaurantsDetailed, searchRestaurantsLocal, type Restaurant } from "../../lib/places";
 import { useSuggestions } from "../../lib/use-suggestions";
 import { getOrFetchNearby } from "../../lib/nearby-cache";
 import { StretchPick } from "../../components/StretchPick";
@@ -105,6 +105,9 @@ export default function DiscoverTab() {
   const [searchResults, setSearchResults] = useState<RankedRestaurant[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchFailed, setSearchFailed] = useState(false);
+  /** The search ran, and the daily Google budget was already spent. Different
+   *  from failed (nothing happened) and from empty (we looked, nothing there). */
+  const [searchDegraded, setSearchDegraded] = useState(false);
   // searchActive flips to true on TextInput focus and stays true until the
   // user taps "Cancel". Drives the suggestion panel ("Find similar to X" +
   // city-wide list) that appears while the query is still empty.
@@ -232,7 +235,18 @@ export default function DiscoverTab() {
     setSearching(true);
     try {
       setSearchFailed(false);
-      const results = await searchRestaurants(query.trim(), here ?? undefined);
+      setSearchDegraded(false);
+      const { places: results, degraded } = await searchRestaurantsDetailed(query.trim(), here ?? undefined);
+      // Budget spent: the proxy answered 200 with an empty list because it did
+      // not go and look. Leave searchResults NULL so the free local
+      // suggestions stay on screen — a degraded search used to REPLACE
+      // catalogue matches the person could still have tapped, which is the
+      // worst of both: no Google results and no local ones either.
+      if (degraded && results.length === 0) {
+        setSearchDegraded(true);
+        setSearchResults(null);
+        return;
+      }
       const ranked = results
         .filter((p) => !personal?.dislikes.placeIds.has(p.google_place_id) && !hiddenIds.has(p.google_place_id))
         .map((p) => buildRankedRestaurant(graph, toInput(p), { here: here ?? undefined, now: new Date() }));
@@ -241,6 +255,7 @@ export default function DiscoverTab() {
       // A failed request is not "this restaurant does not exist".
       setSearchResults([]);
       setSearchFailed(true);
+      setSearchDegraded(false);
     } finally {
       setSearching(false);
     }
@@ -563,6 +578,15 @@ export default function DiscoverTab() {
 
         {/* Suggestions fill in as you type, from what we already know. They
             are replaced by the Google results once a search is submitted. */}
+        {searchDegraded && (
+          <View style={{ marginTop: spacing.lg }}>
+            <Text style={[type.small, { lineHeight: 20, color: colors.mute }]}>
+              Wider search is resting until tomorrow. These are the places we
+              already know about nearby.
+            </Text>
+          </View>
+        )}
+
         {searchResults === null && query.trim().length >= 2 && (
           <View style={{ marginTop: spacing.lg }}>
             <View style={styles.searchHead}>

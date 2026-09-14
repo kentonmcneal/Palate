@@ -93,12 +93,36 @@ export async function searchRestaurantsLocal(
   return (data ?? []) as Restaurant[];
 }
 
-export async function searchRestaurants(query: string, near?: { lat: number; lng: number }) {
-  const { places } = await callProxy<{ places: Restaurant[] }>({
+/**
+ * Google-backed search. Returns the DEGRADED flag, which callers must show.
+ *
+ * This used to destructure `places` alone and drop the flag on the floor —
+ * while nearbyRestaurantsDetailed, four functions up, has carried it correctly
+ * since passive capture needed it. When the daily Google budget trips, the
+ * proxy answers HTTP 200 with `{ places: [], degraded: true }`, so an empty
+ * list means "we did not look", not "there is nothing there".
+ *
+ * The screens then said "Nothing by that name in our list yet" and "No
+ * matches" — telling a person a restaurant does not exist because an account
+ * somewhere spent the budget. The one thing a search must never do is deny a
+ * result it did not go and look for.
+ */
+export async function searchRestaurantsDetailed(
+  query: string,
+  near?: { lat: number; lng: number },
+): Promise<{ places: Restaurant[]; degraded: boolean }> {
+  const res = await callProxy<{ places: Restaurant[]; degraded?: boolean }>({
     action: "search",
     query,
     ...(near ?? {}),
   });
+  return { places: res.places ?? [], degraded: res.degraded === true };
+}
+
+/** Places only. Prefer searchRestaurantsDetailed: a caller that renders an
+ *  empty state needs to know whether the list is empty or merely unlooked-at. */
+export async function searchRestaurants(query: string, near?: { lat: number; lng: number }) {
+  const { places } = await searchRestaurantsDetailed(query, near);
   return places;
 }
 
