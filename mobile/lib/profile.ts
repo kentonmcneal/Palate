@@ -13,8 +13,6 @@ export type AgeRange = "under_18" | "18_24" | "25_34" | "35_44" | "45_54" | "55_
 
 export type Demographics = {
   age_range: AgeRange | null;
-  gender_identity: string | null;
-  race_ethnicity: string[];
   hometown: string | null;
   current_city: string | null;
 };
@@ -28,8 +26,6 @@ export type Profile = {
   taste_preferences: string[];
   profile_visibility: ProfileVisibility;
   age_range: AgeRange | null;
-  gender_identity: string | null;
-  race_ethnicity: string[];
   hometown: string | null;
   current_city: string | null;
   created_at: string;
@@ -50,7 +46,7 @@ export async function getMyProfile(): Promise<Profile | null> {
     // Edit Profile screen, which initialises its fields from this object and
     // writes all six back on Save. Leaving them out of the select meant every
     // Save overwrote them with empty strings. Found by the code review.
-    .select("id, email, display_name, username, avatar_url, taste_preferences, profile_visibility, age_range, gender_identity, race_ethnicity, hometown, current_city, created_at, bio, school, first_name, last_name, instagram_handle, tiktok_handle")
+    .select("id, email, display_name, username, avatar_url, taste_preferences, profile_visibility, age_range, hometown, current_city, created_at, bio, school, first_name, last_name, instagram_handle, tiktok_handle")
     .eq("id", user.id)
     .maybeSingle();
   if (error || !data) return null;

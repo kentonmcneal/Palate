@@ -24,26 +24,10 @@ const AGE_RANGES: { key: AgeRange; label: string }[] = [
   { key: "65_plus", label: "65+" },
 ];
 
-const GENDER_OPTIONS = ["Woman", "Man", "Non-binary", "Prefer to self-describe", "Prefer not to say"];
-
-const RACE_OPTIONS = [
-  "Asian",
-  "Black or African American",
-  "Hispanic or Latino",
-  "Middle Eastern or North African",
-  "Native American or Alaska Native",
-  "Native Hawaiian or Pacific Islander",
-  "White",
-  "Multiracial",
-  "Prefer not to say",
-];
 
 export default function DemographicsScreen() {
   const router = useRouter();
   const [age, setAge] = useState<AgeRange | null>(null);
-  const [gender, setGender] = useState<string | null>(null);
-  const [genderCustom, setGenderCustom] = useState("");
-  const [races, setRaces] = useState<Set<string>>(new Set());
   const [hometown, setHometown] = useState("");
   const [city, setCity] = useState("");
   const [saving, setSaving] = useState(false);
@@ -52,29 +36,17 @@ export default function DemographicsScreen() {
     getMyProfile().then((p) => {
       if (!p) return;
       setAge(p.age_range);
-      setGender(p.gender_identity);
-      if (p.race_ethnicity?.length) setRaces(new Set(p.race_ethnicity));
       setHometown(p.hometown ?? "");
       setCity(p.current_city ?? "");
     }).catch(() => {});
   }, []);
 
-  function toggleRace(r: string) {
-    setRaces((curr) => {
-      const next = new Set(curr);
-      if (next.has(r)) next.delete(r);
-      else next.add(r);
-      return next;
-    });
-  }
 
   async function save() {
     setSaving(true);
     try {
       await saveDemographics({
         age_range: age,
-        gender_identity: gender === "Prefer to self-describe" ? genderCustom.trim() || null : gender,
-        race_ethnicity: [...races],
         hometown: hometown.trim() || null,
         current_city: city.trim() || null,
       });
@@ -111,45 +83,6 @@ export default function DemographicsScreen() {
                 style={[styles.chip, age === a.key && styles.chipActive]}
               >
                 <Text style={[styles.chipText, age === a.key && styles.chipTextActive]}>{a.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </Section>
-
-        <Section title="Gender identity">
-          <View style={styles.chipGrid}>
-            {GENDER_OPTIONS.map((g) => (
-              <Pressable
-                key={g}
-                onPress={() => setGender(gender === g ? null : g)}
-                style={[styles.chip, gender === g && styles.chipActive]}
-              >
-                <Text style={[styles.chipText, gender === g && styles.chipTextActive]}>{g}</Text>
-              </Pressable>
-            ))}
-          </View>
-          {gender === "Prefer to self-describe" && (
-            <TextInput
-              value={genderCustom}
-              onChangeText={setGenderCustom}
-              placeholder="How would you describe it?"
-              placeholderTextColor={colors.mute}
-              style={[styles.input, { marginTop: 10 }]}
-              maxLength={40}
-            />
-          )}
-        </Section>
-
-        <Section title="Race / ethnicity">
-          <Text style={styles.sublabel}>Select all that apply.</Text>
-          <View style={styles.chipGrid}>
-            {RACE_OPTIONS.map((r) => (
-              <Pressable
-                key={r}
-                onPress={() => toggleRace(r)}
-                style={[styles.chip, races.has(r) && styles.chipActive]}
-              >
-                <Text style={[styles.chipText, races.has(r) && styles.chipTextActive]}>{r}</Text>
               </Pressable>
             ))}
           </View>
