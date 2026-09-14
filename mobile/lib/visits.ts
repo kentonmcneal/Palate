@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { signedVisitPhoto, signedVisitPhotos } from "./storage-urls";
 import { getRestaurantIdByPlaceId, type Restaurant } from "./places";
 import { track } from "./analytics";
 import { triggerHapticSuccess } from "./haptics";
@@ -267,7 +268,14 @@ export async function recentVisits(limit = 20) {
     .limit(limit);
 
   if (error) throw error;
-  return (data ?? []) as unknown as Visit[];
+  // Sign the photo paths before anybody tries to render one. visit-photos is
+  // private as of 0167, so photo_url holds a PATH — every consumer of this
+  // function puts it straight into an <Image source={{uri}}>, and a path is
+  // not a URL. Signing here rather than at each render site means a screen
+  // added later cannot forget.
+  const rows = (data ?? []) as unknown as Visit[];
+  const signed = await signedVisitPhotos(rows.map((v) => v.photo_url));
+  return rows.map((v, i) => ({ ...v, photo_url: signed[i] }));
 }
 
 // ----------------------------------------------------------------------------
@@ -345,16 +353,20 @@ export async function attachPhotoToVisit(visitId: string, fileUri: string): Prom
     });
   if (upErr) throw upErr;
 
-  const { data: pub } = supabase.storage.from("visit-photos").getPublicUrl(path);
-  const url = pub.publicUrl;
-
+  // Store the PATH, not a URL.
+  //
+  // visit-photos is a private bucket as of 0167, so getPublicUrl no longer
+  // resolves to anything. Storing a SIGNED url instead would be worse: the
+  // signature expires, and a row outliving its signature is a broken image
+  // with no explanation. The path is stable; storage-urls.ts signs it on read.
   const { error: updateErr } = await supabase
     .from("visits")
-    .update({ photo_url: url })
+    .update({ photo_url: path })
     .eq("id", visitId);
   if (updateErr) throw updateErr;
 
-  return url;
+  // Signed, so the screen that just uploaded can render it without a refetch.
+  return (await signedVisitPhoto(path)) ?? path;
 }
 
 /**

@@ -20,6 +20,7 @@
 // ============================================================================
 
 import { supabase } from "./supabase";
+import { signedVisitPhotos } from "./storage-urls";
 
 /** place_id -> photo url. Null means "asked, and there isn't one" — cached so
  *  a place with no photos doesn't get re-queried on every render. */
@@ -67,9 +68,21 @@ export async function loadPlacePhotos(placeIds: string[]): Promise<Map<string, s
       if (!bucket.has(gid)) bucket.set(gid, row.photo_url);
     }
 
-    for (const id of unknown) {
-      cache.set(id, mine.get(id) ?? theirs.get(id) ?? null);
-    }
+    // Sign them. visit-photos is private as of 0167, so what is stored is a
+    // PATH and a path is not renderable.
+    //
+    // Note `theirs` will mostly resolve to null now: the SELECT policy is
+    // owner-scoped, so nobody can sign somebody else's photo. That is a
+    // deliberate narrowing — a photograph of a stranger's dinner appearing on
+    // a restaurant card is exactly the sharing nobody opted into — and it
+    // costs nothing today because the bucket is empty. If other people's
+    // photos should appear on place cards, that needs a policy keyed on
+    // visits.is_public, and its own decision.
+    const ids = Array.from(unknown);
+    const signed = await signedVisitPhotos(
+      ids.map((id) => mine.get(id) ?? theirs.get(id) ?? null),
+    );
+    ids.forEach((id, i) => cache.set(id, signed[i]));
   } catch {
     // A failed lookup must not blank the feed — mark them as "no photo" for
     // this session and let the gradient carry the cards.
