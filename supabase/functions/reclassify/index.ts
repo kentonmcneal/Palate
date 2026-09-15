@@ -41,11 +41,41 @@ const json = (body: unknown, status = 200) =>
 
 const todayUTC = () => new Date().toISOString().slice(0, 10);
 
+// FAILS CLOSED. This discarded its error, and `?.tripped === true` renders a
+// failed read as false — "budget not spent" — so a transient timeout reopened
+// the kill switch on a function whose whole job is spending money. Same shape
+// as the gates corrected in places-proxy and classify-cuisine-backfill.
+// A MISSING ROW is not an error: the counter row is created on the day's first
+// call, so no row legitimately means nothing spent yet.
 async function budgetSpent(admin: ReturnType<typeof createClient>): Promise<boolean> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from("google_usage_counter").select("tripped").eq("day", todayUTC()).maybeSingle();
+  if (error) {
+    console.error("reclassify: kill switch unreadable, refusing to spend", error.message ?? error);
+    return true;
+  }
   return (data as { tripped?: boolean } | null)?.tripped === true;
 }
+
+/** Google's review text, flattened to the snippets column. */
+function reviewSnippetsOf(place: { reviews?: Array<{ text?: { text?: string } }> }): string[] {
+  return (place.reviews ?? [])
+    .map((r) => r?.text?.text)
+    .filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+    .slice(0, 5);
+}
+
+/** The cheap structural mask, and the one that also carries review text. */
+const MASK_STRUCTURAL =
+  "id,displayName,formattedAddress,shortFormattedAddress,addressComponents,location," +
+  "primaryType,types,priceLevel,rating,userRatingCount,regularOpeningHours";
+const MASK_WITH_REVIEWS =
+  MASK_STRUCTURAL +
+  ",businessStatus,editorialSummary,reviews," +
+  "goodForGroups,goodForChildren,menuForChildren,goodForWatchingSports,liveMusic," +
+  "reservable,outdoorSeating,servesBreakfast,servesBrunch,servesLunch,servesDinner," +
+  "servesBeer,servesWine,servesCocktails,servesVegetarianFood,servesDessert," +
+  "allowsDogs,delivery,takeout,dineIn";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -59,16 +89,32 @@ serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const commit = body.commit === true;
   const limit = Math.min(Number(body.limit ?? MAX_PER_RUN), MAX_PER_RUN);
+  // reviews:true asks Google for editorialSummary + reviews + the atmosphere
+  // booleans. Same ONE Place Details call either way — a field mask changes
+  // which SKU that call is billed at, not how many calls are made — so this
+  // costs the same number of requests and more per request.
+  //
+  // It does NOT run the LLM. Deriving vibe from this text is a separate spend
+  // against a separate ceiling, and bundling them would mean one flag quietly
+  // authorising two budgets.
+  const wantReviews = body.reviews === true;
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
   // Oldest-refreshed first, so repeated runs sweep the whole table instead of
   // re-doing the same head every time. That IS the resumption mechanism —
   // refreshed_at advances as rows are processed, so a second run continues.
-  const { data: rows, error } = await admin
+  // In reviews mode, sweep by what is MISSING rather than by age: the point is
+  // to fill review_snippets, and a row refreshed yesterday by the structural
+  // pass still has none. Ordering by reviews_refreshed_at nulls-first walks
+  // exactly the unfilled rows and then the oldest-cached ones, which is also
+  // the right order for re-fetching text that has expired at 30 days.
+  const query = admin
     .from("restaurants")
-    .select("google_place_id, name, refreshed_at")
-    .order("refreshed_at", { ascending: true, nullsFirst: true })
+    .select("google_place_id, name, refreshed_at, reviews_refreshed_at")
     .limit(limit);
+  const { data: rows, error } = wantReviews
+    ? await query.order("reviews_refreshed_at", { ascending: true, nullsFirst: true })
+    : await query.order("refreshed_at", { ascending: true, nullsFirst: true });
   if (error) return json({ error: error.message }, 500);
 
   const batch = (rows ?? []) as Array<{ google_place_id: string; name: string }>;
@@ -82,9 +128,18 @@ serve(async (req) => {
       total_rows: total ?? null,
       runs_needed: total ? Math.ceil(total / limit) : null,
       google_calls_per_run: batch.length,
+      mode: wantReviews ? "reviews (rich field mask)" : "structural (cheap field mask)",
+      still_missing_review_text: wantReviews
+        ? (await admin.from("restaurants")
+            .select("google_place_id", { count: "exact", head: true })
+            .is("reviews_refreshed_at", null)).count ?? null
+        : null,
       note:
         "One Place Details call per row. Nothing was fetched or written. " +
-        "Send { commit: true } to spend.",
+        "Send { commit: true } to spend." +
+        (wantReviews
+          ? " reviews:true bills this call at the richer SKU and stores text that expires at 30 days (migration 0173)."
+          : ""),
       daily_cap: GOOGLE_DAILY_CALL_CAP,
       budget_already_spent: await budgetSpent(admin),
     });
@@ -103,9 +158,7 @@ serve(async (req) => {
         {
           headers: {
             "X-Goog-Api-Key": GOOGLE_KEY,
-            "X-Goog-FieldMask":
-              "id,displayName,formattedAddress,shortFormattedAddress,addressComponents,location," +
-              "primaryType,types,priceLevel,rating,userRatingCount,regularOpeningHours",
+            "X-Goog-FieldMask": wantReviews ? MASK_WITH_REVIEWS : MASK_STRUCTURAL,
           },
         },
       );
@@ -127,7 +180,20 @@ serve(async (req) => {
       // here: this is a bulk structural pass over rules that need no model, and
       // paying for a thousand LLM calls to re-derive vibe tags is a separate
       // decision from paying for a thousand Places lookups.
-      const built = googleToRestaurantRow(place as GooglePlace);
+      const built = googleToRestaurantRow(place as GooglePlace) as Record<string, unknown>;
+      if (wantReviews) {
+        // Google's text, cached under the 30-day terms and expired by the
+        // prune_stale_review_text cron (0173). The DERIVED tags that
+        // googleToRestaurantRow produces are ours and outlive it.
+        const snippets = reviewSnippetsOf(place as { reviews?: Array<{ text?: { text?: string } }> });
+        const summary = (place as { editorialSummary?: { text?: string } }).editorialSummary?.text ?? null;
+        built.review_snippets = snippets.length ? snippets : null;
+        built.editorial_summary = summary;
+        // Stamped even when Google returned nothing, so a place with no reviews
+        // is not re-fetched on every single run forever. It ages out at 30 days
+        // like anything else and gets one more try then.
+        built.reviews_refreshed_at = new Date().toISOString();
+      }
       await admin.from("restaurants").upsert(built, { onConflict: "google_place_id" });
       updated++;
       if (changes.length < 25) {
@@ -142,5 +208,9 @@ serve(async (req) => {
     }
   }
 
-  return json({ dry_run: false, processed: batch.length, updated, skipped, failed, sample: changes });
+  return json({
+    dry_run: false,
+    mode: wantReviews ? "reviews" : "structural",
+    processed: batch.length, updated, skipped, failed, sample: changes,
+  });
 });
