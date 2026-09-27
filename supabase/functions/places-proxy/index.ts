@@ -18,6 +18,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import Anthropic from "npm:@anthropic-ai/sdk@0.32.1";
 import { errText } from "../_shared/err-text.ts";
+import { isGoogleBudgetSpent, spendGoogle } from "../_shared/google-spend.ts";
 import { retryRead } from "../_shared/retry.ts";
 import {
   CLASSIFIER_VERSION,
@@ -76,7 +77,6 @@ const NEARBY_RATE_LIMIT_MAX = 40;       // was effectively 5 — far too low for
 // details cache-misses). When today's count hits the cap the proxy stops
 // calling Google and serves cached/DB results until the next UTC day. Default
 // ~1500/day (~$48/day worst case at Pro pricing); raise via env as you scale.
-const GOOGLE_DAILY_CALL_CAP = Number(Deno.env.get("GOOGLE_DAILY_CALL_CAP") ?? "1500");
 
 // ----- Read-through nearby cache ----------------------------------------
 // We already store every restaurant we have ever seen. These bound when it is
@@ -195,7 +195,7 @@ async function countUserCall(admin: ReturnType<typeof createClient>, userId: str
 // cuisine backfill, the blurb and details paths here go live too — and they
 // had no meter at all. Same daily-counter table as Google, its own cap.
 const LLM_DAILY_CAP = 300;
-// FAILS CLOSED, for the same reason as isTripped: a discarded read error made
+// FAILS CLOSED, for the same reason as isGoogleBudgetSpent: a discarded read error made
 // `?? 0` mean "nothing spent today", which opens the budget rather than closing
 // it. A missing row still legitimately means no spend yet.
 async function llmBudgetSpent(admin: ReturnType<typeof createClient>): Promise<boolean> {
@@ -234,7 +234,7 @@ async function handleNearby(
   }
 
   // Two ceilings, one answer. `capped` is this account's own daily/burst
-  // limit, decided in the entry point; `isTripped` is the shared daily budget.
+  // limit, decided in the entry point; `isGoogleBudgetSpent` is the shared daily budget.
   // Either one means: do not call Google, serve best-effort results from the
   // cached restaurants.
   //
@@ -243,7 +243,7 @@ async function handleNearby(
   // the whole daily budget. Found by the code review. proxy_calls (0106) is
   // written on every Google-backed call below; cache hits are free and
   // uncounted.
-  if (capped || await isTripped(admin)) {
+  if (capped || await isGoogleBudgetSpent()) {
     const places = await degradedNearby(admin, lat, lng, radius);
     await recordUsage(admin, `nearby:${radius}`, "cache");
     return json({ places, degraded: true });
@@ -303,12 +303,12 @@ async function handleNearby(
     // eligibility gate tightened). Don't trust it; fall through and re-fetch.
   }
 
-  await reserveGoogleCall(admin);
-
-  // call Google Places API (New) — searchNearby
-  const resp = await fetch(
-    "https://places.googleapis.com/v1/places:searchNearby",
-    {
+  // call Google Places API (New) — searchNearby.
+  // spendGoogle prices by SKU, meters, and raises the 80%/tripped alerts.
+  const resp = await spendGoogle({
+    sku: "search_nearby_pro",
+    url: "https://places.googleapis.com/v1/places:searchNearby",
+    init: {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -327,7 +327,15 @@ async function handleNearby(
         },
       }),
     },
-  );
+  });
+
+  // The budget can go between the gate above and the call itself. spendGoogle
+  // refuses rather than spending; degrade exactly as the gate would have.
+  if (!resp) {
+    const places = await degradedNearby(admin, lat, lng, radius);
+    await recordUsage(admin, `nearby:${radius}`, "cache");
+    return json({ places, degraded: true });
+  }
 
   if (!resp.ok) {
     const text = await resp.text();
@@ -411,25 +419,35 @@ async function handleDetails(
   // Budget spent, shared or this account's own — return the stale cached row
   // if we have one, rather than paying Google for a refresh. Only 503 when we
   // have nothing at all to show.
-  if (capped || await isTripped(admin)) {
+  if (capped || await isGoogleBudgetSpent()) {
     if (cached) {
       await recordUsage(admin, "details", "cache");
       return json({ place: cached, degraded: true });
     }
     return json({ error: "temporarily_unavailable", degraded: true }, 503);
   }
-  await reserveGoogleCall(admin);
-
-  // Details endpoint requests the richer fields (editorialSummary, reviews)
-  // because this is the LLM-augmented path — those become inputs to the LLM
-  // classifier and to the review-text miner.
-  const resp = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
+  // Details requests the richer fields (editorialSummary, reviews) because this
+  // is the LLM-augmented path — those become inputs to the LLM classifier and
+  // the review-text miner. That mask is ALSO what makes this the most expensive
+  // SKU we buy, which is why the SKU is named right next to it.
+  const resp = await spendGoogle({
+    sku: "details_enterprise_atmosphere",
+    url: `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
+    init: {
     headers: {
       "X-Goog-Api-Key": GOOGLE_KEY,
       "X-Goog-FieldMask":
         "id,displayName,formattedAddress,shortFormattedAddress,addressComponents,location,primaryType,types,priceLevel,rating,userRatingCount,regularOpeningHours,businessStatus,editorialSummary,reviews,goodForGroups,goodForChildren,menuForChildren,goodForWatchingSports,liveMusic,reservable,outdoorSeating,servesBreakfast,servesBrunch,servesLunch,servesDinner,servesBeer,servesWine,servesCocktails,servesVegetarianFood,servesDessert,allowsDogs,delivery,takeout,dineIn",
     },
+    },
   });
+  if (!resp) {
+    if (cached) {
+      await recordUsage(admin, "details", "cache");
+      return json({ place: cached, degraded: true });
+    }
+    return json({ error: "temporarily_unavailable", degraded: true }, 503);
+  }
   if (!resp.ok) {
     const text = await resp.text();
     return json({ error: "places_failed", detail: text }, 502);
@@ -454,13 +472,14 @@ async function handleSearch(
   // the DB, so when the budget is spent — shared or this account's own — we
   // return empty with a degraded flag rather than a low-quality guess. The
   // caller has `searchCatalogue`, which is free, for this case.
-  if (capped || await isTripped(admin)) {
+  if (capped || await isGoogleBudgetSpent()) {
     await recordUsage(admin, "search", "cache");
     return json({ places: [], degraded: true });
   }
-  await reserveGoogleCall(admin);
-
-  const resp = await fetch("https://places.googleapis.com/v1/places:searchText", {
+  const resp = await spendGoogle({
+    sku: "search_text_pro",
+    url: "https://places.googleapis.com/v1/places:searchText",
+    init: {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -484,8 +503,13 @@ async function handleSearch(
           }
         : {}),
     }),
+    },
   });
 
+  if (!resp) {
+    await recordUsage(admin, "search", "cache");
+    return json({ places: [], degraded: true });
+  }
   if (!resp.ok) {
     const text = await resp.text();
     return json({ error: "places_failed", detail: text }, 502);
@@ -689,75 +713,12 @@ function todayUTC(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-// Best-effort push to the founder's device when a budget threshold is crossed.
-// Reuses the same Expo endpoint as notify-feed-post. Never throws.
-async function sendAlertPush(title: string, body: string) {
-  if (!ALERT_PUSH_TOKEN) return;
-  try {
-    await fetch("https://exp.host/--/api/v2/push/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify({ to: ALERT_PUSH_TOKEN, title, body, priority: "high", sound: "default" }),
-    });
-  } catch (_) { /* alerts are best-effort — never break the request */ }
-}
-
-// True when today's billable-call budget is already spent.
-//
-// FAILS CLOSED. This read used to discard its error, and `data?.tripped ===
-// true` renders a failed read as `false` — "budget not spent" — so a transient
-// timeout silently reopened the kill switch and let billable Google calls
-// through. The guard was enforced by the read happening to succeed.
-//
-// The distinction that matters: a MISSING ROW is not an error. The counter row
-// is created on the day's first call, so no row legitimately means no spend
-// yet, and that must stay open. Only an actual read failure closes the gate.
-//
-// Failing closed costs a degraded result for one request. Failing open costs
-// money, silently, against a cap whose entire purpose is to stop that.
-async function isTripped(admin: ReturnType<typeof createClient>): Promise<boolean> {
-  const res = await retryRead(() =>
-    admin.from("google_usage_counter").select("tripped").eq("day", todayUTC()).maybeSingle()
-  );
-  if (res.error) {
-    console.error("places-proxy: cannot read kill switch, refusing to spend", errText(res.error));
-    return true;
-  }
-  return (res.data as { tripped?: boolean } | null)?.tripped === true;
-}
-
-// Count one billable Google call and fire the 80% / tripped alerts exactly
-// once each (the RPC reports which caller crossed the threshold).
-async function reserveGoogleCall(admin: ReturnType<typeof createClient>) {
-  try {
-    // Retried and logged. A silently failed bump is an uncounted billable call,
-    // and enough of them mean the daily cap is never reached at all.
-    const { data, error: bumpErr } = await retryRead(() =>
-      admin.rpc("bump_google_usage", {
-        p_day: todayUTC(),
-        p_cap: GOOGLE_DAILY_CALL_CAP,
-      })
-    );
-    if (bumpErr) {
-      console.error("places-proxy: BILLABLE CALL NOT COUNTED", errText(bumpErr));
-      return;
-    }
-    const row = Array.isArray(data) ? data[0] : data;
-    if (!row) return;
-    if (row.crossed_warn) {
-      await sendAlertPush(
-        "Palate — Google budget at 80%",
-        `${row.new_count}/${GOOGLE_DAILY_CALL_CAP} Google Places calls used today.`,
-      );
-    }
-    if (row.crossed_trip) {
-      await sendAlertPush(
-        "⚠️ Palate kill-switch tripped",
-        `Hit ${GOOGLE_DAILY_CALL_CAP} Google calls — serving cached results only until tomorrow (UTC).`,
-      );
-    }
-  } catch (_) { /* metering must never break the request */ }
-}
+// The kill-switch read, the meter, the SKU prices and the 80%/tripped push all
+// moved to ../_shared/google-spend.ts. This function was the ONLY one of three
+// spenders that read bump's crossed_warn/crossed_trip flags — and because those
+// flags fire once a day to whoever crosses the line, the nightly backfill ate
+// them at 2am and this code never got the chance. Sharing the helper is what
+// makes "a new spender is silent by default" impossible.
 
 // Telemetry (best-effort): per-day tally of proxy activity by action + source.
 async function recordUsage(

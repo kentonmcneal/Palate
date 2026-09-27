@@ -18,6 +18,37 @@ Free, read-only operations are always fine: `git` status/log/diff, `tsc`,
 
 When unsure whether something costs money, assume it does and ask first.
 
+### A field-mask change is a PRICE change (learned the hard way, 2026-09-26)
+
+Google Places bills by SKU, and the SKU is chosen by the **field mask**, not by
+the endpoint. The same Place Details URL costs ~$0.017/call structural and
+~$0.025/call once the mask asks for `reviews` / `editorialSummary` / the
+`serves*` booleans. So adding a field to a mask is a price rise, and it reads
+in review like a harmless one-line diff.
+
+That is how the reviews backfill billed **$300 in eight days** while every
+guard behaved exactly as written: the budget counted CALLS, and a call counter
+cannot see a price change. The same 1500/day cap was ~$0/day on Essentials and
+$37.50/day on Enterprise + Atmosphere.
+
+Rules that follow:
+
+1. **Never `fetch` a paid Google endpoint directly.** Go through
+   `spendGoogle()` in `supabase/functions/_shared/google-spend.ts`. It gates on
+   the budget, prices the call by SKU, meters it, and raises the 80%/tripped
+   alert. The one exception is `gmail-import`, whose single call uses the free
+   IDs-Only mask and says so.
+2. **Touching a field mask means naming its SKU** in the same diff, and
+   re-approving the cost in DOLLARS. `SKU_MICROS` is the price table.
+3. **A new spender must not be able to go quiet.** The reason the $300 ran
+   unnoticed is that `bump_google_usage` reports `crossed_warn`/`crossed_trip`
+   once a day to whoever crosses the line, and only one of three callers read
+   them — so the 2am cron ate the alert every night. Never re-implement the
+   gate or the meter locally.
+4. **A bulk backfill over a table is a coverage bet.** It only pays off when
+   enough users share the cached rows. With a handful of users, the on-demand
+   path in `places-proxy` is cheaper; see `docs/` and migration 0176.
+
 ## Build / ship policy
 
 **EAS builds and updates are PRE-AUTHORIZED** (2026-08-21). They are covered by

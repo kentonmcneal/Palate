@@ -18,12 +18,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { googleToRestaurantRow, type GooglePlace } from "../_shared/classifier.ts";
+import {
+  dailyBudgetMicros,
+  isGoogleBudgetSpent,
+  skuMicros,
+  spendGoogle,
+} from "../_shared/google-spend.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_KEY = Deno.env.get("GOOGLE_PLACES_API_KEY")!;
 const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
-const GOOGLE_DAILY_CALL_CAP = Number(Deno.env.get("GOOGLE_DAILY_CALL_CAP") ?? "1500");
 
 /** Ceiling per invocation. An edge function has a wall clock, and a run that
  *  dies mid-way should have done bounded, known work rather than an unknown
@@ -56,21 +61,11 @@ function makeAdmin() {
 }
 type Admin = ReturnType<typeof makeAdmin>;
 
-// FAILS CLOSED. This discarded its error, and `?.tripped === true` renders a
-// failed read as false — "budget not spent" — so a transient timeout reopened
-// the kill switch on a function whose whole job is spending money. Same shape
-// as the gates corrected in places-proxy and classify-cuisine-backfill.
-// A MISSING ROW is not an error: the counter row is created on the day's first
-// call, so no row legitimately means nothing spent yet.
-async function budgetSpent(admin: Admin): Promise<boolean> {
-  const { data, error } = await admin
-    .from("google_usage_counter").select("tripped").eq("day", todayUTC()).maybeSingle();
-  if (error) {
-    console.error("reclassify: kill switch unreadable, refusing to spend", error.message ?? error);
-    return true;
-  }
-  return (data as { tripped?: boolean } | null)?.tripped === true;
-}
+// The kill switch, the SKU price table, the meter and the 80%/tripped alert
+// all live in ../_shared/google-spend.ts now. This function used to keep its
+// own copy of the gate and call bump_google_usage WITHOUT reading the
+// crossed_warn/crossed_trip flags it returns — so the nightly backfill ate
+// both one-shot alerts at 2am and nobody was told for eight days.
 
 /** Google's review text, flattened to the snippets column. */
 function reviewSnippetsOf(place: { reviews?: Array<{ text?: { text?: string } }> }): string[] {
@@ -92,12 +87,12 @@ const MASK_WITH_REVIEWS =
   "servesBeer,servesWine,servesCocktails,servesVegetarianFood,servesDessert," +
   "allowsDogs,delivery,takeout,dineIn";
 
-/** Per-call price of the Enterprise + Atmosphere SKU that MASK_WITH_REVIEWS
- *  bills at. Printed in the dry run only; Google's console is authoritative.
- *  The shared kill switch counts CALLS, which is exactly how switching to this
- *  mask multiplied the bill ~5x without tripping anything. Printing dollars is
- *  the cheap corrective for a budget denominated in the wrong unit. */
-const USD_PER_REVIEWS_CALL = 0.025;
+/** The two masks are two different SKUs at two different prices — which is the
+ *  whole reason the budget is now denominated in dollars. Derived from the
+ *  shared table so a price correction lands here automatically. */
+const skuFor = (wantReviews: boolean) =>
+  wantReviews ? "details_enterprise_atmosphere" as const : "details_pro" as const;
+const usdPerCall = (wantReviews: boolean) => skuMicros(skuFor(wantReviews)) / 1_000_000;
 
 /** The corridor the product actually serves. Two users: Newport News VA (often
  *  DC) and Philadelphia (two months in NYC, home to Maryland often). Sweeping
@@ -237,21 +232,19 @@ serve(async (req) => {
       google_calls_per_run: batch.length,
       runs_needed: outstanding != null ? Math.ceil(outstanding / limit) : null,
       est_usd_to_finish: wantReviews && queued != null
-        ? Number((queued * USD_PER_REVIEWS_CALL).toFixed(2))
+        ? Number((queued * usdPerCall(true)).toFixed(2))
         : null,
       note:
         "One Place Details call per row. Nothing was fetched or written. " +
         "Send { commit: true } to spend." +
         (wantReviews
-          ? ` reviews:true bills at the Enterprise + Atmosphere SKU (~$${USD_PER_REVIEWS_CALL}/call)` +
+          ? ` reviews:true bills at the Enterprise + Atmosphere SKU (~$${usdPerCall(true)}/call)` +
             " and stores text that expires at 30 days (migration 0173)." +
             (scoped ? "" : " SCOPE IS ALL METROS — this is the nationwide sweep that cost $300.")
           : ""),
-      daily_cap: GOOGLE_DAILY_CALL_CAP,
-      est_usd_if_cap_is_hit: wantReviews
-        ? Number((GOOGLE_DAILY_CALL_CAP * USD_PER_REVIEWS_CALL).toFixed(2))
-        : null,
-      budget_already_spent: await budgetSpent(admin),
+      daily_budget_usd: dailyBudgetMicros() / 1_000_000,
+      calls_the_budget_allows: Math.floor(dailyBudgetMicros() / skuMicros(skuFor(wantReviews))),
+      budget_already_spent: await isGoogleBudgetSpent(),
     });
   }
 
@@ -276,18 +269,21 @@ serve(async (req) => {
   for (const row of batch) {
     // Re-checked EVERY iteration, not once: a long run can cross the cap
     // mid-way, and the point of a kill switch is that it stops things.
-    if (await budgetSpent(admin)) { skipped++; continue; }
     try {
-      const resp = await fetch(
-        `https://places.googleapis.com/v1/places/${row.google_place_id}`,
-        {
+      // spendGoogle re-checks the budget, prices the call by SKU, meters it and
+      // raises the 80%/tripped alerts. A null means the budget is gone mid-run,
+      // which is the point of a kill switch on a long sweep.
+      const resp = await spendGoogle({
+        sku: skuFor(wantReviews),
+        url: `https://places.googleapis.com/v1/places/${row.google_place_id}`,
+        init: {
           headers: {
             "X-Goog-Api-Key": GOOGLE_KEY,
             "X-Goog-FieldMask": wantReviews ? MASK_WITH_REVIEWS : MASK_STRUCTURAL,
           },
         },
-      );
-      await admin.rpc("bump_google_usage", { p_day: todayUTC(), p_cap: GOOGLE_DAILY_CALL_CAP });
+      });
+      if (!resp) { skipped++; continue; }
       await admin.rpc("record_api_usage", { p_day: todayUTC(), p_action: "reclassify", p_source: "google" });
 
       if (!resp.ok) {
@@ -351,7 +347,7 @@ serve(async (req) => {
     processed: batch.length, updated, skipped, failed, sample: changes,
     queue_remaining: remaining,
     est_usd_spent_this_run: wantReviews
-      ? Number(((updated + failed) * USD_PER_REVIEWS_CALL).toFixed(2))
+      ? Number(((updated + failed) * usdPerCall(true)).toFixed(2))
       : null,
   });
 });

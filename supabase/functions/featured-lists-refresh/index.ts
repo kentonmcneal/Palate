@@ -20,6 +20,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { errText } from "../_shared/err-text.ts";
 import { retryRead } from "../_shared/retry.ts";
+import { isGoogleBudgetSpent, spendGoogle } from "../_shared/google-spend.ts";
 import {
   type GooglePlace as ClassifierPlace,
   googleToRestaurantRow,
@@ -59,37 +60,15 @@ const MAX_PAGES = 3;
 const REFRESH_INTERVAL_DAYS = 90;
 const STALE_AFTER_MS = REFRESH_INTERVAL_DAYS * 24 * 60 * 60 * 1000;
 
-// The same daily budget places-proxy meters against. This function used to be
-// the one Google caller outside the kill switch — a nightly cron over every
-// active city, multiplied by ~15 categories and up to 3 pages each, that could
-// keep spending after the switch had already tripped everywhere else. It now
-// checks and counts like every other caller.
-const GOOGLE_DAILY_CALL_CAP = Number(Deno.env.get("GOOGLE_DAILY_CALL_CAP") ?? "1500");
+// The budget, the gate, the SKU price table, the meter and the 80%/tripped
+// alert all live in ../_shared/google-spend.ts. This function previously kept
+// its own copy of the gate and called bump_google_usage WITHOUT reading the
+// crossed_warn/crossed_trip flags it returns — so whenever this cron was the
+// caller that crossed a threshold, it ate the one-shot alert and nobody was
+// told. Sharing the helper is what makes that impossible to repeat.
 
 function todayUTC(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-// True when today's billable-call budget is already spent.
-async function isTripped(admin: ReturnType<typeof createClient>): Promise<boolean> {
-  const { data } = await admin
-    .from("google_usage_counter")
-    .select("tripped")
-    .eq("day", todayUTC())
-    .maybeSingle();
-  return data?.tripped === true;
-}
-
-// Count one billable Google call against the shared daily budget. Best-effort:
-// metering must never break a refresh, and an uncounted call is a smaller
-// problem than a crashed cron. The tripped CHECK is what actually stops spend.
-async function reserveGoogleCall(admin: ReturnType<typeof createClient>) {
-  try {
-    await admin.rpc("bump_google_usage", {
-      p_day: todayUTC(),
-      p_cap: GOOGLE_DAILY_CALL_CAP,
-    });
-  } catch (_) { /* metering must never break the refresh */ }
 }
 
 async function recordUsage(admin: ReturnType<typeof createClient>, action: string) {
@@ -470,11 +449,14 @@ async function googleTextSearch(
   // Checked per CALL, not once per run: a nightly refresh over every active
   // city is long enough that the budget can be exhausted by another caller
   // while this one is still paginating.
-  if (await isTripped(admin)) throw new BudgetExhausted();
-  await reserveGoogleCall(admin);
+  // Checked per CALL, not once per run — see above.
+  if (await isGoogleBudgetSpent()) throw new BudgetExhausted();
   await recordUsage(admin, "featured_lists_text_search");
 
-  const resp = await fetch("https://places.googleapis.com/v1/places:searchText", {
+  const resp = await spendGoogle({
+    sku: "search_text_pro",
+    url: "https://places.googleapis.com/v1/places:searchText",
+    init: {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -505,7 +487,12 @@ async function googleTextSearch(
       // pageToken must accompany otherwise-identical params (Google requirement).
       ...(pageToken ? { pageToken } : {}),
     }),
+    },
   });
+
+  // The budget can go between the pre-check and the call itself, and
+  // spendGoogle refuses rather than spending. Same outcome as the pre-check.
+  if (!resp) throw new BudgetExhausted();
 
   if (!resp.ok) {
     const text = await resp.text();
