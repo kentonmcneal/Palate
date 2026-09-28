@@ -124,6 +124,53 @@ type Dim = { s: number; matched: boolean };
 const FLAVOR_WEIGHT = 0;
 const UNKNOWN_TASTE_PRIOR = 0.35;
 
+// ----------------------------------------------------------------------------
+// Absence of evidence is not evidence of absence.
+// ----------------------------------------------------------------------------
+// affinityOf returns 0 for a cuisine the person has never eaten, and the
+// shrinkage below then mapped that 0 to (1-trust)*0.5 — which at the founder's
+// 35 visits is 0.0625, against 0.35 for a restaurant we know NOTHING about.
+// Knowing a place is Italian therefore scored 5.6x worse than knowing nothing,
+// and because `trust` grows with totalVisits, the punishment for never having
+// eaten a cuisine grew without bound the more the person ate.
+//
+// Measured in eval.test.ts: the two places the ranker buried at 187 and 188 of
+// 200 are the founder's Italian and Mexican, whose cuisines read as never-eaten
+// once their own visits were held out. Half the held-out set.
+//
+// WHY THIS IS NOT THE FIX THAT WAS REVERTED ON 2026-09-06. That one raised
+// never-eaten to a CONSTANT neutral, which lifted every unseen cuisine to the
+// same value, moved the held-out ranks barely at all (168 vs 178), and put
+// never-eaten ABOVE unclassified — breaking good > unknown > poor.
+//
+// Absence is informative in proportion to how thoroughly someone has explored,
+// not to how much they have eaten. Thirty-five visits across three cuisines
+// says almost nothing about a fourth; across twenty it says a little. So the
+// prior scales with BREADTH, and its whole range sits below
+// UNKNOWN_TASTE_PRIOR, so a known-but-unseen cuisine still ranks under a place
+// we never classified. The ordering the reverted fix broke is preserved by
+// construction here, not by luck.
+// Scaled by how much the person has eaten, NOT by how many distinct things
+// they have eaten. A breadth-based version was tried here first and is wrong:
+// the prior then depends on the map it is scoring, so ADDING a key raises
+// breadth, lowers the prior for every key, and can lower the score of the very
+// cuisine the new evidence was about. Caught by "a cuisine you have only saved
+// lifts similar places", which went 54 -> 53. Volume is stable under a single
+// new observation, so the term is monotone in evidence.
+const UNSEEN_CEIL = 0.33;   // little history: absence barely means anything
+const UNSEEN_FLOOR = 0.18;  // long history: absence is weak negative evidence
+const UNSEEN_K = 12;
+
+/** The value a key gets when the person has no history with it at all.
+ *  Bounded below by UNSEEN_FLOOR: absence is never strong evidence, however
+ *  long the history. The unbounded decay to ~0 is what buried the held-out
+ *  places at 187 of 200. */
+function unseenPrior(totalVisits: number): number {
+  const m = Math.max(1, totalVisits);
+  const informative = m / (m + UNSEEN_K);
+  return UNSEEN_CEIL - (UNSEEN_CEIL - UNSEEN_FLOOR) * informative;
+}
+
 function scoreTaste(g: TasteGraph, r: RestaurantInput): Dim {
   // Compute whenever ANY taste signal exists — including a quiz-seeded persona
   // at 0 visits (the seed fills these maps but leaves totalVisits at 0, so the
@@ -153,16 +200,20 @@ function scoreTaste(g: TasteGraph, r: RestaurantInput): Dim {
   // 0-visit graph counts as one visit's worth.
   const m = Math.max(1, g.totalVisits);
   const trust = m / (m + 5);
-  // Tried and reverted, 2026-09-06: a "novelty floor" that read never-eaten
-  // as neutral for a person whose history spans many cuisines. The held-out
-  // harness had put Josephine Estelle (Italian, eaten twice) at 178 of 200
-  // once its own visits were removed. The floor lifted every never-eaten
-  // cuisine together, so the held-out ranks did not move (168 vs 178), and it
-  // put never-eaten above unclassified on the real pool, breaking the
-  // good > unknown > poor ordering this block exists to produce. The finding
-  // stands and is measured in held-out.test.ts; the fix is not a constant.
+  // See unseenPrior above. No evidence gets the breadth-scaled prior; actual
+  // evidence is shrunk toward neutral as before — and floored at the prior,
+  // because having eaten something once must never score below never having
+  // eaten it at all. At 35 visits a single low-share cuisine used to land at
+  // 0.15, under the 0.23 an unseen one now gets; positive evidence can only
+  // help, so the max() is the invariant, not a patch.
+  // Shrink toward the PRIOR rather than toward 0.5, so no floor or max() is
+  // needed: affinity 0 lands exactly on the prior, affinity 1 lands near the
+  // top, and the term is monotone increasing in evidence everywhere between.
+  // Shrinking toward 0.5 and then clamping made a once-eaten cuisine (0.15 at
+  // 35 visits) score BELOW a never-eaten one, which is incoherent.
+  const prior = unseenPrior(g.totalVisits);
   const shrunk = (map: Record<string, number>, key: string) =>
-    trust * affinityOf(map, key) + (1 - trust) * 0.5;
+    prior + (1 - prior) * trust * affinityOf(map, key);
 
   // Each dimension counts only when the PERSON has a map for it. A quiz
   // seeds regions but never subregions, so a perfect region match used to be

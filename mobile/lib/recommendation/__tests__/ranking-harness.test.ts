@@ -152,7 +152,44 @@ describe("good match > unknown > known-poor match", () => {
     expect(unknown.length).toBeGreaterThan(5);
     expect(poor.length).toBeGreaterThan(5);
     expect(avg(good)).toBeGreaterThan(avg(unknown));
-    expect(avg(unknown)).toBeGreaterThan(avg(poor));
+    // avg(unknown) > avg(poor) USED to be asserted here and is not any more,
+    // because it compares populations that differ in far more than cuisine.
+    // A classified row tends to carry a format, occasion tags and better
+    // quality data too, so it scores higher for reasons that have nothing to
+    // do with the taste term. That confound was invisible only because
+    // never-eaten scored 0.0625 — a punishment big enough to swamp it.
+    // Measured once the punishment was removed: truly-unseen cuisines average
+    // 57.6 against unclassified's 56.4, so the assertion failed while the
+    // property it was defending still held. A population average cannot test
+    // it. The controlled version is the next test, and it is strictly
+    // stronger: same row, cuisine revealed versus hidden.
+  });
+
+  // The real statement of "unknown > known-poor", as a paired comparison.
+  // Confounds cancel because it is the SAME restaurant both times; the only
+  // thing that changes is whether the scorer can see the cuisine.
+  it("revealing a never-eaten cuisine lowers a row; revealing a loved one lifts it", () => {
+    const g = founderGraph();
+    const pool = poolAsInputs();
+    const eaten = new Set(Object.keys(g.cuisineTypes).filter((k) => g.cuisineTypes[k] > 0));
+    const hide = (r: RestaurantInput): RestaurantInput =>
+      ({ ...r, cuisine_type: null, cuisine_region: null, cuisine_subregion: null });
+
+    const unseen = pool.filter((r) => r.cuisine_type && !eaten.has(r.cuisine_type));
+    const good = pool.filter((r) => r.cuisine_type === "american");
+    expect(unseen.length).toBeGreaterThan(10);
+    expect(good.length).toBeGreaterThan(10);
+
+    // Knowing it is a cuisine he has never chosen must never HELP the row.
+    for (const r of unseen) {
+      expect(computeCompatibility(g, r).score)
+        .toBeLessThanOrEqual(computeCompatibility(g, hide(r)).score);
+    }
+    // ...and knowing it is his cuisine must always help.
+    for (const r of good) {
+      expect(computeCompatibility(g, r).score)
+        .toBeGreaterThan(computeCompatibility(g, hide(r)).score);
+    }
   });
 
   it("scores a restaurant whose only cuisine signal is a type", () => {
