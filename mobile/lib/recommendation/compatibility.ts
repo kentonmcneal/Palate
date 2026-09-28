@@ -432,9 +432,45 @@ function hasEntries(map: Record<string, number>): boolean {
   for (const _k in map) return true;
   return false;
 }
+// How strongly the person leans toward one key, on a scale where their
+// favourite is 1.0.
+//
+// TRIED AND MEASURED, 2026-09-28 — COMPRESSION DOES NOT HELP. Keep this at 1.0.
+//
+// The linear share-of-max means the SHAPE of someone's palate sets everyone
+// else's scale. On the founder: american 16 of 28 visits (57%) takes 1.000 and
+// every other cuisine he actually eats collapses — middle-eastern 0.188,
+// italian 0.125, five more at 0.063. Eight of nine cuisines score under 0.19,
+// barely above the 0.22 a NEVER-eaten cuisine gets, so the taste term is close
+// to the binary question "is this american?". That is real, and it is 18 of
+// the 36-point gap that leaves Josephine Estelle at 175 of 200 on the FULL
+// graph with her own two visits counted.
+//
+// So compressing looks obviously right, and it is not. Swept against
+// eval.test.ts, exponent -> MRR / R@30 / meanRank:
+//
+//     1.00   0.053  0.50  100.8   <- best on every metric
+//     0.90   0.052  0.25  102.0
+//     0.80   0.046  0.25  102.8
+//     0.70   0.045  0.25  103.5
+//     0.60   0.045  0.25  104.3
+//     0.50   0.044  0.25  105.5
+//
+// Monotonically worse. The reason is that rank is RELATIVE: lifting italian
+// from 0.125 to 0.354 lifts every other non-dominant cuisine in the pool by
+// the same rule, so the held-out places gain nothing on their competitors and
+// the field around them gets denser. A term can account for most of a score
+// gap and still be the wrong lever, if changing it moves everyone.
+//
+// The knob is left in place, at 1.0, so the next person does not have to
+// rediscover this. 1.0 is exactly the original linear behaviour.
+const AFFINITY_COMPRESSION = 1.0;
+
 function affinityOf(map: Record<string, number>, key: string): number {
   const m = maxValue(map);
-  return m > 0 ? Math.min(1, (map[key] ?? 0) / m) : 0;
+  if (m <= 0) return 0;
+  const share = Math.min(1, (map[key] ?? 0) / m);
+  return share <= 0 ? 0 : Math.pow(share, AFFINITY_COMPRESSION);
 }
 
 function sumAffinity(map: Record<string, number>, keys: string[]): number {
