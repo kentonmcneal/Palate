@@ -40,3 +40,10 @@ Final first-batch validation: WORKING TREE full Jest suite passed 132 suites, 1,
 - WORKING TREE validation: six actual-helper VM tests passed, TypeScript passed, full Jest suite passed 132 suites / 1,143 tests / one skipped. Entirely mocked networking and database; no real API requests.
 - This is NOT an atomic reservation. Concurrent requests can still race; thrown fetches and failed post-fetch metering remain gaps. Missing/malformed spend data fails closed; source relies on spend_micros added by migration 0179. No field masks or SKU prices changed.
 - Supabase reference fetches failed (markdown unsupported, reference routes 404). No Supabase feature/API change or schema migration was introduced; existing maybeSingle query adds an existing column. No LIVE or DEVICE claims, deployment, or spend.
+
+## Crash-reporting resilience
+- WORKING TREE: concurrent initialization shares one attempt; failed initialization is contained and retryable. SDK capture/breadcrumb/normalization failures no longer reject back into the global rejection handler. Test events return false when they cannot be queued.
+- Admin wording separates SDK acceptance from verified delivery and configured DSN from successful initialization. Root crash screen no longer guarantees unsaved data safety.
+- Validation: actual observability source executed in a VM with mocked SDK/synthetic DSN; five new tests cover concurrent init, retry, capture failures, hostile error getter, breadcrumb failures and accepted test events. Existing normalization tests pass. TypeScript passes. Full Jest: 133 suites, 1,148 passed, one skipped. Initial test harness hit Jest dynamic-import limitations; CommonJS VM transpilation resolved it without package changes.
+- No Sentry network calls, DEVICE testing, or LIVE verification. Production DSN and actual delivery remain unknown. No change to the existing policy of swallowing global production exceptions. Native crashes remain outside this JS-only evidence.
+- Budget configuration changes are COMMITTED in c0be455; earlier local test evidence applies to that commit.

@@ -255,7 +255,7 @@ export default function AdminWaitlistScreen() {
               <Text style={type.subtitle}>Crash reporting</Text>
               <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
                 {obs.hasDsn
-                  ? `On, reporting to ${obs.host}. ${obs.initialized ? "Started this session." : "Not started yet this session."}`
+                  ? `Configured for ${obs.host ?? "an invalid host"}. ${obs.initialized ? "Started this session; delivery has not been verified here." : "Not started this session."}`
                   : "Off. No DSN reached this build, so every error is being swallowed. Check that the build profile names an EAS environment that has EXPO_PUBLIC_SENTRY_DSN."}
               </Text>
               {obs.hasDsn && (
@@ -264,10 +264,10 @@ export default function AdminWaitlistScreen() {
                     setTesting(true);
                     void sendTestEvent()
                       .then((sent) => Alert.alert(
-                        sent ? "Test event sent" : "Nothing sent",
+                        sent ? "Test event queued" : "Could not queue event",
                         sent
-                          ? "It should appear in Sentry within a minute, titled 'Palate test event from the Admin screen'."
-                          : "Reporting is not running, so nothing left the device.",
+                          ? "The reporting SDK accepted the event. Check Sentry for 'Palate test event from the Admin screen' to verify delivery."
+                          : "The reporting SDK could not accept the test event. Check configuration and try again.",
                       ))
                       .finally(() => setTesting(false));
                   }}

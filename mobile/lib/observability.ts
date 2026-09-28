@@ -13,6 +13,7 @@ const DSN =
   "";
 
 let initialized = false;
+let initializing: Promise<void> | null = null;
 
 async function loadSentry(): Promise<typeof import("@sentry/react-native") | null> {
   try {
@@ -27,19 +28,29 @@ async function loadSentry(): Promise<typeof import("@sentry/react-native") | nul
 
 export async function initObservability(): Promise<void> {
   if (initialized) return;
+  if (initializing) return initializing;
   if (!DSN) {
     console.info("[obs] no SENTRY_DSN — observability is a no-op");
     return;
   }
-  const Sentry = await loadSentry();
-  if (!Sentry) return;
-  Sentry.init({
-    dsn: DSN,
-    enableAutoSessionTracking: true,
-    sessionTrackingIntervalMillis: 30_000,
-    tracesSampleRate: 0.1,
-  });
-  initialized = true;
+  initializing = (async () => {
+    try {
+      const Sentry = await loadSentry();
+      if (!Sentry) return;
+      Sentry.init({
+        dsn: DSN,
+        enableAutoSessionTracking: true,
+        sessionTrackingIntervalMillis: 30_000,
+        tracesSampleRate: 0.1,
+      });
+      initialized = true;
+    } catch {
+      // Reporting must not create another unhandled rejection in the global
+      // handler. Do not include the original error or credentials in this log.
+      console.warn("[obs] error reporting initialization failed");
+    }
+  })();
+  try { await initializing; } finally { initializing = null; }
 }
 
 /**
@@ -82,23 +93,37 @@ export function toError(err: unknown): { error: Error; extra: Record<string, unk
   };
 }
 
+async function reportError(err: unknown, context?: Record<string, unknown>): Promise<boolean> {
+  if (!initialized || !DSN) return false;
+  try {
+    const Sentry = await loadSentry();
+    if (!Sentry) return false;
+    const { error, extra } = toError(err);
+    Sentry.withScope((scope) => {
+      if (context) scope.setExtras(context);
+      if (Object.keys(extra).length > 0) scope.setExtras(extra);
+      Sentry.captureException(error);
+    });
+    // Accepted by the SDK, not proof of network delivery or dashboard receipt.
+    return true;
+  } catch {
+    console.warn("[obs] error report could not be queued");
+    return false;
+  }
+}
+
 export async function captureError(err: unknown, context?: Record<string, unknown>): Promise<void> {
-  if (!initialized || !DSN) return;
-  const Sentry = await loadSentry();
-  if (!Sentry) return;
-  const { error, extra } = toError(err);
-  Sentry.withScope((scope) => {
-    if (context) scope.setExtras(context);
-    if (Object.keys(extra).length > 0) scope.setExtras(extra);
-    Sentry.captureException(error);
-  });
+  await reportError(err, context);
 }
 
 export async function breadcrumb(message: string, data?: Record<string, unknown>): Promise<void> {
   if (!initialized || !DSN) return;
-  const Sentry = await loadSentry();
-  if (!Sentry) return;
-  Sentry.addBreadcrumb({ message, data, level: "info" });
+  try {
+    const Sentry = await loadSentry();
+    Sentry?.addBreadcrumb({ message, data, level: "info" });
+  } catch {
+    console.warn("[obs] breadcrumb could not be recorded");
+  }
 }
 
 /**
@@ -129,9 +154,8 @@ export async function sendTestEvent(): Promise<boolean> {
   if (!DSN) return false;
   await initObservability();
   if (!initialized) return false;
-  await captureError(new Error("Palate test event from the Admin screen"), {
+  return reportError(new Error("Palate test event from the Admin screen"), {
     at: "admin:sentryTest",
     deliberate: true,
   });
-  return true;
 }
