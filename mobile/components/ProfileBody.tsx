@@ -369,7 +369,7 @@ export function ProfileBody({ targetId }: { targetId: string }) {
                   <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
                     {snapshot.profile_visibility === "private"
                       ? "They've set their profile to private. You can still follow them."
-                      : "Follow each other to see their persona, top spots, and more."}
+                      : "Follow each other to see their persona, top restaurants, and more."}
                   </Text>
                 </View>
               )
@@ -420,8 +420,13 @@ export function ProfileBody({ targetId }: { targetId: string }) {
                 where the repeat used to be. */}
             {!noHistory && personaLabel && (
               <View style={styles.personaCard}>
-                <Text style={styles.personaEyebrow}>LATEST PERSONA</Text>
+                <Text style={styles.personaEyebrow}>{canSee && (snapshot.total_visits ?? 0) < 5 ? "YOUR TASTE IS TAKING SHAPE" : "LATEST PERSONA"}</Text>
                 <Text style={styles.personaLabel}>{personaLabel}</Text>
+                {canSee && (snapshot.total_visits ?? 0) < 5 && (
+                  <Text style={[type.small, { color: colors.mute, marginTop: 8, lineHeight: 20 }]}>
+                    An early impression from {snapshot.total_visits} {snapshot.total_visits === 1 ? "visit" : "visits"}. More visits help refine it.
+                  </Text>
+                )}
                 {!!personaTagline && personaTagline !== personaLabel && (
                   <Text style={styles.personaTagline}>{personaTagline}</Text>
                 )}
@@ -434,7 +439,7 @@ export function ProfileBody({ targetId }: { targetId: string }) {
                 <View style={styles.statsRow}>
                   <Stat label="Visits" value={String(snapshot.total_visits)} />
                   {snapshot.unique_restaurants !== null && (
-                    <Stat label="Spots" value={String(snapshot.unique_restaurants)} />
+                    <Stat label="Restaurants" value={String(snapshot.unique_restaurants)} />
                   )}
                 </View>
                 {snapshot.top_restaurant && (

@@ -27,3 +27,10 @@
 Revert only Codex commits on this branch. The baseline tag preserves the starting source. Do not reset/clean/stash or restore unrelated paths. No secrets were copied or committed.
 
 Final first-batch validation: WORKING TREE full Jest suite passed 132 suites, 1,140 tests, one skipped; TypeScript passed. Server tests are mocked, not LIVE evidence.
+
+## Feed/profile copy batch
+- WORKING TREE: empty feed now describes shared/public activity accurately and offers Find people and Log a visit actions; removed the claim that every logged meal appears.
+- WORKING TREE: profiles with fewer than five visits label the taste persona as an early impression. Restaurant labels are clearer.
+- WORKING TREE: year-in-review placeholder no longer promises an unsupported December 15 launch; describes the feature as in development.
+- TypeScript passed. No DEVICE or LIVE verification; these copy changes do not complete the larger social/profile redesign.
+- First cost/cache batch is COMMITTED as fac1d9d. Strict concurrent server budget reservations remain outstanding and require database validation.

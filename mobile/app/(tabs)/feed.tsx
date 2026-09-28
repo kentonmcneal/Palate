@@ -172,17 +172,25 @@ export default function FeedTab() {
 
         {view === "empty" && (
           <View style={styles.empty}>
-            <Text style={type.subtitle}>Nobody's eaten yet today.</Text>
+            <Text style={type.subtitle}>Your feed is ready for its first story.</Text>
             <Text style={[type.small, { marginTop: 8, lineHeight: 20 }]}>
-              Every meal anyone logs shows up here. You don't have to add them
-              first. Log one and you'll be the one everybody sees.
+              Find people whose taste you trust, or log a visit of your own.
+              You'll see activity they share with you, including public posts.
+              Private visits stay private.
             </Text>
             <Spacer />
             <Pressable
               onPress={() => router.push("/people")}
               style={styles.emptyCta}
             >
-              <Text style={styles.emptyCtaText}>Browse everyone →</Text>
+              <Text style={styles.emptyCtaText}>Find people →</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push("/(tabs)/add")}
+              accessibilityRole="button"
+              style={{ marginTop: 16, paddingVertical: 8 }}
+            >
+              <Text style={[type.small, { color: colors.redText, fontWeight: "700" }]}>Log a visit</Text>
             </Pressable>
           </View>
         )}

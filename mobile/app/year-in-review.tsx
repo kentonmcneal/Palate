@@ -5,16 +5,8 @@ import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, spacing, type } from "../theme";
 
-const TARGET_DATE = new Date("2026-12-15");
-
-function daysUntilDrop(): number {
-  const ms = TARGET_DATE.getTime() - Date.now();
-  return Math.max(0, Math.ceil(ms / 86_400_000));
-}
-
 export default function YearInReviewPlaceholder() {
   const router = useRouter();
-  const days = daysUntilDrop();
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -28,7 +20,7 @@ export default function YearInReviewPlaceholder() {
         <View style={styles.glow} />
 
         <ScrollView contentContainerStyle={styles.body}>
-          <Text style={styles.eyebrow}>COMING DECEMBER 2026</Text>
+          <Text style={styles.eyebrow}>A YEAR OF YOUR TASTE</Text>
           <Text style={styles.h1}>
             Your Year in <Text style={styles.accent}>Palate</Text>.
           </Text>
@@ -39,12 +31,12 @@ export default function YearInReviewPlaceholder() {
           </Text>
 
           <View style={styles.countdownBox}>
-            <Text style={styles.countdownNumber}>{days}</Text>
-            <Text style={styles.countdownLabel}>days until your reveal</Text>
+            <Text style={styles.countdownNumber}>In the works</Text>
+            <Text style={styles.countdownLabel}>Keep logging your visits</Text>
           </View>
 
           <View style={styles.feature}>
-            <Text style={styles.featureTitle}>What you'll see</Text>
+            <Text style={styles.featureTitle}>What we’re working on</Text>
             <Text style={styles.featureLine}>· Your top 5 restaurants of the year</Text>
             <Text style={styles.featureLine}>· The cuisine you ate most (and the one you almost ignored)</Text>
             <Text style={styles.featureLine}>· How your Palate evolved month over month</Text>
@@ -106,7 +98,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
   },
-  countdownNumber: { color: colors.red, fontSize: 64, fontWeight: "800", letterSpacing: -2 },
+  countdownNumber: { color: colors.red, fontSize: 32, fontWeight: "800", letterSpacing: -2 },
   countdownLabel: {
     color: "rgba(255,255,255,0.65)",
     fontSize: 13,
