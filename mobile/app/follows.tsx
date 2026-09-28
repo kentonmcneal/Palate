@@ -11,6 +11,7 @@ import {
   followUser, unfollowUser, followStateOf, followLabel,
   type FollowListItem,
 } from "../lib/friends";
+import { FriendsInCities } from "../components/FriendsInCities";
 
 // ============================================================================
 // follows.tsx — followers, following, friends.
@@ -88,6 +89,11 @@ export default function FollowsScreen() {
         contentContainerStyle={styles.body}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} tintColor={colors.mute} />}
       >
+        {/* Only on Friends: cities come from MUTUAL follows, so showing this
+            above a followers/following list would promise a set that tab is
+            not about. It renders nothing when there is nothing to say. */}
+        {!loading && !error && tab === "friends" && !params.user && <FriendsInCities />}
+
         {loading && <ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.mute} />}
 
         {!loading && error && (

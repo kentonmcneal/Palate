@@ -699,6 +699,23 @@ export function neighborhoodFromPlace(p: GooglePlace): string | null {
   );
 }
 
+/** Locality and state, from the same addressComponents the neighbourhood uses.
+ *  Free: these components ride along on a Details call we have already paid
+ *  for. Deriving city any other way (a reverse-geocode) would be a new billed
+ *  SKU, which after September is not a trade worth making for a column. */
+export function cityFromPlace(p: GooglePlace): { city: string | null; region: string | null } {
+  const comps = p.addressComponents ?? [];
+  const byType = (t: string, short = false) =>
+    (short
+      ? comps.find((c) => c.types?.includes(t))?.shortText
+      : comps.find((c) => c.types?.includes(t))?.longText) ?? null;
+  return {
+    // postal_town covers places where Google omits locality.
+    city: byType("locality") || byType("postal_town"),
+    region: byType("administrative_area_level_1", true),
+  };
+}
+
 function fallbackNeighborhood(address: string | null): string | null {
   if (!address) return null;
   const parts = address.split(",").map((p) => p.trim()).filter(Boolean);
@@ -1231,6 +1248,8 @@ export function googleToRestaurantRow(
     price_feel: d.price_feel,
     ambiance_notes: d.ambiance_notes,
     neighborhood: neighborhoodFromPlace(p),
+    city: cityFromPlace(p).city,
+    region: cityFromPlace(p).region,
     tags: d.tags.length ? d.tags : null,
     price_level: price,
     rating: p.rating ?? null,
