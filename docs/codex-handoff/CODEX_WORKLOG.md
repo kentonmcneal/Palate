@@ -1,0 +1,29 @@
+# Codex worklog — 2026-09-28
+
+## Baseline and scope
+- User confirmed prior sessions finished. Baseline tag: `codex-baseline-20260928`; branch: `codex/handoff-priorities`.
+- Handoffs and governing rules read in full before code. No landing changes, deployment, paid calls, real user data, or credentials added.
+- Existing handoffs were committed by the previous session before the baseline was created.
+
+## Changes (WORKING TREE)
+- Persona nearby lookup and candidate generation now use `getOrFetchNearby`; pair compatibility reaches the latter, so it is not a third independent direct call.
+- Cache coalesces simultaneous requests per location/radius and awaits persistence before releasing the pending request. Failures release the pending entry. TTL expires at five minutes; malformed/future cache timestamps are rejected.
+- Synthetic 2,000-restaurant fixture and proxy-boundary counting tests: the modeled journey makes 11 nearby requests plus three explicit searches, with zero additional requests for same-bucket repeats within the TTL. Different radii intentionally have different cache keys.
+- Actual server spending helper is executed in an isolated VM with mocked database and fetch. Tests prove sequential cutoff, unreadable-budget refusal, and a metering retry without a second fetch.
+
+## Verification
+- WORKING TREE: TypeScript check passed.
+- WORKING TREE: Full Jest suite after cache changes: 131 suites; 1,137 passed, one skipped. Three additional server-helper tests subsequently passed separately.
+- WORKING TREE: Source scan found Google Places URLs only in centralized-spend callers, plus gmail-import's documented direct IDs-only call. No masks or SKU prices changed.
+- No LIVE or DEVICE verification performed. Xcode/Sentry/GCP blockers in handoff remain.
+
+## Limits and next work
+- Client proxy calls are not synonymous with Google billed calls. The fixture does not prove UI rendering or live backend fan-out behavior.
+- INFERENCE from current helper source: post-request metering allows concurrent calls to overshoot; a thrown fetch is not metered, and two failed meter writes can leave usage uncounted. A durable atomic reservation requires a separately tested database change. Do not describe this budget as a strict concurrent cap.
+- An unauthenticated response would prove function boot only, NOT the deployed version or migrations; handoff claims to the contrary are insufficient.
+- Remaining: verify deployed controls when safe access permits, crash reporting, feed/profile/UI work, broader ranking evaluation, confirmed SKU prices.
+
+## Rollback
+Revert only Codex commits on this branch. The baseline tag preserves the starting source. Do not reset/clean/stash or restore unrelated paths. No secrets were copied or committed.
+
+Final first-batch validation: WORKING TREE full Jest suite passed 132 suites, 1,140 tests, one skipped; TypeScript passed. Server tests are mocked, not LIVE evidence.

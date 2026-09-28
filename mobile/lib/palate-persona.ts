@@ -1,3 +1,4 @@
+import { getOrFetchNearby } from "./nearby-cache";
 // ============================================================================
 // Palate Persona Engine
 // ----------------------------------------------------------------------------
@@ -369,7 +370,7 @@ export async function getPersonaRecommendations(
   // Gate BEFORE ranking. This path had no eligibility check at all, which is
   // how national chains reached "Places you'll probably like" on Home.
   const candidates = filterRecommendable(
-    await nearbyRestaurants(anchor.lat, anchor.lng, radius),
+    await getOrFetchNearby(anchor.lat, anchor.lng, radius, nearbyRestaurants),
   );
   const visitedNames = new Set(visits.map((v) => v.profile?.name.toLowerCase() ?? "").filter(Boolean));
 

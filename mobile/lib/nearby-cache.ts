@@ -26,7 +26,7 @@ export async function getCachedNearby(
     const raw = await AsyncStorage.getItem(bucket(lat, lng, radius_m));
     if (!raw) return null;
     const { savedAt, places } = JSON.parse(raw) as { savedAt: number; places: Restaurant[] };
-    if (Date.now() - savedAt > TTL_MS) return null;
+    if (!Number.isFinite(savedAt) || Date.now() < savedAt || Date.now() - savedAt >= TTL_MS || !Array.isArray(places)) return null;
     return places;
   } catch {
     return null;
@@ -53,13 +53,28 @@ export async function setCachedNearby(
  * twice for the same spot. Fetcher is injected to keep this module free of a
  * places.ts import cycle.
  */
+const pending = new Map<string, Promise<Restaurant[]>>();
+
 export async function getOrFetchNearby(
   lat: number, lng: number, radius_m: number,
   fetcher: (lat: number, lng: number, radius_m: number) => Promise<Restaurant[]>,
 ): Promise<Restaurant[]> {
-  const cached = await getCachedNearby(lat, lng, radius_m);
-  if (cached) return cached;
-  const fresh = await fetcher(lat, lng, radius_m);
-  void setCachedNearby(lat, lng, radius_m, fresh);
-  return fresh;
+  const key = bucket(lat, lng, radius_m);
+  const existing = pending.get(key);
+  if (existing) return existing;
+  const request = (async () => {
+    const cached = await getCachedNearby(lat, lng, radius_m);
+    if (cached) return cached;
+    const fresh = await fetcher(lat, lng, radius_m);
+    // Finish persisting before releasing the pending request, avoiding a window
+    // where a second screen misses both the pending request and storage cache.
+    await setCachedNearby(lat, lng, radius_m, fresh);
+    return fresh;
+  })();
+  pending.set(key, request);
+  try {
+    return await request;
+  } finally {
+    pending.delete(key); // failures remain retryable
+  }
 }

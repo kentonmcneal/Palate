@@ -1,3 +1,4 @@
+import { getOrFetchNearby } from "../nearby-cache";
 // ============================================================================
 // recommendation/candidates.ts — generate candidate restaurants from 5 pools.
 // ----------------------------------------------------------------------------
@@ -70,7 +71,7 @@ export function isStretch(graph: TasteGraph, r: RestaurantInput): boolean {
 export async function generateCandidates(opts: GenerateOptions): Promise<Candidate[]> {
   const radius = opts.radiusM ?? 2500;
   const nearby = opts.preFetched
-    ?? (await nearbyRestaurants(opts.here.lat, opts.here.lng, radius)).map(toInput);
+    ?? (await getOrFetchNearby(opts.here.lat, opts.here.lng, radius, nearbyRestaurants)).map(toInput);
 
   if (nearby.length === 0) return [];
 
