@@ -79,7 +79,12 @@ export const skuMicros = (sku: GoogleSku): number =>
  *  real users is a worse failure than $5 — and unlike the old cap, this one
  *  now tells you at 80% the same day. */
 const DAILY_BUDGET_USD = Number(Deno.env.get("GOOGLE_DAILY_BUDGET_USD") ?? "5.00");
-export const dailyBudgetMicros = (): number => Math.round(DAILY_BUDGET_USD * 1_000_000);
+export const dailyBudgetMicros = (): number => {
+  const micros = Math.round(DAILY_BUDGET_USD * 1_000_000);
+  // Invalid, negative, overflowing, or sub-micro-dollar settings disable spend.
+  // Never let NaN turn a comparison against the ceiling into an open gate.
+  return Number.isSafeInteger(micros) && micros > 0 ? micros : 0;
+};
 
 const ALERT_PUSH_TOKEN = Deno.env.get("ALERT_PUSH_TOKEN") ?? "";
 
@@ -112,23 +117,31 @@ async function alertPush(title: string, body: string): Promise<void> {
  *  unreadable switch as "nothing spent yet", which is the wrong way round on a
  *  function whose job is spending money. A MISSING ROW is not an error: the row
  *  is created by the day's first call, so absent legitimately means zero. */
-export async function isGoogleBudgetSpent(): Promise<boolean> {
+export async function isGoogleBudgetSpent(nextMicros = 0): Promise<boolean> {
+  const cap = dailyBudgetMicros();
+  if (cap === 0 || !Number.isSafeInteger(nextMicros) || nextMicros < 0) return true;
   const { data, error } = await admin
     .from("google_usage_counter")
-    .select("tripped")
+    .select("tripped, spend_micros")
     .eq("day", todayUTC())
     .maybeSingle();
   if (error) {
     console.error("google-spend: kill switch unreadable, refusing to spend", error.message);
     return true;
   }
-  return (data as { tripped?: boolean } | null)?.tripped === true;
+  if (data === null) return nextMicros > cap;
+  const row = data as { tripped?: boolean; spend_micros?: number };
+  // A lowered cap takes effect without waiting for the old one-shot trip flag.
+  // This read is NOT an atomic reservation: parallel requests can still race.
+  if (typeof row.spend_micros !== "number" || !Number.isSafeInteger(row.spend_micros) || row.spend_micros < 0) return true;
+  return row.tripped === true || row.spend_micros >= cap || nextMicros > cap - row.spend_micros;
 }
 
 /**
  * Make one paid Google Places call, metered and alarmed.
  *
- * Returns the Response, or `null` when the budget is already spent — callers
+ * Returns the Response, or `null` when the configured budget is invalid or the
+ * next request cannot fit the recorded remaining budget — callers
  * degrade to cached/DB results on null rather than surfacing an error.
  *
  * The bump is retried once: a silently failed bump is an uncounted billable
@@ -137,9 +150,8 @@ export async function isGoogleBudgetSpent(): Promise<boolean> {
 export async function spendGoogle(
   opts: { sku: GoogleSku; url: string; init?: RequestInit },
 ): Promise<Response | null> {
-  if (await isGoogleBudgetSpent()) return null;
-
   const micros = skuMicros(opts.sku);
+  if (await isGoogleBudgetSpent(micros)) return null;
   const cap = dailyBudgetMicros();
 
   const resp = await fetch(opts.url, opts.init);

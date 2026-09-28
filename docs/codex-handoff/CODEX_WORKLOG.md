@@ -34,3 +34,9 @@ Final first-batch validation: WORKING TREE full Jest suite passed 132 suites, 1,
 - WORKING TREE: year-in-review placeholder no longer promises an unsupported December 15 launch; describes the feature as in development.
 - TypeScript passed. No DEVICE or LIVE verification; these copy changes do not complete the larger social/profile redesign.
 - First cost/cache batch is COMMITTED as fac1d9d. Strict concurrent server budget reservations remain outstanding and require database validation.
+
+## Budget configuration and sequential boundary hardening
+- WORKING TREE: invalid, zero, negative, overflowing or sub-micro-dollar budget settings disable spending. Current recorded spend is checked as well as the trip flag, so lowering the cap takes effect immediately. An individual request that cannot fit the remaining recorded budget is refused, including the first request of a day.
+- WORKING TREE validation: six actual-helper VM tests passed, TypeScript passed, full Jest suite passed 132 suites / 1,143 tests / one skipped. Entirely mocked networking and database; no real API requests.
+- This is NOT an atomic reservation. Concurrent requests can still race; thrown fetches and failed post-fetch metering remain gaps. Missing/malformed spend data fails closed; source relies on spend_micros added by migration 0179. No field masks or SKU prices changed.
+- Supabase reference fetches failed (markdown unsupported, reference routes 404). No Supabase feature/API change or schema migration was introduced; existing maybeSingle query adds an existing column. No LIVE or DEVICE claims, deployment, or spend.
