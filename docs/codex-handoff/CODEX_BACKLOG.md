@@ -17,6 +17,20 @@ Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deploym
 - Broader typo pass.
 
 ## Unverified / blocked
+- **PostgREST returns 504 to the push-drain cron, and nobody has explained it.** On 2026-09-14
+  the drain ran 69 times in six hours and succeeded 21: 27 runs reported `server_push disabled`
+  while the flag was `enabled = true`, and 21 returned `{"error":"[object Object]"}`. Both lied
+  in the direction of looking fine. Once it could report, the message was `Gateway Timeout` on
+  the first read of the run. NOT the database — 15/60 connections, no slow queries,
+  `statement_timeout` 2 min, `push_outbox` 45 rows — so it is upstream of Postgres. Retries
+  (`_shared/retry.ts`) mitigate it; nothing explains it. Full write-up: `CODEX_HANDOFF.md` §5.4
+  K1/K2, open question S8.
+- **That 504 rate is currently unmeasurable, not zero.** 72 of 72 drain runs were clean in the
+  retained `net._http_response` window on 09-29, but `retryRead` absorbs up to three failures
+  silently and `send-push` discards the attempt count it already returns, so a run that
+  succeeded on attempt 2 is indistinguishable from one that never failed. Surfacing `attempts`
+  in the response settles it from one day of `net._http_response`. Cheap; do this before
+  claiming the drain is healthy.
 - Multi-session Postgres concurrency remains unverified. Local PGlite privacy execution now passes57 cases; this single embedded engine does not establish concurrent server behavior.
 - Real iPhone rendering and crashes: Xcode license blocker.
 - Production Sentry delivery and deployed database/functions.
