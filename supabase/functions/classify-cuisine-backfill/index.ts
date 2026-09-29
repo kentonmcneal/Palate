@@ -8,8 +8,8 @@
 // overwrites a value that exists.
 //
 // Called by pg_cron (0100) with x-cron-secret. Fails closed without
-// ANTHROPIC_API_KEY. Hard cap of LLM_DAILY_CAP calls per UTC day, so the
-// worst case is bounded whatever the cron does.
+// ANTHROPIC_API_KEY. Read-before-call caps are best effort: concurrent runs
+// can overshoot. There is no atomic LLM reservation in this implementation.
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -29,8 +29,8 @@ const LLM_DAILY_CAP = 500;
 // The budget, in the units the person who approved it was thinking in.
 // ----------------------------------------------------------------------------
 // A cap of 500 CALLS a day bounds the rate, not the bill. Ten dollars was
-// authorised, so ten dollars is what this enforces, measured against the token
-// counts Anthropic reports back on every response.
+// authorised. This read-before-call estimate can overshoot that amount; it
+// is not an atomic reservation or invoice guarantee.
 const LLM_LIFETIME_CAP_USD = 10;
 
 // Per million tokens. These are an ESTIMATE maintained by hand, and the whole
@@ -52,7 +52,11 @@ function costOf(u: {
   input_tokens?: number; output_tokens?: number;
   cache_read_input_tokens?: number; cache_creation_input_tokens?: number;
 } | null): { usd: number; input: number; output: number; cacheRead: number; cacheWrite: number } {
-  const input = u?.input_tokens ?? 0;
+  if (!u || ![u.input_tokens, u.output_tokens, u.cache_read_input_tokens ?? 0,
+      u.cache_creation_input_tokens ?? 0].every(v => Number.isSafeInteger(v) && v! >= 0)) {
+    throw new Error("LLM usage unavailable or invalid; stopping batch");
+  }
+  const input = u.input_tokens!;
   const output = u?.output_tokens ?? 0;
   const cacheRead = u?.cache_read_input_tokens ?? 0;
   const cacheWrite = u?.cache_creation_input_tokens ?? 0;
@@ -110,21 +114,27 @@ serve(async (req) => {
   if (usageRead.error) {
     return json({ error: "daily usage unreadable", detail: errText(usageRead.error), processed: 0 }, 500);
   }
-  const usedToday = usageRead.data?.count ?? 0;
+  const usedToday = usageRead.data === null ? 0 : usageRead.data?.count;
+  if (!Number.isSafeInteger(usedToday) || usedToday < 0) {
+    return json({ error: "daily usage invalid", processed: 0 }, 500);
+  }
   if (usedToday >= LLM_DAILY_CAP) {
     return json({ skipped: "daily cap reached", used_today: usedToday, processed: 0 });
   }
 
   // The money gate. Checked BEFORE any row is fetched, and again inside the
-  // loop, so a long batch cannot run past the ceiling between checks.
+  // loop. The next call can still cross the ceiling, and workers can race.
   const spentRead = await retryRead(() =>
     admin.rpc("llm_spend_total_usd", { p_action: "llm_cuisine_backfill" })
   );
   if (spentRead.error) {
     return json({ error: "spend total unreadable", detail: errText(spentRead.error), processed: 0 }, 500);
   }
-  let spentUsd = Number(spentRead.data ?? 0);
-  if (!Number.isFinite(spentUsd)) {
+  const rawSpent = spentRead.data;
+  const validSpendType = typeof rawSpent === "number" ||
+    (typeof rawSpent === "string" && /^\d+(?:\.\d+)?$/.test(rawSpent));
+  let spentUsd = Number(rawSpent);
+  if (!validSpendType || !Number.isFinite(spentUsd) || spentUsd < 0) {
     // A non-numeric total must never coerce to a permissive 0.
     return json({ error: "spend total not a number", detail: String(spentRead.data), processed: 0 }, 500);
   }
@@ -139,7 +149,7 @@ serve(async (req) => {
     return json({ error: "call count unreadable", detail: errText(callsRead.error), processed: 0 }, 500);
   }
   const lifetimeCalls = callsRead.count;
-  if (typeof lifetimeCalls !== "number") {
+  if (typeof lifetimeCalls !== "number" || !Number.isSafeInteger(lifetimeCalls) || lifetimeCalls < 0) {
     // Never fall back to 0 here: 0 means "spend freely".
     return json({ error: "call count missing", processed: 0 }, 500);
   }
@@ -170,7 +180,7 @@ serve(async (req) => {
   if (error) return json({ error: error.message }, 500);
   if (!rows || rows.length === 0) return json({ done: true, processed: 0 });
 
-  const anthropic = new Anthropic({ apiKey: ANTHROPIC_KEY });
+  const anthropic = new Anthropic({ apiKey: ANTHROPIC_KEY, maxRetries: 0 });
 
   // classifyWithLLM takes the create function, so wrapping it is enough to see
   // what every call actually cost without touching the classifier itself.
@@ -181,11 +191,24 @@ serve(async (req) => {
     return resp;
   };
   let processed = 0, written = 0, abstained = 0, failed = 0;
+  let accountingUncertain = false;
+  let persistenceUncertain = false;
+  // Confirm the intended row, not merely an error-free PATCH with zero matches.
+  // Do not retry an ambiguous write or dispatch another model call in this batch.
+  const persistRestaurant = async (id: string, patch: Record<string, unknown>): Promise<boolean> => {
+    try {
+      const result = await admin.from("restaurants").update(patch).eq("id", id).select("id").maybeSingle();
+      if (!result.error && result.data?.id === id) return true;
+    } catch { /* An acknowledgment may be lost after the write applied. */ }
+    persistenceUncertain = true;
+    return false;
+  };
   const sample: Array<{ name: string; cuisine: string | null; confidence: number }> = [];
 
   for (const row of rows) {
     if (processed + usedToday >= LLM_DAILY_CAP) break;
-    if (spentUsd >= LLM_LIFETIME_CAP_USD) break;
+    if (processed + lifetimeCalls! >= LLM_LIFETIME_CAP_CALLS) break;
+    if (spentUsd >= LLM_LIFETIME_CAP_USD || accountingUncertain || persistenceUncertain) break;
     try {
       const input: LLMInput = {
         name: row.name,
@@ -197,41 +220,49 @@ serve(async (req) => {
         editorialSummary: null,
         reviewSnippets: [],
       };
-      // Counted BEFORE the call: a call that throws is still billed, and an
+      // Counted BEFORE the call: a call that throws may still be billed, and an
       // uncounted failure at temperature 0 repeats forever under the cap.
       processed++;
-      await admin.rpc("record_api_usage", { p_day: day, p_action: "llm_cuisine_backfill", p_source: "anthropic" });
+      accountingUncertain = true;
+      const meter = await admin.rpc("record_api_usage", { p_day: day, p_action: "llm_cuisine_backfill", p_source: "anthropic" });
+      if (meter.error) throw new Error("LLM call meter unconfirmed; stopping batch");
       const stamp = new Date().toISOString();
       let s;
       try {
         lastUsage = null;
-        s = await classifyWithLLM(input, createCounted as never);
+        try {
+          s = await classifyWithLLM(input, createCounted as never);
+        } finally {
+          // Ledger first. A row that classified fine but failed to write is still
+          // billed, and a cost we did not record is a cap we cannot enforce.
+          {
+            const c = costOf(lastUsage);
+            spentUsd += c.usd;
+            const ledger = await admin.from("llm_spend").insert({
+              action: "llm_cuisine_backfill",
+              model: "claude-haiku-4-5",
+              input_tokens: c.input,
+              output_tokens: c.output,
+              cache_read_tokens: c.cacheRead,
+              cache_write_tokens: c.cacheWrite,
+              est_cost_usd: Number(c.usd.toFixed(6)),
+            });
+            if (ledger.error) throw new Error("LLM ledger write unconfirmed; stopping batch");
+            accountingUncertain = false;
+          }
+
+        }
       } catch (e) {
-        await admin.from("restaurants").update({ llm_backfill_at: stamp }).eq("id", row.id);
+        await persistRestaurant(row.id, { llm_backfill_at: stamp });
         throw e;
       }
 
-      // Ledger first. A row that classified fine but failed to write is still
-      // billed, and a cost we did not record is a cap we cannot enforce.
-      {
-        const c = costOf(lastUsage);
-        spentUsd += c.usd;
-        await admin.from("llm_spend").insert({
-          action: "llm_cuisine_backfill",
-          model: "claude-haiku-4-5",
-          input_tokens: c.input,
-          output_tokens: c.output,
-          cache_read_tokens: c.cacheRead,
-          cache_write_tokens: c.cacheWrite,
-          est_cost_usd: Number(c.usd.toFixed(6)),
-        });
-      }
 
       const conf = s.confidence?.cuisine_type ?? 0;
       if (sample.length < 15) sample.push({ name: row.name, cuisine: s.cuisine_type, confidence: conf });
       if (!s.cuisine_type || conf < MIN_CONFIDENCE) {
         abstained++;
-        if (commit) await admin.from("restaurants").update({ llm_backfill_at: stamp }).eq("id", row.id);
+        if (commit && !await persistRestaurant(row.id, { llm_backfill_at: stamp })) failed++;
         continue;
       }
       if (!commit) continue;
@@ -247,8 +278,7 @@ serve(async (req) => {
       if ((!row.occasion_tags || row.occasion_tags.length === 0) && s.occasion_tags?.length) {
         patch.occasion_tags = s.occasion_tags;
       }
-      const { error: upErr } = await admin.from("restaurants").update(patch).eq("id", row.id);
-      if (upErr) { failed++; continue; }
+      if (!await persistRestaurant(row.id, patch)) { failed++; continue; }
       written++;
     } catch {
       failed++;
@@ -257,9 +287,13 @@ serve(async (req) => {
 
   return json({
     processed, written, abstained, failed, commit,
+    accounting_uncertain: accountingUncertain,
+    persistence_uncertain: persistenceUncertain,
     spent_usd: Number(spentUsd.toFixed(4)),
     cap_usd: LLM_LIFETIME_CAP_USD,
-    remaining_estimate: rows.length === limit ? "more" : "none",
+    // Unconfirmed persistence leaves row eligibility unknown, even on the last row.
+    remaining_estimate: accountingUncertain || persistenceUncertain ? "unknown"
+      : processed < rows.length || rows.length === limit ? "more" : "none",
     sample,
   });
 });

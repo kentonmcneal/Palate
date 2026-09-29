@@ -42,7 +42,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // Optional — when unset, the LLM fallback is a no-op and places-proxy keeps
 // behaving as before. Add via: supabase secrets set ANTHROPIC_API_KEY=sk-...
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
-const anthropic = ANTHROPIC_KEY ? new Anthropic({ apiKey: ANTHROPIC_KEY }) : null;
+const anthropic = ANTHROPIC_KEY ? new Anthropic({ apiKey: ANTHROPIC_KEY, maxRetries: 0 }) : null;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -213,10 +213,12 @@ async function llmBudgetSpent(admin: ReturnType<typeof createClient>): Promise<b
     console.error("places-proxy: cannot read LLM budget, refusing to spend", errText(res.error));
     return true;
   }
-  return ((res.data as { count?: number } | null)?.count ?? 0) >= LLM_DAILY_CAP;
+  const count = res.data === null ? 0 : (res.data as { count?: number })?.count;
+  return !Number.isSafeInteger(count) || count! < 0 || count! >= LLM_DAILY_CAP;
 }
 async function recordLlmCall(admin: ReturnType<typeof createClient>): Promise<void> {
-  await admin.rpc("record_api_usage", { p_day: new Date().toISOString().slice(0, 10), p_action: "llm_proxy", p_source: "anthropic" });
+  const result = await admin.rpc("record_api_usage", { p_day: new Date().toISOString().slice(0, 10), p_action: "llm_proxy", p_source: "anthropic" });
+  if (result.error) throw new Error("LLM call meter unconfirmed");
 }
 
 // ----- handlers ---------------------------------------------------------
@@ -568,7 +570,7 @@ async function handleBlurb(
         || new Date(rest.editorial_blurb_generated_at).getTime()
            >= new Date(rest.reviews_refreshed_at).getTime());
   if (cacheValid) {
-    return json({ blurb: rest.editorial_blurb });
+    return json({ blurb: rest.editorial_blurb, cache_write_confirmed: true });
   }
 
   if (!anthropic) {
@@ -577,7 +579,6 @@ async function handleBlurb(
   if (await llmBudgetSpent(admin)) {
     return json({ blurb: null, reason: "llm_budget_spent" });
   }
-  await recordLlmCall(admin);
   const snippets: string[] = rest.review_snippets ?? [];
   if (snippets.length === 0 && !rest.editorial_summary) {
     return json({ blurb: null, reason: "no_reviews" });
@@ -596,6 +597,7 @@ async function handleBlurb(
   parts.push("\nReturn the single sentence.");
 
   try {
+    await recordLlmCall(admin);
     const resp = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 80,
@@ -604,13 +606,23 @@ async function handleBlurb(
     });
     const textBlock = resp.content.find((c) => c.type === "text");
     const blurb = textBlock?.text?.trim()?.replace(/^["']|["']$/g, "") ?? null;
-    if (blurb) {
-      await admin.from("restaurants").update({
-        editorial_blurb: blurb,
+    // Keep a successful paid result even if its cache write is unconfirmed.
+    // HTTP 200 avoids presenting a cache failure as a retryable model failure.
+    try {
+      const cached = await admin.from("restaurants").update({
+        // The enrichment-preservation trigger keeps old text on NULL. An
+        // empty string is the existing no-blurb cache sentinel; keep the
+        // paid response value unchanged below.
+        editorial_blurb: blurb ?? "",
         editorial_blurb_generated_at: new Date().toISOString(),
-      }).eq("id", rest.id);
+      }).eq("id", rest.id).select("id").maybeSingle();
+      if (cached.error || cached.data?.id !== rest.id) {
+        return json({ blurb, cache_write_confirmed: false, reason: "cache_write_unconfirmed" });
+      }
+    } catch {
+      return json({ blurb, cache_write_confirmed: false, reason: "cache_write_unconfirmed" });
     }
-    return json({ blurb });
+    return json({ blurb, cache_write_confirmed: true });
   } catch (e) {
     console.error("blurb generation failed", e);
     return json({ error: errText(e) }, 500);
@@ -667,7 +679,7 @@ async function classifyAndBuildRow(
   };
   // Fire the LLM when cuisine is ambiguous OR when there's enough review text
   // to read vibe/occasion — the latter enriches well-classified places too.
-  if (opts.useLLM && anthropic && (shouldUseLLM(derived) || shouldEnrichQualitative(llmInput))
+  if (opts.useLLM && opts.admin && anthropic && (shouldUseLLM(derived) || shouldEnrichQualitative(llmInput))
       && !(opts.admin && await llmBudgetSpent(opts.admin))) {
     try {
       if (opts.admin) await recordLlmCall(opts.admin);

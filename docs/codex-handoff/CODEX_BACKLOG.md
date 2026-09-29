@@ -86,3 +86,6 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 
 - Completed locally: feed focus/read recovery, explicit auth failures, blocked preview cleanup;154suites/1686passed/1skipped andTypeScript. Native and eventual consistency remain unverified.
 - Additional local PostgreSQL18.3 source build/install succeeded in workspace, but initdb failed with sandbox shmget Operation not permitted; no server/concurrency test ran. No bypass or production action.
+
+- Completed locally: bounded LLM meter/ledger/retry/cache/stamp safeguards,93 offline controls and focused typing pass. NOT an atomic ceiling: concurrent admissions, next-call overshoot and durable unknown-cost holds remain unresolved.
+- In progress: independently reviewed default-deny DB reservation design and all-route integration proposal; no active migration/deployment/spending authorization.
