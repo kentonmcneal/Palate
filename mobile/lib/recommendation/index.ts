@@ -33,7 +33,7 @@ export { classifyIdentity, classifyFromGraph } from "./identity";
 // ----------------------------------------------------------------------------
 
 let cacheGraphId: string | null = null;
-const cache = new Map<string, Compatibility>();
+const cache = new Map<string, { input: string; value: Compatibility }>();
 
 /** Bust the cache — call when the user's data changes. */
 export function invalidateCompatibilityCache(): void {
@@ -49,7 +49,7 @@ onPersonalSignalInvalidate(invalidateCompatibilityCache);
  * Get the canonical compatibility for (graph, restaurant). If the graph has
  * changed since the last call, the cache is rebuilt for this user.
  *
- * The "graphId" is a stable hash of the graph's totals so we don't recompute
+ * The "graphId" is a stable snapshot of the graph's compatibility inputs so we don't recompute
  * when the graph object identity changes but the underlying data didn't.
  */
 export function getCompatibility(graph: TasteGraph, r: RestaurantInput): Compatibility {
@@ -59,12 +59,12 @@ export function getCompatibility(graph: TasteGraph, r: RestaurantInput): Compati
     cacheGraphId = gid;
   }
   const key = r.google_place_id;
-  let c = cache.get(key);
-  if (!c) {
-    c = computeCompatibility(graph, r);
-    cache.set(key, c);
-  }
-  return c;
+  const input = stableSnapshot(r);
+  const cached = cache.get(key);
+  if (cached?.input === input) return cached.value;
+  const value = computeCompatibility(graph, r);
+  cache.set(key, { input, value });
+  return value;
 }
 
 /**
@@ -114,18 +114,21 @@ function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: num
 }
 
 function makeGraphId(g: TasteGraph): string {
-  // Cheap stable hash — totals + a couple of map sizes capture every relevant
-  // change to compatibility output.
-  return [
-    g.totalVisits,
-    g.uniqueRestaurants,
-    g.itemSentimentByRestaurant.size,
-    g.itemSentimentByCuisine.size,
-    g.friendVisitsByPlace.size,
-    // Explicit acts change the %, so they are in the key. The implicit
-    // ledger is deliberately NOT: it never reaches compatibility, and a
-    // cached % must not jitter because somebody scrolled past a card.
-    g.placeSentiment.size,
-    g.dislikes.placeIds.size,
-  ].join(":");
+  // Counts alone collide across people and across edits to existing ratings.
+  // Snapshot actual values, including Map/Set contents; plain JSON.stringify
+  // would silently turn every Map and Set into {}.
+  // Implicit feedback affects ranking only, not the displayed match score.
+  const { feedbackByPlace: _feedback, ...compatibilityGraph } = g;
+  return stableSnapshot(compatibilityGraph);
+}
+
+function stableSnapshot(value: unknown): string {
+  function normalize(v: unknown): unknown {
+    if (v instanceof Map) return [...v.entries()].sort(([a], [b]) => String(a).localeCompare(String(b))).map(([k, item]) => [k, normalize(item)]);
+    if (v instanceof Set) return [...v].sort();
+    if (Array.isArray(v)) return v.map(normalize);
+    if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)).map(([k, item]) => [k, normalize(item)]));
+    return v;
+  }
+  return JSON.stringify(normalize(value));
 }
