@@ -59,3 +59,5 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 - Completed locally: People account/request ownership, strict block filtering and mutation recovery;43 mounted cases pass. Realtime block updates/native verification remain unverified.
 
 - Completed locally: account-scoped root/username gate and username/display-name writes;19 focused plus20 independent cases pass. Other profile writers remain an audit item.
+
+- Reviewed draft: database-owned Google cap closes mixed-worker policy gap in21+11 local cases. Migration-file integration blocked by CLI telemetry write; SQL remains outside active migrations, defaultzero. Live/multisession checks outstanding.
