@@ -21,7 +21,7 @@
 //      one-shot flags at 2am, and places-proxy could never fire them either.
 //      Eight nights, zero notifications.
 //
-// Hence: guard, fetch, price, meter and alert are a SINGLE call here. A new
+// Hence: guard, reserve, fetch and alert are a SINGLE call here. A new
 // caller cannot be silent, cannot forget to be metered, and cannot be mispriced
 // without naming a SKU. There should be no `fetch` to googleapis.com anywhere
 // else in supabase/functions — gmail-import excepted, and only because its one
@@ -138,57 +138,68 @@ export async function isGoogleBudgetSpent(nextMicros = 0): Promise<boolean> {
 }
 
 /**
- * Make one paid Google Places call, metered and alarmed.
+ * Reserve estimated cost BEFORE contacting Google. The existing SQL RPC locks
+ * today's row and returns this reservation's total. The earlier read is only
+ * an optimization: concurrent callers may all pass it, but only reservations
+ * whose returned total fits the cap may perform a Google request.
  *
- * Returns the Response, or `null` when the configured budget is invalid or the
- * next request cannot fit the recorded remaining budget — callers
- * degrade to cached/DB results on null rather than surfacing an error.
- *
- * The bump is retried once: a silently failed bump is an uncounted billable
- * call, and enough of those mean the ceiling is never reached at all.
+ * Reservations are conservative, not an invoice: failed/uncertain RPC replies
+ * may consume budget twice on retry, and failed fetches retain their reservation.
+ * Never refund an uncertain request, since Google may already have served it.
+ * All deployed spenders must use this path for a fleet-wide guarantee.
  */
 export async function spendGoogle(
   opts: { sku: GoogleSku; url: string; init?: RequestInit },
 ): Promise<Response | null> {
   const micros = skuMicros(opts.sku);
-  if (await isGoogleBudgetSpent(micros)) return null;
   const cap = dailyBudgetMicros();
-
-  const resp = await fetch(opts.url, opts.init);
-
-  // Metered AFTER the call is made, so what we count is what Google served —
-  // but unconditionally, including on a non-2xx, because Google bills for
-  // requests it answered and a failing call is exactly the kind that gets
-  // retried in a loop.
-  let bumped = null;
-  for (let attempt = 0; attempt < 2 && !bumped; attempt++) {
-    const { data, error } = await admin.rpc("bump_google_spend", {
-      p_day: todayUTC(),
-      p_micros: micros,
-      p_cap_micros: cap,
-    });
-    if (error) {
-      console.error("google-spend: BILLABLE CALL NOT COUNTED", error.message);
-      continue;
-    }
-    bumped = (Array.isArray(data) ? data[0] : data) as {
-      new_spend_micros: number; new_count: number;
-      crossed_warn: boolean; crossed_trip: boolean;
-    } | null;
+  try {
+    if (await isGoogleBudgetSpent(micros)) return null;
+  } catch {
+    console.error("google-spend: budget lookup failed, refusing to spend");
+    return null;
   }
+  // Attribute the reservation to its admission day, even if fetch crosses UTC
+  // midnight. Do not re-read the day between retry attempts.
+  const day = todayUTC();
+  type Reservation = {
+    new_spend_micros: number; new_count: number;
+    crossed_warn: boolean; crossed_trip: boolean;
+  };
+  let reserved: Reservation | null = null;
+  for (let attempt = 0; attempt < 2 && !reserved; attempt++) {
+    try {
+      const { data, error } = await admin.rpc("bump_google_spend", {
+        p_day: day, p_micros: micros, p_cap_micros: cap,
+      });
+      const row = Array.isArray(data) ? (data.length === 1 ? data[0] : null) : data;
+      if (error || !row || !Number.isSafeInteger(row.new_spend_micros) || row.new_spend_micros < micros ||
+          !Number.isSafeInteger(row.new_count) || row.new_count < 1 ||
+          typeof row.crossed_warn !== "boolean" || typeof row.crossed_trip !== "boolean") {
+        console.error("google-spend: reservation unconfirmed; no Google request made");
+        continue;
+      }
+      reserved = row as Reservation;
+    } catch {
+      console.error("google-spend: reservation failed; no Google request made");
+    }
+  }
+  if (!reserved) return null;
 
-  if (bumped?.crossed_warn) {
+  if (reserved.crossed_warn) {
     await alertPush(
       "Palate — Google budget at 80%",
-      `${usd(bumped.new_spend_micros)} of ${usd(cap)} spent today over ${bumped.new_count} calls.`,
+      `${usd(reserved.new_spend_micros)} of ${usd(cap)} reserved today across ${reserved.new_count} reservation attempts. Actual billing may be lower.`,
     );
   }
-  if (bumped?.crossed_trip) {
+  if (reserved.crossed_trip) {
     await alertPush(
-      "⚠️ Palate kill-switch tripped",
-      `Hit ${usd(cap)} of Google spend (${bumped.new_count} calls) — cached results only until 00:00 UTC.`,
+      "⚠️ Palate Google budget reserved",
+      `The ${usd(cap)} Google budget is exhausted or fully reserved — further requests use cached results until 00:00 UTC.`,
     );
   }
-
-  return resp;
+  // A racing request may have reserved the last slot after our preflight read.
+  // An over-cap reservation stays counted, but must NEVER reach Google.
+  if (reserved.new_spend_micros > cap) return null;
+  return fetch(opts.url, opts.init);
 }

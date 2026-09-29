@@ -58,3 +58,12 @@ Tests:       1 skipped, 1151 passed, 1152 total
 Snapshots:   0 total
 Time:        11.112 s
 Ran all test suites.
+
+## New autonomous window — 2026-09-29 16:01:54 UTC
+Deadline 2026-09-30 16:01:54 UTC. Existing follow-up reactivated, no duplicate. User explicitly authorized bounded subagents; Groundwork vocabulary, quant and home UI have disjoint scopes. See CODEX_BACKLOG.md for current priorities and blocked verification.
+
+## Conservative Google reservations
+- WORKING TREE: reserve assigned SKU cost through existing atomic bump_google_spend before fetch. Only valid returned totals within cap authorize a Google call. Read/RPC failure or malformed reservation refuses spending. Fetch errors retain reserved cost; unknown RPC outcomes can double-reserve on retry but never double-fetch.
+- Independent read-only reviewer assessed SQL locking, retries, cap changes, midnight, free SKUs and rollout. Details and limitations in GOOGLE_RESERVATION_REVIEW.md. No schema change; no local or live Postgres execution claimed.
+- Fourteen actual-helper offline tests passed, including two isolated workers sharing a serialized fake meter with stale reads, mixed SKUs, committed-but-lost replies and HTTP/network failures. TypeScript passed. Full Jest: 134 suites, 1,159 passed, one skipped. No network-capable mocks or real service calls.
+- Counter totals now represent conservative reservations, not exact invoice spend; alerts use matching wording. Complete fleet adoption and real prices remain unverified.
