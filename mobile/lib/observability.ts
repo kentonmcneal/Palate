@@ -6,6 +6,7 @@
 // ============================================================================
 
 import Constants from "expo-constants";
+import { privateErrorEvent, privateErrorTransport } from "./observability-privacy";
 
 const DSN =
   process.env.EXPO_PUBLIC_SENTRY_DSN ??
@@ -37,11 +38,33 @@ export async function initObservability(): Promise<void> {
     try {
       const Sentry = await loadSentry();
       if (!Sentry) return;
+      // Same installed fetch transport used by RN when native is disabled.
+      const { makeFetchTransport } = await import("@sentry/browser");
       Sentry.init({
         dsn: DSN,
-        enableAutoSessionTracking: true,
-        sessionTrackingIntervalMillis: 30_000,
-        tracesSampleRate: 0.1,
+        // Deliberately JS-only. This does not erase historical native queues or
+        // disable a native SDK independently initialized by the host binary.
+        enableNative: false,
+        enableNativeCrashHandling: false,
+        enableAutoSessionTracking: false,
+        enableLogs: false,
+        enableMetrics: false,
+        profilesSampleRate: 0,
+        sendClientReports: false,
+        transport: options => privateErrorTransport(makeFetchTransport(options)),
+        tracesSampleRate: 0,
+        sendDefaultPii: false,
+        attachScreenshot: false,
+        attachViewHierarchy: false,
+        replaysSessionSampleRate: 0,
+        replaysOnErrorSampleRate: 0,
+        beforeBreadcrumb: () => null,
+        beforeSendTransaction: () => null,
+        beforeSend: (event, hint) => {
+          // Attachments bypass event JSON filtering, so exclude them explicitly.
+          hint.attachments = [];
+          return privateErrorEvent(event);
+        },
       });
       initialized = true;
     } catch {
@@ -54,19 +77,10 @@ export async function initObservability(): Promise<void> {
 }
 
 /**
- * Anything that is not an Error becomes one, keeping its own fields as context.
- *
- * Sentry titles an issue from an Error's name and message. Hand it a plain
- * object and it has nothing to title with, so it files everything under
- * "Object captured as exception with keys: ..." and the actual failure is
- * invisible. That is not hypothetical: two of the three people who have ever
- * used this app spent four days inside exactly that issue, and neither the
- * founder nor I could tell what had broken.
- *
- * Supabase is the reason it happens. Its client rejects with a plain
- * { code, details, hint, message } object rather than an Error, so every
- * unhandled Supabase rejection lands in the same unreadable bucket. The
- * message becomes the title; code, details and hint are kept beside it.
+ * Normalize local thrown values into Errors, retaining structured database codes
+ * for grouping. The legacy return value still includes local extras, but reportError
+ * never adds them to SDK scope. Error messages and unknown names are withheld by
+ * the JS event and transport filters; these fields are not remote diagnostics.
  */
 export function toError(err: unknown): { error: Error; extra: Record<string, unknown> } {
   if (err instanceof Error) return { error: err, extra: {} };
@@ -98,12 +112,10 @@ async function reportError(err: unknown, context?: Record<string, unknown>): Pro
   try {
     const Sentry = await loadSentry();
     if (!Sentry) return false;
-    const { error, extra } = toError(err);
-    Sentry.withScope((scope) => {
-      if (context) scope.setExtras(context);
-      if (Object.keys(extra).length > 0) scope.setExtras(extra);
-      Sentry.captureException(error);
-    });
+    const { error } = toError(err);
+    // Keep the context argument for existing callers, but never put arbitrary
+    // payloads into SDK scopes/processors merely to discard them later.
+    Sentry.captureException(error);
     // Accepted by the SDK, not proof of network delivery or dashboard receipt.
     return true;
   } catch {
@@ -116,14 +128,8 @@ export async function captureError(err: unknown, context?: Record<string, unknow
   await reportError(err, context);
 }
 
-export async function breadcrumb(message: string, data?: Record<string, unknown>): Promise<void> {
-  if (!initialized || !DSN) return;
-  try {
-    const Sentry = await loadSentry();
-    Sentry?.addBreadcrumb({ message, data, level: "info" });
-  } catch {
-    console.warn("[obs] breadcrumb could not be recorded");
-  }
+export async function breadcrumb(_message: string, _data?: Record<string, unknown>): Promise<void> {
+  // This bounded prototype does not collect breadcrumbs, even into SDK memory.
 }
 
 /**

@@ -61,3 +61,6 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 - Completed locally: account-scoped root/username gate and username/display-name writes;19 focused plus20 independent cases pass. Other profile writers remain an audit item.
 
 - Reviewed draft: database-owned Google cap closes mixed-worker policy gap in21+11 local cases. Migration-file integration blocked by CLI telemetry write; SQL remains outside active migrations, defaultzero. Live/multisession checks outstanding.
+
+- Completed locally: reviewed JS error-envelope privacy boundary,59 focused tests. Native crash coverage intentionally disabled; historical/native-independent queues unverified.
+- In progress: Metro runtime debug-ID generation and offline bundle/map verification; actual device/server symbolication remains unverified.
