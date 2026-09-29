@@ -64,3 +64,6 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 
 - Completed locally: reviewed JS error-envelope privacy boundary,59 focused tests. Native crash coverage intentionally disabled; historical/native-independent queues unverified.
 - In progress: Metro runtime debug-ID generation and offline bundle/map verification; actual device/server symbolication remains unverified.
+
+- Completed locally: remaining profile/avatar account ownership and coordinated deletion/logout cleanup;147 suites/1452 tests plus24 real-SDK offline controls pass.
+- In progress: notification preference serialization/unknown-state recovery; separate storage-deletion pagination fix. Live auth/device/RLS and complete erasure remain unverified.

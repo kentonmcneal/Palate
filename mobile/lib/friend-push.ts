@@ -17,6 +17,7 @@
 // ============================================================================
 
 import { supabase } from "./supabase";
+import { accountWriteSession, assertAccountWriteSession, requireAccountWriteUser, type AccountWriteSession } from "./account-write";
 
 export async function isFriendActivityPushEnabled(): Promise<boolean> {
   try {
@@ -33,11 +34,12 @@ export async function isFriendActivityPushEnabled(): Promise<boolean> {
   }
 }
 
-export async function setFriendActivityPushEnabled(on: boolean): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-  await supabase
+export async function setFriendActivityPushEnabled(on: boolean, token: AccountWriteSession = accountWriteSession()): Promise<void> {
+  const accountId = await requireAccountWriteUser(token);
+  assertAccountWriteSession(token);
+  const { error } = await supabase
     .from("profiles")
     .update({ push_social_activity: on })
-    .eq("id", user.id);
+    .eq("id", accountId);
+  if (error) throw error;
 }

@@ -1,3 +1,4 @@
+import { accountWriteSession, isAccountWriteSession } from "../../lib/account-write";
 import { useEffect, useState } from "react";
 import { View, ScrollView, StyleSheet, Pressable, Alert, Linking } from "react-native";
 import { TextInput } from "../../components/TextInput";
@@ -35,7 +36,10 @@ export default function ProfileSetup() {
   }, []);
 
   async function pickPhoto() {
+    const token = accountWriteSession();
+    if (!isAccountWriteSession(token)) return;
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!isAccountWriteSession(token)) return;
     if (!perm.granted) {
       Alert.alert("Photo access off", "Allow photo library access in Settings → Palate.", [
         { text: "Open Settings", onPress: () => Linking.openSettings() },
@@ -49,15 +53,17 @@ export default function ProfileSetup() {
       aspect: [1, 1],
       quality: 0.8,
     });
+    if (!isAccountWriteSession(token)) return;
     if (result.canceled || !result.assets[0]) return;
     setUploading(true);
     try {
-      const url = await uploadAvatar(result.assets[0].uri);
-      setAvatarUrl(url);
+      const url = await uploadAvatar(result.assets[0].uri, token);
+      if (isAccountWriteSession(token)) setAvatarUrl(url);
     } catch (e: any) {
+      if (!isAccountWriteSession(token)) return;
       Alert.alert("Couldn't upload", e?.message ?? "Try again");
     } finally {
-      setUploading(false);
+      if (isAccountWriteSession(token)) setUploading(false);
     }
   }
 
@@ -161,8 +167,8 @@ export default function ProfileSetup() {
 
         <Spacer size={12} />
         <Text style={styles.helper}>
-          Tap the photo to upload one. We never share your photo with anyone outside
-          your friends.
+          Tap the photo to upload one. Your profile photo is part of your public
+          identity and is visible to anyone with its link.
         </Text>
       </ScrollView>
 

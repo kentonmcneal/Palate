@@ -18,6 +18,7 @@ import { Linking } from "react-native";
 // ============================================================================
 
 import { supabase } from "./supabase";
+import { accountWriteSession, assertAccountWriteSession, requireAccountWriteUser, type AccountWriteSession } from "./account-write";
 
 export type PublicProfile = {
   id: string;
@@ -108,9 +109,9 @@ export async function saveSocialFields(input: {
   school?: string | null;
   instagram?: string | null;
   tiktok?: string | null;
-}): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not signed in");
+}, token: AccountWriteSession = accountWriteSession()): Promise<void> {
+  const accountId = await requireAccountWriteUser(token);
+  assertAccountWriteSession(token);
 
   const patch: Record<string, string | null> = {};
   // display_name is derived from these by a trigger (migration 0063) — but
@@ -135,7 +136,7 @@ export async function saveSocialFields(input: {
   if (input.tiktok !== undefined) patch.tiktok_handle = normalizeHandle(input.tiktok);
 
   if (Object.keys(patch).length === 0) return;
-  const { error } = await supabase.from("profiles").update(patch).eq("id", user.id);
+  const { error } = await supabase.from("profiles").update(patch).eq("id", accountId);
   if (error) throw error;
 }
 

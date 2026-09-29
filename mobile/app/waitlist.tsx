@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { View, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import { View, StyleSheet, Pressable, ActivityIndicator, Alert } from "react-native";
 import { Text } from "../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import { isApproved } from "../lib/waitlist";
 import { signOut } from "../lib/auth";
+import { usernameGateSession } from "../lib/username-gate";
 
 export default function WaitlistScreen() {
   const router = useRouter();
@@ -51,8 +52,10 @@ export default function WaitlistScreen() {
 
         <Pressable
           onPress={async () => {
-            await signOut();
-            router.replace("/sign-in");
+            try {
+              await signOut();
+              if (usernameGateSession().accountId === null) router.replace("/sign-in");
+            } catch { Alert.alert("Couldn't sign out", "Please try again."); }
           }}
           hitSlop={8}
           style={{ marginTop: 28 }}

@@ -1,5 +1,17 @@
 import { supabase } from "./supabase";
 import * as Linking from "expo-linking";
+import { runAuthTransition } from "./auth-transition";
+import { usernameGateSession, isUsernameGateSession, type UsernameSession } from "./username-gate";
+
+// Await public SDK initialization before any replacement can write a session.
+// Native provider prompts happen outside this queue; credential submission and
+// the SDK's complete session persistence/notification happen inside it.
+function transition<T>(operation: () => Promise<T>): Promise<T> {
+  return runAuthTransition(async () => {
+    await supabase.auth.getSession();
+    return operation();
+  });
+}
 
 /**
  * Sends a magic-link email. The link opens back into the app via the
@@ -7,10 +19,10 @@ import * as Linking from "expo-linking";
  */
 export async function sendMagicLink(email: string) {
   const redirectTo = Linking.createURL("/auth-callback");
-  const { error } = await supabase.auth.signInWithOtp({
+  const { error } = await transition(() => supabase.auth.signInWithOtp({
     email,
     options: { emailRedirectTo: redirectTo, shouldCreateUser: true },
-  });
+  }));
   if (error) throw error;
 }
 
@@ -19,11 +31,11 @@ export async function sendMagicLink(email: string) {
  * (Alternate to magic link — works without deep linking.)
  */
 export async function verifyEmailCode(email: string, code: string) {
-  const { data, error } = await supabase.auth.verifyOtp({
+  const { data, error } = await transition(() => supabase.auth.verifyOtp({
     email,
     token: code,
     type: "email",
-  });
+  }));
   if (error) throw error;
   return data;
 }
@@ -40,10 +52,10 @@ export async function verifyEmailCode(email: string, code: string) {
  * the raw nonce for us to forward here.
  */
 export async function signInWithGoogleIdToken(idToken: string) {
-  const { data, error } = await supabase.auth.signInWithIdToken({
+  const { data, error } = await transition(() => supabase.auth.signInWithIdToken({
     provider: "google",
     token: idToken,
-  });
+  }));
   if (error) throw error;
   return data;
 }
@@ -64,15 +76,31 @@ export async function signInWithGoogleIdToken(idToken: string) {
  * the way, so it is done properly.
  */
 export async function signInWithAppleIdToken(idToken: string, rawNonce: string) {
-  const { data, error } = await supabase.auth.signInWithIdToken({
+  const { data, error } = await transition(() => supabase.auth.signInWithIdToken({
     provider: "apple",
     token: idToken,
     nonce: rawNonce,
-  });
+  }));
   if (error) throw error;
   return data;
 }
 
 export async function signOut() {
-  await supabase.auth.signOut();
+  await signOutForAccount(usernameGateSession());
+}
+
+/** Skip stale deletion/logout intents; never clean up a replacement account.
+ * All application session replacement must use this module's queued helpers.
+ * A queued sign-in runs after the SDK has finished removing the old session.
+ */
+export function signOutForAccount(token: UsernameSession): Promise<boolean> {
+  return runAuthTransition(async () => {
+    if (!isUsernameGateSession(token)) return false;
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!isUsernameGateSession(token) || session?.user.id !== token.accountId) return false;
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    return true;
+  });
 }

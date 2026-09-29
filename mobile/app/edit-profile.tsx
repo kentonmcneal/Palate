@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { accountWriteSession, isAccountWriteSession } from "../lib/account-write";
+import { useEffect, useRef, useState } from "react";
 import {
   View,
   StyleSheet,
@@ -51,6 +52,10 @@ export default function EditProfileScreen() {
   const [savingSocial, setSavingSocial] = useState(false);
   const [socialSaved, setSocialSaved] = useState(false);
 
+  const visibilityPending = useRef(false);
+  const visibilityRevision = useRef(0);
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
+  const [visibilityKnown, setVisibilityKnown] = useState(false);
   const [visibility, setVisibility] = useState<ProfileVisibility>("friends");
 
   const [editingName, setEditingName] = useState(false);
@@ -60,9 +65,15 @@ export default function EditProfileScreen() {
   const [usernameError, setUsernameError] = useState<string | null>(null);
 
   useEffect(() => {
+    const token = accountWriteSession();
+    let alive = true;
+    const revision = ++visibilityRevision.current;
     getMyProfile().then((p) => {
-      if (!p) return;
-      setVisibility(p.profile_visibility);
+      if (!alive || !isAccountWriteSession(token) || !p || p.id !== token.accountId) return;
+      if (revision === visibilityRevision.current) {
+        setVisibility(p.profile_visibility);
+        setVisibilityKnown(true);
+      }
       setDisplayNameState(p.display_name);
       setEmail(p.email ?? null);
       setFirstName((p as { first_name?: string | null }).first_name ?? "");
@@ -74,10 +85,14 @@ export default function EditProfileScreen() {
       setUsernameState(p.username);
       setAvatarUrl(p.avatar_url);
     }).catch(() => {});
+    return () => { alive = false; };
   }, []);
 
   async function pickAvatar() {
+    const token = accountWriteSession();
+    if (!isAccountWriteSession(token)) return;
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!isAccountWriteSession(token)) return;
     if (!perm.granted) {
       Alert.alert(
         "Photo access off",
@@ -95,15 +110,17 @@ export default function EditProfileScreen() {
       aspect: [1, 1],
       quality: 0.8,
     });
+    if (!isAccountWriteSession(token)) return;
     if (result.canceled || !result.assets[0]) return;
     setUploadingAvatar(true);
     try {
-      const url = await uploadAvatar(result.assets[0].uri);
-      setAvatarUrl(url);
+      const url = await uploadAvatar(result.assets[0].uri, token);
+      if (isAccountWriteSession(token)) setAvatarUrl(url);
     } catch (e: any) {
+      if (!isAccountWriteSession(token)) return;
       Alert.alert("Couldn't upload", e?.message ?? "Try again");
     } finally {
-      setUploadingAvatar(false);
+      if (isAccountWriteSession(token)) setUploadingAvatar(false);
     }
   }
 
@@ -130,15 +147,51 @@ export default function EditProfileScreen() {
     setEditingUsername(false);
   }
 
-  async function changeVisibility(next: ProfileVisibility) {
-    const prev = visibility;
-    setVisibility(next); // optimistic
+  async function readVisibility() {
+    const token = accountWriteSession();
+    if (!isAccountWriteSession(token) || visibilityPending.current) return;
+    visibilityPending.current = true;
+    ++visibilityRevision.current;
+    setVisibilitySaving(true);
     try {
-      await setProfileVisibility(next);
+      const p = await getMyProfile();
+      if (!isAccountWriteSession(token)) return;
+      if (p?.id === token.accountId) {
+        setVisibility(p.profile_visibility);
+        setVisibilityKnown(true);
+      }
+    } finally {
+      visibilityPending.current = false;
+      if (isAccountWriteSession(token)) setVisibilitySaving(false);
+    }
+  }
+
+  async function changeVisibility(next: ProfileVisibility) {
+    const token = accountWriteSession();
+    if (!isAccountWriteSession(token) || !visibilityKnown || visibilityPending.current) return;
+    visibilityPending.current = true;
+    ++visibilityRevision.current;
+    setVisibilitySaving(true);
+    try {
+      await setProfileVisibility(next, token);
+      if (isAccountWriteSession(token)) setVisibility(next);
     } catch (e: any) {
-      // Roll back so the UI never shows a privacy setting the DB didn't save.
-      setVisibility(prev);
-      Alert.alert("Couldn't update", e.message ?? "Try again");
+      if (!isAccountWriteSession(token)) return;
+      // A lost reply may follow a committed privacy change. Read the server
+      // rather than restoring an old value and promising the wrong audience.
+      setVisibilityKnown(false);
+      try {
+        const p = await getMyProfile();
+        if (!isAccountWriteSession(token)) return;
+        if (p?.id === token.accountId) {
+          setVisibility(p.profile_visibility);
+          setVisibilityKnown(true);
+        }
+      } catch { /* remain unknown until an explicit read succeeds */ }
+      if (isAccountWriteSession(token)) Alert.alert("Couldn't confirm the update", "Check your privacy setting before trying again.");
+    } finally {
+      visibilityPending.current = false;
+      if (isAccountWriteSession(token)) setVisibilitySaving(false);
     }
   }
 
@@ -274,9 +327,11 @@ export default function EditProfileScreen() {
               <Pressable
                 key={v}
                 onPress={() => changeVisibility(v)}
-                style={[styles.visBtn, visibility === v && styles.visBtnActive]}
+                accessibilityLabel={`${v} profile visibility`}
+                disabled={visibilitySaving || !visibilityKnown}
+                style={[styles.visBtn, visibilityKnown && !visibilitySaving && visibility === v && styles.visBtnActive]}
               >
-                <Text style={[styles.visText, visibility === v && styles.visTextActive]}>
+                <Text style={[styles.visText, visibilityKnown && !visibilitySaving && visibility === v && styles.visTextActive]}>
                   {v[0].toUpperCase() + v.slice(1)}
                 </Text>
               </Pressable>
@@ -293,10 +348,12 @@ export default function EditProfileScreen() {
             visits appear on your profile.
           </Note>
           <Spacer />
+          {visibilitySaving && <Note>Saving or checking your privacy setting…</Note>}
+          {!visibilitySaving && !visibilityKnown && <Button title="Reload privacy setting" onPress={() => void readVisibility().catch(() => {})} variant="ghost" />}
           <Note>
-            {visibility === "public" && "Anyone on Palate can see your profile and persona."}
-            {visibility === "friends" && "Only people you follow who also follow you can see your shared visits, persona and profile details. Your name, username, profile photo and connection counts remain visible."}
-            {visibility === "private" && "Your visits, persona and profile details are hidden from other people. Your name, username, profile photo and connection counts remain visible."}
+            {visibilityKnown && !visibilitySaving && visibility === "public" && "Anyone on Palate can see your profile and persona."}
+            {visibilityKnown && !visibilitySaving && visibility === "friends" && "Only people you follow who also follow you can see your shared visits, persona and profile details. Your name, username, profile photo and connection counts remain visible."}
+            {visibilityKnown && !visibilitySaving && visibility === "private" && "Your visits, persona and profile details are hidden from other people. Your name, username, profile photo and connection counts remain visible."}
           </Note>
         </Section>
 

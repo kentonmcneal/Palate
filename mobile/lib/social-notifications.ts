@@ -12,6 +12,7 @@
 // sends until that is turned on deliberately.
 // ----------------------------------------------------------------------------
 import { supabase } from "./supabase";
+import { accountWriteSession, assertAccountWriteSession, requireAccountWriteUser, type AccountWriteSession } from "./account-write";
 
 export type SocialPushPrefs = { likes: boolean; comments: boolean };
 
@@ -35,13 +36,14 @@ export async function getSocialPushPrefs(): Promise<SocialPushPrefs> {
 export async function setSocialPushPref(
   which: keyof SocialPushPrefs,
   enabled: boolean,
+  token: AccountWriteSession = accountWriteSession(),
 ): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Please sign in.");
+  const accountId = await requireAccountWriteUser(token);
+  assertAccountWriteSession(token);
   const column = which === "likes" ? "push_post_likes" : "push_post_comments";
   const { error } = await supabase
     .from("profiles")
     .update({ [column]: enabled })
-    .eq("id", user.id);
+    .eq("id", accountId);
   if (error) throw error;
 }

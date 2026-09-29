@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { supabase } from "./supabase";
+import { accountWriteSession, assertAccountWriteSession, requireAccountWriteUser, type AccountWriteSession } from "./account-write";
 import { usernameGateSession, isUsernameGateSession, type UsernameSession } from "./username-gate";
 
 export type ProfileVisibility = "private" | "friends" | "public";
@@ -54,10 +55,10 @@ export async function getMyProfile(): Promise<Profile | null> {
   return data as Profile;
 }
 
-export async function saveDemographics(d: Partial<Demographics>): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not signed in");
-  const { error } = await supabase.from("profiles").update(d).eq("id", user.id);
+export async function saveDemographics(d: Partial<Demographics>, token: AccountWriteSession = accountWriteSession()): Promise<void> {
+  const accountId = await requireAccountWriteUser(token);
+  assertAccountWriteSession(token);
+  const { error } = await supabase.from("profiles").update(d).eq("id", accountId);
   if (error) throw error;
 }
 
@@ -79,13 +80,13 @@ export async function setUsername(handle: string, token: UsernameSession = usern
   return { ok: true };
 }
 
-export async function setProfileVisibility(v: ProfileVisibility): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not signed in");
+export async function setProfileVisibility(v: ProfileVisibility, token: AccountWriteSession = accountWriteSession()): Promise<void> {
+  const accountId = await requireAccountWriteUser(token);
+  assertAccountWriteSession(token);
   const { error } = await supabase
     .from("profiles")
     .update({ profile_visibility: v })
-    .eq("id", user.id);
+    .eq("id", accountId);
   if (error) throw error;
 }
 
@@ -151,9 +152,9 @@ export async function getFriendProfileSnapshot(targetId: string): Promise<Friend
   return row as FriendProfileSnapshot;
 }
 
-export async function saveQuizResult(personaKey: string, chips: string[]): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not signed in");
+export async function saveQuizResult(personaKey: string, chips: string[], token: AccountWriteSession = accountWriteSession()): Promise<void> {
+  const accountId = await requireAccountWriteUser(token);
+  assertAccountWriteSession(token);
   const { error } = await supabase
     .from("profiles")
     .update({
@@ -162,7 +163,7 @@ export async function saveQuizResult(personaKey: string, chips: string[]): Promi
       quiz_completed_at: new Date().toISOString(),
       onboarding_complete: true,
     })
-    .eq("id", user.id);
+    .eq("id", accountId);
   if (error) throw error;
 }
 
@@ -208,9 +209,9 @@ export async function getQuizPersona(): Promise<{ persona: string | null; chips:
   };
 }
 
-export async function saveTastePreferences(cuisines: string[]): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not signed in");
+export async function saveTastePreferences(cuisines: string[], token: AccountWriteSession = accountWriteSession()): Promise<void> {
+  const accountId = await requireAccountWriteUser(token);
+  assertAccountWriteSession(token);
   const { error } = await supabase
     .from("profiles")
     .update({
@@ -223,7 +224,7 @@ export async function saveTastePreferences(cuisines: string[]): Promise<void> {
       // back through onboarding on every single sign-in, forever.
       onboarding_complete: true,
     })
-    .eq("id", user.id);
+    .eq("id", accountId);
   if (error) throw error;
 }
 
@@ -243,18 +244,20 @@ export async function getTastePreferences(): Promise<string[]> {
 // Avatar upload — pushes to the public 'avatars' bucket, namespaced by user id.
 // Returns the public URL written to profiles.avatar_url.
 // ============================================================================
-export async function uploadAvatar(uri: string): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not signed in");
+export async function uploadAvatar(uri: string, token: AccountWriteSession = accountWriteSession()): Promise<string> {
+  const accountId = await requireAccountWriteUser(token);
+  assertAccountWriteSession(token);
 
   const ext = (uri.split(".").pop() || "jpg").toLowerCase().slice(0, 4);
-  const path = `${user.id}/${Date.now()}.${ext}`;
+  const path = `${accountId}/${Date.now()}.${ext}`;
 
   // Read the file as binary. Expo image picker URIs are file:// — we have to
   // fetch -> arrayBuffer ourselves; the supabase JS client otherwise sends
   // an empty blob on RN.
   const resp = await fetch(uri);
+  assertAccountWriteSession(token);
   const buf = await resp.arrayBuffer();
+  assertAccountWriteSession(token);
 
   const { error: uploadErr } = await supabase.storage
     .from("avatars")
@@ -263,6 +266,7 @@ export async function uploadAvatar(uri: string): Promise<string> {
       upsert: false,
     });
   if (uploadErr) throw uploadErr;
+  assertAccountWriteSession(token);
 
   const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
   const url = pub.publicUrl;
@@ -270,9 +274,10 @@ export async function uploadAvatar(uri: string): Promise<string> {
   const { error: updateErr } = await supabase
     .from("profiles")
     .update({ avatar_url: url })
-    .eq("id", user.id);
+    .eq("id", accountId);
   if (updateErr) throw updateErr;
 
+  assertAccountWriteSession(token);
   return url;
 }
 

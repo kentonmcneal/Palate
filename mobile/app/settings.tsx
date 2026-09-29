@@ -1,3 +1,5 @@
+import { accountWriteSession, isAccountWriteSession } from "../lib/account-write";
+import { deleteHistoryForAccount, deleteAccountForAccount } from "../lib/account-settings";
 import React, { useCallback, useEffect, useState } from "react";
 import { View, StyleSheet, Switch, Alert, Linking, ScrollView, Share, Pressable, Modal } from "react-native";
 import { TextInput } from "../components/TextInput";
@@ -8,7 +10,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Button, Spacer } from "../components/Button";
 import { colors, spacing, type } from "../theme";
 import { supabase } from "../lib/supabase";
-import { signOut } from "../lib/auth";
+import { signOut, signOutForAccount } from "../lib/auth";
 import { buildInfoLine, checkForUpdateNow } from "../lib/build-info";
 import { generateForCurrentWeek } from "../lib/wrapped";
 import {
@@ -140,21 +142,31 @@ export default function Settings() {
   }
 
   function deleteHistory() {
+    const token = accountWriteSession();
+    if (!isAccountWriteSession(token)) return;
     Alert.alert("Delete all visit history?", "This cannot be undone.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-          const { error } = await supabase.rpc("delete_my_history");
-          if (error) Alert.alert("Failed", error.message);
-          else Alert.alert("Cleared", "Your visit history is empty.");
+          if (!isAccountWriteSession(token)) return;
+          try {
+            const { error } = await deleteHistoryForAccount(token);
+            if (!isAccountWriteSession(token)) return;
+            if (error) Alert.alert("Failed", error.message);
+            else Alert.alert("Cleared", "Your visit history is empty.");
+          } catch (e: any) {
+            if (isAccountWriteSession(token)) Alert.alert("Failed", e?.message ?? "Try again.");
+          }
         },
       },
     ]);
   }
 
   function deleteAccount() {
+    const token = accountWriteSession();
+    if (!isAccountWriteSession(token)) return;
     Alert.alert(
       "Delete account?",
       "This wipes everything: your account, visits, location events, and every photo you uploaded. You can't undo this.",
@@ -175,12 +187,21 @@ export default function Settings() {
             // Server-side because a client-side list-and-remove is skippable
             // by force-quitting mid-flow, and a deletion you can interrupt is
             // not a deletion.
-            const { error } = await supabase.functions.invoke("delete-account", { body: {} });
-            if (error) {
-              Alert.alert("Failed", await readFunctionError(error));
-            } else {
-              await signOut();
-              router.replace("/sign-in");
+            if (!isAccountWriteSession(token)) return;
+            try {
+              const { error } = await deleteAccountForAccount(token);
+              if (!isAccountWriteSession(token)) return;
+              if (error) {
+                const message = await readFunctionError(error);
+                if (isAccountWriteSession(token)) Alert.alert("Failed", message);
+              } else {
+                await signOutForAccount(token);
+                // signOut itself advances the account token; never navigate a
+                // newly signed-in account after this old deletion completes.
+                if (accountWriteSession().accountId === null) router.replace("/sign-in");
+              }
+            } catch (e: any) {
+              if (isAccountWriteSession(token)) Alert.alert("Failed", e?.message ?? "Try again.");
             }
           },
         },
@@ -266,7 +287,7 @@ export default function Settings() {
             right={
               <Switch
                 value={friendPush}
-                onValueChange={(v) => { setFriendPush(v); void setFriendActivityPushEnabled(v); }}
+                onValueChange={(v) => { setFriendPush(v); void setFriendActivityPushEnabled(v).catch(() => setFriendPush(!v)); }}
                 thumbColor={friendPush ? colors.red : "#fff"}
                 trackColor={{ true: colors.redTintBorder, false: colors.line }}
               />
@@ -348,7 +369,12 @@ export default function Settings() {
           <Spacer />
           <Button title="Blocked accounts" onPress={() => router.push("/blocked")} variant="ghost" />
           <Spacer />
-          <Button title="Sign out" onPress={async () => { await signOut(); router.replace("/sign-in"); }} variant="ghost" />
+          <Button title="Sign out" onPress={async () => {
+            try {
+              await signOut();
+              if (accountWriteSession().accountId === null) router.replace("/sign-in");
+            } catch { Alert.alert("Couldn't sign out", "Please try again."); }
+          }} variant="ghost" />
         </CollapsibleSection>
 
         <CollapsibleSection title="Help">
