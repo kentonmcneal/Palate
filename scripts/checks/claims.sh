@@ -23,6 +23,22 @@ else
 fi
 
 echo
+echo "== enforcement =="
+hp=$(git config core.hooksPath 2>/dev/null || true)
+if [ "${hp:-}" = ".githooks" ]; then
+  echo "  pre-commit hook: installed"
+else
+  echo "  pre-commit hook: NOT INSTALLED — claims are advisory only"
+  echo "    fix: git config core.hooksPath .githooks"
+fi
+if [ -n "${PALATE_AGENT:-}" ]; then
+  echo "  PALATE_AGENT=$PALATE_AGENT"
+else
+  echo "  PALATE_AGENT unset — the hook cannot tell your claims from theirs"
+  echo "    fix: export PALATE_AGENT=claude   # or codex"
+fi
+
+echo
 echo "== active claims =="
 awk '/^## Active claims/{f=1;next} /^## Closed recently/{f=0} f && /^\| /{print "  "$0}' \
   docs/AGENT_CLAIMS.md 2>/dev/null | grep -v '^\s*| *---' || echo "  (none)"

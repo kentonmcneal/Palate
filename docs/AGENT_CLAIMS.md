@@ -54,9 +54,33 @@ handoff review."*
    neither will see the other, because a claim has to be committed to be visible and commits
    race. It reduces collisions; it cannot prevent them. Rule 2 is the reliable half.
 
+## Enforcement
+
+`.githooks/pre-commit` refuses a commit whose staged paths fall under another agent's
+unexpired claim. **One-time setup per clone**, because git does not share hooks:
+
+```bash
+git config core.hooksPath .githooks
+export PALATE_AGENT=claude        # or codex — the hook cannot tell you apart otherwise
+```
+
+`./scripts/checks/claims.sh` warns when either is missing.
+
+It is a **no-op while the table below is empty**, deliberately: a hook with false positives
+gets deleted and then protects nothing. It is also not security — `--no-verify` bypasses it and
+git offers no way to prevent that. It makes not-looking fail loudly rather than silently.
+
+Verified by making it fire: an unexpired claim by another agent blocks (including via glob), and
+an empty table, an expired claim, a non-matching path, and your own claim with `PALATE_AGENT`
+set all pass.
+
 ## Active claims
 
-Newest first. UTC. Delete your own row when you are done, or let it expire.
+Newest first. **Exactly six columns — the hook parses `agent`, `paths` and `expires` by
+position, so do not add or reorder them.** `expires` must be UTC ISO to the minute
+(`2026-09-29T23:04Z`); it is compared as a string, which is why the format is fixed. `paths` is
+space-separated and may glob (`mobile/lib/observability*`). Delete your own row when done, or
+let it expire.
 
 | agent | branch | paths | opened | expires | note |
 |---|---|---|---|---|---|

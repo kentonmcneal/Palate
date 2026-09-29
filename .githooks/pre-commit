@@ -1,0 +1,75 @@
+#!/bin/bash
+# Refuse a commit that touches paths another agent has claimed.
+#
+# WHAT THIS IS NOT: security, or a mutex. `--no-verify` bypasses it and git
+# offers no way to stop that. It exists because two agents collided four times
+# in one day on 2026-09-29 and every collision was avoidable by looking. This
+# makes not-looking fail loudly instead of silently.
+#
+# It is a NO-OP unless docs/AGENT_CLAIMS.md has an unexpired claim whose paths
+# match something you staged. With the table empty it can never fire, which is
+# deliberate: a hook with false positives gets deleted, and then protects
+# nothing.
+#
+# ATTRIBUTION. Codex and Claude run as the same OS user with the same git
+# author, so the hook cannot tell who you are. Identify yourself:
+#
+#     export PALATE_AGENT=claude      # or codex
+#
+# Unset, any matching claim blocks — because an unidentified committer touching
+# somebody's claimed path is exactly the case worth stopping.
+set -u
+
+CLAIMS="docs/AGENT_CLAIMS.md"
+[ -f "$CLAIMS" ] || exit 0
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -n "$staged" ] || exit 0
+
+me="${PALATE_AGENT:-}"
+now=$(date -u +%Y-%m-%dT%H:%MZ)   # ISO sorts lexicographically; no date parsing
+blocked=""
+
+# Rows between "## Active claims" and "## Closed recently".
+# Columns: | agent | branch | paths | opened | expires | note |
+while IFS= read -r row; do
+  agent=$(  awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/,"",$2); print $2}' <<<"$row")
+  paths=$(  awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/,"",$4); print $4}' <<<"$row")
+  expires=$(awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/,"",$6); print $6}' <<<"$row")
+
+  case "$agent" in ""|agent|_*|-*) continue ;; esac
+  [ -n "$paths" ] || continue
+
+  # Expired claims are void and need no cleanup — that is the whole point.
+  if [ -n "$expires" ] && [[ "$expires" < "$now" ]]; then continue; fi
+  # Your own claim never blocks you.
+  if [ -n "$me" ] && [ "$agent" = "$me" ]; then continue; fi
+
+  # Strip backticks/commas, then glob-match each staged path.
+  cleaned=$(tr -d '`' <<<"$paths" | tr ',' ' ')
+  for pat in $cleaned; do
+    while IFS= read -r f; do
+      # shellcheck disable=SC2254
+      case "$f" in $pat) blocked="${blocked}  ${f}  <- claimed by ${agent} until ${expires:-?}"$'\n' ;; esac
+    done <<<"$staged"
+  done
+done < <(awk '/^## Active claims/{f=1;next} /^## Closed recently/{f=0} f && /^\|/{print}' "$CLAIMS")
+
+[ -n "$blocked" ] || exit 0
+
+cat >&2 <<EOF
+
+COMMIT REFUSED — these staged paths are claimed by another agent:
+
+${blocked}
+Claims live in ${CLAIMS}; run ./scripts/checks/claims.sh to see them.
+
+What to do, in order of preference:
+  1. Work on something else until the claim expires.
+  2. If the claim is stale, say so in ${CLAIMS} and let it expire — do not
+     delete somebody else's row.
+  3. If it is YOUR claim and the hook cannot tell:  export PALATE_AGENT=<you>
+  4. If you are certain, 'git commit --no-verify' — and say in the message why.
+
+EOF
+exit 1

@@ -3,6 +3,8 @@
 ## Before you edit: check who is holding what
 
 ```bash
+git config core.hooksPath .githooks   # once per clone — enforces claims
+export PALATE_AGENT=claude            # so the hook knows your claims from theirs
 ./scripts/checks/claims.sh
 ```
 
