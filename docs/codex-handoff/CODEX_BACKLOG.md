@@ -3,7 +3,8 @@
 Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deployment or paid services.
 
 ## In progress
-- Security review of server readers and client privacy handling.
+- SQL privacy fixes with synthetic local PGlite execution; full deployed schema remains unverified.
+- Follows-list ownership and asynchronous mutation reliability.
 
 ## Completed before this window
 - Nearby request coalescing, malformed-cache and budget config checks.
@@ -11,8 +12,8 @@ Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deploym
 - Feed/profile copy corrections; malformed-location ranking protection.
 
 ## Next
-- Independent social/feed/profile UI pass with reversible local changes.
-- Recommendation evaluations across sparse histories and dense-city fixtures; prioritize measured defects over arbitrary reweighting.
+- Device review of owner profile redesign; broader people-search reliability and profile layout.
+- Expand recommendation relevance evidence beyond current synthetic invariants.
 - Broader typo pass.
 
 ## Unverified / blocked
@@ -28,3 +29,7 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 - 5f1a5a2: conservative pre-fetch Google reservations, failure/concurrency mocks and independent source review. Live accounting remains unverified.
 - f4729fc: recommendation cache invalidates on real profile/restaurant changes.
 - Social mutation batch: independent race review, per-row like guards and comment-session/mutation reconciliation; 137 suites pass, device verification pending.
+
+- 91a9374: three missing-evidence ranking corrections;49 synthetic evaluations.
+- 708ec6f: edge authorization fixes;26 offline handler cases. SQL defects remain pending.
+- Own profile connections/navigation and privacy wording:139 suites /1,240 tests passed; device review pending.

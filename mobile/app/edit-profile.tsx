@@ -295,8 +295,8 @@ export default function EditProfileScreen() {
           <Spacer />
           <Note>
             {visibility === "public" && "Anyone on Palate can see your profile and persona."}
-            {visibility === "friends" && "Only your accepted friends can see your profile and persona."}
-            {visibility === "private" && "Nothing is visible to anyone but you."}
+            {visibility === "friends" && "Only people you follow who also follow you can see your shared visits, persona and profile details. Your name, username, profile photo and connection counts remain visible."}
+            {visibility === "private" && "Your visits, persona and profile details are hidden from other people. Your name, username, profile photo and connection counts remain visible."}
           </Note>
         </Section>
 

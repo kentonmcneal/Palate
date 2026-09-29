@@ -3,28 +3,19 @@ import { View, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { Text } from "../../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { OwnProfileConnections } from "../../components/OwnProfileConnections";
 import { ProfileBody } from "../../components/ProfileBody";
 import { useCaptureStatus, useCaptureFix } from "../../components/CaptureWarning";
 import { supabase } from "../../lib/supabase";
 import { colors, spacing, type } from "../../theme";
 import { FONT_CAP } from "../../lib/a11y";
 
-/**
- * The Profile tab.
- *
- * This tab used to point at the Settings screen with the word "Profile" on it,
- * which is why nobody had a profile: the app had no place where you could see
- * yourself the way other people see you. It now renders the same body as
- * `profile/[id]`, so what you look at IS what a friend looks at — the numbers
- * match, the sections match, and anything hidden from them is hidden from this
- * view too, with the private remainder disclosed rather than silently dropped.
- *
- * Settings moved out to its own pushed route behind the gear.
- */
+/** Owner-only navigation; the shared, privacy-gated profile body is unchanged. */
 export default function MyProfileScreen() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [section, setSection] = useState<"profile" | "connections">("profile");
 
   useEffect(() => {
     supabase.auth.getUser()
@@ -36,8 +27,10 @@ export default function MyProfileScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <View style={{ width: 40 }} />
-        <Text style={type.title}>Profile</Text>
+        <View style={styles.heading}>
+          <Text style={styles.eyebrow}>YOUR PALATE</Text>
+          <Text style={styles.title}>A taste of you.</Text>
+        </View>
         <Pressable
           onPress={() => router.push("/settings" as never)}
           style={styles.gearBtn}
@@ -51,8 +44,31 @@ export default function MyProfileScreen() {
       {!ready && (
         <View style={styles.center}><ActivityIndicator color={colors.red} /></View>
       )}
-      {ready && userId && <CaptureStatusRow />}
-      {ready && userId && <ProfileBody targetId={userId} />}
+      {ready && userId && (
+        <>
+          <View style={styles.sections} accessibilityRole="tablist">
+            {(["profile", "connections"] as const).map((item) => (
+              <Pressable
+                key={item}
+                onPress={() => setSection(item)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: section === item }}
+                style={[styles.sectionButton, section === item && styles.sectionSelected]}
+              >
+                <Text style={[styles.sectionText, section === item && styles.sectionTextSelected]}>
+                  {item === "profile" ? "My profile" : "Connections"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {section === "profile" ? (
+            <>
+              <CaptureStatusRow />
+              <ProfileBody targetId={userId} />
+            </>
+          ) : <OwnProfileConnections />}
+        </>
+      )}
       {ready && !userId && (
         <View style={styles.center}>
           <Text style={type.subtitle}>Sign in to see your profile.</Text>
@@ -126,8 +142,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
     borderBottomColor: colors.line, borderBottomWidth: 1,
   },
+  heading: { flex: 1, paddingRight: spacing.md },
+  eyebrow: { ...type.badge, letterSpacing: 1.8, color: colors.redText },
+  title: { ...type.display, color: colors.ink, marginTop: 5 },
+  sections: { flexDirection: "row", marginHorizontal: spacing.lg, marginTop: spacing.md, marginBottom: spacing.sm, padding: 4, borderRadius: 16, backgroundColor: colors.wash },
+  sectionButton: { flex: 1, minHeight: 44, paddingVertical: 12, paddingHorizontal: 8, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  sectionSelected: { backgroundColor: colors.faint },
+  sectionText: { ...type.small, color: colors.mute },
+  sectionTextSelected: { color: colors.ink },
   gearBtn: {
-    width: 40, height: 40, borderRadius: 20,
+    width: 44, height: 44, borderRadius: 22,
     alignItems: "center", justifyContent: "center",
     backgroundColor: colors.faint,
   },

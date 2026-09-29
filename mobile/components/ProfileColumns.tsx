@@ -95,7 +95,7 @@ export function ProfileColumns() {
       <View style={styles.divider} />
 
       <View style={styles.col}>
-        <Text style={styles.head}>PALATE FRIENDS</Text>
+        <Text style={styles.head}>TASTE MATCHES</Text>
         {people.length === 0 && <Text style={styles.none}>Nobody overlaps you yet</Text>}
         {people.map((p) => (
           <Pressable
