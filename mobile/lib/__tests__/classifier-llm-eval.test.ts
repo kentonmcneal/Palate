@@ -4,24 +4,9 @@ import { GOLDEN, type GoldenCase } from "../../../evals/classifier/golden";
 import { tally, format, outcomeOf } from "../../../evals/classifier/score";
 import { addUsage, costUsd, project, formatUsd, ZERO_USAGE, type Usage } from "../../../evals/classifier/cost";
 
-// ============================================================================
-// The paid half of the eval. Costs money, so it refuses to run by accident.
-// ----------------------------------------------------------------------------
-// Two gates, both required: ANTHROPIC_API_KEY must exist AND RUN_LLM_EVAL must
-// be 1. A key sitting in the environment for some other reason must never turn
-// the ordinary test suite into a bill, and `npx jest` is run dozens of times a
-// day here.
-//
-//   RUN_LLM_EVAL=1 EVAL_LIMIT=20 npx jest classifier-llm-eval
-//
-// EVAL_LIMIT caps the number of places, defaulting to 20. It answers the
-// question worth answering before any backfill: on cases where the rules
-// abstain, does the LLM actually get it right, and what does it cost per place
-// once the cached system prompt is accounted for.
-// ============================================================================
-
-const KEY = process.env.ANTHROPIC_API_KEY;
-const ARMED = process.env.RUN_LLM_EVAL === "1" && !!KEY;
+// Paid evaluation is disabled until a separately reviewed central admission path
+// and explicit spending authorization exist. Environment opt-ins cannot enable it.
+const ARMED = false;
 const LIMIT = Number(process.env.EVAL_LIMIT ?? 20);
 
 function asPlace(c: GoldenCase): GooglePlace {
@@ -30,22 +15,8 @@ function asPlace(c: GoldenCase): GooglePlace {
 
 let spent: Usage = ZERO_USAGE;
 
-/** The Anthropic SDK's messages.create, as plain fetch. The classifier takes a
- *  structural callable precisely so no SDK has to be installed to use it. */
-const create: AnthropicMessageCreate = async (params) => {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": KEY as string,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify(params),
-  });
-  if (!res.ok) throw new Error(`anthropic ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  const body = await res.json();
-  spent = addUsage(spent, body.usage ?? {});
-  return body;
+const create: AnthropicMessageCreate = async () => {
+  throw new Error("Paid evaluation disabled pending central admission and explicit authorization");
 };
 
 (ARMED ? describe : describe.skip)("classifier eval — LLM half (SPENDS MONEY)", () => {
@@ -101,10 +72,10 @@ const create: AnthropicMessageCreate = async (params) => {
   }, 180_000);
 });
 
-// Always runs, costs nothing: proves the gate is what keeps the bill at zero.
-describe("the paid eval stays off unless it is asked for", () => {
-  it("needs both an API key and an explicit opt-in", () => {
-    expect(ARMED).toBe(process.env.RUN_LLM_EVAL === "1" && !!process.env.ANTHROPIC_API_KEY);
-    if (process.env.RUN_LLM_EVAL !== "1") expect(ARMED).toBe(false);
+// Even an explicit legacy opt-in cannot bypass central admission.
+describe("paid evaluation is disabled", () => {
+  it("refuses direct model transport", async () => {
+    expect(ARMED).toBe(false);
+    await expect(create({} as never)).rejects.toThrow("Paid evaluation disabled");
   });
 });

@@ -7,7 +7,9 @@
     "ios": "expo start --ios",
     "android": "expo start --android",
     "test": "jest",
-    "test:palate": "jest lib/palate"
+    "test:palate": "jest lib/palate",
+    "test:llm-admission:guards": "node ../supabase/scripts/test-llm-admission-bypasses.cjs && node ../supabase/scripts/test-llm-admission-operators.cjs && node ../supabase/scripts/test-llm-admission-types.cjs",
+    "test:llm-admission": "node ../supabase/scripts/test-llm-admission.cjs"
   },
   "jest": {
     "preset": "jest-expo",

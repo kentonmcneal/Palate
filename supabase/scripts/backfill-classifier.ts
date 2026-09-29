@@ -6,8 +6,7 @@
 //   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
 //     npx tsx backfill-classifier.ts
 //
-//   # with LLM augmentation for low-confidence rows:
-//   ANTHROPIC_API_KEY=... ... npx tsx backfill-classifier.ts --with-llm
+// Paid --with-llm mode is disabled pending central admission review.
 //
 // Reads rows where classifier_version != current OR classifier_version is null,
 // deserializes the cached google_raw payload, re-runs the classifier (and LLM
@@ -15,7 +14,7 @@
 // payload is what we already have. Idempotent.
 //
 // Flags:
-//   --with-llm        also run the LLM fallback on low-confidence rows
+//   --with-llm        refused; no paid operator mode is authorized
 //   --limit=N         cap the number of rows processed (default: all)
 //   --dry-run         show what would change without writing
 //   --version=X.Y.Z   target a specific classifier version (default: current)
@@ -39,6 +38,7 @@ import {
 
 const args = process.argv.slice(2);
 const WITH_LLM = args.includes("--with-llm");
+if (WITH_LLM) throw new Error("Paid operator classification disabled pending central admission and explicit authorization");
 const DRY_RUN = args.includes("--dry-run");
 const LIMIT = parseInt(args.find((a) => a.startsWith("--limit="))?.split("=")[1] ?? "0", 10) || null;
 const TARGET_VERSION = args.find((a) => a.startsWith("--version="))?.split("=")[1] ?? CLASSIFIER_VERSION;
@@ -178,15 +178,8 @@ function printSummary(total: number, updated: number, llmCalls: number) {
   console.log(`\nDone. scanned=${total} updated=${updated} llm_calls=${llmCalls}${DRY_RUN ? " (dry run — nothing written)" : ""}`);
 }
 
-async function getLLMCreate() {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    console.error("--with-llm requires ANTHROPIC_API_KEY in env");
-    process.exit(1);
-  }
-  const { default: Anthropic } = await import("@anthropic-ai/sdk");
-  const client = new Anthropic({ apiKey });
-  return client.messages.create.bind(client.messages) as never;
+async function getLLMCreate(): Promise<never> {
+  throw new Error("Paid operator classification disabled pending central admission and explicit authorization");
 }
 
 main().catch((e) => {

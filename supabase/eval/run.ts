@@ -4,8 +4,7 @@
 //   cd supabase/eval
 //   npm install
 //   npm run eval           # deterministic only
-//   npm run eval:llm       # also invokes Haiku 4.5 on low-confidence cases
-//                          # (requires ANTHROPIC_API_KEY in env)
+//   npm run eval:llm       # refused pending central admission and authorization
 //
 // Reports per-field accuracy + per-case failures. Exits non-zero on any
 // failure so this can wedge into CI once we trust the metrics.
@@ -18,14 +17,8 @@ import {
   deriveClassification,
   type DerivedClassification,
   type GooglePlace,
-  PRICE_LEVEL_MAP,
 } from "../functions/_shared/classifier";
-import {
-  classifyWithLLM,
-  type LLMInput,
-  mergeLLMIntoDerivation,
-  shouldUseLLM,
-} from "../functions/_shared/llm-classifier";
+
 
 interface Case {
   id: string;
@@ -155,47 +148,7 @@ async function main() {
     return;
   }
 
-  // --- LLM-augmented pass ---
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    console.error(`\n${ANSI.red}--with-llm set but ANTHROPIC_API_KEY is not in env. Aborting.${ANSI.reset}`);
-    process.exitCode = 1;
-    return;
-  }
-  // Lazy import so plain `npm run eval` doesn't need the SDK installed.
-  const { default: Anthropic } = await import("@anthropic-ai/sdk");
-  const client = new Anthropic({ apiKey });
-  const create = client.messages.create.bind(client.messages);
-
-  let llmCalls = 0;
-  const llm = await evaluateCases(file.cases, async (c) => {
-    const base = deriveClassification(c.input);
-    if (!shouldUseLLM(base)) return base;
-    llmCalls += 1;
-    const input: LLMInput = {
-      name: c.input.displayName?.text ?? "Unknown",
-      types: c.input.types ?? [],
-      primaryType: c.input.primaryType ?? null,
-      priceLevel: c.input.priceLevel ? PRICE_LEVEL_MAP[c.input.priceLevel] ?? null : null,
-      userRatingCount: c.input.userRatingCount ?? null,
-      editorialSummary: c.input.editorialSummary?.text ?? null,
-      reviewSnippets: (c.input.reviews ?? [])
-        .map((r) => r.text?.text ?? "")
-        .filter(Boolean),
-    };
-    try {
-      const suggestion = await classifyWithLLM(input, create as never);
-      return mergeLLMIntoDerivation(base, suggestion);
-    } catch (e) {
-      console.error(`  ${ANSI.red}[${c.id}] LLM call failed:${ANSI.reset}`, e);
-      return base;
-    }
-  });
-  console.log(`\n${ANSI.cyan}LLM invoked on ${llmCalls} / ${file.cases.length} cases (rest were high-confidence).${ANSI.reset}`);
-  printReport("With LLM fallback:", llm, file.cases.length);
-
-  printFailures("LLM", llm);
-  if (llm.failures.length > 0) process.exitCode = 1;
+  throw new Error("Paid evaluation disabled pending central admission and explicit authorization");
 }
 
 main().catch((e) => {

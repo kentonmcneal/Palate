@@ -51,6 +51,10 @@ jobs:
         working-directory: mobile
         run: npm ci --silent
 
+      - name: Offline LLM admission source guards
+        working-directory: mobile
+        run: npm run test:llm-admission:guards
+
       - name: TypeScript
         working-directory: mobile
         run: npx tsc --noEmit -p .

@@ -16,7 +16,7 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import Anthropic from "npm:@anthropic-ai/sdk@0.32.1";
+import { admittedCreate, LlmAdmissionError } from "../_shared/llm-admission-edge.ts";
 import { errText } from "../_shared/err-text.ts";
 import { isGoogleBudgetSpent, spendGoogle } from "../_shared/google-spend.ts";
 import { retryRead } from "../_shared/retry.ts";
@@ -42,7 +42,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // Optional — when unset, the LLM fallback is a no-op and places-proxy keeps
 // behaving as before. Add via: supabase secrets set ANTHROPIC_API_KEY=sk-...
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
-const anthropic = ANTHROPIC_KEY ? new Anthropic({ apiKey: ANTHROPIC_KEY, maxRetries: 0 }) : null;
+// Paid requests also require a confirmed database-owned admission receipt.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -190,6 +190,8 @@ async function countUserCall(admin: ReturnType<typeof createClient>, userId: str
   if (error) console.error("places-proxy: user call not metered", errText(error));
 }
 
+// Legacy counters are extra stop conditions, never spending authorization.
+// Every paid request additionally requires reserve_llm_v1.
 // ----- LLM budget ---------------------------------------------------------
 // The Anthropic key is project-wide. The moment it exists for the approved
 // cuisine backfill, the blurb and details paths here go live too — and they
@@ -573,7 +575,7 @@ async function handleBlurb(
     return json({ blurb: rest.editorial_blurb, cache_write_confirmed: true });
   }
 
-  if (!anthropic) {
+  if (!ANTHROPIC_KEY) {
     return json({ blurb: null, reason: "no_llm_configured" });
   }
   if (await llmBudgetSpent(admin)) {
@@ -598,7 +600,9 @@ async function handleBlurb(
 
   try {
     await recordLlmCall(admin);
-    const resp = await anthropic.messages.create({
+    const resp = await admittedCreate(
+      { url: SUPABASE_URL, serviceKey: SUPABASE_SERVICE_KEY }, ANTHROPIC_KEY, "proxy_blurb",
+    )({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 80,
       system: [{ type: "text", text: BLURB_SYSTEM, cache_control: { type: "ephemeral" } }],
@@ -624,6 +628,7 @@ async function handleBlurb(
     }
     return json({ blurb, cache_write_confirmed: true });
   } catch (e) {
+    if (e instanceof LlmAdmissionError) return json({ blurb: null, reason: e.message });
     console.error("blurb generation failed", e);
     return json({ error: errText(e) }, 500);
   }
@@ -679,13 +684,13 @@ async function classifyAndBuildRow(
   };
   // Fire the LLM when cuisine is ambiguous OR when there's enough review text
   // to read vibe/occasion — the latter enriches well-classified places too.
-  if (opts.useLLM && opts.admin && anthropic && (shouldUseLLM(derived) || shouldEnrichQualitative(llmInput))
+  if (opts.useLLM && opts.admin && ANTHROPIC_KEY && (shouldUseLLM(derived) || shouldEnrichQualitative(llmInput))
       && !(opts.admin && await llmBudgetSpent(opts.admin))) {
     try {
       if (opts.admin) await recordLlmCall(opts.admin);
       const suggestion = await classifyWithLLM(
         llmInput,
-        anthropic.messages.create.bind(anthropic.messages),
+        admittedCreate({ url: SUPABASE_URL, serviceKey: SUPABASE_SERVICE_KEY }, ANTHROPIC_KEY, "proxy_classify"),
       );
       derived = mergeLLMIntoDerivation(derived, suggestion);
     } catch (e) {

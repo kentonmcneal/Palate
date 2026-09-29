@@ -89,3 +89,5 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 
 - Completed locally: bounded LLM meter/ledger/retry/cache/stamp safeguards,93 offline controls and focused typing pass. NOT an atomic ceiling: concurrent admissions, next-call overshoot and durable unknown-cost holds remain unresolved.
 - In progress: independently reviewed default-deny DB reservation design and all-route integration proposal; no active migration/deployment/spending authorization.
+
+- Completed locally: three-route confirmed LLM admission and disabled paid operator/eval shortcuts,123offlinecases +154mobile suites/1686tests/1skip andTypeScript. Durable guardswiredtoCI(notremoteexecuted). SQLdraftdefaultszero outsideactivemigrations; live/concurrent/account-wide protection remainsblocked/unverified, notcomplete.

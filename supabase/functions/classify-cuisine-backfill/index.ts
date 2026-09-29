@@ -8,12 +8,12 @@
 // overwrites a value that exists.
 //
 // Called by pg_cron (0100) with x-cron-secret. Fails closed without
-// ANTHROPIC_API_KEY. Read-before-call caps are best effort: concurrent runs
-// can overshoot. There is no atomic LLM reservation in this implementation.
+// ANTHROPIC_API_KEY. Every paid dispatch also requires database-owned admission.
+// Legacy read-before-call caps below are additional stops, never authorization.
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import Anthropic from "npm:@anthropic-ai/sdk@0.32.1";
+import { admittedCreate } from "../_shared/llm-admission-edge.ts";
 import { classifyWithLLM, type LLMInput } from "../_shared/llm-classifier.ts";
 import { CLASSIFIER_VERSION } from "../_shared/classifier.ts";
 import { errText } from "../_shared/err-text.ts";
@@ -29,8 +29,8 @@ const LLM_DAILY_CAP = 500;
 // The budget, in the units the person who approved it was thinking in.
 // ----------------------------------------------------------------------------
 // A cap of 500 CALLS a day bounds the rate, not the bill. Ten dollars was
-// authorised. This read-before-call estimate can overshoot that amount; it
-// is not an atomic reservation or invoice guarantee.
+// historically referenced. It is NOT authorization for the new policy.
+// Policy stays disabled/zero until separately approved and reconciled.
 const LLM_LIFETIME_CAP_USD = 10;
 
 // Per million tokens. These are an ESTIMATE maintained by hand, and the whole
@@ -180,13 +180,20 @@ serve(async (req) => {
   if (error) return json({ error: error.message }, 500);
   if (!rows || rows.length === 0) return json({ done: true, processed: 0 });
 
-  const anthropic = new Anthropic({ apiKey: ANTHROPIC_KEY, maxRetries: 0 });
-
-  // classifyWithLLM takes the create function, so wrapping it is enough to see
-  // what every call actually cost without touching the classifier itself.
+  let lastDispatched = false;
+  let settlementUncertain = false;
+  let admissionDenied = false;
+  const createAdmitted = admittedCreate(
+    { url: SUPABASE_URL, serviceKey: SUPABASE_SERVICE_KEY }, ANTHROPIC_KEY, "cuisine_backfill",
+    (state) => {
+      lastDispatched = state.dispatched;
+      admissionDenied = state.denied;
+      settlementUncertain = state.dispatched && !state.settlementAcknowledged;
+    },
+  );
   let lastUsage: Parameters<typeof costOf>[0] = null;
-  const createCounted = async (args: Parameters<typeof anthropic.messages.create>[0]) => {
-    const resp = await anthropic.messages.create(args);
+  const createCounted = async (args: Parameters<typeof createAdmitted>[0]) => {
+    const resp = await createAdmitted(args);
     lastUsage = (resp as { usage?: NonNullable<Parameters<typeof costOf>[0]> }).usage ?? null;
     return resp;
   };
@@ -208,7 +215,7 @@ serve(async (req) => {
   for (const row of rows) {
     if (processed + usedToday >= LLM_DAILY_CAP) break;
     if (processed + lifetimeCalls! >= LLM_LIFETIME_CAP_CALLS) break;
-    if (spentUsd >= LLM_LIFETIME_CAP_USD || accountingUncertain || persistenceUncertain) break;
+    if (spentUsd >= LLM_LIFETIME_CAP_USD || accountingUncertain || persistenceUncertain || admissionDenied) break;
     try {
       const input: LLMInput = {
         name: row.name,
@@ -230,30 +237,36 @@ serve(async (req) => {
       let s;
       try {
         lastUsage = null;
+        lastDispatched = false;
+        settlementUncertain = false;
         try {
           s = await classifyWithLLM(input, createCounted as never);
         } finally {
-          // Ledger first. A row that classified fine but failed to write is still
-          // billed, and a cost we did not record is a cap we cannot enforce.
+          // Preserve the legacy ledger before restaurant writes. It is secondary
+          // telemetry/stop logic; the permanent admission debit is authoritative.
           {
-            const c = costOf(lastUsage);
-            spentUsd += c.usd;
-            const ledger = await admin.from("llm_spend").insert({
-              action: "llm_cuisine_backfill",
-              model: "claude-haiku-4-5",
-              input_tokens: c.input,
-              output_tokens: c.output,
-              cache_read_tokens: c.cacheRead,
-              cache_write_tokens: c.cacheWrite,
-              est_cost_usd: Number(c.usd.toFixed(6)),
-            });
-            if (ledger.error) throw new Error("LLM ledger write unconfirmed; stopping batch");
-            accountingUncertain = false;
+            if (admissionDenied) accountingUncertain = false;
+            else {
+              const c = costOf(lastUsage);
+              spentUsd += c.usd;
+              const ledger = await admin.from("llm_spend").insert({
+                action: "llm_cuisine_backfill",
+                model: "claude-haiku-4-5",
+                input_tokens: c.input,
+                output_tokens: c.output,
+                cache_read_tokens: c.cacheRead,
+                cache_write_tokens: c.cacheWrite,
+                est_cost_usd: Number(c.usd.toFixed(6)),
+              });
+              if (ledger.error) throw new Error("LLM ledger write unconfirmed; stopping batch");
+              accountingUncertain = settlementUncertain;
+            }
           }
 
         }
       } catch (e) {
-        await persistRestaurant(row.id, { llm_backfill_at: stamp });
+        // Policy denial did not judge this restaurant; leave it eligible.
+        if (lastDispatched) await persistRestaurant(row.id, { llm_backfill_at: stamp });
         throw e;
       }
 
@@ -287,12 +300,13 @@ serve(async (req) => {
 
   return json({
     processed, written, abstained, failed, commit,
+    admission_denied: admissionDenied,
     accounting_uncertain: accountingUncertain,
     persistence_uncertain: persistenceUncertain,
     spent_usd: Number(spentUsd.toFixed(4)),
     cap_usd: LLM_LIFETIME_CAP_USD,
     // Unconfirmed persistence leaves row eligibility unknown, even on the last row.
-    remaining_estimate: accountingUncertain || persistenceUncertain ? "unknown"
+    remaining_estimate: admissionDenied || accountingUncertain || persistenceUncertain ? "unknown"
       : processed < rows.length || rows.length === limit ? "more" : "none",
     sample,
   });
