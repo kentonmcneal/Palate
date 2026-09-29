@@ -25,6 +25,10 @@
  * Stored pre-normalized (lowercase, no punctuation) — see normalizeBrand().
  */
 const NATIONAL_CHAINS: string[] = [
+  // Preserve known brands formerly covered only by Right Now's broad substring
+  // filter. Shared exact/prefix+generic-suffix rules avoid hiding independents.
+  "dairy queen", "baskin robbins", "cold stone", "cold stone creamery",
+  "the capital grille", "capital grille", "bdubs", "b dubs", "chickfila",
   // Pizza
   "dominos", "pizza hut", "papa johns", "little caesars", "marcos pizza",
   "cicis", "round table pizza", "blaze pizza", "mod pizza", "papa murphys",

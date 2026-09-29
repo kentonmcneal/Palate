@@ -3,9 +3,13 @@
 Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deployment or paid services.
 
 ## In progress
-- Extend recommendation evidence beyond committed synthetic invariants; taxonomy/timezone/live retrieval gaps remain.
-- Review newly audited LLM accounting/retry gaps and bounded mitigation; a hard account-wide LLM ceiling is not established.
-- Continue social/layout/typo work after feed read-recovery and account/settings/crash-report corrections.
+- User priority: trace end-of-day visit confirmation notifications through capture, qualification, inbox and OS scheduling. Mocked tests only; real delivery remains unverified.
+- User priority: reduce dense-city/bus-stop false positives and missed short/repeated coffee stops such as 7 Brew. Audit duration, precision, work-cluster suppression and venue attribution before changing thresholds.
+- Right Now chain eligibility consistency: remove duplicate substring filtering while preserving known-brand exclusions in the shared registry; final independent review pending.
+- Broader social/layout/typo work remains unfinished.
+
+## Completed locally
+- Confirmed LLM admission source integration and disabled paid operator/evaluation shortcuts: fe08e2a.123 offline cases,154 mobile suites/1686 tests passed,1 skipped. SQL policies remain disabled/zero drafts outside active migrations; no deployment or live spending guarantee.
 
 ## Completed before this window
 - Nearby request coalescing, malformed-cache and budget config checks.

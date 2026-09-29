@@ -47,42 +47,6 @@ function legacyMatch(graph: TasteGraph, r: RestaurantInput, contextFit: number) 
   };
 }
 
-// ----------------------------------------------------------------------------
-// National-chain denylist for the Right Now hero.
-// "What should I eat right now?" should reach for the unique/independent/
-// regional gem, not McDonald's. We detect by name pattern (Google Places
-// doesn't reliably tag chains in its API).
-//
-// Regional chains intentionally NOT included (Whataburger, In-N-Out,
-// Bojangles, Sheetz, Wawa, Cookout, Culver's, etc.) — they're often the
-// "unique to a region" answer and SHOULD show up.
-// ----------------------------------------------------------------------------
-const NATIONAL_CHAIN_PATTERNS = [
-  // Fast food
-  "mcdonald", "burger king", "wendy", "taco bell", "kfc", "popeyes",
-  "subway", "jersey mike", "jimmy john", "quiznos", "arby",
-  "chick-fil-a", "chickfila", "raising cane", "zaxby",
-  "domino", "pizza hut", "papa john", "little caesar", "marco's pizza",
-  "panera", "chipotle", "qdoba", "moe's southwest", "el pollo loco",
-  "panda express", "five guys", "shake shack", "smashburger",
-  "sonic", "checkers", "white castle", "carl's jr", "hardee",
-  "dairy queen", "baskin-robbins", "cold stone",
-  // Coffee
-  "starbucks", "dunkin", "caribou coffee", "tim horton", "peet's coffee",
-  // Casual dining chains
-  "applebee", "chili's", "tgi friday", "olive garden", "outback",
-  "red lobster", "longhorn", "cheesecake factory", "ihop", "denny",
-  "cracker barrel", "buffalo wild wings", "bdubs", "texas roadhouse",
-  "ruby tuesday", "bonefish grill", "carrabba", "yard house",
-  "p.f. chang", "pf chang", "the capital grille",
-];
-
-function isNationalChain(name: string | null | undefined): boolean {
-  if (!name) return false;
-  const n = name.toLowerCase().trim();
-  return NATIONAL_CHAIN_PATTERNS.some((p) => n.includes(p));
-}
-
 // We always surface the top scorer (no hard floor) — "Try another" cycles
 // down by score so the user can keep exploring. Empty-state only fires when
 // there are literally no candidates. Per latest UX feedback: showing the
@@ -149,16 +113,15 @@ export async function computeRightNow(opts: RightNowOptions): Promise<RightNowRe
 
   // ---- Right Now: exploit (93%) -----------------------------------------
   // Apply anti-staleness so a place visited 5x doesn't lock the slot.
-  // Drop national chains entirely — "What should I eat right now?" should
-  // reach for the unique pick, not McDonald's. Regional chains and
-  // independents stay (the denylist is intentionally national-only).
+  // generateCandidates already applies the shared conservative chain/format
+  // eligibility gate. A second substring matcher would hide eligible
+  // independents such as Sonic Boom Ramen and disagree with other surfaces.
   const baseFiltered = scored
     .filter((s) => {
       // Don't recommend places the user has visited 3+ times
       const visits = opts.graph.restaurantVisits[s.restaurant.google_place_id] ?? 0;
       return visits < 3;
-    })
-    .filter((s) => !isNationalChain(s.restaurant.name));
+    });
 
   const strategy: RightNowStrategy = opts.strategy ?? "best";
   const exploit = sortForStrategy(baseFiltered, strategy);
