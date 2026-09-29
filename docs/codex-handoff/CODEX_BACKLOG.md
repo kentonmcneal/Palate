@@ -41,3 +41,5 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 - Search block enforcement0184:20 local SQL cases pass. People UI safeguards are separate, still under independent review.
 
 - Completed locally: connection route ownership, mutation reconciliation, profile target-race isolation;38 mounted cases pass. Native/device verification outstanding.
+
+- Completed locally: People account/request ownership, strict block filtering and mutation recovery;43 mounted cases pass. Realtime block updates/native verification remain unverified.

@@ -202,15 +202,6 @@ export async function needsDiscoveryPrompt(): Promise<boolean> {
   return data.profile_visibility !== "public";
 }
 
-export async function markDiscoveryPrompted(): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-  await supabase
-    .from("profiles")
-    .update({ discovery_prompted_at: new Date().toISOString() })
-    .eq("id", user.id);
-}
-
 // ============================================================================
 // People who eat like you — across the whole app, not just friends.
 // ============================================================================

@@ -137,3 +137,12 @@ Deadline 2026-09-30 16:01:54 UTC. Existing follow-up reactivated, no duplicate. 
 - Validation:38 mounted connection/profile cases pass; full integration1337 passed/one skipped/one unrelated unused People helper failure. After that cleanup,84 focused connection/People/dead-export cases pass; TypeScript passed. Native transport cancellation and already-dispatched writes are not claimed.
 - DEVICE / LIVE: no device visual/accessibility or deployed privacy verification. Target-key isolation resets profile local state on target changes. Landing untouched.
 - Rollback: revert this batch commit only; preserve baseline tag and unrelated changes.
+
+
+## People discovery privacy and asynchronous recovery — 2026-09-29
+- WORKING TREE: screen sessions follow actual account identity; stale session restoration, old focus/search/enrichment replies and captured old actions cannot publish into the new screen. Search uses the server's three-character boundary. Failed reads have retry states, and unknown follow status disables mutations until reconciled.
+- Strict bidirectional block reads fail closed. Independent review reproduced retained hidden identities when a sibling data read failed, plus named mutation errors that could retain/reintroduce blocked people. Privacy results now retire identities independently of search/directory success; errors are pruned/suppressed too. Migration0184 remains separately required server protection.
+- Visibility invitation links to explicit profile settings; it no longer silently writes visibility. Session dismissal replaces the unused discovery-prompt write helper, which was removed after the dead-export guard caught it.
+- Validation:43 mounted People cases pass, including real helper mapping/failure controls. Full integrated run1337 passed/one skipped with only the subsequently fixed dead-export failure; final84 focused tests pass. TypeScript passed before unused helper removal; no test threshold relaxed. PEOPLE_INDEPENDENT_REVIEW_20260929.md records red/green reproductions and limits.
+- LIVE / DEVICE: no production/service calls, native layout or VoiceOver validation. No realtime block subscription, transport cancellation, or rollback of already-sent mutations. Landing untouched.
+- Rollback: revert this batch commit locally; keep baseline/recovery tag and server privacy migration independently.
