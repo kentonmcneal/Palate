@@ -3,8 +3,9 @@
 Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deployment or paid services.
 
 ## In progress
-- Expand recommendation evaluation and correct remaining metadata-density/cold-start ranking defects.
-- Continue security, feed quality, layout and typo audit after committed account/settings/crash-report corrections.
+- Extend recommendation evidence beyond committed synthetic invariants; taxonomy/timezone/live retrieval gaps remain.
+- Review newly audited LLM accounting/retry gaps and bounded mitigation; a hard account-wide LLM ceiling is not established.
+- Continue social/layout/typo work after feed read-recovery and account/settings/crash-report corrections.
 
 ## Completed before this window
 - Nearby request coalescing, malformed-cache and budget config checks.
@@ -82,3 +83,6 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 - Completed locally: actual offline iOS/Android JS+Hermes source-map identity production,9 artifact gates and independent review. Device stacks, uploads and server symbolication remain unverified.
 
 - Completed locally: missing-cuisine novelty, Right Now availability preference and duplicate-metadata invariants. Independent red/green review;153suites/1668passed/1skipped andTypeScript. Human relevance, venue timezone and live retrieval remain unverified.
+
+- Completed locally: feed focus/read recovery, explicit auth failures, blocked preview cleanup;154suites/1686passed/1skipped andTypeScript. Native and eventual consistency remain unverified.
+- Additional local PostgreSQL18.3 source build/install succeeded in workspace, but initdb failed with sandbox shmget Operation not permitted; no server/concurrency test ran. No bypass or production action.

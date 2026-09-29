@@ -84,7 +84,7 @@ let it expire.
 
 | agent | branch | paths | opened | expires | note |
 |---|---|---|---|---|---|
-| codex task 01a0e643 | `codex/handoff-priorities` | `mobile/lib/recommendation/{candidates,compatibility,gems,scoring,right-now}.ts`, `mobile/lib/recommendation/__tests__/{quality-invariants,independent-boundaries}.test.ts`, `docs/codex-handoff/CODEX_{BACKLOG,WORKLOG}.md`, `docs/codex-handoff/RECOMMENDATION_*_20260929.md` | 2026-09-29 20:00 UTC | 2026-09-29 22:00 UTC | Integrating independently reviewed offline ranking fixes; existing backlog edits are ours. Feed worker read-only, no repo writes. |
+| codex | `codex/handoff-priorities` | `mobile/app/(tabs)/feed.tsx` `mobile/lib/__tests__/feed-loading-races.test.tsx` `docs/codex-handoff/CODEX_BACKLOG.md` `docs/codex-handoff/CODEX_WORKLOG.md` `docs/codex-handoff/FEED_*_20260929.md` | 2026-09-29T20:30Z | 2026-09-29T22:30Z | Task01a0e643; recommendation integration complete a72d662. Reviewed feed integration; other workers scratch-only. |
 | _(none)_ | | | | | |
 
 ## Closed recently

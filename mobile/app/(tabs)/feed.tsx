@@ -32,7 +32,6 @@ import { listFeed, toggleLike, type FeedEvent } from "../../lib/feed";
 import { CommentsSheet } from "../../components/CommentsSheet";
 import { HeartButton, HeartBurst } from "../../components/HeartButton";
 import { loadView } from "../../lib/load-state";
-import { LoadError } from "../../components/LoadError";
 import { reportContent, blockUser, REPORT_REASONS } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
 import { applyLike, restoreLike, createLikeGate } from "../../lib/optimistic-like";
@@ -41,6 +40,11 @@ export default function FeedTab() {
   const router = useRouter();
   const likeGate = useRef(createLikeGate()).current;
   const likeRevision = useRef(0);
+  // Focus owns reads; per-row mutation gates deliberately survive blur.
+  const focused = useRef(false);
+  const loadSequence = useRef(0);
+  const pendingLoad = useRef<number | null>(null);
+  const contentRevision = useRef(0);
   const likesInFlight = useRef(0);
   const [pendingLikes, setPendingLikes] = useState<Set<string>>(new Set());
   const [events, setEvents] = useState<FeedEvent[]>([]);
@@ -57,36 +61,66 @@ export default function FeedTab() {
   // on the place itself.
   const [graph, setGraph] = useState<TasteGraph | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (refresh = false) => {
+    if (!focused.current || pendingLoad.current !== null) return;
+    const request = ++loadSequence.current;
+    pendingLoad.current = request;
+    const ownsRead = () => focused.current && loadSequence.current === request;
+    setError(null);
+    setLoading(true);
+    setRefreshing(refresh);
+    const contentVersion = contentRevision.current;
     const revision = likeRevision.current;
     try {
-      const [feed, { data: auth }] = await Promise.all([
+      const [feed, { data: auth, error: authError }] = await Promise.all([
         listFeed(60),
         supabase.auth.getUser(),
       ]);
-      if (revision !== likeRevision.current || likesInFlight.current > 0) return;
+      if (!ownsRead()) return;
+      if (authError) throw authError;
+      if (!auth.user) {
+        // A confirmed absent account is not a successful empty feed. The root
+        // normally remounts on sign-out; clear reader-owned state here too.
+        setEvents([]);
+        setMyId(null);
+        setGraph(null);
+        setOpenComments(null);
+        throw new Error("Feed account is unavailable");
+      }
+      if (contentVersion !== contentRevision.current
+        || revision !== likeRevision.current || likesInFlight.current > 0) return;
       setEvents(feed);
       setMyId(auth.user?.id ?? null);
       setError(null);
       void Promise.all([
         computeTasteVector().catch(() => null),
         loadPersonalSignal().catch(() => null),
-      ]).then(([vector, personal]) => setGraph(assembleGraph(vector, personal)))
+      ]).then(([vector, personal]) => {
+        if (ownsRead()) setGraph(assembleGraph(vector, personal));
+      })
         .catch(() => {});
     } catch (e: any) {
       // The feed once returned 400 on every call for its whole existence and
       // rendered as "quiet right now" the entire time. A failure has to look
       // like a failure.
-      setError(e ?? new Error("feed load failed"));
+      if (ownsRead()) setError(e ?? new Error("feed load failed"));
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (ownsRead()) {
+        pendingLoad.current = null;
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
   useFocusEffect(useCallback(() => {
-    setLoading(true);
-    load();
+    focused.current = true;
+    void load();
+    return () => {
+      focused.current = false;
+      ++loadSequence.current;
+      pendingLoad.current = null;
+    };
   }, [load]));
 
   const view = loadView({ loading, error, count: events.length });
@@ -94,13 +128,22 @@ export default function FeedTab() {
   const summary = useMemo(() => weekSummary(events), [events]);
 
   function removeUser(userId: string) {
-    setEvents((curr) => curr.filter((e) => e.user_id !== userId));
+    contentRevision.current++;
+    setEvents((curr) => curr.filter((e) => e.user_id !== userId).map((e) => ({
+      ...e,
+      topComments: e.topComments.filter((comment) => comment.user_id !== userId),
+      // The sheet may already have published its authoritative count. Do not
+      // subtract preview removals: previews are only a subset of comments.
+    })));
+    setOpenComments(current => events.some(e => e.id === current && e.user_id === userId) ? null : current);
   }
   function removeEvent(id: string) {
+    contentRevision.current++;
     setEvents((curr) => curr.filter((e) => e.id !== id));
   }
   /** The sheet knows the real count; the card should not guess it. */
   const setCommentCount = useCallback((eventId: string, n: number) => {
+    contentRevision.current++;
     setEvents((curr) => curr.map((e) => (e.id === eventId ? { ...e, commentCount: n } : e)));
   }, []);
 
@@ -130,7 +173,7 @@ export default function FeedTab() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); load(); }}
+            onRefresh={() => { void load(true); }}
           />
         }
       >
@@ -150,10 +193,10 @@ export default function FeedTab() {
           contentContainerStyle={styles.chipRow}
         >
           <View style={{ flexDirection: "row", gap: 6 }}>
-            <Pressable onPress={() => router.push("/board")} style={styles.friendsBtn}>
+            <Pressable onPress={() => router.push("/board")} style={styles.friendsBtn} accessibilityRole="button">
               <Text style={styles.friendsBtnText}>Board</Text>
             </Pressable>
-            <Pressable onPress={() => router.push("/people")} style={styles.friendsBtn}>
+            <Pressable onPress={() => router.push("/people")} style={styles.friendsBtn} accessibilityRole="button">
               <Text style={styles.friendsBtnText}>People</Text>
             </Pressable>
           </View>
@@ -165,11 +208,25 @@ export default function FeedTab() {
         <HypeMap />
 
         {loading && events.length === 0 && (
-          <View style={styles.center}><ActivityIndicator color={colors.red} /></View>
+          <View style={styles.center} accessibilityLiveRegion="polite">
+            <ActivityIndicator color={colors.red} accessibilityLabel="Loading feed" />
+            <Text style={[type.small, { marginTop: spacing.sm }]}>Loading your feed…</Text>
+          </View>
         )}
 
-        {view === "error" && (
-          <LoadError error={error} onRetry={() => { setLoading(true); load(); }} />
+        {!!error && (
+          <View style={styles.recovery} accessibilityLiveRegion="polite">
+            <Text style={type.subtitle} accessibilityRole="header">
+              {events.length ? "Couldn't refresh your feed" : "Couldn't load your feed"}
+            </Text>
+            <Text style={[type.small, { marginTop: spacing.sm, lineHeight: 20 }]}>
+              {events.length ? "Showing the posts already loaded. Try again to check for new activity." : "Your feed isn't available right now. Try again in a moment."}
+            </Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Retry feed"
+              style={styles.retry} onPress={() => { void load(events.length > 0); }}>
+              <Text style={[type.small, { color: colors.primaryText, fontWeight: "700" }]}>Try again</Text>
+            </Pressable>
+          </View>
         )}
 
         {view === "empty" && (
@@ -184,13 +241,14 @@ export default function FeedTab() {
             <Pressable
               onPress={() => router.push("/people")}
               style={styles.emptyCta}
+              accessibilityRole="button"
             >
               <Text style={styles.emptyCtaText}>Find people →</Text>
             </Pressable>
             <Pressable
               onPress={() => router.push("/(tabs)/add")}
               accessibilityRole="button"
-              style={{ marginTop: 16, paddingVertical: 8 }}
+              style={{ marginTop: 16, paddingVertical: 8, minHeight: 44, justifyContent: "center" }}
             >
               <Text style={[type.small, { color: colors.redText, fontWeight: "700" }]}>Log a visit</Text>
             </Pressable>
@@ -206,7 +264,7 @@ export default function FeedTab() {
                 alone disappears against the grey page. */}
             <View style={styles.dayHeader}>
               <View style={styles.dayDot} accessibilityElementsHidden importantForAccessibility="no" />
-              <Text style={styles.dayHeaderText}>{section.title}</Text>
+              <Text style={styles.dayHeaderText} accessibilityRole="header">{section.title}</Text>
             </View>
             {section.data.map((ev) => (
               <FeedRow
@@ -612,13 +670,15 @@ function relativeTime(iso: string): string {
 }
 
 const styles = StyleSheet.create({
+  recovery: { padding: spacing.md, marginBottom: spacing.md, backgroundColor: colors.faint, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line },
+  retry: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start", paddingHorizontal: spacing.md, marginTop: spacing.sm, borderRadius: radius.full, backgroundColor: colors.redTint },
   safe: { flex: 1, backgroundColor: colors.paper },
   container: { padding: spacing.lg, paddingBottom: 100 },
   header: { marginBottom: 12 },
   // Horizontal scroll rather than wrapping: the four chips exceed the width of
   // a small phone, and wrapping them pushed the feed itself below the fold.
   chipRow: { paddingBottom: 12, paddingRight: 4 },
-  friendsBtn: {
+  friendsBtn: { minHeight: 44, justifyContent: "center",
     paddingHorizontal: 14, paddingVertical: 8,
     borderRadius: 999,
     backgroundColor: colors.faint,
@@ -633,10 +693,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.faint,
     ...shadow.card,
   },
-  emptyCta: {
+  emptyCta: { minHeight: 44, justifyContent: "center",
     alignSelf: "flex-start",
     paddingHorizontal: 16, paddingVertical: 10,
-    borderRadius: 999, backgroundColor: colors.red,
+    borderRadius: 999, backgroundColor: colors.primaryFill,
   },
   emptyCtaText: { color: "#fff", fontWeight: "700", fontSize: 13 },
 
