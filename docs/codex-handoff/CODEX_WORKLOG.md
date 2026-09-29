@@ -190,3 +190,11 @@ Deadline 2026-09-30 16:01:54 UTC. Existing follow-up reactivated, no duplicate. 
 - Evidence: DELETE_PAGINATION_AUTHOR_20260929.md and DELETE_PAGINATION_REVIEW_20260929.md. Tests supplied as durable offline scripts. Current uploaders use flat filenames; nested folders/concurrent uploads/eventual consistency are not certified. Partial deletion is not rolled back; error counts omit partial current-bucket removals.
 - LIVE / unverified: deployedStorage/auth/RPC behavior and exhaustive erasure remain unverified; no deployment or user deletion occurred.
 - Rollback: revert this local batch commit; that restores skipped-page/list-failure behavior. Preserve baseline tag and unrelated work.
+
+
+## Notification preference ownership and readback — 2026-09-29
+- WORKING TREE: Activity/Likes/Comments controls start unknown, use strict account-bound reads, serialize same-field callbacks before render and reconcile both successful/failed updates. Missing/nonboolean/wrong-account rows never become a guessed switch value. Failed reads offer retry; ambiguous writes retain an explicit snapshot warning. Different fields remain independent.
+- Independent review executed the actual CollapsibleSection and reproduced12 failures: collapse destroyed operation ownership and allowed overlapping writes or lost warnings. State now lives above collapsible presentation and survives closing/reopening. Account generation still invalidates old callbacks/results.
+- Main integration151 suites/1565 tests pass/one skipped; TypeScript passes. Six focused suites contain178 tests, including27 actual-collapse cases and18 independent strict-reader cases. No real push/auth/service calls, native UI or deployed policy verification.
+- Evidence: PUSH_PREFS_AUTHOR_20260929.md and PUSH_PREFS_REVIEW_20260929.md. Receive-preference comments now follow current source columns; sender visibility is separate. Backend-wide ordering, cross-screen recreation of uncertain writes and notification delivery remain unverified. Readback is a snapshot, not proof a timed-out request cannot commit later.
+- Rollback: revert this local batch; earlier preference guessing/overlap returns. Existing recovery tag, landing and account cleanup preserved.

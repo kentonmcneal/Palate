@@ -1,6 +1,6 @@
-import { accountWriteSession, isAccountWriteSession } from "../lib/account-write";
+import { accountWriteSession, isAccountWriteSession, type AccountWriteSession } from "../lib/account-write";
 import { deleteHistoryForAccount, deleteAccountForAccount } from "../lib/account-settings";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { View, StyleSheet, Switch, Alert, Linking, ScrollView, Share, Pressable, Modal } from "react-native";
 import { TextInput } from "../components/TextInput";
 import { Text } from "../components/Text";
@@ -26,13 +26,13 @@ import {
   areDiscoveryPingsEnabled,
   setDiscoveryPingsEnabled,
 } from "../lib/notification-schedule";
-import { isFriendActivityPushEnabled, setFriendActivityPushEnabled } from "../lib/friend-push";
+import { readFriendActivityPushEnabled, setFriendActivityPushEnabled } from "../lib/friend-push";
 
 import { generateInviteLink, inviteShareMessage, getMyReferralCount } from "../lib/referrals";
 import { GmailImportCard } from "../components/GmailImportCard";
 import { ForwardReceiptsCard } from "../components/ForwardReceiptsCard";
 import { FORWARDING_LIVE } from "../lib/receipt-forwarding";
-import { getSocialPushPrefs, setSocialPushPref } from "../lib/social-notifications";
+import { readSocialPushPref, setSocialPushPref } from "../lib/social-notifications";
 import { readFunctionError } from "../lib/function-error";
 import { getGmailStatus } from "../lib/gmail";
 import { isFlagEnabled } from "../lib/flags";
@@ -59,9 +59,6 @@ export default function Settings() {
   const [sundayReminder, setSundayReminder] = useState(false);
   const [screenshotPrompt, setScreenshotPrompt] = useState(true);
   const [discoveryPings, setDiscoveryPings] = useState(true);
-  const [friendPush, setFriendPush] = useState(true);
-  const [likePush, setLikePush] = useState(true);
-  const [commentPush, setCommentPush] = useState(true);
   const [referralCount, setReferralCount] = useState(0);
 
   useEffect(() => {
@@ -70,10 +67,6 @@ export default function Settings() {
     isReminderEnabled().then(setSundayReminder);
     isScreenshotPromptEnabled().then(setScreenshotPrompt);
     areDiscoveryPingsEnabled().then(setDiscoveryPings);
-    isFriendActivityPushEnabled().then(setFriendPush);
-    getSocialPushPrefs()
-      .then((p) => { setLikePush(p.likes); setCommentPush(p.comments); })
-      .catch(() => {});
     getMyReferralCount().then(setReferralCount).catch(() => {});
   }, []);
 
@@ -279,45 +272,10 @@ export default function Settings() {
         <PassiveInboxEntry />
         <AdminEntry />
 
-        <CollapsibleSection title="Wrapped & reminders">
+        <ProfilePushPreferences>{preferences => <CollapsibleSection title="Wrapped & reminders">
           <Row label="Sunday Wrapped reminder" right={<Switch value={sundayReminder} onValueChange={toggleSundayReminder} thumbColor={sundayReminder ? colors.red : "#fff"} trackColor={{ true: colors.redTintBorder, false: colors.line }} />} />
           <Note>One reminder a week, Sunday at 9 AM. That's it.</Note>
-          <Row
-            label="Activity from other people"
-            right={
-              <Switch
-                value={friendPush}
-                onValueChange={(v) => { setFriendPush(v); void setFriendActivityPushEnabled(v).catch(() => setFriendPush(!v)); }}
-                thumbColor={friendPush ? colors.red : "#fff"}
-                trackColor={{ true: colors.redTintBorder, false: colors.line }}
-              />
-            }
-          />
-          <Note>New people joining, Wrapped results, and friends&apos; visits. Your own activity is only shared as far as your profile visibility allows.</Note>
-          <Row
-            label="Likes on your posts"
-            right={
-              <Switch
-                value={likePush}
-                onValueChange={(v) => { setLikePush(v); void setSocialPushPref("likes", v).catch(() => setLikePush(!v)); }}
-                thumbColor={likePush ? colors.red : "#fff"}
-                trackColor={{ true: colors.redTintBorder, false: colors.line }}
-              />
-            }
-          />
-          <Note>When someone hearts a post of yours, or a comment you left.</Note>
-          <Row
-            label="Comments and replies"
-            right={
-              <Switch
-                value={commentPush}
-                onValueChange={(v) => { setCommentPush(v); void setSocialPushPref("comments", v).catch(() => setCommentPush(!v)); }}
-                thumbColor={commentPush ? colors.red : "#fff"}
-                trackColor={{ true: colors.redTintBorder, false: colors.line }}
-              />
-            }
-          />
-          <Note>When someone comments on your post or answers a comment of yours. Never more than the daily cap, and never during quiet hours.</Note>
+          {preferences}
           <Row
             label="Weekend picks"
             right={
@@ -352,7 +310,7 @@ export default function Settings() {
             onPress={() => router.push("/year-in-review")}
             variant="ghost"
           />
-        </CollapsibleSection>
+        </CollapsibleSection>}</ProfilePushPreferences>
 
         {/* Insights section removed — all of that content (Palate Lore,
             percentiles, people-like-you, aspirational, top palates in area)
@@ -444,6 +402,119 @@ export default function Settings() {
 
     </SafeAreaView>
   );
+}
+
+type PushPreference = {
+  key: string; label: string; note: string;
+  read: (token: AccountWriteSession) => Promise<boolean>;
+  write: (value: boolean, token: AccountWriteSession) => Promise<void>;
+};
+const PROFILE_PUSH_PREFS: PushPreference[] = [
+  { key: "activity", label: "Activity from other people", note: "Activity notifications you receive, including new followers, messages, Wrapped results and friends' visits. Your profile visibility separately controls sharing your own activity.", read: readFriendActivityPushEnabled, write: setFriendActivityPushEnabled },
+  { key: "likes", label: "Likes on your posts", note: "When someone hearts a post of yours, or a comment you left.", read: token => readSocialPushPref("likes", token), write: (value, token) => setSocialPushPref("likes", value, token) },
+  { key: "comments", label: "Comments and replies", note: "When someone comments on your post or answers a comment of yours. Delivery also depends on server notification controls.", read: token => readSocialPushPref("comments", token), write: (value, token) => setSocialPushPref("comments", value, token) },
+];
+
+function ProfilePushPreferences({ children }: { children: (controls: React.ReactNode) => React.ReactNode }) {
+  const [token, setToken] = useState(accountWriteSession);
+  useEffect(() => {
+    let alive = true;
+    // Root advances the shared generation synchronously. Read it after all
+    // synchronous subscribers, without awaiting work inside the SDK callback.
+    const sync = () => { void Promise.resolve().then(() => {
+      if (alive) setToken(accountWriteSession());
+    }); };
+    const { data } = supabase.auth.onAuthStateChange(sync);
+    sync();
+    return () => { alive = false; data.subscription.unsubscribe(); };
+  }, []);
+  return <ProfilePushPreferenceSession key={token.generation} token={token}>{children}</ProfilePushPreferenceSession>;
+}
+
+// Own operation state above CollapsibleSection: its closed body unmounts.
+// Collapsing must not release a write slot or discard its readback/warning.
+// Only screen destruction or an account generation change ends this owner.
+function ProfilePushPreferenceSession({ token, children }: {
+  token: AccountWriteSession;
+  children: (controls: React.ReactNode) => React.ReactNode;
+}) {
+  const activity = useProfilePushPreference(token, PROFILE_PUSH_PREFS[0]);
+  const likes = useProfilePushPreference(token, PROFILE_PUSH_PREFS[1]);
+  const comments = useProfilePushPreference(token, PROFILE_PUSH_PREFS[2]);
+  return <>{children(<>{activity}{likes}{comments}</>)}</>;
+}
+
+type PushState = { phase: "loading" | "ready" | "saving" | "error"; value: boolean | null; uncertain: boolean };
+function useProfilePushPreference(token: AccountWriteSession, preference: PushPreference) {
+  const initial: PushState = { phase: "loading", value: null, uncertain: false };
+  const [state, setState] = useState<PushState>(initial);
+  const current = useRef<PushState>(initial);
+  const mounted = useRef(false);
+  const pending = useRef(false);
+  const revision = useRef(0);
+  const valid = () => mounted.current && isAccountWriteSession(token);
+  const commit = (next: PushState) => { current.current = next; setState(next); };
+
+  async function reload() {
+    if (!valid() || pending.current) return;
+    pending.current = true;
+    const request = ++revision.current;
+    const uncertain = current.current.uncertain;
+    commit({ phase: "loading", value: null, uncertain });
+    try {
+      const value = await preference.read(token);
+      if (!valid() || request !== revision.current) return;
+      commit({ phase: "ready", value, uncertain });
+    } catch {
+      if (valid() && request === revision.current) commit({ phase: "error", value: null, uncertain });
+    } finally {
+      if (valid() && request === revision.current) pending.current = false;
+    }
+  }
+  useEffect(() => {
+    mounted.current = true; pending.current = false;
+    if (isAccountWriteSession(token)) void reload();
+    else commit({ phase: "error", value: null, uncertain: false });
+    return () => { mounted.current = false; pending.current = true; ++revision.current; };
+  }, [token, preference]);
+
+  async function change(value: boolean) {
+    if (!valid() || pending.current || current.current.phase !== "ready" || current.current.value === value) return;
+    pending.current = true; // before React commits a disabled Switch
+    const request = ++revision.current;
+    commit({ ...current.current, phase: "saving" });
+    let uncertain = current.current.uncertain;
+    try {
+      await preference.write(value, token);
+    } catch {
+      uncertain = true;
+    }
+    if (!valid() || request !== revision.current) return;
+    // A returned UPDATE without a row/count is not confirmation. Read back
+    // even on success. After an error this is only a snapshot, not proof that
+    // a delayed write cannot commit later; keep that uncertainty visible.
+    try {
+      const saved = await preference.read(token);
+      if (!valid() || request !== revision.current) return;
+      commit({ phase: "ready", value: saved, uncertain: uncertain || saved !== value });
+    } catch {
+      if (valid() && request === revision.current) commit({ phase: "error", value: null, uncertain: true });
+    } finally {
+      if (valid() && request === revision.current) pending.current = false;
+    }
+  }
+
+  return <>
+    <Row label={preference.label} right={state.value === null
+      ? <Text accessibilityValue={{ text: state.phase === "loading" ? "Loading" : "Unknown" }}>{state.phase === "loading" ? "Loading…" : "Unknown"}</Text>
+      : <Switch value={state.value} disabled={state.phase !== "ready"} onValueChange={value => { void change(value); }} thumbColor={state.value ? colors.red : "#fff"} trackColor={{ true: colors.redTintBorder, false: colors.line }} />}
+    />
+    <Note>{preference.note}</Note>
+    {state.phase === "saving" && <Note>Saving…</Note>}
+    {state.phase === "error" && <Note>Couldn&apos;t read this setting. Its current value is unknown.</Note>}
+    {state.uncertain && state.phase === "ready" && <Note>We couldn&apos;t confirm your change. This is the latest value we could read; the earlier change may still finish.</Note>}
+    {(state.phase === "error" || (state.phase === "ready" && state.uncertain)) && <Button title={`Retry ${preference.label}`} variant="ghost" onPress={() => { void reload(); }} />}
+  </>;
 }
 
 // Waitlist-approvals entry — renders only for admins.

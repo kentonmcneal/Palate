@@ -1,12 +1,11 @@
 // ----------------------------------------------------------------------------
 // social-notifications.ts — "tell me when someone reacts to me".
 // ----------------------------------------------------------------------------
-// Two preferences, both on profiles, both read by enqueue_social_push in 0148
-// at the moment a like or comment happens. They default TRUE, unlike
-// push_friend_activity which defaults FALSE — the difference is who the event
-// is about. Friend activity broadcasts YOUR movements to other people, so it
-// has to be opted into. A reply to you is someone addressing you, and an app
-// that silently swallows those is broken rather than discreet.
+// Receive preferences: profiles.push_post_likes and push_post_comments,
+// both default TRUE (0148). They govern notifications addressed to this user.
+// Activity notifications use push_social_activity, also default TRUE (0057,
+// 0170); push_friend_activity is retired. None of these receive switches
+// authorizes broadcasting the user's activity; visibility is separate.
 //
 // Everything here is still behind the server_push master flag, so nothing
 // sends until that is turned on deliberately.
@@ -16,6 +15,7 @@ import { accountWriteSession, assertAccountWriteSession, requireAccountWriteUser
 
 export type SocialPushPrefs = { likes: boolean; comments: boolean };
 
+/** Legacy best-effort reader; settings must use the strict reader below. */
 export async function getSocialPushPrefs(): Promise<SocialPushPrefs> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { likes: true, comments: true };
@@ -46,4 +46,23 @@ export async function setSocialPushPref(
     .update({ [column]: enabled })
     .eq("id", accountId);
   if (error) throw error;
+}
+
+/** Strict settings read; preserve getSocialPushPrefs's legacy fallback for its other consumers. */
+export async function readSocialPushPref(
+  which: keyof SocialPushPrefs,
+  token: AccountWriteSession = accountWriteSession(),
+): Promise<boolean> {
+  const accountId = await requireAccountWriteUser(token);
+  assertAccountWriteSession(token);
+  const column = which === "likes" ? "push_post_likes" : "push_post_comments";
+  const { data, error } = await supabase.from("profiles")
+    .select(`id, ${column}`).eq("id", accountId).maybeSingle();
+  assertAccountWriteSession(token);
+  if (error) throw error;
+  const value = data && column in data ? (data as Record<string, unknown>)[column] : undefined;
+  if (!data || data.id !== accountId || typeof value !== "boolean") {
+    throw new Error("Could not read social notification preference.");
+  }
+  return value;
 }

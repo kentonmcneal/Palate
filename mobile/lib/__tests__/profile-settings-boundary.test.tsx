@@ -50,7 +50,7 @@ function harness(file: string) {
     if (id.endsWith("/lib/account-settings")) return deletes;
     if (id.endsWith("/lib/auth")) return { signOut, signOutForAccount: signOut };
     if (id.endsWith("/lib/function-error")) return { readFunctionError };
-    if (id.endsWith("/lib/supabase")) return { supabase: { auth: { getUser: async () => ({ data: { user: { id: "A" } } }) }, rpc: jest.fn(), functions: { invoke: jest.fn() } } };
+    if (id.endsWith("/lib/supabase")) return { supabase: { auth: { onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }), getUser: async () => ({ data: { user: { id: "A" } } }) }, rpc: jest.fn(), functions: { invoke: jest.fn() } } };
     if (id.startsWith("../")) return named;
     throw Error(`Unmocked module: ${id}`);
   } });
