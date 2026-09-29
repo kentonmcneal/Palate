@@ -108,23 +108,31 @@ serve(async (req) => {
     //   2. their profile is one the caller may read: public, or friends-only
     //      with the follow returned. A one-way follow of a friends-only
     //      account must not become a way to read its history.
-    const [{ data: iFollowRows }, { data: followsMeRows }] = await Promise.all([
+    const [{ data: iFollowRows, error: iFollowErr }, { data: followsMeRows, error: followsMeErr }] = await Promise.all([
       admin.from("follows").select("followee_id").eq("follower_id", callerId),
       admin.from("follows").select("follower_id").eq("followee_id", callerId),
     ]);
+    if (iFollowErr || followsMeErr) return json({ error: "authorization_unavailable" }, 503);
     const iFollow = new Set((iFollowRows ?? []).map((r: { followee_id: string }) => r.followee_id));
     const followsMe = new Set((followsMeRows ?? []).map((r: { follower_id: string }) => r.follower_id));
 
-    const { data: visRows } = await admin
+    const { data: visRows, error: visErr } = await admin
       .from("profiles")
       .select("id, profile_visibility")
       .in("id", others);
+    if (visErr) return json({ error: "authorization_unavailable" }, 503);
+    const { data: blocks, error: blockErr } = await admin.from("blocked_users")
+      .select("blocker_id, blocked_id")
+      .or(`blocker_id.eq.${callerId},blocked_id.eq.${callerId}`);
+    if (blockErr || !Array.isArray(blocks)) return json({ error: "authorization_unavailable" }, 503);
+    const blocked = new Set(blocks.map((b: { blocker_id: string; blocked_id: string }) =>
+      b.blocker_id === callerId ? b.blocked_id : b.blocker_id));
     const visibility = new Map(
       (visRows ?? []).map((r: { id: string; profile_visibility: string }) => [r.id, r.profile_visibility]),
     );
 
     const unauthorized = others.filter((id) => {
-      if (!iFollow.has(id)) return true;
+      if (blocked.has(id) || !iFollow.has(id)) return true;
       const vis = visibility.get(id);
       if (vis === "public") return false;
       if (vis === "friends") return !followsMe.has(id); // needs reciprocity

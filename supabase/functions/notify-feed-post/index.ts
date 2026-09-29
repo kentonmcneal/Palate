@@ -29,10 +29,10 @@ serve(async (req) => {
     const jwt = authHeader.replace("Bearer ", "");
     if (!jwt) return json({ error: "missing auth" }, 401);
 
-    const userClient = createClient(SUPABASE_URL, jwt, { global: { headers: { Authorization: `Bearer ${jwt}` } } });
-    const { data: userData } = await userClient.auth.getUser();
-    const me = userData.user?.id;
-    if (!me) return json({ error: "unauthorized" }, 401);
+    const userClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { global: { headers: { Authorization: `Bearer ${jwt}` } }, auth: { persistSession: false } });
+    const { data: userData, error: authErr } = await userClient.auth.getUser(jwt);
+    const me = userData?.user?.id;
+    if (authErr || !me) return json({ error: "unauthorized" }, 401);
 
     const body = await req.json().catch(() => ({}));
     const feedEventId = body.feed_event_id as string | undefined;
@@ -58,13 +58,21 @@ serve(async (req) => {
     // Look up the event + caller display
     const { data: event, error: eErr } = await admin
       .from("feed_events")
-      .select("id, user_id, kind, payload, created_at")
+      .select("id, user_id, kind, payload, created_at, visit_id")
       .eq("id", feedEventId)
       .maybeSingle();
     if (eErr || !event) return json({ error: "event not found" }, 404);
 
     // Only the event owner is allowed to trigger pushes for their own event
     if (event.user_id !== me) return json({ error: "forbidden" }, 403);
+
+    // Do not broadcast a visit the author hid, or a forged cross-user link.
+    if (event.visit_id) {
+      const { data: visit, error: visitErr } = await retryRead(() => admin.from("visits")
+        .select("user_id, is_public").eq("id", event.visit_id).maybeSingle());
+      if (visitErr) return json({ error: "visit read failed" }, 500);
+      if (!visit || visit.user_id !== me || visit.is_public !== true) return json({ skipped: "visit is not shareable", sent: 0 });
+    }
 
     // The POSTER's visibility, read alongside their name.
     //
@@ -87,7 +95,7 @@ serve(async (req) => {
 
     // Fails CLOSED on an unknown visibility: broadcasting is the irreversible
     // direction, so an absent row means do not broadcast.
-    if ((posterRow?.profile_visibility ?? "private") === "private") {
+    if (!["public", "friends"].includes(posterRow?.profile_visibility ?? "")) {
       return json({ skipped: "poster is private", sent: 0 });
     }
 
@@ -95,10 +103,8 @@ serve(async (req) => {
       posterRow?.display_name ||
       (posterRow?.email ? posterRow.email.split("@")[0] : "Someone");
 
-    // The poster's FOLLOWERS. Under the old mutual-accept model this was the
-    // accepted-friendship set; a post now reaches whoever chose to hear about
-    // it, which is what following means. Visibility is still enforced by RLS
-    // on feed_events; the same gate is replicated below.
+    // Public posts may reach followers; friends-only posts require reciprocal
+    // follows. Service-role reads must also enforce blocks in both directions.
     // Guarded: a failed read leaves friendIds empty, and the function then
     // returns { sent: 0 } — a success indistinguishable from "nobody follows
     // this person". Silence that reports itself as normal is the hardest kind
@@ -108,9 +114,21 @@ serve(async (req) => {
     );
     if (followErr) return json({ error: "follower read failed", detail: errText(followErr) }, 500);
 
+    const [{ data: following, error: followingErr }, { data: blocks, error: blockErr }] = await Promise.all([
+      retryRead(() => admin.from("follows").select("followee_id").eq("follower_id", me)),
+      retryRead(() => admin.from("blocked_users").select("blocker_id, blocked_id")
+        .or(`blocker_id.eq.${me},blocked_id.eq.${me}`)),
+    ]);
+    if (followingErr || blockErr || !Array.isArray(following) || !Array.isArray(blocks)) {
+      return json({ error: "recipient authorization unavailable" }, 500);
+    }
+    const reciprocal = new Set(following.map((f: { followee_id: string }) => f.followee_id));
+    const blocked = new Set(blocks.map((b: { blocker_id: string; blocked_id: string }) =>
+      b.blocker_id === me ? b.blocked_id : b.blocker_id));
     const friendIds = ((followers ?? []) as { follower_id: string }[])
       .map((f) => f.follower_id)
-      .filter(Boolean);
+      .filter(id => id !== me && !blocked.has(id) &&
+        (posterRow?.profile_visibility === "public" || reciprocal.has(id)));
 
     if (friendIds.length === 0) return json({ sent: 0 });
 

@@ -89,3 +89,11 @@ Deadline 2026-09-30 16:01:54 UTC. Existing follow-up reactivated, no duplicate. 
 - Validation: all49 new tests passed in integrated full run; TypeScript passed. Overall run1230 passed/1failed/1skipped; sole failure was unrelated concurrent profile typography and is handled in its separate batch. Detailed cases and limitations in PALATE_RANKING_REVIEW_20260929.md.
 - INFERENCE: synthetic invariants improve known broken behavior, not measured human recommendation relevance. No ranking weights tuned. Mixed type/subregion taxonomy remains separately keyed; region-only grouping is broad. Upstream live retrieval limits and device latency remain unverified.
 - LIVE / DEVICE: no calls or deployment. Rollback: revert this recommendation commit only; baseline recovery retained.
+
+
+## Edge authorization hardening — 2026-09-29
+- WORKING TREE: group-recs now checks bidirectional blocks independently of retained follow edges; follows/profile/block authorization read failures fail closed. Existing authorized public/mutual-friends cases preserved.
+- WORKING TREE: notify-feed-post verifies linked visit ownership/publicity, friends-only reciprocity, bidirectional blocks and explicit JWT authentication before selecting push recipients. Existing push kill-switch unchanged. No real push sent.
+- Independent source audit identified8 server issues plus3 UI contract mismatches (SECURITY_AUDIT_20260929.md). This commit addresses the two edge routes only; SQL repairs remain a separate uncommitted review/testing task. Source findings are not live exploit results.
+- Validation:26 mocked executions of actual transpiled handlers passed after integration via scripts/security-edge-authorization.test.cjs. Both block directions with retained follows, private/one-way access, hidden/forged visit references, invalid auth, authorization read failures and valid controls covered. No real SDK/network/database used. Main reviewed patch; no production deployment.
+- Limits: SQL RLS/grants, concurrent privacy changes after recipient selection, queued notifications and deployed auth SDK behavior require separate verification. Rollback: revert this edge commit only, understanding that it restores the identified authorization gaps; retain tests/evidence when planning a replacement.
