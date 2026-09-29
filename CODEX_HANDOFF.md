@@ -298,8 +298,37 @@ but the held-out eval sample is **four places**. Treat any ranking claim as prov
 | S1 | Sentry is inert in production too (no DSN in EAS env) | `eas env:list production` once eas-cli is available — **names only, never paste values** |
 | S2 | `0179`/`0180` are deployed (the `edd0d2a` message says "verified after deploy") | Call `places-proxy` unauthenticated; its own lowercase `unauthorized` proves the module loaded, and costs nothing (`CLAUDE.md` §"How to actually verify", rule 5) |
 | S3 | The `sdk-upgrade` branch is abandoned | Ask Kenton |
+| S8 | **The 504s (K2) may be masked rather than gone.** 72 of 72 drain runs were clean in the retained pg_net window on 09-29 — but `retryRead` absorbs up to three failures silently and `send-push` does not report the attempt count, so a run that succeeded on attempt 2 is indistinguishable from one that never failed. I cannot tell "fixed" from "hidden". | Surface `attempts` from `retryRead` in the `send-push` response (it is already returned by the helper and discarded at the call sites), then read one day of `net._http_response`. Cheap and conclusive |
 
 ---
+
+### 5.4 From the Claude sessions, 2026-09-14 → 09-29 (not previously in this file)
+
+All shipped and deployed unless marked. Grep found **zero** prior mentions of "504",
+"Gateway Timeout", "push drain" or the digest straddle, so these are additions rather
+than duplicates.
+
+| # | Finding | Fix | Evidence |
+|---|---|---|---|
+| K1 | **The push drain was failing ~70% of the time.** Over six hours on 09-14 it ran 69 times and succeeded 21: 27 runs reported `server_push disabled` while `feature_flags.server_push` was `enabled = true`, and 21 returned HTTP 500 `{"error":"[object Object]"}`. Both failure modes lied in the direction of looking fine, which is why it survived. | `errText()` in `_shared/err-text.ts`; kill-switch read now distinguishes unreadable / missing / off; step labels (`server_push unreadable`, `due query failed`, `profile read failed`) | `LIVE`. Checked the three response shapes were one job, not three, by counting: `ok+falseOff+err` is **exactly 12 per full hour**, which is the `*/5` schedule |
+| K2 | **Root cause: PostgREST returns 504 to the cron's calls.** First real message recovered after K1 was `{"error":"server_push unreadable","detail":"Gateway Timeout"}` — the *kill-switch read*, the first fatal call in the run, surviving all three retries. **Not the database:** 15/60 connections, no slow queries, `statement_timeout` 2 min, `push_outbox` 45 rows. It is upstream of Postgres. | Mitigated only: all four reads go through `retryRead` (`_shared/retry.ts`), 3 tries, 250 ms linear backoff, reads only | `LIVE`. **Unfixed and unexplained — see S8.** Worth raising with Supabase |
+| K3 | **An unguarded profile read was permanently destroying notifications.** A failed read left `profiles === null`, so the token map was empty, so *every* row in the batch fell into the tokenless branch and was retired with `attempts = MAX` and `error = "no push token"` — a transient timeout written down as a confident, terminal, false fact. | Guarded; aborts the run and retries next tick | `LIVE`, proven not inferred: user `a6d005d3` received a push at **17:35:09** on 09-13 and had their `post_comment` notification retired at **18:05:56** as "no push token" |
+| K4 | **The friend-visit push could not reach anybody.** `0162` gated it on `profiles.push_friend_activity` — retired by `0057`, and `false` on all 19 accounts — instead of `push_social_activity` (`true` on all 19). It also read `public.friendships` (3 rows, 1 accepted, newest 09-05) rather than `follows` (15 rows). The settings switch writes the column the trigger did not read. | `0170` | `LIVE`, end-to-end: one real visit takes `friend_visit` rows 11 → 13; before, zero. Run in a transaction and rolled back |
+| K5 | **A private profile's visits were broadcasting.** `0057`/`0093` read the actor's `profile_visibility` and returned early on `private`; `0162` dropped that check and **`0170` (mine) carried the omission forward** by rewriting from the version it replaced instead of the one before it. `notify-feed-post` had it backwards entirely — never checked the poster, filtered *recipients* by their own visibility. | `0171` + `notify-feed-post` | `LIVE`, A/B on the same actor with the same followers, changing only the flag: public enqueues 2, private enqueues 0. Nothing leaked — the one private account has no followers |
+| K6 | **`are_friends(a, b)` was a friendship oracle for the anon key.** SECURITY DEFINER, two arbitrary uuids, reads `follows`, no guard at all. `REVIEW_2026-09-05.md` had already named it; it survived because `smoke.sql` pinned five definer functions **by name** and this was not one. | `0172` revokes from public/anon/authenticated. All 11 internal callers are definer-owned by `postgres`, so none needed the grant | `LIVE`. `smoke.sql` now *enumerates* `pg_proc` instead: any anon-executable definer function must test `is_admin` or `auth.uid()`. Verified to trip by re-granting inside a rolled-back transaction |
+| K7 | **A meal eaten just before the digest hour was never asked about.** A stop is not detected until it ENDS and the row is written after resolution, so a 20:57 meal was written at 21:00:19 — 19 s after the digest fired on an empty inbox. The next window opened at 21:00:00, three minutes *after* the meal. Too late for one notification, too early for the next; it would have expired unasked at 48 h. | 20-minute grace on `digestWindowStart` | `LIVE` + `RUN`. 2 of 20 pending entries sat in that gap — 10% of entries in 1.3% of the clock, because the gap is exactly where dinners end |
+| K8 | **Signup announcements were starving the social loop.** Over nine days the outbox sent **16** `user_joined` and **1** `friend_visit`, with 10 of the latter dropped. `user_joined` is the only type that fans out to the whole user base per event, so its volume grows as (signups × users) and in a shared 3/day budget it crowds out everything else, worse as the app grows. | `_shared/push-quota.ts`: announcements get their own 1/day ceiling; surplus dropped not deferred; a scarce slot goes to the row that dies soonest | `RUN`, 12 tests. 8 of the 10 drops were *not* this — they expired while `server_push` was off, which is deliberate |
+| K9 | **A published 24-hour moderation SLA with no mechanism.** `content_reports` had no trigger, no user SELECT policy and no admin screen; the only reader was a local script. | `0169`: after-insert alert via the existing `ALERT_PUSH_TOKEN`, plus admin-gated `open_report_count` / `list_content_reports` / `resolve_content_report` | `LIVE`. Trigger fires (a real insert enqueues a pg_net call); a non-admin gets 0, 0 rows and "not authorized". **Still no admin screen — the RPCs exist, the client work does not** |
+| K10 | **Onboarding lost its buttons at one notch above default text size.** `justifyContent: "space-between"` on a non-scrolling column; Yoga's `flexShrink: 0` pushes the footer off-screen rather than compressing it. Total loss on SE, 13 mini and iPhone 15 at 1.118×. The fix already existed in `passive-capture-intro` and had never been applied to the funnel. | ScrollView with the CTA outside it, on all six screens; `keyboardShouldPersistTaps` on the two with text fields | `RUN`. Guard test, made to fail on purpose |
+
+**Audit status (`docs/AUDIT_FINDINGS_2026-09-13.md`): 11 of 13 closed.** Re-checked each
+against the live DB rather than notes. The two open ones are not code: **#3 Sign in with
+Apple** is one Supabase dashboard step — enable the provider, put `app.palate.ios` in
+Client IDs, no Apple private key and no rebuild, because `auth.ts` uses the native
+`signInWithIdToken` flow and build 33 already carries the entitlement (runbook in
+`docs/PUBLIC_LAUNCH.md`) — and **#10 share links** is blocked until an App Store URL
+exists, with a guard now failing the build if only one of the two invite destinations is
+migrated.
 
 ## 6. The improvement plan
 
@@ -800,6 +829,9 @@ on-demand pricing beats coverage pricing. The cron is deliberately **unscheduled
 | Are the four estimated SKU prices right? | Billing → Reports grouped by SKU |
 | Is `sdk-upgrade` abandoned? | ask |
 | Does the new prior in `1410f09` hold up? | n≥30 held-out set — **not n=4** |
+| Are the PostgREST 504s (K2) still happening, or absorbed by retries? | surface `retryRead`'s `attempts` in the `send-push` response (S8) |
+| Should the reviews backfill finish? | 49 in-scope rows (~$1.23) and 245 out-of-corridor (~$6) remain unfetched. `AGENTS.md` says do not re-run it; Kenton asked for 190 rows on 09-28 and they were fetched at $4.75. **The instruction and the request conflict — his call, and worth telling him Codex's reasoning: at two users, on-demand beats coverage.** |
+| Does cached review text survive to be used? | First `reviews_refreshed_at` expires **2026-10-22** via `prune_stale_review_text` (0173). `ANTHROPIC_API_KEY` is still unset, so no LLM pass has converted text → `vibe`; 1,092 `vibe` values came free from the atmosphere booleans instead |
 
 **Sensible defaults if I am unreachable:** keep the light theme and restrained red; keep
 distance as a tiebreaker; keep the budget in dollars and never move a limit client-side;
