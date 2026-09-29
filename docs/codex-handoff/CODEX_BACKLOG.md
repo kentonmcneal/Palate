@@ -3,8 +3,8 @@
 Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deployment or paid services.
 
 ## In progress
-- Independent review fixes for profile/follows request ownership; account transition boundary.
-- Follows-list ownership and asynchronous mutation reliability.
+- Expand recommendation evaluation and correct remaining metadata-density/cold-start ranking defects.
+- Continue security, feed quality, layout and typo audit after committed account/settings/crash-report corrections.
 
 ## Completed before this window
 - Nearby request coalescing, malformed-cache and budget config checks.
@@ -17,6 +17,8 @@ Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deploym
 - Broader typo pass.
 
 ## Unverified / blocked
+- Database-owned spending policy remains an unnumbered reviewed draft: required migration CLI attempts a denied telemetry write. Keep default cap zero; no paid tests or deployment.
+- Current JS crash privacy and local Metro identity are verified offline; native crash coverage is intentionally disabled and device/server symbolication remains unverified.
 - **PostgREST returns 504 to the push-drain cron, and nobody has explained it.** On 2026-09-14
   the drain ran 69 times in six hours and succeeded 21: 27 runs reported `server_push disabled`
   while the flag was `enabled = true`, and 21 returned `{"error":"[object Object]"}`. Both lied
@@ -78,3 +80,5 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 - Completed locally: three profile push controls with strict unknown/readback states and operation ownership surviving section collapse;151 suites/1565 tests and TypeScript pass. Whole-screen/server ordering/device delivery remain unverified.
 
 - Completed locally: actual offline iOS/Android JS+Hermes source-map identity production,9 artifact gates and independent review. Device stacks, uploads and server symbolication remain unverified.
+
+- Completed locally: missing-cuisine novelty, Right Now availability preference and duplicate-metadata invariants. Independent red/green review;153suites/1668passed/1skipped andTypeScript. Human relevance, venue timezone and live retrieval remain unverified.

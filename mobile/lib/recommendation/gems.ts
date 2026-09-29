@@ -137,8 +137,9 @@ function priceUpscale(r: RestaurantInput): number {
 
 function tagSignal(r: RestaurantInput): number {
   let s = 0;
-  for (const t of r.tags ?? []) {
-    const k = t.toLowerCase();
+  // Tags describe facts, not repeated observations. Case variants of the
+  // same tag must not multiply either acclaim or a negative adjustment.
+  for (const k of new Set((r.tags ?? []).map(t => t.toLowerCase()))) {
     s += ACCLAIM[k] ?? ANTI[k] ?? 0;
   }
   return s;

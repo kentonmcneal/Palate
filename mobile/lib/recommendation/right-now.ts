@@ -23,6 +23,7 @@ import { computeCompatibility } from "./compatibility";
 import { scoreRestaurant, scoreContext } from "./scoring";
 import { explainRightNow, type RightNowExplanation } from "./explanations";
 import { distanceKm } from "../match-score";
+import { venueOpenAt } from "../opening-hours";
 
 // Build the legacy `.match` shim (same data, old field name) so existing
 // UI components like StretchPick / RestaurantCompatibilityCard
@@ -167,7 +168,7 @@ export async function computeRightNow(opts: RightNowOptions): Promise<RightNowRe
   // exploit pick in the events, so its outcomes could never be read. Home's
   // explore slot (recommendation/shortlist.ts) does the job deterministically
   // and says so in the event stream.
-  const rightNowPick: RankedRestaurant | null = exploit[0]?.restaurant ?? null;
+  const rightNowPick = firstNotKnownClosed(exploit, now);
 
   // ---- Stretch slot: the BEST of the adjacent options ----
   //
@@ -206,7 +207,7 @@ export async function computeRightNow(opts: RightNowOptions): Promise<RightNowRe
     // So this still ranks by compatibility, as asked — it just stops
     // recommending the best match in a locked building.
     .sort((a, b) => b.restaurant.score.finalScore - a.restaurant.score.finalScore);
-  const stretchPick = stretchScored[0]?.restaurant ?? null;
+  const stretchPick = firstNotKnownClosed(stretchScored, now);
 
   return {
     rightNow: rightNowPick ? buildPick(rightNowPick, opts.graph, false) : null,
@@ -237,6 +238,15 @@ function distanceOf(r: RestaurantInput, here: { lat: number; lng: number } | nul
 }
 
 type ScoredCandidate = { restaurant: RankedRestaurant; pool: string };
+
+/** Preserve each strategy's ordering among available/unknown venues. A known
+ * closed venue is a fallback only when every option in that strategy is closed.
+ * Missing hours remain unknown, not closed or certified open. This is selection
+ * policy for Right Now, not a change to compatibility or the browsing pool. */
+function firstNotKnownClosed(items: ScoredCandidate[], now: Date): RankedRestaurant | null {
+  return (items.find(s => venueOpenAt(s.restaurant.regular_opening_hours, now) !== false)
+    ?? items[0])?.restaurant ?? null;
+}
 
 /**
  * Strategy-specific sort. Each strategy filters / re-ranks `baseFiltered`

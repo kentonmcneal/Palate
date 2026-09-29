@@ -92,7 +92,7 @@ export function scoreContext(r: RestaurantInput, ctx: ScoreContext): number {
   if (ctx.now && r.occasion_tags?.length) {
     const slot = currentSlot(ctx.now);
     const wanted = SLOT_TO_OCCASIONS[slot];
-    const hits = r.occasion_tags.filter((t) => wanted.includes(t)).length;
+    const hits = [...new Set(r.occasion_tags)].filter((t) => wanted.includes(t)).length;
     score += Math.min(15, hits * 7);
   }
 
@@ -106,12 +106,11 @@ export function scoreContext(r: RestaurantInput, ctx: ScoreContext): number {
   // around Memphis carry usable hours, so this is real coverage, not a
   // theoretical field.
   //
-  // Recommending a closed restaurant is the most obviously wrong output a
-  // dining app can produce, so the penalty is large enough to sink a place
-  // below anything open. It is a penalty rather than a hard filter because
-  // hours data is imperfect and a wrong record should cost a place its rank,
-  // not its existence — and because "closes in 20 minutes" is still useful
-  // when you are standing outside.
+  // This is a soft contextual penalty, not a guarantee that every open venue
+  // outranks every closed one: taste and gem adjustments can outweigh it.
+  // Right Now separately prefers a not-known-closed option within its strategy
+  // pool. Browsing keeps closed venues in the ranking because hours can be
+  // imperfect and planning a future visit remains useful.
   //
   // NULL is untouched. venueOpenAt returns null for missing or unparseable
   // hours, and penalising that would punish exactly the small independent

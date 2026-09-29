@@ -60,6 +60,10 @@ export type GenerateOptions = {
  * apart is how a tab ends up showing something else under a new label.
  */
 export function isStretch(graph: TasteGraph, r: RestaurantInput): boolean {
+  // A matching format connects a known unfamiliar cuisine to the person, but
+  // cannot establish novelty when we have no cuisine classification at all.
+  // Calling those rows stretch would also remove them from Best and Comfort.
+  if (!r.cuisine_subregion && !r.cuisine_region && !r.cuisine_type) return false;
   const inSubregion = r.cuisine_subregion && shareOf(graph.cuisinesSubregion, r.cuisine_subregion) > 0;
   if (inSubregion) return false;
   // When the finer classification is absent, a familiar type is not novel.

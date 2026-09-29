@@ -475,7 +475,8 @@ function affinityOf(map: Record<string, number>, key: string): number {
 
 function sumAffinity(map: Record<string, number>, keys: string[]): number {
   let s = 0;
-  for (const k of keys) s += affinityOf(map, k);
+  // Repeating an attribute in one row is not additional preference evidence.
+  for (const k of new Set(keys)) s += affinityOf(map, k);
   return Math.min(1, s);
 }
 
