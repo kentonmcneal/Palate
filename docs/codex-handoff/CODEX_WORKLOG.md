@@ -198,3 +198,12 @@ Deadline 2026-09-30 16:01:54 UTC. Existing follow-up reactivated, no duplicate. 
 - Main integration151 suites/1565 tests pass/one skipped; TypeScript passes. Six focused suites contain178 tests, including27 actual-collapse cases and18 independent strict-reader cases. No real push/auth/service calls, native UI or deployed policy verification.
 - Evidence: PUSH_PREFS_AUTHOR_20260929.md and PUSH_PREFS_REVIEW_20260929.md. Receive-preference comments now follow current source columns; sender visibility is separate. Backend-wide ordering, cross-screen recreation of uncertain writes and notification delivery remain unverified. Readback is a snapshot, not proof a timed-out request cannot commit later.
 - Rollback: revert this local batch; earlier preference guessing/overlap returns. Existing recovery tag, landing and account cleanup preserved.
+
+
+## Offline Metro runtime/source-map identity — 2026-09-29
+- WORKING TREE: added installed Sentry Expo Metro integration to generate matching runtime registry and source-map debug IDs. Release-for-web/replay/annotations/development-source-context additions explicitly disabled. No uploader/dependency/native project changes.
+- Actual isolated whole-app iOS/Android plain-JS and Hermes exports succeeded with allowlisted environment, dotenv/telemetry/upload disabled and network-denial preload. Default Expo iOS control has map/comment ID but no Sentry runtime registry; proposed JS exports populate it. Core derives metadata from generated registries and existing privacy transport preserves it.
+- Main durable artifact gate9/9 passes against author artifacts; independent gate9/9 plus separate source/hash/config checks pass. Both real Hermes bytecodes contain matching composed-map IDs and registry identifier; bytecode was not executed on a device. Independent59 observability tests and main full151 suites/1565 tests/one skipped pass.
+- Evidence: METRO_DEBUG_ID_AUTHOR_20260929.md and METRO_DEBUG_ID_REVIEW_20260929.md. App-export VM stops at missing native bridge after registry creation; this is not app boot/device proof. Source maps stay local.
+- LIVE / DEVICE limits: upload/OTA packaging/ingestion/server symbolication/native crashes/web or split bundles unverified. This closes the demonstrated runtime-ID generation gap for tested local export paths only. No paid calls/deployment.
+- Rollback: revert this local config/test commit; runtime registry generation then returns to the demonstrated missing-default condition. Baseline tag retained.
