@@ -75,6 +75,27 @@ serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
+  // How many tries each read needed, reported on EVERY response below.
+  //
+  // retryRead already returns `attempts` and every call site threw it away, so
+  // a read that succeeded on attempt two was indistinguishable from one that
+  // never failed. That mattered: the drain was taking 504s from PostgREST on
+  // roughly two runs in three, retries were added to absorb them, and
+  // afterwards there was no way to tell whether the 504s had stopped or were
+  // simply being hidden. 72 clean runs told us nothing.
+  //
+  // It has to appear on every exit, not just the sending path. The overwhelming
+  // majority of runs leave at `{sent:0, pending:0}` with nothing due — if
+  // attempts rode only on the full path, this would measure almost nothing.
+  const reads: Record<string, number> = {};
+  const reply = (body: Record<string, unknown>, status = 200) =>
+    json({
+      ...body,
+      read_attempts: reads,
+      // The single number to graph: reads that needed more than one try.
+      retried_reads: Object.values(reads).filter((n) => n > 1).length,
+    }, status);
+
   try {
     // Master kill switch. Fails CLOSED: a missing row, or any error reading
     // it, means we do not send.
@@ -97,21 +118,22 @@ serve(async (req) => {
     // function reported "server_push disabled" — with the flag demonstrably
     // enabled in the database. Twenty-seven runs in six hours said the switch
     // was off while it was on, and nothing anywhere contradicted them.
-    const { data: flag, error: flagErr } = await retryRead(() =>
+    const { data: flag, error: flagErr, attempts: flagTries } = await retryRead(() =>
       admin.from("feature_flags").select("enabled").eq("key", "server_push").maybeSingle()
     );
+    reads.flag = flagTries;
     if (flagErr) {
       console.error("send-push: cannot read server_push flag", flagErr);
-      return json({ error: "server_push unreadable", detail: errText(flagErr) }, 500);
+      return reply({ error: "server_push unreadable", detail: errText(flagErr) }, 500);
     }
     if (!flag) {
-      return json({ error: "server_push flag missing", sent: 0 }, 500);
+      return reply({ error: "server_push flag missing", sent: 0 }, 500);
     }
     if (!flag.enabled) {
-      return json({ skipped: "server_push disabled", sent: 0 });
+      return reply({ skipped: "server_push disabled", sent: 0 });
     }
 
-    const { data: due, error: dueErr } = await retryRead(() =>
+    const { data: due, error: dueErr, attempts: dueTries } = await retryRead(() =>
       admin
         .from("push_outbox")
         .select("id, user_id, title, body, data, attempts, expires_at")
@@ -121,10 +143,11 @@ serve(async (req) => {
         .order("send_after", { ascending: true })
         .limit(MAX_PER_RUN)
     );
-    if (dueErr) return json({ error: "due query failed", detail: errText(dueErr) }, 500);
+    reads.due = dueTries;
+    if (dueErr) return reply({ error: "due query failed", detail: errText(dueErr) }, 500);
 
     const rows = due ?? [];
-    if (rows.length === 0) return json({ sent: 0, pending: 0 });
+    if (rows.length === 0) return reply({ sent: 0, pending: 0 });
 
     // Drop perishable rows rather than sending stale news. Without this, the
     // one-per-day cap would defer a rate-limited user's broadcasts and they
@@ -153,14 +176,15 @@ serve(async (req) => {
     // Guarded: on a failed read every count is zero, so every ceiling silently
     // stops applying and a rate-limited user gets the firehose the caps exist
     // to prevent. Abort and retry next tick rather than over-send.
-    const { data: recent, error: recentErr } = await retryRead(() =>
+    const { data: recent, error: recentErr, attempts: recentTries } = await retryRead(() =>
       admin
         .from("push_outbox")
         .select("user_id, data")
         .not("sent_at", "is", null)
         .gte("sent_at", since)
     );
-    if (recentErr) return json({ error: "quota tally failed", detail: errText(recentErr) }, 500);
+    reads.recent = recentTries;
+    if (recentErr) return reply({ error: "quota tally failed", detail: errText(recentErr) }, 500);
     // Counted in separate buckets per class. One shared counter would mean a
     // busy day of correspondence silently suppressing the ambient feed, and a
     // burst of signups suppressing both — each class starving the others for
@@ -189,7 +213,7 @@ serve(async (req) => {
     if (expireNow.length) {
       await admin.from("push_outbox").update({ error: "expired", attempts: MAX_ATTEMPTS }).in("id", expireNow);
     }
-    if (eligible.length === 0) return json({ sent: 0, deferred: deferred.length });
+    if (eligible.length === 0) return reply({ sent: 0, deferred: deferred.length });
 
     // Resolve tokens.
     const userIds = [...new Set(eligible.map((r) => r.user_id))];
@@ -199,10 +223,11 @@ serve(async (req) => {
     // attempts = MAX_ATTEMPTS and error "no push token". Real pushes to people
     // who do have a token would be thrown away, and the outbox would record a
     // confident, wrong reason. Better to abort the run and retry next tick.
-    const { data: profiles, error: profErr } = await retryRead(
+    const { data: profiles, error: profErr, attempts: profTries } = await retryRead(
       () => admin.from("profiles").select("id, push_token").in("id", userIds)
     );
-    if (profErr) return json({ error: "profile read failed", detail: errText(profErr) }, 500);
+    reads.profiles = profTries;
+    if (profErr) return reply({ error: "profile read failed", detail: errText(profErr) }, 500);
     const tokenByUser = new Map<string, string>();
     for (const p of profiles ?? []) {
       if (p.push_token) tokenByUser.set(p.id, p.push_token);
@@ -216,7 +241,7 @@ serve(async (req) => {
         .update({ error: "no push token", attempts: MAX_ATTEMPTS })
         .in("id", tokenless);
     }
-    if (sendable.length === 0) return json({ sent: 0, tokenless: tokenless.length });
+    if (sendable.length === 0) return reply({ sent: 0, tokenless: tokenless.length });
 
     let sent = 0;
     const failed: { id: string; error: string; attempts: number }[] = [];
@@ -283,7 +308,7 @@ serve(async (req) => {
         .in("id", [...new Set(staleTokens)]);
     }
 
-    return json({
+    return reply({
       sent,
       failed: failed.length,
       deferred: deferred.length,
@@ -293,7 +318,7 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("send-push failed", e);
-    return json({ error: "unhandled", detail: errText(e) }, 500);
+    return reply({ error: "unhandled", detail: errText(e) }, 500);
   }
 });
 
