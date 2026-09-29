@@ -1,7 +1,10 @@
 import { supabase } from "./supabase";
 import { signedVisitPhoto, signedVisitPhotos } from "./storage-urls";
 import { getRestaurantIdByPlaceId, type Restaurant } from "./places";
-import { track } from "./analytics";
+import {
+  accountWriteSession, accountWriteAuthorization, requireAccountWriteUser,
+  assertAccountWriteSession, isAccountWriteSession, type AccountWriteSession,
+} from "./account-write";
 import { triggerHapticSuccess } from "./haptics";
 import { invalidatePersonalSignal } from "./personal-signal";
 import { captureError } from "./observability";
@@ -119,11 +122,15 @@ export async function saveVisit(opts: {
   source: "auto" | "manual";
   notes?: string;
 }): Promise<SaveVisitResult> {
+  // Capture before any await; A -> B -> A is a different generation too.
+  const token = accountWriteSession();
+  if (!token.accountId) throw new Error("Not signed in");
+  const userId = await requireAccountWriteUser(token);
+  const authorization = await accountWriteAuthorization(token);
+  assertAccountWriteSession(token);
   const restaurantId = await getRestaurantIdByPlaceId(opts.googlePlaceId);
+  assertAccountWriteSession(token);
   const visitedAt = opts.visitedAt ?? new Date();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not signed in");
 
   // Dedup: if the user already logged this restaurant within the window,
   // return that existing row instead of creating a duplicate.
@@ -131,18 +138,20 @@ export async function saveVisit(opts: {
   const { data: existing } = await supabase
     .from("visits")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .eq("restaurant_id", restaurantId)
     .gte("visited_at", dedupCutoff.toISOString())
     .order("visited_at", { ascending: false })
     .limit(1)
-    .maybeSingle();
+    .maybeSingle().setHeader("Authorization", authorization);
+  assertAccountWriteSession(token);
 
   if (existing) {
     const { count } = await supabase
       .from("visits")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id);
+      .eq("user_id", userId).setHeader("Authorization", authorization);
+    assertAccountWriteSession(token);
     return {
       ...(existing as Visit),
       isFirstVisit: false,
@@ -153,11 +162,12 @@ export async function saveVisit(opts: {
   const { count: priorCount } = await supabase
     .from("visits")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id);
+    .eq("user_id", userId).setHeader("Authorization", authorization);
+  assertAccountWriteSession(token);
 
   const meta = buildVisitTimeMeta(visitedAt);
   const insertPayload: Record<string, unknown> = {
-    user_id: user.id,
+    user_id: userId,
     restaurant_id: restaurantId,
     visited_at: meta.visited_at,
     meal_type: mealTypeFor(visitedAt),
@@ -175,7 +185,8 @@ export async function saveVisit(opts: {
     .from("visits")
     .insert(insertPayload)
     .select("*")
-    .single();
+    .single().setHeader("Authorization", authorization);
+  assertAccountWriteSession(token);
 
   // Graceful degradation: if the migration hasn't been applied yet, retry
   // without the new columns so the app keeps working in the meantime.
@@ -189,18 +200,19 @@ export async function saveVisit(opts: {
       confirmed_by_user: insertPayload.confirmed_by_user,
       notes: insertPayload.notes,
     };
-    const retry = await supabase.from("visits").insert(fallback).select("*").single();
+    const retry = await supabase.from("visits").insert(fallback).select("*").single().setHeader("Authorization", authorization);
+    assertAccountWriteSession(token);
     data = retry.data;
     error = retry.error;
   }
 
   if (error) throw error;
   const total = (priorCount ?? 0) + 1;
-  void track("visit_logged", { source: opts.source, visit_total: total });
+  void trackVisitWrite(token, authorization, "visit_logged", { source: opts.source, visit_total: total });
   void triggerHapticSuccess();
   // Invalidate the personal-signal cache so the next recs / scoring pass sees
   // the new visit (anti-staleness + friend signal stay accurate in real time).
-  try { (await import("./personal-signal")).invalidatePersonalSignal(); } catch {}
+  try { invalidatePersonalSignal(); } catch {}
 
   // Quietly drop a feed event so friends see "Kenton visited an American spot."
   // No push notification — visit events are passive, not real-time.
@@ -208,24 +220,28 @@ export async function saveVisit(opts: {
   // this is a no-op today — it matters the moment defaultVisitVisibility is
   // wired, and wiring it later without this would publish hidden visits.
   if ((data as { is_public?: boolean }).is_public !== false) {
-    void emitVisitFeedEvent(user.id, restaurantId, opts.googlePlaceId, (data as { id: string }).id);
+    void emitVisitFeedEvent(token, authorization, userId, restaurantId, opts.googlePlaceId, (data as { id: string }).id);
   }
 
   return { ...(data as Visit), isFirstVisit: total === 1, totalVisits: total };
 }
 
 async function emitVisitFeedEvent(
+  token: AccountWriteSession,
+  authorization: string,
   userId: string,
   restaurantId: string,
   googlePlaceId: string,
   visitId?: string,
 ) {
   try {
+    assertAccountWriteSession(token);
     const { data: rest } = await supabase
       .from("restaurants_resolved")
       .select("name, cuisine_type:resolved_cuisine_type, neighborhood")
       .eq("id", restaurantId)
-      .maybeSingle();
+      .maybeSingle().setHeader("Authorization", authorization);
+    assertAccountWriteSession(token);
     if (!rest) return;
     const { data: created } = await supabase.from("feed_events").insert({
       user_id: userId,
@@ -239,7 +255,8 @@ async function emitVisitFeedEvent(
         neighborhood: rest.neighborhood,
         google_place_id: googlePlaceId,
       },
-    }).select("id").single();
+    }).select("id").single().setHeader("Authorization", authorization);
+    assertAccountWriteSession(token);
 
     // Friends are told by the database, not from here. visits_enqueue_friend_push
     // fires on the visit insert above and writes one push_outbox row per
@@ -424,15 +441,29 @@ export async function recordPromptDecision(
    *  so callers that do not have the stop to hand still record the decision. */
   at?: { lat: number; lng: number } | null,
 ) {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+  const token = accountWriteSession();
+  if (!token.accountId) return;
+  let userId: string;
+  let authorization: string;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!isAccountWriteSession(token) || !user || user.id !== token.accountId) return;
+    userId = user.id;
+    authorization = await accountWriteAuthorization(token);
+    assertAccountWriteSession(token);
+  } catch (error) {
+    // Bookkeeping from an abandoned account must not block the answer.
+    if (!isAccountWriteSession(token)) return;
+    throw error;
+  }
   const { error } = await supabase.from("prompt_decisions").insert({
-    user_id: user.id,
+    user_id: userId,
     google_place_id: googlePlaceId,
     outcome,
     lat: at?.lat ?? null,
     lng: at?.lng ?? null,
-  });
+  }).setHeader("Authorization", authorization);
+  if (!isAccountWriteSession(token)) return;
   if (error) {
     // Reported, not thrown. The callers are the Yes, Not here and Don't ask
     // again handlers, and a failed bookkeeping row must not block the answer
@@ -441,7 +472,7 @@ export async function recordPromptDecision(
     // "Don't ask again today" button wrote a value the prompt_outcome enum did
     // not have, so every one of those taps failed and nothing said so. Now a
     // failed decision is a Sentry event and an analytics row.
-    void track("prompt_decision_failed", {
+    void trackVisitWrite(token, authorization, "prompt_decision_failed", {
       outcome,
       place_id: googlePlaceId,
       code: error.code ?? null,
@@ -606,4 +637,27 @@ export async function listVisitsForCuration(limit = 100) {
     restaurant: { google_place_id: string; name: string; chain_name: string | null;
       primary_type: string | null; types: string[] | null; cuisine_type: string | null } | null;
   }>;
+}
+
+// Visit-write analytics must not resolve the replacement user's credentials
+// after the visit/decision itself has been bound to its initiating account.
+async function trackVisitWrite(
+  token: AccountWriteSession,
+  authorization: string,
+  event: string,
+  props: Record<string, unknown>,
+): Promise<void> {
+  try {
+    assertAccountWriteSession(token);
+    const { error } = await supabase.from("analytics_events").insert({
+      user_id: token.accountId, event, props,
+    }).setHeader("Authorization", authorization);
+    if (error && isAccountWriteSession(token)) {
+      void captureError(new Error(`analytics insert rejected: ${error.message}`), {
+        at: "track", event,
+      });
+    }
+  } catch {
+    // Analytics never blocks the visit/answer.
+  }
 }

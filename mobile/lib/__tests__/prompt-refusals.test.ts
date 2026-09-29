@@ -17,7 +17,7 @@ const mockDb: {
 
 jest.mock("../supabase", () => {
   const builder: Record<string, unknown> = {};
-  for (const m of ["select", "eq", "in", "gte", "lte", "order", "limit", "insert", "upsert", "delete", "maybeSingle", "single"]) {
+  for (const m of ["select", "eq", "in", "gte", "lte", "order", "limit", "insert", "upsert", "delete", "maybeSingle", "single", "setHeader"]) {
     builder[m] = (...args: unknown[]) => {
       mockDb.calls.push([m, args]);
       if (mockDb.throwOn === m) throw new Error(`boom in ${m}`);
@@ -30,7 +30,10 @@ jest.mock("../supabase", () => {
   return {
     supabase: {
       from: (table: string) => { mockDb.from.push(table); return builder; },
-      auth: { getUser: async () => ({ data: { user: { id: "u1" } } }) },
+      auth: {
+        getUser: async () => ({ data: { user: { id: "u1" } } }),
+        getSession: async () => ({ data: { session: { user: { id: "u1" }, access_token: "synthetic-u1" } } }),
+      },
     },
   };
 });
@@ -51,6 +54,7 @@ jest.mock("../visits", () => ({
   recentlyPrompted: jest.fn().mockResolvedValue(false),
 }));
 
+import { setUsernameGateAccount } from "../username-gate";
 import { track } from "../analytics";
 import { captureError } from "../observability";
 import {
@@ -84,6 +88,7 @@ function suppressions(reason: string) {
 }
 
 beforeEach(async () => {
+  setUsernameGateAccount("u1");
   await AsyncStorage.clear();
   jest.clearAllMocks();
   mockDb.count = 0;
@@ -175,16 +180,18 @@ describe("recordPromptDecision reports a failed insert", () => {
       mockDb.error,
       expect.objectContaining({ at: "visits:recordPromptDecision", outcome: "skip_today", google_place_id: "home" }),
     );
-    expect(track).toHaveBeenCalledWith(
-      "prompt_decision_failed",
-      expect.objectContaining({ outcome: "skip_today", place_id: "home", code: "22P02" }),
-    );
+    expect(mockDb.from).toContain("analytics_events");
+    expect(mockDb.calls).toContainEqual(["insert", [expect.objectContaining({
+      user_id: "u1", event: "prompt_decision_failed",
+      props: expect.objectContaining({ outcome: "skip_today", place_id: "home", code: "22P02" }),
+    })]]);
+    expect(mockDb.calls).toContainEqual(["setHeader", ["Authorization", "Bearer synthetic-u1"]]);
   });
 
   it("stays quiet when the insert lands", async () => {
     await recordPromptDecision("home", "dismissed");
     expect(captureError).not.toHaveBeenCalled();
-    expect(track).not.toHaveBeenCalledWith("prompt_decision_failed", expect.anything());
+    expect(mockDb.from).not.toContain("analytics_events");
     // lat/lng ride along from 0145. Null when the caller has no stop to hand,
     // which keeps the row valid as the coarse place-level signal it always was.
     expect(mockDb.calls).toContainEqual([
