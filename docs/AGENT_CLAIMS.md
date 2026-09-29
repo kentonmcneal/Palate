@@ -60,6 +60,7 @@ Newest first. UTC. Delete your own row when you are done, or let it expire.
 
 | agent | branch | paths | opened | expires | note |
 |---|---|---|---|---|---|
+| codex task 01a0e643 | `codex/handoff-priorities` | `mobile/lib/recommendation/{candidates,compatibility,gems,scoring,right-now}.ts`, `mobile/lib/recommendation/__tests__/{quality-invariants,independent-boundaries}.test.ts`, `docs/codex-handoff/CODEX_{BACKLOG,WORKLOG}.md`, `docs/codex-handoff/RECOMMENDATION_*_20260929.md` | 2026-09-29 20:00 UTC | 2026-09-29 22:00 UTC | Integrating independently reviewed offline ranking fixes; existing backlog edits are ours. Feed worker read-only, no repo writes. |
 | _(none)_ | | | | | |
 
 ## Closed recently
