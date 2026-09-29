@@ -113,3 +113,12 @@ Deadline 2026-09-30 16:01:54 UTC. Existing follow-up reactivated, no duplicate. 
 - Evidence and limitations: LOCAL_SQL_SECURITY_20260929.md; reproduction in scripts/security-sql/README.md. Fixture does not replay full migration history or test multi-session timing. No real notifications, LIVE operations or deployment. PGlite is an external free test tool, not a production dependency.
 - Existing malformed reply trees require separate preflight/repair decisions. Legacy forged events are hidden, not deleted. Read-only preflight supplied but not run live. Deployed version, grants, auth, concurrent privacy changes and queued notification delivery remain unverified.
 - Rollback: since nothing is deployed, revert this batch commit locally; do not reverse security SQL against production without a separately reviewed replacement migration. Baseline tag retained.
+
+
+## Correct field-mask pricing and actual SQL budget proof — 2026-09-29
+- WORKING TREE: current rating/price/opening-hours masks require Enterprise, while prior callers declared Pro. Corrected structural details20,000 micros and text/nearby search35,000 micros; rich details25,000 unchanged. Public global first-paid-tier sources independently verified; no claim of account invoice verification. Unknown/retired/inherited SKUs now refuse before any meter read/fetch.
+- Six paid-mask variants and Gmail's free IDs-only exception are covered by AST contracts. These checks enumerate current callers; they are not runtime mask validation or automatic future-spender discovery. See GOOGLE_FIELD_PRICING_20260929.md.
+- Independent review:18 focused cases passed; main full integration141 suites /1,266 tests passed, one skipped, TypeScript passed.
+- New durable scripts/security-sql/budget-sql.test.cjs executes original0033 and0179 SQL plus current helper against PGlite. Main rerun41/41 passed. Real committed reservations are exercised under lost/malformed replies and SQL/HTTP failures; no network-capable fetch. Source hashes print with results.
+- GOOGLE_BUDGET_SQL_PROOF_20260929.md records counterexamples and limits: mixed caller caps can exceed the smaller cap; old deployments do not dollar-meter; raising a cap retains old trip; lost replies can consume alert flags without delivery. Single embedded backend does not prove multi-session concurrency or deployed auth. No billing access, paid calls or deployment.
+- Rollback: revert this batch commit locally, recognizing it restores lower inaccurate estimates. Original migrations untouched; baseline tag retained.

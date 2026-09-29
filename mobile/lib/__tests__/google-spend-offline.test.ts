@@ -52,14 +52,14 @@ function harness(options: {
 test("tripped or unreadable budget makes zero paid requests", async () => {
   for (const options of [{ tripped: true }, { readError: true }]) {
     const h = harness(options);
-    expect(await h.api.spendGoogle({ sku: "search_nearby_pro", url: "https://fixture.invalid" })).toBeNull();
+    expect(await h.api.spendGoogle({ sku: "search_nearby_enterprise", url: "https://fixture.invalid" })).toBeNull();
     expect(h.fetch).not.toHaveBeenCalled();
   }
 });
 test("sequential searches refuse a call that would exceed the budget", async () => {
   const h = harness();
-  for (let i = 0; i < 200; i++) await h.api.spendGoogle({ sku: "search_nearby_pro", url: "https://fixture.invalid" });
-  expect(h.fetch).toHaveBeenCalledTimes(Math.floor(5_000_000 / h.api.SKU_MICROS.search_nearby_pro));
+  for (let i = 0; i < 200; i++) await h.api.spendGoogle({ sku: "search_nearby_enterprise", url: "https://fixture.invalid" });
+  expect(h.fetch).toHaveBeenCalledTimes(Math.floor(5_000_000 / h.api.SKU_MICROS.search_nearby_enterprise));
   expect(h.rpc).toHaveBeenCalledTimes(h.fetch.mock.calls.length);
 });
 test("metering retry does not repeat the paid fetch", async () => {
@@ -72,7 +72,7 @@ test("metering retry does not repeat the paid fetch", async () => {
  test("invalid or disabled budgets refuse spending before any request", async () => {
   for (const budget of ["", "nope", "NaN", "Infinity", "-1", "0", "0.0000001", "100000000000"]) {
     const h = harness({ budget });
-    expect(await h.api.spendGoogle({ sku: "details_pro", url: "https://fixture.invalid" })).toBeNull();
+    expect(await h.api.spendGoogle({ sku: "details_enterprise", url: "https://fixture.invalid" })).toBeNull();
     expect(h.fetch).not.toHaveBeenCalled();
     expect(h.rpc).not.toHaveBeenCalled();
   }
@@ -80,39 +80,39 @@ test("metering retry does not repeat the paid fetch", async () => {
 test("lowered cap and missing meter fail closed without a trip flag", async () => {
   for (const options of [{ budget: "1", initialSpend: 1_100_000 }, { malformedSpend: true }]) {
     const h = harness(options);
-    expect(await h.api.spendGoogle({ sku: "details_pro", url: "https://fixture.invalid" })).toBeNull();
+    expect(await h.api.spendGoogle({ sku: "details_enterprise", url: "https://fixture.invalid" })).toBeNull();
     expect(h.fetch).not.toHaveBeenCalled();
   }
 });
 test("first call must fit, and an exactly fitting call is allowed", async () => {
-  const tooSmall = harness({ budget: "0.016", missingRow: true });
-  expect(await tooSmall.api.spendGoogle({ sku: "details_pro", url: "https://fixture.invalid" })).toBeNull();
+  const tooSmall = harness({ budget: "0.019", missingRow: true });
+  expect(await tooSmall.api.spendGoogle({ sku: "details_enterprise", url: "https://fixture.invalid" })).toBeNull();
   expect(tooSmall.fetch).not.toHaveBeenCalled();
-  const exact = harness({ budget: "0.017" });
-  expect(await exact.api.spendGoogle({ sku: "details_pro", url: "https://fixture.invalid" })).not.toBeNull();
-  expect(await exact.api.spendGoogle({ sku: "details_pro", url: "https://fixture.invalid" })).toBeNull();
+  const exact = harness({ budget: "0.020" });
+  expect(await exact.api.spendGoogle({ sku: "details_enterprise", url: "https://fixture.invalid" })).not.toBeNull();
+  expect(await exact.api.spendGoogle({ sku: "details_enterprise", url: "https://fixture.invalid" })).toBeNull();
   expect(exact.fetch).toHaveBeenCalledTimes(1);
 });
 
 test("a successful reservation always precedes fetch", async () => {
   const h = harness();
-  await h.api.spendGoogle({ sku: "details_pro", url: "https://fixture.invalid" });
+  await h.api.spendGoogle({ sku: "details_enterprise", url: "https://fixture.invalid" });
   expect(h.events).toEqual(["reserve", "fetch"]);
 });
 test("concurrent workers with stale preflight reads cannot fetch beyond the cap", async () => {
   const meter = { spend: 0, count: 0 };
   const workers = [harness({ meter, staleRead: true }), harness({ meter, staleRead: true })];
-  await Promise.all(Array.from({ length: 250 }, (_, i) => workers[i % 2].api.spendGoogle({ sku: "search_nearby_pro", url: "https://fixture.invalid" })));
+  await Promise.all(Array.from({ length: 250 }, (_, i) => workers[i % 2].api.spendGoogle({ sku: "search_nearby_enterprise", url: "https://fixture.invalid" })));
   const requests = workers.reduce((n, h) => n + h.fetch.mock.calls.length, 0);
-  expect(requests).toBe(Math.floor(5_000_000 / 32_000));
-  expect(requests * 32_000).toBeLessThanOrEqual(5_000_000);
+  expect(requests).toBe(Math.floor(5_000_000 / 35_000));
+  expect(requests * 35_000).toBeLessThanOrEqual(5_000_000);
   // Rejected racing reservations may exceed the cap; paid requests do not.
   expect(meter.spend).toBeGreaterThan(5_000_000);
 });
 test("unconfirmed reservations and thrown reads never perform a Google fetch", async () => {
   for (const options of [{ bumpFailures: 2 }, { bumpThrows: true }, { malformedReservation: true }, { readThrows: true }]) {
     const h = harness(options);
-    expect(await h.api.spendGoogle({ sku: "details_pro", url: "https://fixture.invalid" })).toBeNull();
+    expect(await h.api.spendGoogle({ sku: "details_enterprise", url: "https://fixture.invalid" })).toBeNull();
     expect(h.fetch).not.toHaveBeenCalled();
   }
 });
@@ -131,28 +131,28 @@ test("a thrown fetch retains its reservation and is never retried by the helper"
 });
 
 test("malformed reservation totals cannot authorize spending", async () => {
-  const valid = { new_spend_micros: 17_000, new_count: 1, crossed_warn: false, crossed_trip: false };
-  const invalid = [null, [], [valid, valid], {}, ...[null, undefined, "17000", -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, 16_999].map(total => ({ ...valid, new_spend_micros: total }))];
+  const valid = { new_spend_micros: 20_000, new_count: 1, crossed_warn: false, crossed_trip: false };
+  const invalid = [null, [], [valid, valid], {}, ...[null, undefined, "20000", -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, 19_999].map(total => ({ ...valid, new_spend_micros: total }))];
   for (const reservationResult of invalid) {
     const h = harness({ reservationResult });
-    expect(await h.api.spendGoogle({ sku: "details_pro", url: "https://fixture.invalid" })).toBeNull();
+    expect(await h.api.spendGoogle({ sku: "details_enterprise", url: "https://fixture.invalid" })).toBeNull();
     expect(h.fetch).not.toHaveBeenCalled();
   }
   const h = harness({ reservationResult: [valid] });
-  expect(await h.api.spendGoogle({ sku: "details_pro", url: "https://fixture.invalid" })).not.toBeNull();
+  expect(await h.api.spendGoogle({ sku: "details_enterprise", url: "https://fixture.invalid" })).not.toBeNull();
 });
 test("HTTP errors retain the reservation without retrying the request", async () => {
   for (const httpStatus of [429, 500]) {
-    const h = harness({ budget: "0.017", httpStatus });
-    expect((await h.api.spendGoogle({ sku: "details_pro", url: "https://fixture.invalid" })).status).toBe(httpStatus);
-    expect(h.meter.spend).toBe(17_000);
+    const h = harness({ budget: "0.020", httpStatus });
+    expect((await h.api.spendGoogle({ sku: "details_enterprise", url: "https://fixture.invalid" })).status).toBe(httpStatus);
+    expect(h.meter.spend).toBe(20_000);
     expect(h.fetch).toHaveBeenCalledTimes(1);
     expect(h.rpc).toHaveBeenCalledTimes(1);
   }
 });
 test("concurrent mixed SKUs remain bounded by their combined assigned cost", async () => {
   const h = harness({ staleRead: true, budget: "1" });
-  const skus = ["details_pro", "details_enterprise_atmosphere", "search_nearby_pro"];
+  const skus = ["details_enterprise", "details_enterprise_atmosphere", "search_nearby_enterprise"];
   const results = await Promise.all(Array.from({ length: 100 }, async (_, i) => {
     const sku = skus[i % skus.length];
     const response = await h.api.spendGoogle({ sku, url: "https://fixture.invalid" });
@@ -160,4 +160,13 @@ test("concurrent mixed SKUs remain bounded by their combined assigned cost", asy
   }));
   expect(results.reduce((sum, n) => sum + n, 0)).toBeLessThanOrEqual(1_000_000);
   expect(h.fetch.mock.calls.length).toBeGreaterThan(0);
+});
+
+test("unknown and inherited SKU names cannot authorize a fetch", async () => {
+  for (const sku of ["future_search", "search_nearby_pro", "toString", "__proto__"]) {
+    const h = harness();
+    expect(await h.api.spendGoogle({ sku, url: "https://fixture.invalid" })).toBeNull();
+    expect(h.fetch).not.toHaveBeenCalled();
+    expect(h.rpc).not.toHaveBeenCalled();
+  }
 });

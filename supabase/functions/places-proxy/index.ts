@@ -306,7 +306,7 @@ async function handleNearby(
   // call Google Places API (New) — searchNearby.
   // spendGoogle prices by SKU, meters, and raises the 80%/tripped alerts.
   const resp = await spendGoogle({
-    sku: "search_nearby_pro",
+    sku: "search_nearby_enterprise",
     url: "https://places.googleapis.com/v1/places:searchNearby",
     init: {
       method: "POST",
@@ -428,8 +428,8 @@ async function handleDetails(
   }
   // Details requests the richer fields (editorialSummary, reviews) because this
   // is the LLM-augmented path — those become inputs to the LLM classifier and
-  // the review-text miner. That mask is ALSO what makes this the most expensive
-  // SKU we buy, which is why the SKU is named right next to it.
+  // the review-text miner. That mask selects Details Enterprise + Atmosphere; the
+  // search endpoints have their own, higher per-request Enterprise rates.
   const resp = await spendGoogle({
     sku: "details_enterprise_atmosphere",
     url: `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
@@ -477,7 +477,7 @@ async function handleSearch(
     return json({ places: [], degraded: true });
   }
   const resp = await spendGoogle({
-    sku: "search_text_pro",
+    sku: "search_text_enterprise",
     url: "https://places.googleapis.com/v1/places:searchText",
     init: {
     method: "POST",

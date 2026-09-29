@@ -454,7 +454,7 @@ async function googleTextSearch(
   await recordUsage(admin, "featured_lists_text_search");
 
   const resp = await spendGoogle({
-    sku: "search_text_pro",
+    sku: "search_text_enterprise",
     url: "https://places.googleapis.com/v1/places:searchText",
     init: {
     method: "POST",

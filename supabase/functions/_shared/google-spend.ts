@@ -35,49 +35,41 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
  *  for. Name the SKU next to the mask and the two cannot drift apart. */
 export type GoogleSku =
   | "details_enterprise_atmosphere" // reviews, editorialSummary, serves*/goodFor*
-  | "details_pro"                   // structural details: hours, rating, price
-  | "search_text_pro"               // searchText with rating/hours/priceLevel
-  | "search_nearby_pro"             // searchNearby with rating/hours/priceLevel
+  | "details_enterprise"                   // structural details: hours, rating, price
+  | "search_text_enterprise"               // searchText with rating/hours/priceLevel
+  | "search_nearby_enterprise"             // searchNearby with rating/hours/priceLevel
   | "ids_only";                     // field mask of ids alone — free
 
-/** Micro-dollars (1e-6 USD) per call. Places SKUs are quoted per 1,000 calls,
- *  so $25/1000 is 25000 micros.
- *
- *  ONLY the first line is confirmed: $300 billed over eight days at a 1500/day
- *  cap divides out to exactly $0.025/call. The rest are list-price estimates —
- *  check Billing > Reports grouped by SKU and correct them here. Being roughly
- *  right is already the whole point: the old system treated a 25000 call and a
- *  0 call as identical. */
+/** Conservative global first-paid-tier list rates, checked 2026-09-29.
+ * https://developers.google.com/maps/billing-and-pricing/pricing
+ * https://developers.google.com/maps/documentation/places/web-service/data-fields
+ * Ratings, priceLevel and opening hours require Enterprise, not Pro. No free
+ * monthly allowance, volume discount or account-specific credit is assumed.
+ * This is a reservation estimate, not verified invoice data. */
 export const SKU_MICROS: Record<GoogleSku, number> = {
-  details_enterprise_atmosphere: 25_000, // CONFIRMED against the Sep 2026 bill
-  details_pro: 17_000,
-  search_text_pro: 32_000,
-  search_nearby_pro: 32_000,
+  details_enterprise_atmosphere: 25_000,
+  details_enterprise: 20_000,
+  search_text_enterprise: 35_000,
+  search_nearby_enterprise: 35_000,
   ids_only: 0,
 };
 
-/** An unrecognised SKU is priced as the most expensive thing we know about.
- *  Guessing low is how a budget gets quietly overrun; guessing high only ever
- *  degrades early, which is loud and recoverable. */
-const UNKNOWN_SKU_MICROS = 35_000;
-
+/** Unknown SKUs cannot authorize a request by guessing a price. */
 export const skuMicros = (sku: GoogleSku): number =>
-  SKU_MICROS[sku] ?? UNKNOWN_SKU_MICROS;
+  Object.prototype.hasOwnProperty.call(SKU_MICROS, sku) ? SKU_MICROS[sku] : NaN;
 
 /** The daily ceiling, in dollars. Tune with GOOGLE_DAILY_BUDGET_USD.
  *
  *  $5/day (~$150/month) against the $37.50/day (~$1,140/month) the old
  *  1500-call cap permitted once the mask went rich. What $5 actually buys:
  *
- *      ~156 search calls        (search_*_pro,  $0.032)
- *      ~294 structural details  (details_pro,   $0.017)
+ *      ~142 search calls        (search_*_enterprise, $0.035)
+ *      250 structural details   (details_enterprise, $0.020)
  *      ~200 review details      (atmosphere,    $0.025)
  *
- *  Sized so one enthusiastic phone cannot exhaust it: USER_CAP_PER_DAY is 120
- *  calls, so a single user at their own ceiling still leaves room for the
- *  other. Tighter would be cheaper, but a budget that degrades the app for
- *  real users is a worse failure than $5 — and unlike the old cap, this one
- *  now tells you at 80% the same day. */
+ *  This default is an operational ceiling, not permission to spend in tests.
+ *  Per-user limits are separate and do not establish a fleet-wide guarantee.
+ *  Alert delivery is best effort and has not been verified live. */
 const DAILY_BUDGET_USD = Number(Deno.env.get("GOOGLE_DAILY_BUDGET_USD") ?? "5.00");
 export const dailyBudgetMicros = (): number => {
   const micros = Math.round(DAILY_BUDGET_USD * 1_000_000);
@@ -152,6 +144,7 @@ export async function spendGoogle(
   opts: { sku: GoogleSku; url: string; init?: RequestInit },
 ): Promise<Response | null> {
   const micros = skuMicros(opts.sku);
+  if (!Number.isSafeInteger(micros) || micros < 0) return null;
   const cap = dailyBudgetMicros();
   try {
     if (await isGoogleBudgetSpent(micros)) return null;

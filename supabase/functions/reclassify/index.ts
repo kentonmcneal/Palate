@@ -91,7 +91,7 @@ const MASK_WITH_REVIEWS =
  *  whole reason the budget is now denominated in dollars. Derived from the
  *  shared table so a price correction lands here automatically. */
 const skuFor = (wantReviews: boolean) =>
-  wantReviews ? "details_enterprise_atmosphere" as const : "details_pro" as const;
+  wantReviews ? "details_enterprise_atmosphere" as const : "details_enterprise" as const;
 const usdPerCall = (wantReviews: boolean) => skuMicros(skuFor(wantReviews)) / 1_000_000;
 
 /** The corridor the product actually serves. Two users: Newport News VA (often

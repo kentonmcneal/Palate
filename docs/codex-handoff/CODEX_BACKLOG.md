@@ -3,7 +3,7 @@
 Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deployment or paid services.
 
 ## In progress
-- Additional spending-path and field-mask pricing audit.
+- Independent review fixes for profile/follows request ownership; account transition boundary.
 - Follows-list ownership and asynchronous mutation reliability.
 
 ## Completed before this window
@@ -20,7 +20,7 @@ Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deploym
 - Multi-session Postgres concurrency remains unverified. Local PGlite privacy execution now passes57 cases; this single embedded engine does not establish concurrent server behavior.
 - Real iPhone rendering and crashes: Xcode license blocker.
 - Production Sentry delivery and deployed database/functions.
-- Four SKU price estimates require billing verification.
+- Current masks/rates verified against public Google tables; account invoices, deployed caller adoption and mixed-cap rollout remain unverified.
 
 ## Rollback
 Revert individual Codex commits; baseline tag codex-baseline-20260928 is retained. Never reset unrelated work.
@@ -35,3 +35,5 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 - Own profile connections/navigation and privacy wording:139 suites /1,240 tests passed; device review pending.
 
 - SQL privacy migration0183 and durable fixture:57 local PostgreSQL cases pass; no deployment or full-chain proof.
+
+- Field-mask pricing corrections:18 focused mocks/contracts,41 actual local SQL/helper cases; full141 suites /1,266 tests pass.
