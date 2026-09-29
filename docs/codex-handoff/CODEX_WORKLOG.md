@@ -81,3 +81,11 @@ Deadline 2026-09-30 16:01:54 UTC. Existing follow-up reactivated, no duplicate. 
 - Validation: complete local Jest run passed 137 suites / 1,182 tests, one skipped (/tmp/palate-social-reviewed.log). After final reply-target cleanup, focused 19 tests and TypeScript passed. Mocked component cases cover out-of-order loads, same-tick duplicate likes, old/new send ownership, reopened sends, stale snapshots, delete cascades, blocks and stale error alerts.
 - LIVE / DEVICE: not tested or deployed. This establishes mocked local behavior, not production authorization, network reliability or device visual quality. Existing Xcode license blocker remains.
 - Rollback: revert this batch commit, preserving unrelated work and baseline recovery tag. No database changes.
+
+
+## Recommendation missing-evidence corrections — 2026-09-29
+- WORKING TREE: fixed three independently reproduced defects. Empty format/occasion histories no longer penalize newly available restaurant metadata; known cuisine types can populate familiar pools when subregion is absent; diversity cap falls back to known subregion/region when type is absent.
+- WORKING TREE:49 synthetic tests include32 combinations of four tastes ×0/1/5/35 visits ×40/2,000 candidates, through actual candidate/scoring/shortlist/Best/Comfort code. Only data-loading boundaries mocked; accidental live requests throw.14 targeted tests fail on unchanged baseline, pass on proposed fixes. Main reviewed the scoped changes and actual pipeline tests.
+- Validation: all49 new tests passed in integrated full run; TypeScript passed. Overall run1230 passed/1failed/1skipped; sole failure was unrelated concurrent profile typography and is handled in its separate batch. Detailed cases and limitations in PALATE_RANKING_REVIEW_20260929.md.
+- INFERENCE: synthetic invariants improve known broken behavior, not measured human recommendation relevance. No ranking weights tuned. Mixed type/subregion taxonomy remains separately keyed; region-only grouping is broad. Upstream live retrieval limits and device latency remain unverified.
+- LIVE / DEVICE: no calls or deployment. Rollback: revert this recommendation commit only; baseline recovery retained.

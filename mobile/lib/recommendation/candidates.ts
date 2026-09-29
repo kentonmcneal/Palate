@@ -62,6 +62,9 @@ export type GenerateOptions = {
 export function isStretch(graph: TasteGraph, r: RestaurantInput): boolean {
   const inSubregion = r.cuisine_subregion && shareOf(graph.cuisinesSubregion, r.cuisine_subregion) > 0;
   if (inSubregion) return false;
+  // When the finer classification is absent, a familiar type is not novel.
+  // An explicitly new subregion can still be a stretch within a known type.
+  if (!r.cuisine_subregion && r.cuisine_type && shareOf(graph.cuisineTypes, r.cuisine_type) > 0) return false;
   const adjacentRegion = r.cuisine_region && shareOf(graph.cuisines, r.cuisine_region) > 0;
   const matchingFlavor = r.flavor_tags?.some((f) => (graph.flavors[f] ?? 0) > 0);
   const matchingFormat = r.format_class && shareOf(graph.formats, r.format_class) >= 0.1;
@@ -87,6 +90,8 @@ export async function generateCandidates(opts: GenerateOptions): Promise<Candida
 
   // Pool A — taste_similar: cuisine subregion or region overlaps with user pattern.
   const tasteSet = poolBy(eligible, (r) => {
+    // Type is a fallback: do not relabel an explicitly new subregion as familiar.
+    if (!r.cuisine_subregion && r.cuisine_type && shareOf(opts.graph.cuisineTypes, r.cuisine_type) >= 0.05) return true;
     if (r.cuisine_subregion && shareOf(opts.graph.cuisinesSubregion, r.cuisine_subregion) >= 0.05) return true;
     if (r.cuisine_region && shareOf(opts.graph.cuisines, r.cuisine_region) >= 0.05) return true;
     return false;

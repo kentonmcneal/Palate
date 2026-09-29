@@ -80,7 +80,17 @@ export function shortlist<T>(items: T[], opts: ShortlistOptions<T>): Shortlist<T
   // 3. Cap.
   const thin = g.dataDepth === "low";
   const cap = thin ? 1 : 2;
-  const exploit = capByKey(base, cuisineOf, cap, size);
+  // Use known finer/coarser classifications when type is absent. Keep this
+  // key separate from exploration's cuisine-type history lookup. Prefixes
+  // avoid conflating unrelated taxonomy levels; entirely unknown stays null.
+  const diversityKeyOf = (t: T): string | null => {
+    const r = opts.toInput(t);
+    if (norm(r.cuisine_type)) return `type:${norm(r.cuisine_type)}`;
+    if (norm(r.cuisine_subregion)) return `sub:${norm(r.cuisine_subregion)}`;
+    if (norm(r.cuisine_region)) return `region:${norm(r.cuisine_region)}`;
+    return null;
+  };
+  const exploit = capByKey(base, diversityKeyOf, cap, size);
 
   // 4. Explore.
   if (opts.explore === false || thin || exploit.length < size || size < 2) {

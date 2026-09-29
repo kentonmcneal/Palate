@@ -276,11 +276,11 @@ function scoreBehavior(g: TasteGraph, r: RestaurantInput): Dim {
   let score = 0;
   let weight = 0;
 
-  if (r.format_class) {
+  if (r.format_class && hasEntries(g.formats)) {
     const aff = affinityOf(g.formats, r.format_class);
     score += aff * 0.45; weight += 0.45;
   }
-  if (r.occasion_tags?.length) {
+  if (r.occasion_tags?.length && hasEntries(g.occasions)) {
     const overlap = sumAffinity(g.occasions, r.occasion_tags);
     score += overlap * 0.30; weight += 0.30;
   }
