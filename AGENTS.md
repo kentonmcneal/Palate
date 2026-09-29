@@ -45,7 +45,13 @@ budget counted *calls*, and a call counter cannot see a price change.
 - **Do not re-run the bulk reviews backfill.** The cron is deliberately unscheduled; at two
   users, on-demand pricing beats coverage pricing.
 
-### 3. Never destroy work you did not create
+### 3. Never destroy work you did not create — and check who is holding what
+
+**Run `./scripts/checks/claims.sh` before you edit anything.** It prints the branch you are on,
+anything uncommitted, and the live claims in [`docs/AGENT_CLAIMS.md`](docs/AGENT_CLAIMS.md).
+Claims are advisory and expire after two hours; **uncommitted changes in the tree are a stronger
+claim than the file** and mean another agent is mid-edit. Commit only the paths you claimed —
+`git add <path>`, never `git add -A`.
 
 This repo is frequently worked by more than one agent session at a time. HEAD moved four times
 during the handoff review on 2026-09-27.

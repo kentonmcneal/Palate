@@ -1,5 +1,22 @@
 # Palate — project rules
 
+## Before you edit: check who is holding what
+
+```bash
+./scripts/checks/claims.sh
+```
+
+More than one agent works this repo concurrently. That script prints your branch, anything
+uncommitted, and the live claims in `docs/AGENT_CLAIMS.md`. **Read `AGENTS.md` too** — it is the
+convention file other agents read, it carries rules this file does not repeat, and it is where
+the `DEVELOPER_DIR` fix for git lives.
+
+On 2026-09-29 a session committed to another agent's feature branch without noticing, patched a
+file that had been rewritten two days earlier, and spent two exchanges treating a solved git
+problem as a blocker — all three because it had not read `AGENTS.md` or checked the branch. The
+information was available every time.
+
+
 ## Spending policy (applies to ALL agents, including scheduled/background runs)
 
 **Never take any action that costs money without explicit, per-action approval
