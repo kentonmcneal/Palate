@@ -37,6 +37,12 @@ import { reportContent, blockUser, unblockUser, isBlocked, REPORT_REASONS } from
  * below decides what data is allowed through.
  */
 export function ProfileBody({ targetId }: { targetId: string }) {
+  // Target identity owns all profile state, including auxiliary reads and
+  // mutation callbacks. A -> B -> A must not reuse A's first request session.
+  return <TargetProfileBody key={targetId} targetId={targetId} />;
+}
+
+function TargetProfileBody({ targetId }: { targetId: string }) {
   const router = useRouter();
 
   const [snapshot, setSnapshot] = useState<FriendProfileSnapshot | null>(null);
@@ -49,6 +55,8 @@ export function ProfileBody({ targetId }: { targetId: string }) {
   const [sharedPlaces, setSharedPlaces] = useState<SharedPlace[]>([]);
   const [blocked, setBlocked] = useState(false);
   const matchCardRef = useRef<View>(null);
+  const active = useRef<object | null>(null);
+  const request = useRef(0);
 
   useEffect(() => {
     if (!targetId) return;
@@ -70,7 +78,10 @@ export function ProfileBody({ targetId }: { targetId: string }) {
     // not just accepted friends — since 0077 that includes every public
     // profile. `friend_taste_features` applies the same gate server-side and
     // returns nothing when it does not hold.
-    if (snapshot?.is_self || snapshot?.total_visits === null) return;
+    if (!snapshot || snapshot.is_self || snapshot.total_visits === null) {
+      setMatch(null);
+      return;
+    }
     let alive = true;
     loadPalateMatch(targetId)
       .then((m) => alive && setMatch(m))
@@ -79,15 +90,21 @@ export function ProfileBody({ targetId }: { targetId: string }) {
   }, [snapshot?.total_visits, snapshot?.is_self, targetId]);
 
   const load = useCallback(async () => {
+    const view = active.current;
+    if (!view) return;
+    const sequence = ++request.current;
+    const current = () => active.current === view && request.current === sequence;
     try {
       const [snap, isB] = await Promise.all([
         getFriendProfileSnapshot(targetId),
         isBlocked(targetId),
       ]);
+      if (!current()) return;
       setLoadError(null);
       setSnapshot(snap);
       setBlocked(isB);
     } catch (e: any) {
+      if (!current()) return;
       // captureError, not console.warn.
       //
       // This was the only swallowed catch left in app/ or components/, and it
@@ -99,13 +116,21 @@ export function ProfileBody({ targetId }: { targetId: string }) {
       captureError(e, { at: "ProfileBody.snapshot", targetId });
       setLoadError(e?.message ?? "Couldn't load this profile.");
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }, [targetId]);
 
   useFocusEffect(useCallback(() => {
+    const view = {};
+    active.current = view;
     setLoading(true);
-    load();
+    setSnapshot(null);
+    setLoadError(null);
+    void load();
+    return () => {
+      if (active.current === view) active.current = null;
+      ++request.current;
+    };
   }, [load]));
 
   async function shareMatch() {
@@ -188,7 +213,7 @@ export function ProfileBody({ targetId }: { targetId: string }) {
       ...REPORT_REASONS.map((r) => ({
         text: r.label,
         onPress: () => reportContent({ targetType: "profile", targetId, targetUserId: targetId, reason: r.key })
-          .then(() => Alert.alert("Thanks for flagging", "We'll review this within 24 hours."))
+          .then(() => Alert.alert("Thanks for flagging", "Your report has been submitted."))
           .catch((e: any) => Alert.alert("Couldn't report", e?.message ?? "Try again")),
       })),
       { text: "Cancel", style: "cancel" as const },
@@ -256,34 +281,30 @@ export function ProfileBody({ targetId }: { targetId: string }) {
                 </View>
               )}
 
-              {/* Followers, following, friends — tappable, the way they are
-                  everywhere else. Friends is the reciprocal count, so it is
-                  always the smallest of the three and never needs explaining. */}
+              {/* List RPCs support the caller only. Other profiles expose counts,
+                  never a button that misleadingly opens the viewer's own list. */}
               <View style={styles.followRow}>
-                <Pressable
-                  style={styles.followStat}
-                  onPress={() => router.push({ pathname: "/follows", params: { user: targetId, tab: "followers" } } as never)}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.followN}>{snapshot.followers_count ?? 0}</Text>
-                  <Text style={styles.followL}>followers</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.followStat}
-                  onPress={() => router.push({ pathname: "/follows", params: { user: targetId, tab: "following" } } as never)}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.followN}>{snapshot.following_count ?? 0}</Text>
-                  <Text style={styles.followL}>following</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.followStat}
-                  onPress={() => router.push({ pathname: "/follows", params: { user: targetId, tab: "friends" } } as never)}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.followN}>{snapshot.friends_count ?? 0}</Text>
-                  <Text style={styles.followL}>friends</Text>
-                </Pressable>
+                {([
+                  ["followers", snapshot.followers_count],
+                  ["following", snapshot.following_count],
+                  ["friends", snapshot.friends_count],
+                ] as const).map(([tab, count]) => mine ? (
+                  <Pressable
+                    key={tab}
+                    style={styles.followStat}
+                    onPress={() => router.push({ pathname: "/follows", params: { tab } } as never)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${count ?? 0} ${tab}. Open your ${tab}.`}
+                  >
+                    <Text style={styles.followN}>{count ?? 0}</Text>
+                    <Text style={styles.followL}>{tab}</Text>
+                  </Pressable>
+                ) : (
+                  <View key={tab} style={styles.followStat} accessible accessibilityLabel={`${count ?? 0} ${tab}`}>
+                    <Text style={styles.followN}>{count ?? 0}</Text>
+                    <Text style={styles.followL}>{tab}</Text>
+                  </View>
+                ))}
               </View>
 
               {/* Profile content. The RPC returns these as null for a private

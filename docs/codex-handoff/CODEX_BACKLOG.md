@@ -39,3 +39,5 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 - Field-mask pricing corrections:18 focused mocks/contracts,41 actual local SQL/helper cases; full141 suites /1,266 tests pass.
 
 - Search block enforcement0184:20 local SQL cases pass. People UI safeguards are separate, still under independent review.
+
+- Completed locally: connection route ownership, mutation reconciliation, profile target-race isolation;38 mounted cases pass. Native/device verification outstanding.

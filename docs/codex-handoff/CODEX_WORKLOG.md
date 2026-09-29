@@ -129,3 +129,11 @@ Deadline 2026-09-30 16:01:54 UTC. Existing follow-up reactivated, no duplicate. 
 - Independent worker supplied real local PostgreSQL tests; main reviewed and integrated durable scripts/security-sql/search fixture. Main rerun20/20 passed: bidirectional baseline reproductions, incoming-block RLS, unblocked parity, ACLs, query matching/limits, no-subject and wildcard controls.
 - No LIVE calls/deployment; minimal fixture does not prove full migration-chain compatibility, production grants, query performance or concurrent block changes. SEARCH_BLOCKS_REVIEW_20260929.md records limits.
 - Rollback: revert locally only; deployed reversal would reopen the privacy gap and needs a separately reviewed replacement. Baseline tag retained.
+
+
+## Connections navigation and request ownership — 2026-09-29
+- WORKING TREE: own follower/following/friend tabs validate route inputs; other profile counts no longer open the caller's own list under a misleading target. Unsupported target routes explain the limitation. Per-row synchronous gates remain until authoritative reconciliation, including errors, refocus and tab/route changes.
+- Independent review reproduced three regressions in the initial proposal. Integrated fixes retain mutation ownership across route changes and isolate profile state by target identity; old target/focus loads cannot overwrite a newer profile or launch stale reloads. Removed unsupported report-response SLA.
+- Validation:38 mounted connection/profile cases pass; full integration1337 passed/one skipped/one unrelated unused People helper failure. After that cleanup,84 focused connection/People/dead-export cases pass; TypeScript passed. Native transport cancellation and already-dispatched writes are not claimed.
+- DEVICE / LIVE: no device visual/accessibility or deployed privacy verification. Target-key isolation resets profile local state on target changes. Landing untouched.
+- Rollback: revert this batch commit only; preserve baseline tag and unrelated changes.
