@@ -3,7 +3,7 @@
 Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deployment or paid services.
 
 ## In progress
-- SQL privacy fixes with synthetic local PGlite execution; full deployed schema remains unverified.
+- Additional spending-path and field-mask pricing audit.
 - Follows-list ownership and asynchronous mutation reliability.
 
 ## Completed before this window
@@ -17,7 +17,7 @@ Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deploym
 - Broader typo pass.
 
 ## Unverified / blocked
-- Local Postgres concurrency execution: no psql/Docker/Postgres available in PATH. Existing SQL atomic increment reviewed in source, not executed here.
+- Multi-session Postgres concurrency remains unverified. Local PGlite privacy execution now passes57 cases; this single embedded engine does not establish concurrent server behavior.
 - Real iPhone rendering and crashes: Xcode license blocker.
 - Production Sentry delivery and deployed database/functions.
 - Four SKU price estimates require billing verification.
@@ -33,3 +33,5 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 - 91a9374: three missing-evidence ranking corrections;49 synthetic evaluations.
 - 708ec6f: edge authorization fixes;26 offline handler cases. SQL defects remain pending.
 - Own profile connections/navigation and privacy wording:139 suites /1,240 tests passed; device review pending.
+
+- SQL privacy migration0183 and durable fixture:57 local PostgreSQL cases pass; no deployment or full-chain proof.
