@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 jest.mock("../analytics", () => ({ track: jest.fn() }));
-jest.mock("../flags", () => ({ isFlagEnabled: jest.fn().mockResolvedValue(true) }));
+jest.mock("../flags", () => ({ isFlagEnabled: jest.fn().mockResolvedValue(true), readFlag: jest.fn().mockResolvedValue(true) }));
 jest.mock("../../modules/palate-visit-monitor", () => ({ logDetectorNote: jest.fn() }));
 jest.mock("expo-notifications", () => ({
   scheduleNotificationAsync: jest.fn(),

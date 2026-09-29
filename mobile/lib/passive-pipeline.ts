@@ -61,6 +61,10 @@ export function resolveRadius(raw: RawVisit): number {
 const CLUSTER_HISTORY_KEY = "palate.passive.clusterHistory";
 const CLUSTER_RADIUS_M = 60;
 const CLUSTER_MIN_HITS = 3;
+// Conservative work evidence, separate from the five-minute meal floor.
+// A heuristic, not a calibrated workplace classifier: recurring coffee stops
+// must not become office evidence merely because they happen during desk hours.
+const WORK_MIN_DWELL_MIN = 120;
 
 // ----------------------------------------------------------------------------
 // Travel
@@ -127,6 +131,7 @@ export function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: n
 // ----------------------------------------------------------------------------
 
 type ClusterPoint = {
+  visitId?: string;
   lat: number; lng: number; hour: number; weekday: boolean;
   /** Minutes stayed. Absent on points written before this existed; those fall
    *  back to arrival-instant behaviour rather than breaking. */
@@ -144,8 +149,18 @@ async function loadClusterHistory(): Promise<ClusterPoint[]> {
 
 /** Record a raw visit centroid into the on-device clustering history (capped). */
 export async function recordForClustering(raw: RawVisit): Promise<void> {
-  const when = new Date(raw.arrivalAt ?? raw.capturedAt);
+  const dwell = dwellMinutes(raw);
+  // Retain long work/home stays even when they fail the meal-duration ceiling.
+  // Incomplete, invalid or very coarse observations cannot teach a location.
+  if (dwell == null || !Number.isFinite(dwell) || dwell <= 0 ||
+      !Number.isFinite(raw.lat) || Math.abs(raw.lat) > 90 ||
+      !Number.isFinite(raw.lng) || Math.abs(raw.lng) > 180 ||
+      !Number.isFinite(raw.horizontalAccuracy) || raw.horizontalAccuracy < 0 ||
+      raw.horizontalAccuracy > MAX_ACCURACY_M) return;
+  const when = new Date(raw.arrivalAt!);
+  if (!Number.isFinite(when.getTime())) return;
   const point: ClusterPoint = {
+    visitId: raw.id,
     lat: raw.lat,
     lng: raw.lng,
     hour: when.getHours(),
@@ -155,7 +170,15 @@ export async function recordForClustering(raw: RawVisit): Promise<void> {
     dwellMin: dwellMinutes(raw) ?? 0,
   };
   const history = await loadClusterHistory();
-  history.push(point);
+  // A stop rejected for duration must not turn an unfamiliar city into a
+  // familiar one. Apply the same source-independent floor BEFORE recording;
+  // deliberately do not apply the meal ceiling to genuine long stays.
+  if (dwell < minDwellFor(isAwayFromKnownAreas(raw.lat, raw.lng, history))) return;
+  // Resolution retries must not manufacture independent visits. Legacy rows
+  // have no identity; they remain readable but cannot be retrospectively deduped.
+  const previous = history.findIndex((p) => p.visitId === raw.id);
+  if (previous >= 0) history[previous] = point;
+  else history.push(point);
   // Keep the most recent 500 points — plenty to learn home/work, bounded storage.
   const trimmed = history.slice(-500);
   await AsyncStorage.setItem(CLUSTER_HISTORY_KEY, JSON.stringify(trimmed));
@@ -242,7 +265,7 @@ export async function isHomeOrWorkSuppressed(raw: RawVisit): Promise<boolean> {
   const near = history.filter((p) => distanceMeters(raw.lat, raw.lng, p.lat, p.lng) <= CLUSTER_RADIUS_M);
   if (near.length < hits) return false;
   const overnight = near.filter(isOvernight).length;
-  const work = near.filter((p) => isWorkHours(p.hour, p.weekday)).length;
+  const work = near.filter((p) => Number.isFinite(p.dwellMin) && p.dwellMin! >= WORK_MIN_DWELL_MIN && isWorkHours(p.hour, p.weekday)).length;
   // If the recurring cluster is dominated by sleep hours or the 9–5 weekday
   // block, treat it as home/work and suppress. Away from home the bar is two
   // rather than three, so the place somebody is sleeping stops being offered

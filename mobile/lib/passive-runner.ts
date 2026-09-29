@@ -101,6 +101,11 @@ export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
   });
   // Feed clustering AFTER using it for suppression, so a place needs history to
   // be suppressed (its own first visit never suppresses itself).
+  // Unknown confirmation availability must preserve the stop, not mark it
+  // processed. Check before clustering/resolution so retrying this gate neither
+  // adds duplicate location history nor repeats a venue lookup.
+  const confirmOn = await readFlag(CONFIRM_FLAG);
+  if (confirmOn === null) throw retryLater("confirm flag unknown");
   const q = await qualifyVisit(raw);
   await recordForClustering(raw);
 
@@ -151,7 +156,7 @@ export async function runPipelineForRaw(raw: RawVisit): Promise<VisitOutcome> {
     return { id: raw.id, stage: "unqualified", detail: "no-venue-found" };
   }
 
-  if (!(await isFlagEnabled(CONFIRM_FLAG))) {
+  if (!confirmOn) {
     logDetectorNote("miss", "confirm kill switch off");
     return { id: raw.id, stage: "resolved", detail: `${resolved.candidates[0].name} (+${resolved.candidates.length - 1})` };
   }
@@ -183,11 +188,12 @@ let running = false;
 /** Drain + process everything unprocessed. Safe to call on every foreground. */
 export async function processPendingVisits(): Promise<RunSummary> {
   if (running) return { ran: false, detected: 0, retried: 0, dropped: 0, outcomes: [] };
-  if (!(await isFlagEnabled(PASSIVE_CAPTURE_FLAG))) {
-    return { ran: false, detected: 0, retried: 0, dropped: 0, outcomes: [] };
-  }
+  // Acquire before the first await so foreground and native callbacks cannot overlap.
   running = true;
   try {
+    if (!(await isFlagEnabled(PASSIVE_CAPTURE_FLAG))) {
+      return { ran: false, detected: 0, retried: 0, dropped: 0, outcomes: [] };
+    }
     return await runProcess();
   } finally {
     running = false;
