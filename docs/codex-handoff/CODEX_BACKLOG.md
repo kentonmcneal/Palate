@@ -95,3 +95,11 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 - In progress: independently reviewed default-deny DB reservation design and all-route integration proposal; no active migration/deployment/spending authorization.
 
 - Completed locally: three-route confirmed LLM admission and disabled paid operator/eval shortcuts,123offlinecases +154mobile suites/1686tests/1skip andTypeScript. Durable guardswiredtoCI(notremoteexecuted). SQLdraftdefaultszero outsideactivemigrations; live/concurrent/account-wide protection remainsblocked/unverified, notcomplete.
+
+
+### Passive investigation checkpoint — 2026-09-29
+- Completed locally:7ddd2a2 unknown-confirmation retention, runner admission, short-stop workplace/history safeguards.
+- Completed locally pending current commit: strict reminder read/cancellation recovery and source/distance confidence ceiling;158 suites1,861 tests +TypeScript pass.
+- In progress: account ownership design; no claim of complete passive privacy isolation.
+- Unverified: actual7Brew trace/venue row, OS permission/delivery, NYC native stale-fix behavior, device background lifecycle.
+- Remaining: native early5min emission versus12min travel reconciliation; sub5min capture; separate owner-scoped queues/actions/native lease; opt-out reminder semantics and coffee-inclusive copy.

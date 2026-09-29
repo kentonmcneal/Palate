@@ -1,12 +1,19 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+const mockPending = new Map<string, any>();
+let mockSequence = 0;
+
 jest.mock("../analytics", () => ({ track: jest.fn() }));
 jest.mock("expo-notifications", () => ({
-  scheduleNotificationAsync: jest.fn().mockResolvedValue("notif-id"),
-  cancelScheduledNotificationAsync: jest.fn(),
+  scheduleNotificationAsync: jest.fn(async (request) => {
+    const id = `notif-${++mockSequence}`;
+    mockPending.set(id, request);
+    return id;
+  }),
+  cancelScheduledNotificationAsync: jest.fn(async (id) => { mockPending.delete(id); }),
   setNotificationCategoryAsync: jest.fn(),
   getPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
-  getAllScheduledNotificationsAsync: jest.fn().mockResolvedValue([]),
+  getAllScheduledNotificationsAsync: jest.fn(async () => [...mockPending].map(([identifier, request]) => ({ identifier, content: request.content }))),
   SchedulableTriggerInputTypes: { DATE: "date", WEEKLY: "weekly" },
 }));
 jest.mock("../visits", () => ({
@@ -53,6 +60,8 @@ describe("confirming empties the inbox AND disarms the digest", () => {
   beforeEach(async () => {
     await AsyncStorage.clear();
     jest.clearAllMocks();
+    mockPending.clear();
+    mockSequence = 0;
     jest.useFakeTimers().setSystemTime(NOON);
   });
   afterEach(() => { jest.useRealTimers(); });
@@ -77,6 +86,7 @@ describe("confirming empties the inbox AND disarms the digest", () => {
     const after = (Notifications.scheduleNotificationAsync as jest.Mock).mock.calls;
     const digests = after.filter((c) => c[0]?.content?.data?.kind === "passive_digest");
     expect(digests).toHaveLength(0);
+    expect(mockPending.size).toBe(0);
   });
 
   it("rewrites rather than stacks when a second visit lands", async () => {
@@ -87,5 +97,6 @@ describe("confirming empties the inbox AND disarms the digest", () => {
     // so the person is never told about the same evening twice.
     expect(await getInbox()).toHaveLength(2);
     expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalled();
+    expect(mockPending.size).toBe(1);
   });
 });

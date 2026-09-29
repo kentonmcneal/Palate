@@ -192,36 +192,42 @@ export async function bumpNotifCount(): Promise<void> {
 // Inbox
 // ----------------------------------------------------------------------------
 
-export async function getInbox(): Promise<InboxEntry[]> {
-  try {
-    const raw = await AsyncStorage.getItem(INBOX_KEY);
-    const all = raw ? (JSON.parse(raw) as InboxEntry[]) : [];
-    const cutoff = Date.now() - INBOX_EXPIRY_HOURS * 3_600_000;
-    const live = all.filter((e) => e.detectedAt >= cutoff);
-    if (live.length !== all.length) {
-      await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(live));
-      void mirrorInbox(live);
-      // An entry that expires unanswered is an IGNORE, and ignores are almost
-      // certainly the most common outcome. Dropping them silently would bias
-      // calibration upward: "of entries scored High, what fraction get
-      // confirmed?" would only count the ones people bothered to answer, so a
-      // stream of bad High prompts that everyone ignores would score as
-      // excellent. The denominator has to include everything we claimed.
-      for (const e of all.filter((x) => x.detectedAt < cutoff)) {
-        void track("visit_ignored", {
-          place_id: e.place_id,
-          confidence: e.confidence == null ? null : Number(e.confidence.toFixed(3)),
-          confidence_band: e.confidenceBand ?? null,
-          dwell_min: Math.round(e.dwellMin),
-          source: e.source ?? null,
-          candidate_count: e.candidateCount ?? null,
-        });
-      }
-    }
-    return live.sort((a, b) => b.detectedAt - a.detectedAt);
-  } catch {
-    return [];
+/** Throw when inbox contents or expiry persistence are unavailable. A scheduler
+ * must never mistake that state for a verified empty inbox. */
+async function readInbox(): Promise<InboxEntry[]> {
+  const raw = await AsyncStorage.getItem(INBOX_KEY);
+  const all = raw === null ? [] : (JSON.parse(raw) as InboxEntry[]);
+  if (!Array.isArray(all) || all.some(e => !e || !Number.isFinite(e.detectedAt))) {
+    throw new Error("Inbox storage is not a valid dated-entry array");
   }
+  const cutoff = Date.now() - INBOX_EXPIRY_HOURS * 3_600_000;
+  const live = all.filter((e) => e.detectedAt >= cutoff);
+  if (live.length !== all.length) {
+    await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(live));
+    void mirrorInbox(live);
+    // An entry that expires unanswered is an IGNORE, and ignores are almost
+    // certainly the most common outcome. Dropping them silently would bias
+    // calibration upward: "of entries scored High, what fraction get
+    // confirmed?" would only count the ones people bothered to answer, so a
+    // stream of bad High prompts that everyone ignores would score as
+    // excellent. The denominator has to include everything we claimed.
+    for (const e of all.filter((x) => x.detectedAt < cutoff)) {
+      void track("visit_ignored", {
+        place_id: e.place_id,
+        confidence: e.confidence == null ? null : Number(e.confidence.toFixed(3)),
+        confidence_band: e.confidenceBand ?? null,
+        dwell_min: Math.round(e.dwellMin),
+        source: e.source ?? null,
+        candidate_count: e.candidateCount ?? null,
+      });
+    }
+  }
+  return live.sort((a, b) => b.detectedAt - a.detectedAt);
+}
+
+export async function getInbox(): Promise<InboxEntry[]> {
+  // Preserve existing display/caller behavior; scheduling uses the strict read.
+  try { return await readInbox(); } catch { return []; }
 }
 
 /** The calendar day a detection belongs to, on THIS device, in local time.
@@ -412,7 +418,7 @@ export const rescheduleDigest = serialize(async (): Promise<void> => {
     // passive-digest -> passive-confirm cycle; the cycle is gone, so the
     // indirection is too.
     await scheduleDigest(
-      await getInbox(),
+      await readInbox(),
       () => AsyncStorage.getItem(DIGEST_NOTIF_ID_STORAGE_KEY),
       async (id) => {
         if (id) await AsyncStorage.setItem(DIGEST_NOTIF_ID_STORAGE_KEY, id);

@@ -382,7 +382,7 @@ export function allowsRealtimePrompt(entry: InboxEntry): boolean {
 // nothing and the user hears nothing.
 
 import * as Notifications from "expo-notifications";
-import { cancelScheduledOfKind } from "./notification-dedupe";
+import { ownedBy } from "./notification-dedupe";
 import { track } from "./analytics";
 
 // WHEN THE DIGEST FIRES. Fixed, by weekday, and no longer negotiable.
@@ -514,7 +514,7 @@ export function digestTimeFor(
  */
 export async function scheduleDigest(
   entries: InboxEntry[],
-  getStoredId: () => Promise<string | null>,
+  _getStoredId: () => Promise<string | null>,
   setStoredId: (id: string | null) => Promise<void>,
   now = new Date(),
 ): Promise<string | null> {
@@ -526,14 +526,21 @@ export async function scheduleDigest(
   const digest = buildDigest(entries, now, { pattern });
   const when = digestTimeFor(now, pattern, digest);
 
-  const previous = await getStoredId();
-  if (previous) {
-    await Notifications.cancelScheduledNotificationAsync(previous).catch(() => {});
-    await setStoredId(null);
+  // The OS queue is authoritative. Read it BEFORE cancelling anything: an
+  // unavailable queue must not produce a replacement alongside an old digest.
+  // A remembered ID may be stale or missing; ownership comes from request data.
+  const pending = await Notifications.getAllScheduledNotificationsAsync();
+  const ids = ownedBy(pending, "kind", DIGEST_KIND);
+  for (const id of ids) {
+    await Notifications.cancelScheduledNotificationAsync(id);
   }
-  // And anything the stored id does not know about. Two captures landing at
-  // once used to leave one digest orphaned; the person got it twice.
-  await cancelScheduledOfKind(Notifications, "kind", DIGEST_KIND);
+  // A fulfilled cancellation is not enough if the request remains pending.
+  // Fail closed for this digest only; other schedulers keep their own policy.
+  const remaining = await Notifications.getAllScheduledNotificationsAsync();
+  if (ownedBy(remaining, "kind", DIGEST_KIND).length > 0) {
+    throw new Error("Digest cancellation could not be verified");
+  }
+  await setStoredId(null);
 
   if (!isDigestWorthSending(digest)) return null;
 

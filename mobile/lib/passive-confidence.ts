@@ -173,6 +173,9 @@ export function categoryScore(place: Restaurant): number {
 export type ConfidenceInput = {
   dwellMin: number;
   accuracyM: number;
+  /** Missing/unknown evidence cannot authorize a prechecked attribution. */
+  source?: "visit" | "stop" | "slc";
+  matchedVenueDistanceM?: number | null;
   /** How many plausible venues were in range — the honest measure of ambiguity. */
   candidateCount: number;
   hour: number;
@@ -191,6 +194,26 @@ export type ConfidenceInput = {
    */
   patternFit?: number | null;
 };
+
+// A medium suggestion remains recoverable in the digest, but never prechecked.
+// These are conservative UI evidence gates, not calibrated probabilities or
+// building containment: restaurant coordinates describe a centroid only.
+const UNVERIFIED_ATTRIBUTION_CAP = HIGH_BAND_MIN - 0.01;
+const PRECHECK_MAX_ACCURACY_M = 50;
+const CENTROID_TOLERANCE_M = 20;
+
+export function attributionCeiling(input: ConfidenceInput): number {
+  const distance = input.matchedVenueDistanceM;
+  const preciseSource = input.source === "visit" || input.source === "stop";
+  const preciseFix = Number.isFinite(input.accuracyM) && input.accuracyM >= 0 &&
+    input.accuracyM <= PRECHECK_MAX_ACCURACY_M;
+  const matched = distance != null && Number.isFinite(distance) && distance >= 0 &&
+    distance <= Math.max(CENTROID_TOLERANCE_M, input.accuracyM);
+  // Even two plausible doors are ambiguous; popularity and repeat visits must
+  // not supply an answer on the user's behalf.
+  return preciseSource && preciseFix && matched && input.candidateCount === 1
+    ? 1 : UNVERIFIED_ATTRIBUTION_CAP;
+}
 
 /**
  * The meal-fit term, generic and personal halves.
@@ -222,7 +245,7 @@ export function confidenceScore(input: ConfidenceInput): number {
     w.category * categoryScore(input.place);
 
   // Ambiguity caps what the evidence is allowed to claim.
-  const capped = Math.min(evidence, densityCeiling(input.candidateCount));
+  const capped = Math.min(evidence, densityCeiling(input.candidateCount), attributionCeiling(input));
 
   // A closed venue is the one signal strong enough to override everything else.
   const penalty = input.venueOpen === false ? CLOSED_VENUE_PENALTY : 1;

@@ -690,6 +690,16 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
   const confidence = confidenceScore({
     dwellMin: dwellMinutes(raw) ?? 0,
     accuracyM: raw.horizontalAccuracy,
+    // Missing native source is the legacy CLVisit format. Unknown runtime
+    // values pass through and are treated as unverified by the scorer.
+    source: raw.source ?? "visit",
+    matchedVenueDistanceM:
+      Number.isFinite(ranked[0].latitude) && Number.isFinite(ranked[0].longitude) &&
+      Math.abs(ranked[0].latitude!) <= 90 && Math.abs(ranked[0].longitude!) <= 180 &&
+      Number.isFinite(raw.lat) && Number.isFinite(raw.lng) &&
+      Math.abs(raw.lat) <= 90 && Math.abs(raw.lng) <= 180
+        ? distanceMeters(raw.lat, raw.lng, ranked[0].latitude!, ranked[0].longitude!)
+        : null,
     candidateCount: eligible.length,
     hour,
     place: ranked[0],

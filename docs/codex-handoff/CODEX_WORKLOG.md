@@ -260,3 +260,14 @@ Main validation: existing full155 suites/1,785 tests passed, one skipped after b
 Limitations: not a diagnosis of actual7Brew; sub-five-minute native misses, early five-minute emission versus twelve-minute travel floor, stale fixes/120m NYC radius, confidence without matched-venue distance, contaminated legacy area data, short late-night home inference and account-global passive data remain. Reminder read/cancellation recovery is next separate reviewed batch. No live notifications, device execution, paid calls or deployment. Rollback: revert this coherent batch; baseline tag preserved.
 
 WORKING TREE final TypeScript check passed with both new durable test files included (/tmp/palate-passive-types-final.log).
+
+
+## 2026-09-29 — reminder recovery and cautious venue attribution
+
+WORKING TREE locally verified: scheduler distinguishes unavailable/corrupt inbox from verified empty, preserving armed requests on read failure. Independent correction treats present empty string as corrupt, only null as missing. Digest replacement enumerates only owned pending requests, awaits cancellation and verifies none remain before replacing; failed/no-op/partial cancellation blocks replacement. Shared scheduler policy unchanged. May leave no reminder if verification fails after cancellation; inbox remains for retry.
+
+Source/distance confidence ceiling prevents high/prechecked status without a precise-source family, finite accuracy<=50m, valid actual-winner distance<=max(20m,accuracy), and exactly one eligible venue. Uncertain visits remain suggestions, not discarded. These are heuristic bounds, not probabilities or building containment; a bus stop at the restaurant centroid remains indistinguishable, and true drive-through visits can be demoted. Existing inbox scores not rescored.
+
+Main actual-source attribution26 author and81 independent controls passed (zero Google calls); independent review additionally checked3,575 envelope combinations. Independent scheduling13 durable regressions integrated, including corrupt reads, no-op/partial cancellations and unknown enumeration. Full158 suites/1,861 tests passed, one skipped, TypeScript passed (/tmp/palate-passive-final-all.log and -types.log). No OS delivery/device/live/deployment claim. Reports PASSIVE_SCHEDULING_* and PASSIVE_ATTRIBUTION_* preserve evidence and limits.
+
+Rollback this coherent batch to restore prior scheduler/scoring behavior; preserve7ddd2a2 and baseline tag. Account-global passive storage/mirror/actions require a separate coordinated ownership change; design recorded in workspace outputs/passive-account-isolation-plan. Short native capture and five/twelve-minute travel mismatch remain unresolved.

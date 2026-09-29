@@ -10,6 +10,7 @@ function place(primary_type = "restaurant"): Restaurant {
 
 const IDEAL = {
   dwellMin: 45, accuracyM: 20, candidateCount: 1, hour: 12,
+  source: "visit" as const, matchedVenueDistanceM: 0,
   place: place(), visitedBefore: true,
 };
 
@@ -144,5 +145,43 @@ describe("confidenceBand", () => {
     expect(confidenceBand(HIGH_BAND_MIN - 0.01)).toBe("medium");
     expect(confidenceBand(MEDIUM_BAND_MIN)).toBe("medium");
     expect(confidenceBand(MEDIUM_BAND_MIN - 0.01)).toBe("low");
+  });
+});
+
+describe("matched-venue attribution before prechecking", () => {
+  it.each(["stop", "visit"] as const)("keeps a sole restaurant 65m from a precise %s fix unchecked", (source) => {
+    expect(confidenceBand(confidenceScore({ ...IDEAL, source, accuracyM: 10, matchedVenueDistanceM: 65 }))).toBe("medium");
+  });
+
+  it("does not let repeat visits or an hour of dwell overcome a mismatched centroid", () => {
+    expect(confidenceScore({ ...IDEAL, dwellMin: 60, accuracyM: 5, matchedVenueDistanceM: 65 }))
+      .toBeLessThan(HIGH_BAND_MIN);
+  });
+
+  it.each([null, undefined, -1, NaN, Infinity])("requires usable matched distance (%s)", (matchedVenueDistanceM) => {
+    expect(confidenceScore({ ...IDEAL, matchedVenueDistanceM }))
+      .toBeLessThan(HIGH_BAND_MIN);
+  });
+
+  it("keeps the coarse significant-change source unchecked even with a precise reported fix", () => {
+    expect(confidenceScore({ ...IDEAL, source: "slc" })).toBeLessThan(HIGH_BAND_MIN);
+  });
+
+  it("does not invent precision when the caller supplies no source", () => {
+    expect(confidenceScore({ ...IDEAL, source: undefined })).toBeLessThan(HIGH_BAND_MIN);
+  });
+
+  it("does not precheck either of two plausible doors", () => {
+    expect(confidenceScore({ ...IDEAL, candidateCount: 2 })).toBeLessThan(HIGH_BAND_MIN);
+  });
+
+  it("preserves a genuine centroid with moderate precision but caps a poorer fix", () => {
+    expect(confidenceScore({ ...IDEAL, accuracyM: 50, matchedVenueDistanceM: 0 })).toBeGreaterThanOrEqual(HIGH_BAND_MIN);
+    expect(confidenceScore({ ...IDEAL, accuracyM: 51, matchedVenueDistanceM: 0 })).toBeLessThan(HIGH_BAND_MIN);
+  });
+
+  it("allows centroid tolerance without broadening it for precise fixes", () => {
+    expect(confidenceScore({ ...IDEAL, accuracyM: 5, matchedVenueDistanceM: 20 })).toBeGreaterThanOrEqual(HIGH_BAND_MIN);
+    expect(confidenceScore({ ...IDEAL, accuracyM: 5, matchedVenueDistanceM: 20.01 })).toBeLessThan(HIGH_BAND_MIN);
   });
 });
