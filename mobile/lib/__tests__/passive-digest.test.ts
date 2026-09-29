@@ -150,7 +150,7 @@ describe("digestNotificationBody", () => {
     const d = buildDigest([entry({ id: "Chipotle", detectedAt: at(12), confidenceBand: "high" })], DAY);
     const title = digestNotificationTitle(d);
     const body = digestNotificationBody(d, fmt);
-    expect(title).toBe("Did you eat at Chipotle?");
+    expect(title).toBe("Food or a drink at Chipotle?");
     expect(`${title} ${body}`).toContain("Chipotle");
     expect(body).toMatch(/no need to open the app/i);
   });
@@ -163,7 +163,7 @@ describe("digestNotificationBody", () => {
       // Chipotle?" — one confident place, asked about the rest on the screen.
       entry({ id: "Ruby's", detectedAt: at(19), confidenceBand: "high" }),
     ], DAY);
-    expect(digestNotificationTitle(d)).toBe("Looks like you ate at 2 places today");
+    expect(digestNotificationTitle(d)).toBe("Food or drinks at 2 places today?");
     expect(digestNotificationBody(d, fmt)).toMatch(/can you confirm/i);
   });
 

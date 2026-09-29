@@ -271,3 +271,10 @@ Source/distance confidence ceiling prevents high/prechecked status without a pre
 Main actual-source attribution26 author and81 independent controls passed (zero Google calls); independent review additionally checked3,575 envelope combinations. Independent scheduling13 durable regressions integrated, including corrupt reads, no-op/partial cancellations and unknown enumeration. Full158 suites/1,861 tests passed, one skipped, TypeScript passed (/tmp/palate-passive-final-all.log and -types.log). No OS delivery/device/live/deployment claim. Reports PASSIVE_SCHEDULING_* and PASSIVE_ATTRIBUTION_* preserve evidence and limits.
 
 Rollback this coherent batch to restore prior scheduler/scoring behavior; preserve7ddd2a2 and baseline tag. Account-global passive storage/mirror/actions require a separate coordinated ownership change; design recorded in workspace outputs/passive-account-isolation-plan. Short native capture and five/twelve-minute travel mismatch remain unresolved.
+
+
+## 2026-09-29 — coffee-inclusive copy and ambiguous notification actions
+
+WORKING TREE: food/drink copy includes coffee. A singleton high/medium stop with multiple plausible venues now has no direct Yes/No category or place/action parameters; body asks to tap and choose. Unambiguous singleton retains direct actions and now names the venue in the body (medium title was otherwise generic). Schedule/time/low-only deferral unchanged. Independent actual scheduler16 controls accepted final source, with original-action mutation rejected; routing reviewed in source only. Legacy missing-count behavior and stored high ambiguity/prechecks remain separate limitations.
+
+Added durable actual resolver/scorer/digest attribution17 cases, including wrong-row and source-erasure mutations in author review; main inspected and ran the actual repository tests. Main focused5suites61tests passed plus full TypeScript. Prior full158suites1861tests passed for58a7f6a; do not mislabel that full-suite result as including these new23 tests. No device/live message or deployment. Rollback this copy/action/test batch, retaining58a7f6a/7ddd2a2 safeguards.

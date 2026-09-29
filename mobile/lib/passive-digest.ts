@@ -335,22 +335,24 @@ export function digestNotificationTitle(digest: Digest): string {
   // asking about — but it asks rather than asserts.
   if (digest.high.length === 0) return "Were you out today?";
   if (digest.high.length === 1) {
-    return `Did you eat at ${digest.high[0].name}?`;
+    return `Food or a drink at ${digest.high[0].name}?`;
   }
-  return `Looks like you ate at ${digest.high.length} places today`;
+  return `Food or drinks at ${digest.high.length} places today?`;
 }
 
 export function digestNotificationBody(digest: Digest, formatTime: (ms: number) => string): string {
   if (isLowOnlyDigest(digest)) {
     const near = digest.low[0];
     return near
-      ? `We think you were near ${near.name}. Tap to say where you actually ate.`
-      : "Tap to log anything you ate out.";
+      ? `We think you were near ${near.name}. Tap to review food or drink stops.`
+      : "Tap to log food or drinks while you were out.";
   }
   const shown = [...digest.high, ...digest.medium];
   if (!shown.length) return "";
   if (shown.length === 1) {
-    return `${formatTime(shown[0].detectedAt)} today. Answer here, no need to open the app.`;
+    return shown[0].ambiguous
+      ? `${formatTime(shown[0].detectedAt)} today. Several places were nearby. Tap to choose where you stopped.`
+      : `${shown[0].name}, ${formatTime(shown[0].detectedAt)} today. Answer here, no need to open the app.`;
   }
   const names = shown.slice(0, 2).map((e) => e.name).join(" and ");
   const rest = shown.length - 2;
@@ -552,9 +554,10 @@ export async function scheduleDigest(
   // the realtime prompt already registers — that is the "verify without
   // opening the app" the founder asked for, and it costs nothing extra
   // because the category is already registered at launch. Two or more places
-  // is not a yes/no question, so those still open the digest.
+  // is not a yes/no question, so those still open the digest. A single stop
+  // with several plausible venues also needs a venue choice, not a Yes button.
   const confident = [...digest.high, ...digest.medium];
-  const single = confident.length === 1 ? confident[0] : null;
+  const single = confident.length === 1 && !confident[0].ambiguous ? confident[0] : null;
 
   const id = await Notifications.scheduleNotificationAsync({
     content: {
