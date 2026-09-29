@@ -84,6 +84,7 @@ let it expire.
 
 | agent | branch | paths | opened | expires | note |
 |---|---|---|---|---|---|
+| codex | `codex/handoff-priorities` | `supabase/functions/classify-cuisine-backfill/index.ts` `supabase/functions/places-proxy/index.ts` `docs/codex-handoff/LLM_*` `docs/codex-handoff/CODEX_WORKLOG.md` `docs/codex-handoff/CODEX_BACKLOG.md` | 2026-09-29T21:55Z | 2026-09-29T23:55Z | Task01a0e643 bounded LLM accounting and retry safeguards; atomic policy remains separate draft. |
 | codex | `codex/handoff-priorities` | `mobile/app/(tabs)/feed.tsx` `mobile/lib/__tests__/feed-loading-races.test.tsx` `docs/codex-handoff/CODEX_BACKLOG.md` `docs/codex-handoff/CODEX_WORKLOG.md` `docs/codex-handoff/FEED_*_20260929.md` | 2026-09-29T20:30Z | 2026-09-29T22:30Z | Task01a0e643; recommendation integration complete a72d662. Reviewed feed integration; other workers scratch-only. |
 | _(none)_ | | | | | |
 
