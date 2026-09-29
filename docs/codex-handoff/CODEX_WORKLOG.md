@@ -182,3 +182,11 @@ Deadline 2026-09-30 16:01:54 UTC. Existing follow-up reactivated, no duplicate. 
 - Evidence: REMAINING_PROFILE_WRITES_REVIEW_20260929.md, AUTH_CLEANUP_AUTHOR_20260929.md and AUTH_CLEANUP_REVIEW_20260929.md. Original author claims are superseded by independent R1 finding and queue correction.
 - Remaining: notification-toggle overlap is a separate active fix; SDK refresh/startup/native/multiprocess behavior not exhaustively verified; unresolved SDK operation can hold queue. Endpoint erasure completeness separately scoped. No deployment or device proof.
 - Rollback: revert this batch locally as a unit, preserving baseline tag and unrelated work. Removing queue restores reproduced replacement-session loss risk.
+
+
+## Account-storage deletion pagination — 2026-09-29
+- WORKING TREE: repeatedly list offset0 while deleting flat user-prefix objects. Previous increasing offsets skipped100 objects in a250-object example. Listing errors/missing data now fail closed before account-row deletion.
+- Main actual-handler mock execution:10 author cases plus8 independent cases pass, covering0–1000objects, listing/removal failures, auth/method contracts, later-bucket failure, RPC failure and repeat cleanup. No Deno remoteimports or actual Storage SDK/service run.
+- Evidence: DELETE_PAGINATION_AUTHOR_20260929.md and DELETE_PAGINATION_REVIEW_20260929.md. Tests supplied as durable offline scripts. Current uploaders use flat filenames; nested folders/concurrent uploads/eventual consistency are not certified. Partial deletion is not rolled back; error counts omit partial current-bucket removals.
+- LIVE / unverified: deployedStorage/auth/RPC behavior and exhaustive erasure remain unverified; no deployment or user deletion occurred.
+- Rollback: revert this local batch commit; that restores skipped-page/list-failure behavior. Preserve baseline tag and unrelated work.

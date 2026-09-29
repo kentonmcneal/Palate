@@ -72,3 +72,5 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 
 - Completed locally: remaining profile/avatar account ownership and coordinated deletion/logout cleanup;147 suites/1452 tests plus24 real-SDK offline controls pass.
 - In progress: notification preference serialization/unknown-state recovery; separate storage-deletion pagination fix. Live auth/device/RLS and complete erasure remain unverified.
+
+- Completed locally: flat account-storage deletion pagination/error correction;18 actual-handler mocked cases pass. Nested storage/concurrent uploads/deployed erasure remain unverified.

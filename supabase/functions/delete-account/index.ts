@@ -48,9 +48,13 @@ async function removeUserFolder(admin: ReturnType<typeof createClient>, bucket: 
   let removed = 0;
   // list() returns one page; a user with a lot of meal photos needs all of
   // them, and stopping at the first hundred would silently leave files behind.
-  for (let offset = 0; ; offset += 100) {
-    const { data, error } = await admin.storage.from(bucket).list(uid, { limit: 100, offset });
-    if (error || !data || data.length === 0) break;
+  // Removing a page shifts the remaining objects. Always read the first page;
+  // increasing offset would skip objects after every successful removal.
+  for (;;) {
+    const { data, error } = await admin.storage.from(bucket).list(uid, { limit: 100, offset: 0 });
+    if (error) throw new Error(`${bucket}: ${error.message}`);
+    if (!data) throw new Error(`${bucket}: storage listing returned no data`);
+    if (data.length === 0) break;
     const paths = data.map((f) => `${uid}/${f.name}`);
     const { error: rmErr } = await admin.storage.from(bucket).remove(paths);
     if (rmErr) throw new Error(`${bucket}: ${rmErr.message}`);
