@@ -35,9 +35,14 @@ import { loadView } from "../../lib/load-state";
 import { LoadError } from "../../components/LoadError";
 import { reportContent, blockUser, REPORT_REASONS } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
+import { applyLike, restoreLike, createLikeGate } from "../../lib/optimistic-like";
 
 export default function FeedTab() {
   const router = useRouter();
+  const likeGate = useRef(createLikeGate()).current;
+  const likeRevision = useRef(0);
+  const likesInFlight = useRef(0);
+  const [pendingLikes, setPendingLikes] = useState<Set<string>>(new Set());
   const [events, setEvents] = useState<FeedEvent[]>([]);
   // ONE sheet for the whole screen, holding whichever post is open. It used to
   // be one <Modal> per FeedRow -- fifty posts, fifty modals.
@@ -53,11 +58,13 @@ export default function FeedTab() {
   const [graph, setGraph] = useState<TasteGraph | null>(null);
 
   const load = useCallback(async () => {
+    const revision = likeRevision.current;
     try {
       const [feed, { data: auth }] = await Promise.all([
         listFeed(60),
         supabase.auth.getUser(),
       ]);
+      if (revision !== likeRevision.current || likesInFlight.current > 0) return;
       setEvents(feed);
       setMyId(auth.user?.id ?? null);
       setError(null);
@@ -98,26 +105,21 @@ export default function FeedTab() {
   }, []);
 
   async function handleLike(ev: FeedEvent) {
-    // Optimistic update
-    setEvents((curr) =>
-      curr.map((e) =>
-        e.id === ev.id
-          ? { ...e, iLiked: !e.iLiked, likeCount: e.likeCount + (e.iLiked ? -1 : 1) }
-          : e,
-      ),
-    );
+    if (!likeGate.acquire(ev.id)) return;
+    likeRevision.current++;
+    likesInFlight.current++;
+    setPendingLikes(curr => new Set(curr).add(ev.id));
+    setEvents(curr => applyLike(curr, ev.id, !ev.iLiked));
     try {
       await toggleLike(ev.id, ev.iLiked);
     } catch (e: any) {
-      // Revert on failure
-      setEvents((curr) =>
-        curr.map((x) =>
-          x.id === ev.id
-            ? { ...x, iLiked: ev.iLiked, likeCount: ev.likeCount }
-            : x,
-        ),
-      );
+      setEvents(curr => restoreLike(curr, ev));
       Alert.alert("Couldn't update like", e?.message ?? "Try again");
+    } finally {
+      likeRevision.current++;
+      likesInFlight.current--;
+      likeGate.release(ev.id);
+      setPendingLikes(curr => { const next = new Set(curr); next.delete(ev.id); return next; });
     }
   }
 
@@ -139,7 +141,7 @@ export default function FeedTab() {
         <View style={styles.header}>
           <Text style={type.title}>Feed</Text>
           <Text style={[type.body, { color: colors.mute, marginTop: 4 }]}>
-            How everyone on Palate actually eats.
+            Visits, recommendations, and conversations worth sharing.
           </Text>
         </View>
         <ScrollView
@@ -211,6 +213,7 @@ export default function FeedTab() {
                 key={ev.id}
                 event={ev}
                 isSelf={ev.user_id === myId}
+                likePending={pendingLikes.has(ev.id)}
                 graph={graph}
                 onLike={() => handleLike(ev)}
                 onOpenComments={() => setOpenComments(ev.id)}
@@ -235,10 +238,11 @@ export default function FeedTab() {
 }
 
 function FeedRow({
-  event, isSelf, graph, onLike, onOpenComments, onBlockedUser, onReportedEvent,
+  event, isSelf, graph, onLike, onOpenComments, onBlockedUser, onReportedEvent, likePending,
 }: {
   event: FeedEvent;
   isSelf: boolean;
+  likePending: boolean;
   graph: TasteGraph | null;
   onLike: () => void;
   onOpenComments: () => void;
@@ -255,7 +259,7 @@ function FeedRow({
       lastTap.current = 0;
       setBurst((n) => n + 1);
       // Only ever ADDS a like. See the comment at the call site.
-      if (!event.iLiked) onLike();
+      if (!event.iLiked && !likePending) onLike();
       return;
     }
     lastTap.current = now;
@@ -270,7 +274,7 @@ function FeedRow({
     reportContent({ targetType: "feed_event", targetId: event.id, targetUserId: event.user_id, reason })
       .then(() => {
         onReportedEvent(event.id);
-        Alert.alert("Thanks for flagging", "We'll review this within 24 hours. It's hidden from your feed now.");
+        Alert.alert("Thanks for flagging", "Your report was submitted. It's hidden from your feed now.");
       })
       .catch((e: any) => Alert.alert("Couldn't report", e?.message ?? "Try again"));
   }
@@ -353,7 +357,7 @@ function FeedRow({
       <View style={styles.actions}>
         {/* Heart first, comment second — the order everyone already has muscle
             memory for. The count lives beside the glyph, not in the label. */}
-        <HeartButton liked={event.iLiked} count={event.likeCount} onToggle={onLike} />
+        <HeartButton disabled={likePending} liked={event.iLiked} count={event.likeCount} onToggle={onLike} />
 
         <Pressable
           onPress={onOpenComments}

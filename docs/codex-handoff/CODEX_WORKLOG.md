@@ -71,3 +71,13 @@ Deadline 2026-09-30 16:01:54 UTC. Existing follow-up reactivated, no duplicate. 
 ## Compatibility cache correctness
 - WORKING TREE: cache identities now include actual taste-graph values (including Map/Set contents), not just counts; restaurant snapshots also participate. This fixes collisions between equal-size profiles, edited ratings, and enriched restaurant rows. Implicit feedback remains excluded because it affects rank rather than the headline match.
 - Four regression tests passed for distinct profiles, in-place rating changes, restaurant updates and equivalent snapshots. TypeScript passed. Combined full suite before final social guard edits: 136 suites / 1,166 passed / one skipped. No paid requests, live evaluation or DEVICE validation. Snapshot serialization trades some CPU for correctness; device profiling is still needed at large histories.
+
+
+## Social mutation reliability — 2026-09-29
+- WORKING TREE: Feed likes now use per-row synchronous gates and pending controls. Failed optimistic updates reverse only their own like delta; stale refreshes cannot overwrite an in-flight/recent like mutation. Other rows remain intact.
+- WORKING TREE: Comments use distinct post sessions, send ownership tokens, load sequence and successful mutation replay. Switching A→B→A cannot let an old response clear a new draft or replace new comments; successful sends/deletes/blocks/likes reconcile against stale list snapshots. Deleting/blocking also clears an affected reply target. Composer is disabled until initial load succeeds.
+- WORKING TREE: Replaced direct native input rendering with the shared TextInput wrapper; removed unsupported report-response SLA and improved feed description. Landing untouched.
+- Independent review found three additional reopen races; reviewer implemented fixes and fifteen mounted regression cases. Main reviewed the mutation replay and added affected reply-target cleanup.
+- Validation: complete local Jest run passed 137 suites / 1,182 tests, one skipped (/tmp/palate-social-reviewed.log). After final reply-target cleanup, focused 19 tests and TypeScript passed. Mocked component cases cover out-of-order loads, same-tick duplicate likes, old/new send ownership, reopened sends, stale snapshots, delete cascades, blocks and stale error alerts.
+- LIVE / DEVICE: not tested or deployed. This establishes mocked local behavior, not production authorization, network reliability or device visual quality. Existing Xcode license blocker remains.
+- Rollback: revert this batch commit, preserving unrelated work and baseline recovery tag. No database changes.

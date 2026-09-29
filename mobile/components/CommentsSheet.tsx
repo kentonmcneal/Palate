@@ -22,12 +22,14 @@
 // ============================================================================
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Modal, View, StyleSheet, Pressable, ScrollView, TextInput,
+  Modal, View, StyleSheet, Pressable, ScrollView, type TextInput as NativeTextInput,
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from "react-native";
 import { Text } from "./Text";
+import { TextInput } from "./TextInput";
 import { FeedAvatar } from "./FeedAvatar";
 import { HeartButton } from "./HeartButton";
+import { applyLike, restoreLike, createLikeGate } from "../lib/optimistic-like";
 import { colors, radius, spacing, type } from "../theme";
 import { FONT_CAP } from "../lib/a11y";
 import {
@@ -47,6 +49,8 @@ export function CommentsSheet({
   onCountChange: (eventId: string, n: number) => void;
   onBlockedUser: (userId: string) => void;
 }) {
+  const likeGate = useRef(createLikeGate()).current;
+  const [pendingLikes, setPendingLikes] = useState<Set<string>>(new Set());
   const [comments, setComments] = useState<FeedComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +58,34 @@ export function CommentsSheet({
   const [sending, setSending] = useState(false);
   const [replyTo, setReplyTo] = useState<FeedComment | null>(null);
   const scroller = useRef<ScrollView | null>(null);
-  const input = useRef<TextInput | null>(null);
+  const input = useRef<NativeTextInput | null>(null);
+  const activeEvent = useRef<string | null>(null);
+  const session = useRef({ key: null as string | null, version: 0 });
+  const nextEvent = visible ? eventId : null;
+  if (session.current.key !== nextEvent) session.current = { key: nextEvent, version: session.current.version + 1 };
+  activeEvent.current = nextEvent;
+  const sendToken = useRef<object | null>(null);
+  const loadSequence = useRef(0);
+  const commentsRef = useRef(comments);
+  // Mutations and list responses share this synchronous source of truth.
+  const mutationRevision = useRef(0);
+  const mutations = useRef<Array<{
+    revision: number;
+    event: string | null; // null applies to every post (a blocked author).
+    apply: (rows: FeedComment[]) => FeedComment[];
+  }>>([]);
+
+  function publish(id: string, rows: FeedComment[]) {
+    commentsRef.current = rows;
+    setComments(rows);
+    countCb.current(id, rows.length);
+  }
+
+  function completeMutation(id: string | null, apply: (rows: FeedComment[]) => FeedComment[]) {
+    mutations.current.push({ revision: ++mutationRevision.current, event: id, apply });
+    const active = activeEvent.current;
+    if (active && (id === null || active === id)) publish(active, apply(commentsRef.current));
+  }
 
   // The escape hatch from the render loop: the callback is READ at call time
   // and never observed, so its identity cannot invalidate anything.
@@ -62,67 +93,87 @@ export function CommentsSheet({
   countCb.current = onCountChange;
 
   const load = useCallback(async (id: string) => {
+    const sequence = ++loadSequence.current;
+    const revision = mutationRevision.current;
+    const version = session.current.version;
+    const current = () => activeEvent.current === id && session.current.version === version && loadSequence.current === sequence;
+    setLoading(true);
     setError(null);
     try {
       const rows = await listComments(id);
-      setComments(rows);
-      countCb.current(id, rows.length);
+      if (!current()) return;
+      const merged = mutations.current
+        .filter(m => m.revision > revision && (m.event === null || m.event === id))
+        .reduce((currentRows, m) => m.apply(currentRows), rows);
+      publish(id, merged);
+      // Older operations are already represented by this request's snapshot.
+      mutations.current = mutations.current.filter(m => m.revision > revision);
     } catch (e: any) {
-      setError(e?.message ?? "Couldn't load comments.");
+      if (current()) setError(e?.message ?? "Couldn't load comments.");
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (!visible || !eventId) return;
+    if (!visible || !eventId) { loadSequence.current++; return; }
     setLoading(true);
+    sendToken.current = null;
+    setSending(false);
     setComments([]);
+    commentsRef.current = [];
     setReplyTo(null);
     setDraft("");
     void load(eventId);
+    return () => { loadSequence.current++; };
   }, [visible, eventId, load]);
 
   const threads = useMemo(() => threadComments(comments), [comments]);
 
-  function setCount(next: FeedComment[]) {
-    setComments(next);
-    if (eventId) countCb.current(eventId, next.length);
-  }
-
   async function send() {
     const body = draft.trim();
-    if (!body || sending || !eventId) return;
+    if (!body || sendToken.current || loading || error || !eventId) return;
     setSending(true);
+    const targetEvent = eventId;
+    const version = session.current.version;
+    const token = {};
+    sendToken.current = token;
+    const current = () => activeEvent.current === targetEvent && session.current.version === version && sendToken.current === token;
     try {
-      const created = await addComment(eventId, body, replyTo?.id ?? null);
+      const created = await addComment(targetEvent, body, replyTo?.id ?? null);
+      // Data belongs to the post; draft and busy state belong to this session.
+      completeMutation(targetEvent, rows => rows.some(c => c.id === created.id)
+        ? rows : [...rows, created]);
+      if (!current()) return;
       setDraft("");
       setReplyTo(null);
-      setCount([...comments, created]);
       void triggerHapticSuccess();
-      requestAnimationFrame(() => scroller.current?.scrollToEnd({ animated: true }));
+      requestAnimationFrame(() => {
+        if (activeEvent.current === targetEvent && session.current.version === version) scroller.current?.scrollToEnd({ animated: true });
+      });
     } catch (e: any) {
-      Alert.alert("Couldn't post", e?.message ?? "Try again.");
+      if (current()) Alert.alert("Couldn't post", e?.message ?? "Try again.");
     } finally {
-      setSending(false);
+      if (current()) { sendToken.current = null; setSending(false); }
     }
   }
 
   function heart(c: FeedComment) {
-    // Optimistic, like the post heart: the tap answers immediately and the
-    // server catches up. A failure puts the exact previous numbers back rather
-    // than guessing at them.
-    const before = comments;
-    setComments((curr) =>
-      curr.map((x) =>
-        x.id === c.id
-          ? { ...x, iLiked: !x.iLiked, likeCount: x.likeCount + (x.iLiked ? -1 : 1) }
-          : x,
-      ),
-    );
-    void toggleCommentLike(c.id, c.iLiked).catch((e: any) => {
-      setComments(before);
-      Alert.alert("Couldn't update", e?.message ?? "Try again.");
+    if (!likeGate.acquire(c.id)) return;
+    const targetEvent = eventId;
+    const version = session.current.version;
+    setPendingLikes(curr => new Set(curr).add(c.id));
+    if (targetEvent) publish(targetEvent, applyLike(commentsRef.current, c.id, !c.iLiked));
+    void toggleCommentLike(c.id, c.iLiked).then(() => {
+      if (targetEvent) completeMutation(targetEvent, rows => applyLike(rows, c.id, !c.iLiked));
+    }).catch((e: any) => {
+      if (targetEvent && activeEvent.current === targetEvent && session.current.version === version) {
+        publish(targetEvent, restoreLike(commentsRef.current, c));
+        Alert.alert("Couldn't update", e?.message ?? "Try again.");
+      }
+    }).finally(() => {
+      likeGate.release(c.id);
+      setPendingLikes(curr => { const next = new Set(curr); next.delete(c.id); return next; });
     });
   }
 
@@ -136,6 +187,9 @@ export function CommentsSheet({
   }
 
   function confirmDelete(c: FeedComment) {
+    const targetEvent = eventId;
+    const version = session.current.version;
+    const current = () => activeEvent.current === targetEvent && session.current.version === version;
     Alert.alert("Delete comment?", "This can't be undone.", [
       { text: "Cancel", style: "cancel" },
       {
@@ -144,15 +198,16 @@ export function CommentsSheet({
           try {
             const gone = await deleteComment(c.id);
             if (!gone) {
-              Alert.alert("Couldn't delete", "You can only delete your own comments, or comments on your post.");
+              if (current()) Alert.alert("Couldn't delete", "You can only delete your own comments, or comments on your post.");
               return;
             }
             // A deleted parent takes its replies with it (ON DELETE CASCADE),
             // so the local list has to drop them too or they linger as orphans
             // until the next load.
-            setCount(comments.filter((x) => x.id !== c.id && x.parentId !== c.id));
+            if (targetEvent) completeMutation(targetEvent, rows => rows.filter(x => x.id !== c.id && x.parentId !== c.id));
+            if (activeEvent.current === targetEvent) setReplyTo(reply => reply?.id === c.id ? null : reply);
           } catch (e: any) {
-            Alert.alert("Couldn't delete", e?.message ?? "Try again.");
+            if (current()) Alert.alert("Couldn't delete", e?.message ?? "Try again.");
           }
         },
       },
@@ -160,6 +215,9 @@ export function CommentsSheet({
   }
 
   function openMenu(c: FeedComment) {
+    const targetEvent = eventId;
+    const version = session.current.version;
+    const current = () => activeEvent.current === targetEvent && session.current.version === version;
     const options: any[] = [{ text: "Reply", onPress: () => startReply(c) }];
     if (c.canDelete) options.push({ text: "Delete", style: "destructive", onPress: () => confirmDelete(c) });
     options.push({ text: "Report", onPress: () => openReport(c) });
@@ -172,10 +230,11 @@ export function CommentsSheet({
           onPress: async () => {
             try {
               await blockUser(c.userId);
-              setCount(comments.filter((x) => x.userId !== c.userId));
+              completeMutation(null, rows => rows.filter(x => x.userId !== c.userId));
+              setReplyTo(reply => reply?.userId === c.userId ? null : reply);
               onBlockedUser(c.userId);
             } catch (e: any) {
-              Alert.alert("Couldn't block", e?.message ?? "Try again.");
+              if (current()) Alert.alert("Couldn't block", e?.message ?? "Try again.");
             }
           },
         },
@@ -244,10 +303,10 @@ export function CommentsSheet({
             >
               {threads.map(({ comment, replies }) => (
                 <View key={comment.id} style={styles.thread}>
-                  <Row c={comment} onHeart={heart} onMenu={openMenu} onReply={startReply} />
+                  <Row likePending={pendingLikes.has(comment.id)} c={comment} onHeart={heart} onMenu={openMenu} onReply={startReply} />
                   {replies.map((r) => (
                     <View key={r.id} style={styles.replyIndent}>
-                      <Row c={r} onHeart={heart} onMenu={openMenu} onReply={startReply} small />
+                      <Row likePending={pendingLikes.has(r.id)} c={r} onHeart={heart} onMenu={openMenu} onReply={startReply} small />
                     </View>
                   ))}
                 </View>
@@ -276,12 +335,13 @@ export function CommentsSheet({
               onChangeText={setDraft}
               multiline
               maxLength={COMMENT_MAX_LENGTH + 40}
-              editable={!sending}
+              editable={!sending && !loading && !error}
             />
             <Pressable
               onPress={send}
-              disabled={sending || !draft.trim() || over}
-              style={[styles.send, (sending || !draft.trim() || over) && styles.sendOff]}
+              accessibilityLabel="Post comment"
+              disabled={sending || loading || !!error || !draft.trim() || over}
+              style={[styles.send, (sending || loading || !!error || !draft.trim() || over) && styles.sendOff]}
               accessibilityRole="button"
             >
               <Text style={styles.sendText}>{sending ? "…" : "Post"}</Text>
@@ -299,13 +359,14 @@ export function CommentsSheet({
 }
 
 function Row({
-  c, onHeart, onMenu, onReply, small,
+  c, onHeart, onMenu, onReply, small, likePending = false,
 }: {
   c: FeedComment;
   onHeart: (c: FeedComment) => void;
   onMenu: (c: FeedComment) => void;
   onReply: (c: FeedComment) => void;
   small?: boolean;
+  likePending?: boolean;
 }) {
   return (
     <Pressable onLongPress={() => onMenu(c)} delayLongPress={300} style={styles.row}>
@@ -323,7 +384,7 @@ function Row({
           <Text style={styles.replyText}>Reply</Text>
         </Pressable>
       </View>
-      <HeartButton liked={c.iLiked} count={c.likeCount} onToggle={() => onHeart(c)} size={18} />
+      <HeartButton disabled={likePending} liked={c.iLiked} count={c.likeCount} onToggle={() => onHeart(c)} size={18} />
     </Pressable>
   );
 }

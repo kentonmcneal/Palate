@@ -3,7 +3,6 @@
 Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deployment or paid services.
 
 ## In progress
-- Conservative pre-fetch spending reservations using existing atomic counter; test concurrency/failures and independent review.
 - Security review of server readers and client privacy handling.
 
 ## Completed before this window
@@ -24,3 +23,8 @@ Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deploym
 
 ## Rollback
 Revert individual Codex commits; baseline tag codex-baseline-20260928 is retained. Never reset unrelated work.
+
+## Completed in this window
+- 5f1a5a2: conservative pre-fetch Google reservations, failure/concurrency mocks and independent source review. Live accounting remains unverified.
+- f4729fc: recommendation cache invalidates on real profile/restaurant changes.
+- Social mutation batch: independent race review, per-row like guards and comment-session/mutation reconciliation; 137 suites pass, device verification pending.

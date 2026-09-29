@@ -31,9 +31,10 @@ import { FONT_CAP } from "../lib/a11y";
 import { triggerHapticSelection } from "../lib/haptics";
 
 export function HeartButton({
-  liked, count, onToggle, size = 26, showZero = false,
+  liked, count, onToggle, size = 26, showZero = false, disabled = false,
 }: {
   liked: boolean;
+  disabled?: boolean;
   count: number;
   onToggle: () => void;
   size?: number;
@@ -53,6 +54,7 @@ export function HeartButton({
   }
 
   function handlePress() {
+    if (disabled) return;
     // Fire the animation and the haptic on the way IN, not after the await:
     // the feedback is for the tap, and a spinner's worth of delay is exactly
     // what makes a like feel broken.
@@ -66,10 +68,11 @@ export function HeartButton({
   return (
     <Pressable
       onPress={handlePress}
+      disabled={disabled}
       hitSlop={10}
       style={styles.wrap}
       accessibilityRole="button"
-      accessibilityState={{ selected: liked }}
+      accessibilityState={{ selected: liked, disabled, busy: disabled }}
       accessibilityLabel={liked ? `Unlike, ${count} likes` : `Like, ${count} likes`}
     >
       <Animated.View style={{ transform: [{ scale }] }}>
