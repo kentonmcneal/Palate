@@ -47,3 +47,14 @@ Final first-batch validation: WORKING TREE full Jest suite passed 132 suites, 1,
 - Validation: actual observability source executed in a VM with mocked SDK/synthetic DSN; five new tests cover concurrent init, retry, capture failures, hostile error getter, breadcrumb failures and accepted test events. Existing normalization tests pass. TypeScript passes. Full Jest: 133 suites, 1,148 passed, one skipped. Initial test harness hit Jest dynamic-import limitations; CommonJS VM transpilation resolved it without package changes.
 - No Sentry network calls, DEVICE testing, or LIVE verification. Production DSN and actual delivery remain unknown. No change to the existing policy of swallowing global production exceptions. Native crashes remain outside this JS-only evidence.
 - Budget configuration changes are COMMITTED in c0be455; earlier local test evidence applies to that commit.
+
+## Ranking location robustness — 2026-09-29
+- WORKING TREE: malformed coordinates (nonfinite or outside geographic bounds) now receive neutral missing-location treatment instead of a NaN score or invented proximity signal. Valid zero and boundary coordinates remain accepted. No ranking weights changed.
+- Three targeted tests and TypeScript passed. Initial full Jest launcher crashed with a segmentation fault; repeated using explicit native /opt/homebrew/bin/node succeeded. Full result recorded below. No API calls or DEVICE/LIVE validation.
+
+
+Test Suites: 134 passed, 134 total
+Tests:       1 skipped, 1151 passed, 1152 total
+Snapshots:   0 total
+Time:        11.112 s
+Ran all test suites.

@@ -83,7 +83,7 @@ export function scoreContext(r: RestaurantInput, ctx: ScoreContext): number {
   let score = 50; // neutral default
 
   // Distance — 0km = +30, 8km+ = -30
-  if (ctx.here && r.latitude != null && r.longitude != null) {
+  if (ctx.here && validCoordinates(ctx.here.lat, ctx.here.lng) && r.latitude != null && r.longitude != null && validCoordinates(r.latitude, r.longitude)) {
     const km = haversineKm(ctx.here, { lat: r.latitude, lng: r.longitude });
     score += clamp(60 * (1 - km / 8), -30, 30);
   }
@@ -228,6 +228,12 @@ function inferType(compat: { score: number; breakdown: { noveltyFit: number } },
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
+}
+
+// Treat malformed location data as unknown, not as a NaN rank or proximity
+// signal. Zero and boundary coordinates remain valid.
+function validCoordinates(lat: number, lng: number): boolean {
+  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
 }
 
 function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
