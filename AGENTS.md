@@ -53,6 +53,13 @@ Claims are advisory and expire after two hours; **uncommitted changes in the tre
 claim than the file** and mean another agent is mid-edit. Commit only the paths you claimed —
 `git add <path>`, never `git add -A`.
 
+A pre-commit hook enforces the claims. **Set it up once per clone**, or claims stay advisory:
+
+```bash
+git config core.hooksPath .githooks
+export PALATE_AGENT=codex     # so the hook does not block you on your own claims
+```
+
 This repo is frequently worked by more than one agent session at a time. HEAD moved four times
 during the handoff review on 2026-09-27.
 
