@@ -33,7 +33,7 @@ import { supabase } from "../lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { colors } from "../theme";
 import { getMyProfile } from "../lib/profile";
-import { subscribeUsernameClaimed, isUsernameClaimed } from "../lib/username-gate";
+import { subscribeUsernameClaimed, isUsernameClaimed, setUsernameGateAccount } from "../lib/username-gate";
 import { needsNotificationPrimer, isPrimerSeen, subscribePrimerSeen } from "../lib/notification-primer";
 import * as WebBrowser from "expo-web-browser";
 import { initObservability, captureError } from "../lib/observability";
@@ -132,6 +132,9 @@ export default function RootLayout() {
   // was quietly rendering in San Francisco.
 
   useEffect(() => {
+    let alive = true;
+    let authRevision = 0;
+    let accountId: string | null = null;
     // These startup tasks are fire-and-forget, so EVERY one must have its own
     // rejection handler. Under the New Architecture an unhandled promise
     // rejection becomes a native fatal, which expo-updates' error recovery then
@@ -143,21 +146,37 @@ export default function RootLayout() {
     supabase.auth
       .getSession()
       .then(({ data }) => {
+        // A late restore must not replace a newer sign-in/sign-out event.
+        if (!alive || authRevision !== 0) return;
+        accountId = data.session?.user.id ?? null;
+        setUsernameGateAccount(accountId);
         setSession(data.session);
         setLoaded(true);
       })
       .catch((e) => {
         // Never let a failed session restore hang the splash or escape unhandled.
+        if (!alive || authRevision !== 0) return;
         setLoaded(true);
         void captureError(e, { at: "getSession" });
       });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      setSession(s);
+      if (!alive) return;
+      ++authRevision;
+      const nextAccount = s?.user.id ?? null;
+      if (nextAccount !== accountId) {
+        setNeedsUsername(false);
+        setNeedsPrimer(false);
+        setScreenshotPrompt(false);
+      }
+      accountId = nextAccount;
+      setUsernameGateAccount(nextAccount);
       // Module-level caches are per process, not per account: a second
       // sign-in on the same phone inherited the first account's visits and
       // dismissals. Cleared on every auth transition.
       invalidatePersonalSignal();
       invalidateCompatibilityCache();
+      setSession(s);
+      setLoaded(true);
       // Register push token whenever a session shows up — the first-run path
       // (permission prompt + token fetch) is the one that crashed new accounts.
       if (s?.user) {
@@ -167,7 +186,7 @@ export default function RootLayout() {
         void syncTimezone().catch((e) => captureError(e, { at: "syncTimezone" }));
       }
     });
-    return () => sub.subscription.unsubscribe();
+    return () => { alive = false; sub.subscription.unsubscribe(); };
   }, []);
 
   // The weekly discovery pings (Friday date night, Saturday brunch, Thursday
@@ -424,11 +443,12 @@ export default function RootLayout() {
   const [screenshotPrompt, setScreenshotPrompt] = useState(false);
   useEffect(() => {
     if (!session) return; // feedback requires an account
+    let alive = true;
     let sub: { remove: () => void } | null = null;
     try {
       sub = ScreenCapture.addScreenshotListener(() => {
         void shouldPromptNow().then((ok) => {
-          if (!ok) return;
+          if (!alive || !ok) return;
           void recordPromptShown();
           setScreenshotPrompt(true);
         });
@@ -436,7 +456,7 @@ export default function RootLayout() {
     } catch {
       // Listener is iOS/Android-native; never let its absence break launch.
     }
-    return () => sub?.remove();
+    return () => { alive = false; sub?.remove(); };
   }, [session]);
 
   // Whether this account still needs a handle. Resolved once per session —
@@ -526,7 +546,9 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.paper } }}>
+        {/* Account replacement destroys screen-local rows, drafts and pending
+            request ownership. Token refresh for the same account preserves them. */}
+        <Stack key={session?.user.id ?? "signed-out"} screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.paper } }}>
           <Stack.Screen name="sign-in" />
           <Stack.Screen name="onboarding" />
           {/* Gate, not a destination: no back, reached only by the guard. */}

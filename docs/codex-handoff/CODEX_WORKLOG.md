@@ -146,3 +146,11 @@ Deadline 2026-09-30 16:01:54 UTC. Existing follow-up reactivated, no duplicate. 
 - Validation:43 mounted People cases pass, including real helper mapping/failure controls. Full integrated run1337 passed/one skipped with only the subsequently fixed dead-export failure; final84 focused tests pass. TypeScript passed before unused helper removal; no test threshold relaxed. PEOPLE_INDEPENDENT_REVIEW_20260929.md records red/green reproductions and limits.
 - LIVE / DEVICE: no production/service calls, native layout or VoiceOver validation. No realtime block subscription, transport cancellation, or rollback of already-sent mutations. Landing untouched.
 - Rollback: revert this batch commit locally; keep baseline/recovery tag and server privacy migration independently.
+
+
+## Account transition and profile write ownership — 2026-09-29
+- WORKING TREE: root rejects stale initial auth restoration and unmounted callbacks; navigation state remounts on account replacement/sign-out while same-account refresh preserves drafts. Username claimed state is scoped to an account generation, including A→B→A, without dropping subscriptions.
+- Username/onboarding completions use the initiating session token before navigation/marking; setUsername/setDisplayName recheck token and resolved user before submission, then pin the update row to the initiating ID. Independent review had caught the deferred-getUser wrong-account path; final review confirms it fixed.
+- Validation:19 focused cases pass in main and independent review. Independent reviewer additionally ran20 actual-helper/gate cases covering explicit/default tokens, mismatched auth, A→B→A, same-ID refresh and post-submission account changes. Full integrated suite included these19 passing cases; only unrelated dead-export issue subsequently fixed. TypeScript passes.
+- Evidence: ACCOUNT_WRITE_REVIEW_20260929.md. LIVE / DEVICE: auth transport, native routing and production RLS unverified. Already-submitted writes cannot be recalled; other profile/avatar/background writers are not certified by this scope.
+- Rollback: revert this batch commit locally; retains baseline tag. This restores the identified account-state risks, so prefer a reviewed forward fix if a regression is discovered.

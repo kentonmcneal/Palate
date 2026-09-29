@@ -9,7 +9,7 @@ import { colors, spacing, type } from "../theme";
 import { getMyProfile, setUsername } from "../lib/profile";
 import { validateUsername, suggestUsername } from "../lib/username";
 import { track } from "../lib/analytics";
-import { markUsernameClaimed } from "../lib/username-gate";
+import { markUsernameClaimed, usernameGateSession, isUsernameGateSession } from "../lib/username-gate";
 
 /**
  * Claiming a handle, for accounts that predate it being required.
@@ -46,10 +46,13 @@ export default function ClaimUsername() {
     const check = validateUsername(handle);
     if (!check.ok) { setError(check.message); return; }
 
+    const gateSession = usernameGateSession();
+    if (!isUsernameGateSession(gateSession)) return;
     setSaving(true);
     setError(null);
     try {
-      const claimed = await setUsername(check.value);
+      const claimed = await setUsername(check.value, gateSession);
+      if (!isUsernameGateSession(gateSession)) return;
       if (!claimed.ok) {
         setError(
           claimed.reason === "taken"
@@ -60,13 +63,14 @@ export default function ClaimUsername() {
       }
       // Synchronously, and BEFORE navigating: the route guard reads this on
       // its next run, which happens the instant we replace below.
-      markUsernameClaimed();
+      if (!markUsernameClaimed(gateSession)) return;
       void track("username_claimed", { surface: "gate" });
       router.replace("/(tabs)");
     } catch (e: any) {
+      if (!isUsernameGateSession(gateSession)) return;
       Alert.alert("Couldn't save", e?.message ?? "Try again");
     } finally {
-      setSaving(false);
+      if (isUsernameGateSession(gateSession)) setSaving(false);
     }
   }
 

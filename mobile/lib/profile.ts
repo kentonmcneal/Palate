@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { supabase } from "./supabase";
+import { usernameGateSession, isUsernameGateSession, type UsernameSession } from "./username-gate";
 
 export type ProfileVisibility = "private" | "friends" | "public";
 
@@ -60,15 +61,15 @@ export async function saveDemographics(d: Partial<Demographics>): Promise<void> 
   if (error) throw error;
 }
 
-export async function setUsername(handle: string): Promise<{ ok: true } | { ok: false; reason: "taken" | "invalid" | "error" }> {
+export async function setUsername(handle: string, token: UsernameSession = usernameGateSession()): Promise<{ ok: true } | { ok: false; reason: "taken" | "invalid" | "error" }> {
   const cleaned = handle.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
   if (cleaned.length < 3 || cleaned.length > 20) return { ok: false, reason: "invalid" };
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, reason: "error" };
+  if (!user || !isUsernameGateSession(token) || user.id !== token.accountId) return { ok: false, reason: "error" };
   const { error } = await supabase
     .from("profiles")
     .update({ username: cleaned })
-    .eq("id", user.id);
+    .eq("id", token.accountId);
   if (error) {
     if ((error as any).code === "23505" || `${error.message}`.toLowerCase().includes("unique")) {
       return { ok: false, reason: "taken" };
@@ -88,13 +89,13 @@ export async function setProfileVisibility(v: ProfileVisibility): Promise<void> 
   if (error) throw error;
 }
 
-export async function setDisplayName(name: string): Promise<void> {
+export async function setDisplayName(name: string, token: UsernameSession = usernameGateSession()): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not signed in");
+  if (!user || !isUsernameGateSession(token) || user.id !== token.accountId) throw new Error("Account changed. Please try again.");
   const { error } = await supabase
     .from("profiles")
     .update({ display_name: name.trim() || null })
-    .eq("id", user.id);
+    .eq("id", token.accountId);
   if (error) throw error;
 }
 

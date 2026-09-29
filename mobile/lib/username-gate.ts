@@ -11,32 +11,46 @@
 // value before the new read lands. So the screen states the fact synchronously
 // instead, and the guard reads the same bit.
 //
-// One-way on purpose: nothing sets this back to "needed" for a session. Losing
-// a handle is not a thing that happens, and a gate that can re-arm itself is
-// how you get the loop back.
+// One-way within one account session; changing accounts must start fresh.
 // ============================================================================
 
+export type UsernameSession = Readonly<{ accountId: string | null; generation: number }>;
+let current: UsernameSession = { accountId: null, generation: 0 };
 let claimed = false;
 const listeners = new Set<() => void>();
 
-/** Call the moment a handle is durably saved, BEFORE navigating away. */
-export function markUsernameClaimed(): void {
-  if (claimed) return;
-  claimed = true;
-  for (const l of listeners) l();
+/** Account transitions reset the bit, preserving active guard subscriptions. */
+export function setUsernameGateAccount(accountId: string | null): void {
+  if (current.accountId === accountId) return;
+  current = { accountId, generation: current.generation + 1 };
+  claimed = false;
 }
 
-export function isUsernameClaimed(): boolean {
-  return claimed;
+/** Capture BEFORE a save; an old A completion must not affect B or a new A session. */
+export function usernameGateSession(): UsernameSession { return current; }
+export function isUsernameGateSession(token: UsernameSession): boolean {
+  return token === current && current.accountId !== null;
 }
 
+/** Returns false for a stale/signed-out completion. Call before navigating. */
+export function markUsernameClaimed(token: UsernameSession): boolean {
+  if (!isUsernameGateSession(token)) return false;
+  if (!claimed) {
+    claimed = true;
+    for (const l of listeners) l();
+  }
+  return true;
+}
+
+export function isUsernameClaimed(): boolean { return claimed; }
 export function subscribeUsernameClaimed(fn: () => void): () => void {
   listeners.add(fn);
   return () => { listeners.delete(fn); };
 }
 
-/** Tests only — module state outlives a single test otherwise. */
+/** Tests only — resets subscribers too. */
 export function __resetUsernameGate(): void {
+  current = { accountId: null, generation: current.generation + 1 };
   claimed = false;
   listeners.clear();
 }

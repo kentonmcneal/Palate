@@ -11,7 +11,7 @@ import { colors, spacing, type } from "../../theme";
 import { setDisplayName, uploadAvatar, setUsername, getMyProfile } from "../../lib/profile";
 import { UsernameField } from "../../components/UsernameField";
 import { validateUsername, suggestUsername } from "../../lib/username";
-import { markUsernameClaimed } from "../../lib/username-gate";
+import { markUsernameClaimed, usernameGateSession, isUsernameGateSession } from "../../lib/username-gate";
 import { track } from "../../lib/analytics";
 
 export default function ProfileSetup() {
@@ -72,10 +72,13 @@ export default function ProfileSetup() {
       return;
     }
 
+    const gateSession = usernameGateSession();
+    if (!isUsernameGateSession(gateSession)) return;
     setSaving(true);
     setHandleError(null);
     try {
-      const claimed = await setUsername(check.value);
+      const claimed = await setUsername(check.value, gateSession);
+      if (!isUsernameGateSession(gateSession)) return;
       if (!claimed.ok) {
         setHandleError(
           claimed.reason === "taken"
@@ -84,10 +87,11 @@ export default function ProfileSetup() {
         );
         return;
       }
-      markUsernameClaimed();
+      if (!markUsernameClaimed(gateSession)) return;
       if (name.trim()) {
-        await setDisplayName(name);
+        await setDisplayName(name, gateSession);
       }
+      if (!isUsernameGateSession(gateSession)) return;
       void track("profile_setup_completed", {
         had_name: !!name.trim(),
         had_photo: !!avatarUrl,
@@ -95,9 +99,10 @@ export default function ProfileSetup() {
       });
       router.push("/onboarding/taste-preferences");
     } catch (e: any) {
+      if (!isUsernameGateSession(gateSession)) return;
       Alert.alert("Couldn't save", e?.message ?? "Try again");
     } finally {
-      setSaving(false);
+      if (isUsernameGateSession(gateSession)) setSaving(false);
     }
   }
 
