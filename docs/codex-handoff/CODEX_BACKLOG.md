@@ -25,12 +25,17 @@ Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deploym
   `statement_timeout` 2 min, `push_outbox` 45 rows — so it is upstream of Postgres. Retries
   (`_shared/retry.ts`) mitigate it; nothing explains it. Full write-up: `CODEX_HANDOFF.md` §5.4
   K1/K2, open question S8.
-- **That 504 rate is currently unmeasurable, not zero.** 72 of 72 drain runs were clean in the
-  retained `net._http_response` window on 09-29, but `retryRead` absorbs up to three failures
-  silently and `send-push` discards the attempt count it already returns, so a run that
-  succeeded on attempt 2 is indistinguishable from one that never failed. Surfacing `attempts`
-  in the response settles it from one day of `net._http_response`. Cheap; do this before
-  claiming the drain is healthy.
+- **That 504 rate is now measurable — done 09-29 in `529c7c1` on `main`.** It previously was
+  not: `retryRead` absorbs up to three failures silently and every `send-push` call site
+  discarded the `attempts` the helper already returned, so a run that succeeded on attempt 2
+  was indistinguishable from one that never failed, and 72 clean runs proved nothing. Every
+  response after the first read now carries `read_attempts` per read and `retried_reads`.
+  First two live runs: `{"read_attempts":{"flag":1,"due":1},"retried_reads":0}` — zero retries,
+  so on that sample the 504s are genuinely absent rather than hidden. **Two runs is not a
+  rate.** Two gaps remain: only `flag` and `due` are exercised, because runs exit early at
+  `{sent:0,pending:0}` and `recent`/`profiles` never execute; and pg_net prunes
+  `net._http_response` to roughly six hours, so anything beyond that needs these counts
+  sampled into a table that persists. Not done. The 504 cause is still unexplained.
 - Multi-session Postgres concurrency remains unverified. Local PGlite privacy execution now passes57 cases; this single embedded engine does not establish concurrent server behavior.
 - Real iPhone rendering and crashes: Xcode license blocker.
 - Production Sentry delivery and deployed database/functions.
