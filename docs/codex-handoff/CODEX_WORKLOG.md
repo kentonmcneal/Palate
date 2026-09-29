@@ -122,3 +122,10 @@ Deadline 2026-09-30 16:01:54 UTC. Existing follow-up reactivated, no duplicate. 
 - New durable scripts/security-sql/budget-sql.test.cjs executes original0033 and0179 SQL plus current helper against PGlite. Main rerun41/41 passed. Real committed reservations are exercised under lost/malformed replies and SQL/HTTP failures; no network-capable fetch. Source hashes print with results.
 - GOOGLE_BUDGET_SQL_PROOF_20260929.md records counterexamples and limits: mixed caller caps can exceed the smaller cap; old deployments do not dollar-meter; raising a cap retains old trip; lost replies can consume alert flags without delivery. Single embedded backend does not prove multi-session concurrency or deployed auth. No billing access, paid calls or deployment.
 - Rollback: revert this batch commit locally, recognizing it restores lower inaccurate estimates. Original migrations untouched; baseline tag retained.
+
+
+## Search respects blocks — 2026-09-29
+- WORKING TREE: additive migration0184 excludes blocks in both directions inside search_users before the20-row limit. Source audit found the security-definer search lacked the directory's block predicate. Existing exact-email (email not returned), display substring, username prefix and bare-identity visibility remain unchanged; private/friends identities are not made public-content profiles.
+- Independent worker supplied real local PostgreSQL tests; main reviewed and integrated durable scripts/security-sql/search fixture. Main rerun20/20 passed: bidirectional baseline reproductions, incoming-block RLS, unblocked parity, ACLs, query matching/limits, no-subject and wildcard controls.
+- No LIVE calls/deployment; minimal fixture does not prove full migration-chain compatibility, production grants, query performance or concurrent block changes. SEARCH_BLOCKS_REVIEW_20260929.md records limits.
+- Rollback: revert locally only; deployed reversal would reopen the privacy gap and needs a separately reviewed replacement. Baseline tag retained.

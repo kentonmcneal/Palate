@@ -37,3 +37,5 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 - SQL privacy migration0183 and durable fixture:57 local PostgreSQL cases pass; no deployment or full-chain proof.
 
 - Field-mask pricing corrections:18 focused mocks/contracts,41 actual local SQL/helper cases; full141 suites /1,266 tests pass.
+
+- Search block enforcement0184:20 local SQL cases pass. People UI safeguards are separate, still under independent review.

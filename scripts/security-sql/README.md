@@ -17,3 +17,11 @@ node scripts/security-sql/budget-sql.test.cjs /absolute/path/to/node_modules/@el
 ```
 
 Executes original0033/0179 counter migrations and the current helper with mocked transport/clock. No network-capable fetch. Includes characterized limits (different caller caps, legacy callers and lost alerts), not just success cases. See GOOGLE_BUDGET_SQL_PROOF_20260929.md.
+
+## Search block regression
+
+```sh
+node scripts/security-sql/search/search-users.test.cjs /absolute/path/to/node_modules/@electric-sql/pglite
+```
+
+Runs actual0184 against a synthetic identity/block schema.20 cases reproduce old disclosure and check corrected matching/ACL behavior. No live calls.
