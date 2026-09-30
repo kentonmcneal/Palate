@@ -1,18 +1,20 @@
-import { useCallback, useEffect, useState } from "react";
-import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert } from "react-native";
+import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { Text } from "../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import { Button, Spacer } from "../components/Button";
 import { track } from "../lib/analytics";
-import { getInbox, removeFromInbox } from "../lib/passive-confirm";
+import { getInboxReadResult, removeFromInbox } from "../lib/passive-confirm";
 import { confirmDigest, type VisitRating } from "../lib/digest-confirm";
 import { buildDigest, type Digest, type DigestEntry } from "../lib/passive-digest";
 import { saveVisit, recordPromptDecision, rateVisit } from "../lib/visits";
 import { loadVisitPayoff } from "../lib/visit-payoff";
 import { Confetti } from "../components/Confetti";
 import { triggerHapticSuccess } from "../lib/haptics";
+import { accountWriteSession, isAccountWriteSession, type AccountWriteSession } from "../lib/account-write";
+import { onPersonalSignalInvalidate } from "../lib/personal-signal";
 import type { Restaurant } from "../lib/places";
 
 // The nightly digest. Confirmation is far cheaper cognitively than input, so
@@ -34,6 +36,11 @@ function timeOf(ms: number): string {
 }
 
 export default function DigestScreen() {
+  const account = useSyncExternalStore(onPersonalSignalInvalidate, accountWriteSession, accountWriteSession);
+  return <DigestSession key={account.generation} account={account} />;
+}
+
+function DigestSession({ account }: { account: AccountWriteSession }) {
   const router = useRouter();
   const [digest, setDigest] = useState<Digest | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -50,33 +57,86 @@ export default function DigestScreen() {
   const [celebrate, setCelebrate] = useState(false);
   const [done, setDone] = useState(false);
 
-  const load = useCallback(async () => {
-    // Unwindowed: this screen exists to CLEAR the inbox, so it must show
-      // everything the inbox holds. Anything it hides is unanswerable.
-      const d = buildDigest(await getInbox(), new Date(), { windowed: false });
-    setDigest(d);
-    // Everything the digest presents as a likely visit arrives ticked, so the
-    // common case — "yes, all of these" — is one tap. Driven off preChecked
-    // rather than the band, so the rule lives in one place.
-    setChecked(new Set(
-      [...d.high, ...d.medium, ...d.low].filter((e) => e.preChecked).map((e) => e.id),
-    ));
-    void track("digest_opened", {
-      high: d.high.length, medium: d.medium.length, low: d.low.length,
-    });
+  const [status, setStatus] = useState<"loading" | "ready" | "unavailable">("loading");
+  const [notice, setNotice] = useState("");
+  const [savedCount, setSavedCount] = useState(0);
+  const life = useRef<object | null>(null);
+  const focus = useRef<object | null>(null);
+  const request = useRef<object | null>(null);
+  const busy = useRef(false);
+  const verified = useRef(false);
+  const committed = useRef<object | null>(null);
+  const render = {};
+  // Session-local acknowledgements prevent repeat writes after partial success.
+  // They do not establish ownership of legacy ownerless inbox records.
+  const settled = useRef(new Set<string>());
+  const saved = useRef(new Map<string, NonNullable<Awaited<ReturnType<typeof saveVisit>>>>());
+  const rated = useRef(new Set<string>());
+  // These cache completed calls, not proof of durable optional bookkeeping.
+  const decided = useRef(new Map<string, string>());
+  const selections = useRef(new Map<string, boolean>());
+  const summary = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    life.current = {};
+    return () => { life.current = null; focus.current = null; request.current = null; verified.current = false; };
   }, []);
-
-  useEffect(() => { void load(); }, [load]);
+  useLayoutEffect(() => {
+    committed.current = render;
+    return () => { if (committed.current === render) committed.current = null; };
+  });
+  const currentAccount = () => !!life.current && isAccountWriteSession(account);
+  const canAct = () => currentAccount() && !!focus.current && !busy.current && verified.current && committed.current === render;
+  function edit(action: () => void) {
+    if (!canAct()) return;
+    committed.current = null;
+    action();
+  }
+  const load = useCallback(async () => {
+    const owner = life.current, focused = focus.current;
+    if (!owner || !focused || busy.current || request.current || !isAccountWriteSession(account)) return;
+    const ticket = {};
+    request.current = ticket; verified.current = false;
+    summary.current = null; setDone(false); setPayoff(null); setCelebrate(false);
+    setStatus("loading");
+    const current = () => life.current === owner && focus.current === focused && request.current === ticket && isAccountWriteSession(account);
+    try {
+      const result = await getInboxReadResult();
+      if (!current()) return;
+      if (result.status !== "ready") { setStatus("unavailable"); return; }
+      const d = buildDigest(result.entries.filter(e => !settled.current.has(e.id)), new Date(), { windowed: false });
+      setDigest(d);
+      setChecked(new Set([...d.high, ...d.medium, ...d.low].filter(e => saved.current.has(e.id) || (selections.current.get(e.id) ?? e.preChecked)).map(e => e.id)));
+      setStatus("ready"); verified.current = true;
+      try { void track("digest_opened", { high: d.high.length, medium: d.medium.length, low: d.low.length }); } catch { /* Optional telemetry is not read status. */ }
+    } catch { if (current()) setStatus("unavailable"); }
+    finally { if (request.current === ticket) request.current = null; }
+  }, [account]);
+  useFocusEffect(useCallback(() => {
+    const token = {}; focus.current = token;
+    void load();
+    return () => { if (focus.current === token) focus.current = null; request.current = null; verified.current = false; };
+  }, [load]));
+  function back() {
+    if (!life.current || accountWriteSession() !== account || !focus.current || busy.current) return;
+    focus.current = null; verified.current = false; request.current = null;
+    router.back();
+  }
 
   function rate(id: string, r: VisitRating) {
     // Saying how it was is also saying you went. Rating a row ticks it, and
     // tapping the same answer again clears the rating without unticking:
     // undoing an opinion is not the same as undoing the visit.
+    if (!canAct() || saved.current.has(id)) return;
+    committed.current = null;
+    selections.current.set(id, true);
     setRatings((prev) => ({ ...prev, [id]: prev[id] === r ? undefined : r }));
     setChecked((prev) => new Set(prev).add(id));
   }
 
   function toggle(id: string) {
+    if (!canAct() || saved.current.has(id)) return;
+    committed.current = null;
+    selections.current.set(id, !checked.has(id));
     setChecked((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
@@ -85,6 +145,9 @@ export default function DigestScreen() {
   }
 
   function choose(entry: DigestEntry, place: Restaurant) {
+    if (!canAct() || saved.current.has(entry.id)) return;
+    committed.current = null;
+    selections.current.set(entry.id, true);
     setResolvedChoice((prev) => ({ ...prev, [entry.id]: place }));
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -95,62 +158,99 @@ export default function DigestScreen() {
   }
 
   async function confirmAll() {
-    if (!digest) return;
-    setSaving(true);
+    if (!digest || !canAct()) return;
+    busy.current = true; verified.current = false; committed.current = null;
+    setSaving(true); setNotice("");
+    const owner = life.current, focused = focus.current;
+    const current = () => life.current === owner && focus.current === focused && isAccountWriteSession(account);
+    const guard = () => { if (!current()) throw new Error("Review changed"); };
     const all = [...digest.high, ...digest.medium, ...digest.low];
-    const confirmed = all.filter((e) => checked.has(e.id));
-    const skipped = all.filter((e) => !checked.has(e.id));
-
     try {
-      // The ordering that keeps a failed save from silently deleting the entry
-      // lives in lib/digest-confirm.ts, where it can be tested.
-      // No `as never`. Those casts are why two separate bugs shipped: the stop
-      // coordinates and the detection facts were both present on DigestEntry
-      // and both silently dropped at this boundary, because a cast to `never`
-      // tells the compiler not to check the one place where it mattered.
-      const { savedIds, failed } = await confirmDigest(
-        confirmed,
-        skipped,
-        resolvedChoice,
-        { saveVisit, removeFromInbox, recordPromptDecision, track, rateVisit },
-        ratings,
-      );
-
-      track("digest_confirmed", {
-        confirmed: confirmed.length,
-        skipped: skipped.length,
-        failed: failed.length,
-      });
-
-      if (failed.length) {
-        // Still in the inbox, still actionable. Saying so beats a silent
-        // partial success the user only discovers via a missing visit.
-        Alert.alert(
-          failed.length === 1 ? "One visit didn't save" : `${failed.length} visits didn't save`,
-          `${failed.map((f) => f.name).join(", ")} still needs saving. Try again in a moment.`,
-        );
+      // One entry per helper call lets us guard every next entry and retain a
+      // successful visit if inbox removal fails. Shared helper policy is unchanged.
+      // Retain the helper's confirmed-before-skipped ordering.
+      const isConfirmed = (entry: DigestEntry) => checked.has(entry.id) || saved.current.has(entry.id);
+      for (const entry of [...all.filter(isConfirmed), ...all.filter(e => !isConfirmed(e))]) {
+        guard();
+        if (settled.current.has(entry.id)) continue;
+        const confirmed = checked.has(entry.id) || saved.current.has(entry.id);
+        let removed = false;
+        const result = await confirmDigest(confirmed ? [entry] : [], confirmed ? [] : [entry], resolvedChoice, {
+          saveVisit: async args => {
+            guard();
+            const existing = saved.current.get(entry.id);
+            if (existing) return existing;
+            const visit = await saveVisit(args);
+            // Remember a completed write even if focus changed during its await.
+            if (visit?.id) saved.current.set(entry.id, visit);
+            guard();
+            if (!visit?.id) throw new Error("Visit save was not confirmed");
+            return visit;
+          },
+          removeFromInbox: async id => { guard(); await removeFromInbox(id); removed = true; guard(); },
+          recordPromptDecision: async (...args) => {
+            guard();
+            const signature = JSON.stringify(args);
+            if (decided.current.get(entry.id) === signature) return;
+            await recordPromptDecision(...args);
+            decided.current.set(entry.id, signature);
+            guard();
+          },
+          rateVisit: async (...args) => {
+            guard(); if (rated.current.has(entry.id)) return;
+            await rateVisit(...args); rated.current.add(entry.id); guard();
+          },
+          track: (name, props) => { if (current()) void track(name, props); },
+        }, ratings);
+        if (removed && result.failed.length === 0) settled.current.add(entry.id);
+        guard();
       }
-
-      if (savedIds[0]) setPayoff(await loadVisitPayoff(savedIds[0]));
-      // The digest is where most confirmations happen — it is the screen the
-      // notification opens — and it was the one path with no celebration at
-      // all. The single-visit screens have had confetti since they shipped.
-      if (savedIds.length > 0 && failed.length === 0) {
-        setCelebrate(true);
-        void triggerHapticSuccess();
+      guard();
+      const pending = all.filter(e => !settled.current.has(e.id));
+      try { void track("digest_confirmed", { confirmed: all.filter(isConfirmed).length, skipped: all.filter(e => !isConfirmed(e)).length, failed: pending.length }); } catch { /* Keep acknowledged outcomes. */ }
+      setSavedCount(new Set([...saved.current.values()].map(visit => visit.id)).size);
+      setDigest({ ...digest, high: digest.high.filter(e => !settled.current.has(e.id)), medium: digest.medium.filter(e => !settled.current.has(e.id)), low: digest.low.filter(e => !settled.current.has(e.id)), total: pending.length });
+      setChecked(new Set(pending.filter(e => checked.has(e.id) || saved.current.has(e.id)).map(e => e.id)));
+      if (pending.length) {
+        setNotice("Some stops still need attention. Saved visits stay in your diary; retry finishes only the remaining stops.");
+      } else {
+        setDone(true);
+        if (saved.current.size > 0) { setCelebrate(true); void triggerHapticSuccess().catch(() => {}); }
+        const first = saved.current.values().next().value;
+        if (first?.id) {
+          const ticket = {}; summary.current = ticket;
+          // Optional payoff must not keep confirmation/navigation locked.
+          void loadVisitPayoff(first.id).then(text => {
+            if (current() && summary.current === ticket) setPayoff(text);
+          }).catch(() => {});
+        }
       }
-      setDone(failed.length === 0);
+    } catch {
+      if (current()) {
+        const pending = all.filter(e => !settled.current.has(e.id));
+        setSavedCount(new Set([...saved.current.values()].map(visit => visit.id)).size);
+        setDigest({ ...digest, high: digest.high.filter(e => !settled.current.has(e.id)), medium: digest.medium.filter(e => !settled.current.has(e.id)), low: digest.low.filter(e => !settled.current.has(e.id)), total: pending.length });
+        setChecked(new Set(pending.filter(e => checked.has(e.id) || saved.current.has(e.id)).map(e => e.id)));
+        setNotice("We couldn’t finish this review. Retry to continue; visits already saved will not be saved again in this review.");
+      }
     } finally {
-      setSaving(false);
+      busy.current = false;
+      if (life.current === owner && isAccountWriteSession(account)) {
+        setSaving(false);
+        if (focus.current === focused && focused) verified.current = true;
+        else if (focus.current) void load();
+      }
     }
   }
 
   if (!digest) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.center}><ActivityIndicator color={colors.red} /></View>
-      </SafeAreaView>
-    );
+    return <SafeAreaView style={styles.safe}><View style={styles.center}>
+      {account.accountId === null ? <Text style={styles.sub}>Return when your account is ready to review visits.</Text> : status === "unavailable" ? <>
+        <Text style={styles.h1}>Couldn’t load your stops</Text>
+        <Text style={styles.sub}>We couldn’t check which visits need confirmation.</Text>
+        <Button title="Retry loading stops" onPress={() => { void load(); }} />
+      </> : <ActivityIndicator color={colors.red} />}
+    </View><View style={styles.footer}><Button title="Close" onPress={back} /></View></SafeAreaView>;
   }
 
   if (done) {
@@ -159,13 +259,15 @@ export default function DigestScreen() {
         <Confetti fire={celebrate} count={80} />
         <View style={styles.center}>
           <Text style={styles.emoji}>🍽️</Text>
-          <Text style={styles.h1}>Logged</Text>
+          <Text style={styles.h1}>{savedCount ? `${savedCount} ${savedCount === 1 ? "visit" : "visits"} saved to your diary` : "Stops reviewed"}</Text>
+          {!savedCount && <Text style={styles.sub}>No visits were added to your diary.</Text>}
           {/* The give-back. A digest that only ever asks for a chore will not
               sustain, so it returns something the day earned. */}
           {!!payoff && <Text style={styles.payoff}>{payoff}</Text>}
         </View>
         <View style={styles.footer}>
-          <Button title="Done" onPress={() => router.back()} />
+          {(digest.heldBack ?? 0) > 0 && <Button title="Review more stops" onPress={() => edit(() => { setDone(false); setCelebrate(false); setPayoff(null); void load(); })} />}
+          <Button title="Done" onPress={back} />
         </View>
       </SafeAreaView>
     );
@@ -180,20 +282,25 @@ export default function DigestScreen() {
         <Text style={styles.sub}>Select the places where you got food or a drink. Leave the others unchecked.</Text>
         <Text style={styles.why}>{WHY_IT_MATTERS}</Text>
 
-        {nothing && (
+        {status !== "ready" && <View style={styles.card}>
+          <Text style={styles.sub}>{status === "loading" ? "Checking your stops…" : "Couldn’t refresh your stops. Previously loaded stops are shown; retry before confirming."}</Text>
+          {status === "unavailable" && <Button title="Retry loading stops" onPress={() => { void load(); }} />}
+        </View>}
+        {!!notice && <Text accessibilityRole="alert" style={styles.sub}>{notice}</Text>}
+        {nothing && status === "ready" && (
           <View style={styles.card}>
-            <Text style={type.small}>Nothing captured today.</Text>
+            <Text style={type.small}>No stops waiting for confirmation.</Text>
           </View>
         )}
 
         {digest.high.length > 0 && (
           <Section>
             {digest.high.map((e) => (
-              <Row key={e.id} entry={e} checked={checked.has(e.id)} chosen={resolvedChoice[e.id]}
+              <Row disabled={saving || status !== "ready" || saved.current.has(e.id)} key={e.id} entry={e} checked={checked.has(e.id)} chosen={resolvedChoice[e.id]}
                    rating={ratings[e.id]} onRate={(r) => rate(e.id, r)}
                    onToggle={() => toggle(e.id)}
                    expanded={expanded.has(e.id)}
-                   onExpand={() => setExpanded((p) => new Set(p).add(e.id))}
+                   onExpand={() => { if (!saved.current.has(e.id)) edit(() => setExpanded((p) => new Set(p).add(e.id))); }}
                    onChoose={(pl) => choose(e, pl)} />
             ))}
           </Section>
@@ -202,11 +309,11 @@ export default function DigestScreen() {
         {digest.medium.length > 0 && (
           <Section title="Also nearby today?">
             {digest.medium.map((e) => (
-              <Row key={e.id} entry={e} checked={checked.has(e.id)} chosen={resolvedChoice[e.id]}
+              <Row disabled={saving || status !== "ready" || saved.current.has(e.id)} key={e.id} entry={e} checked={checked.has(e.id)} chosen={resolvedChoice[e.id]}
                    rating={ratings[e.id]} onRate={(r) => rate(e.id, r)}
                    onToggle={() => toggle(e.id)}
                    expanded={expanded.has(e.id)}
-                   onExpand={() => setExpanded((p) => new Set(p).add(e.id))}
+                   onExpand={() => { if (!saved.current.has(e.id)) edit(() => setExpanded((p) => new Set(p).add(e.id))); }}
                    onChoose={(pl) => choose(e, pl)} />
             ))}
           </Section>
@@ -214,17 +321,17 @@ export default function DigestScreen() {
 
         {digest.low.length > 0 && (
           <View style={{ marginTop: spacing.lg }}>
-            <Pressable onPress={() => setShowLow((v) => !v)} hitSlop={8}>
+            <Pressable disabled={saving || status !== "ready"} onPress={() => edit(() => setShowLow((v) => !v))} hitSlop={8}>
               <Text style={styles.link}>{showLow ? "Hide" : `Anything else? (${digest.low.length})`}</Text>
             </Pressable>
             {showLow && (
               <Section>
                 {digest.low.map((e) => (
-                  <Row key={e.id} entry={e} checked={checked.has(e.id)} chosen={resolvedChoice[e.id]}
+                  <Row disabled={saving || status !== "ready" || saved.current.has(e.id)} key={e.id} entry={e} checked={checked.has(e.id)} chosen={resolvedChoice[e.id]}
                        rating={ratings[e.id]} onRate={(r) => rate(e.id, r)}
                        onToggle={() => toggle(e.id)}
                        expanded={expanded.has(e.id)}
-                       onExpand={() => setExpanded((p) => new Set(p).add(e.id))}
+                       onExpand={() => { if (!saved.current.has(e.id)) edit(() => setExpanded((p) => new Set(p).add(e.id))); }}
                        onChoose={(pl) => choose(e, pl)} />
                 ))}
               </Section>
@@ -239,7 +346,8 @@ export default function DigestScreen() {
         {!nothing && <Text style={styles.footerWhy}>{WHY_IT_MATTERS}</Text>}
         <Button
           title={nothing ? "Close" : `Confirm ${checked.size}`}
-          onPress={nothing ? () => router.back() : confirmAll}
+          onPress={nothing ? back : confirmAll}
+          disabled={saving || status !== "ready"}
           loading={saving}
         />
       </View>
@@ -263,8 +371,9 @@ const RATINGS: { key: VisitRating; label: string }[] = [
 ];
 
 function Row({
-  entry, checked, chosen, rating, onRate, onToggle, expanded, onExpand, onChoose,
+  entry, checked, chosen, rating, onRate, onToggle, expanded, onExpand, onChoose, disabled,
 }: {
+  disabled: boolean;
   entry: DigestEntry;
   checked: boolean;
   chosen?: Restaurant;
@@ -278,7 +387,7 @@ function Row({
   const name = chosen?.name ?? entry.name;
   return (
     <View style={styles.row}>
-      <Pressable onPress={onToggle} style={styles.rowMain} hitSlop={6}>
+      <Pressable disabled={disabled} onPress={onToggle} style={styles.rowMain} hitSlop={6}>
         <View style={[styles.box, checked && styles.boxOn]}>
           {checked && <Text style={styles.tick}>✓</Text>}
         </View>
@@ -300,6 +409,7 @@ function Row({
             const on = rating === r.key;
             return (
               <Pressable
+                disabled={disabled}
                 key={r.key}
                 onPress={() => onRate(r.key)}
                 style={[styles.rateChip, on && styles.rateChipOn]}
@@ -318,7 +428,7 @@ function Row({
       {/* Several plausible venues: "which one?" is the honest question, not a
           yes/no about our best guess. */}
       {entry.ambiguous && !chosen && !expanded && entry.alternates.length > 0 && (
-        <Pressable onPress={onExpand} hitSlop={6}>
+        <Pressable disabled={disabled} onPress={onExpand} hitSlop={6}>
           <Text style={styles.which}>Which one?</Text>
         </Pressable>
       )}
@@ -326,7 +436,7 @@ function Row({
         <View style={styles.picker}>
           {[{ google_place_id: entry.place_id, name: entry.name } as Restaurant, ...entry.alternates]
             .map((p) => (
-              <Pressable key={p.google_place_id} onPress={() => onChoose(p)} style={styles.pick}>
+              <Pressable disabled={disabled} key={p.google_place_id} onPress={() => onChoose(p)} style={styles.pick}>
                 <Text style={styles.pickText}>{p.name}</Text>
               </Pressable>
             ))}

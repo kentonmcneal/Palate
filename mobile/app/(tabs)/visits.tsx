@@ -78,7 +78,7 @@ export default function VisitsScreen() {
         <Text style={type.title}>Visits</Text>
         <Text style={[type.body, { color: colors.mute, marginTop: 4 }]}>
           {visits.length === 0
-            ? "Everywhere you've eaten will collect here."
+            ? "Your confirmed and manually added visits appear here."
             : `${visits.length} ${visits.length === 1 ? "meal" : "meals"}, oldest to newest.`}
         </Text>
       </View>
@@ -124,8 +124,8 @@ export default function VisitsScreen() {
         <View style={styles.center}>
           <Text style={type.subtitle}>Nothing here yet.</Text>
           <Text style={styles.emptyBody}>
-            Turn on tracking and your visits collect themselves. You can always
-            add one by hand.
+            Palate can suggest stops for food or coffee. Confirm the ones you visited,
+            or add a visit yourself.
           </Text>
           <Pressable
             onPress={() => router.push("/(tabs)/add" as never)}

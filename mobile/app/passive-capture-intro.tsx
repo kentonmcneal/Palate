@@ -1,30 +1,19 @@
-import { useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { View, StyleSheet, Alert, Linking, ScrollView, Pressable } from "react-native";
 import { Text } from "../components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { colors, spacing, type } from "../theme";
 import { Button, Spacer } from "../components/Button";
 import { track } from "../lib/analytics";
 import { requestWhenInUse, requestAlways, hasWhenInUse, hasAlways } from "../lib/passive-permissions";
-import { setPassiveOptIn, startPassiveCaptureIfEnabled } from "../lib/passive-capture";
+import { setPassiveOptIn, startPassiveCaptureIfEnabled, type StartResult } from "../lib/passive-capture";
 import { ensureNotificationPermission } from "../lib/notifications";
 
-// Custom pre-permission screen for passive dining capture.
-//
-// The funnel deliberately shows ONE in-app screen and then no cold system modal
-// for background location. Sequence:
-//   value screen -> When-In-Use prompt -> notifications -> Always (silent)
-// Asking for Always while the app already holds When-In-Use gets a PROVISIONAL
-// grant: iOS shows nothing, we register CLVisit right away, and iOS prompts the
-// user itself later — once it can show real usage context. That is a far better
-// ask than a modal fired at someone who has not seen the feature work yet.
-//
-// Because that system prompt arrives later and unannounced, the success screen
-// pre-teaches the answer ("choose Always Allow"). Priming it is the single
-// highest-leverage thing we can do for conversion, since we never get to place
-// that dialog ourselves.
-type Step = "value" | "needs-settings" | "done";
+import { accountWriteSession } from "../lib/account-write";
+
+type Step = "value" | "needs-settings" | "result";
+type IntroStartResult = StartResult | { started: false; reason: "unknown" };
 
 export default function PassiveCaptureIntro() {
   const router = useRouter();
@@ -32,163 +21,159 @@ export default function PassiveCaptureIntro() {
   const [step, setStep] = useState<Step>("value");
   const [busy, setBusy] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
-
-  useEffect(() => {
+  const [result, setResult] = useState<IntroStartResult | null>(null);
+  const [saved, setSaved] = useState(false);
+  const active = useRef(false);
+  const operation = useRef<object | null>(null);
+  useFocusEffect(useCallback(() => {
+    active.current = true;
+    setBusy(false);
     void track("perm_prescreen_shown");
-  }, []);
+    return () => { active.current = false; operation.current = null; };
+  }, []));
 
   function finish() {
+    if (!active.current || operation.current) return;
+    active.current = false;
+    operation.current = null;
     if (next) router.replace(next as never);
     else router.back();
   }
 
-  // Opt in, then start monitoring. A flag-off or missing-native-module result
-  // still keeps the opt-in: the foreground resume path picks it up once the
-  // kill switch flips or the user updates the app.
-  async function completeOptIn() {
-    await setPassiveOptIn(true);
-    const r = await startPassiveCaptureIfEnabled();
-    void track("passive_opt_in_completed", {
-      started: r.started,
-      reason: r.started ? null : r.reason,
-    });
-    if (!r.started && r.reason === "native-module-unavailable") {
-      Alert.alert(
-        "Update Palate to finish",
-        "Background logging needs the latest version of the app. We've saved your choice. It turns on once you update.",
-      );
-    }
-    setStep("done");
-  }
-
-  async function onEnable() {
+  // One operation per focused screen. Every continuation checks ownership;
+  // returning from phone Settings never writes consent or starts automatically.
+  async function run(enable: boolean) {
+    if (!active.current || operation.current) return;
+    const ticket = {};
+    operation.current = ticket;
+    const account = accountWriteSession();
+    const ownsOperation = () => active.current && operation.current === ticket;
+    const current = () => ownsOperation() && accountWriteSession() === account;
     setBusy(true);
     try {
-      void track("perm_prescreen_accepted");
-      const granted = (await hasWhenInUse()) || (await requestWhenInUse());
-      if (!granted) {
-        Alert.alert(
-          "No problem",
-          "You can still log meals yourself. Turn this on anytime in Settings.",
-        );
-        finish();
-        return;
+      if (enable) {
+        setSaved(false);
+        const alreadyGranted = await hasWhenInUse();
+        if (!current()) return;
+        const granted = alreadyGranted || await requestWhenInUse();
+        if (!current()) return;
+        if (!granted) {
+          Alert.alert("Location is optional", "You can still add visits yourself and choose background suggestions later in Settings.");
+          operation.current = null;
+          setBusy(false);
+          finish();
+          return;
+        }
+        await ensureNotificationPermission();
+        if (!current()) return;
+        const always = await hasAlways();
+        if (!current()) return;
+        if (!always) {
+          const outcome = await requestAlways();
+          if (!current()) return;
+          if (outcome !== "granted") { setStep("needs-settings"); return; }
+        }
+        await setPassiveOptIn(true);
+        if (!current()) return;
+        setSaved(true);
       }
-      // Ask for notifications now too — the confirmation prompt IS the payoff,
-      // and a visit detected later can't ask for anything without this.
-      await ensureNotificationPermission();
-
-      // Already holding Always (re-running the funnel) — nothing left to ask.
-      if (await hasAlways()) {
-        await completeOptIn();
-        return;
-      }
-
-      // The silent step. On the happy path the user sees no dialog at all.
-      const outcome = await requestAlways();
-      if (outcome === "granted") await completeOptIn();
-      else setStep("needs-settings");
+      // Retry startup only: never rewrite consent after a newer opt-out.
+      const nextResult = await startPassiveCaptureIfEnabled();
+      if (!current()) return;
+      setResult(nextResult);
+      if (!nextResult.started && nextResult.reason === "not-opted-in") setSaved(false);
+      setStep("result");
+      void track("passive_opt_in_completed", {
+        started: nextResult.started,
+        reason: nextResult.started ? null : nextResult.reason,
+      });
     } catch {
-      // Never let a rejected permission call escape as an unhandled rejection
-      // (New-Arch fatal pattern). Degrade to manual silently.
-      finish();
+      if (current()) { setResult({ started: false, reason: "unknown" }); setStep("result"); }
     } finally {
-      setBusy(false);
+      if (ownsOperation()) {
+        operation.current = null; setBusy(false);
+        if (accountWriteSession() !== account) {
+          setSaved(false);
+          setResult({ started: false, reason: "unknown" });
+          setStep("result");
+        }
+      }
     }
   }
 
-  function onNotNow() {
-    void track("perm_prescreen_dismissed", { step });
-    finish(); // never a dead end
+  async function openSettings() {
+    if (!active.current || operation.current) return;
+    const ticket = {};
+    operation.current = ticket;
+    setBusy(true);
+    try { await Linking.openSettings(); }
+    catch {
+      if (active.current && operation.current === ticket) Alert.alert("Could not open Settings", "Open your phone's Settings, then choose Palate → Location.");
+    } finally {
+      if (active.current && operation.current === ticket) { operation.current = null; setBusy(false); }
+    }
   }
 
-  if (step === "needs-settings") {
-    return (
-      <Screen footer={<>
-        <Button title="Open iOS Settings" onPress={() => Linking.openSettings()} />
-        <Spacer />
-        <Button title="Not now" variant="ghost" onPress={onNotNow} />
-        </>}>
-        <Text style={styles.emoji}>⚙️</Text>
-        <Text style={styles.h1}>Background logging is still off</Text>
-        <Text style={styles.p}>
-          iOS is holding location to "While Using the App." You can switch it to Always in
-          Settings → Palate → Location, or skip it and keep logging meals yourself.
-        </Text>
-      </Screen>
-    );
-  }
-
-  if (step === "done") {
-    return (
-      <Screen footer={<>
-        <Button title="Done" onPress={finish} />
-        </>}>
-        <Text style={styles.emoji}>✅</Text>
-        <Text style={styles.h1}>You're set. Go eat.</Text>
-        <Text style={styles.p}>
-          Next time you spend a while at a restaurant, we'll ask if you ate there. One tap and
-          it's logged. Nothing is saved until you confirm it.
-        </Text>
-        <Spacer />
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>One heads-up</Text>
-          <Text style={styles.cardBody}>
-            In a few days iOS will ask whether Palate can keep using your location in the
-            background, and will show you a map of where it checked. Choose "Change to
-            Always Allow". If you pick "Keep Only While Using", passive logging stops and
-            you are back to typing meals in.
-          </Text>
-        </View>
-      </Screen>
-    );
-  }
-
-  return (
+  if (step === "needs-settings") return (
     <Screen footer={<>
-      <Button title="Enable passive logging" onPress={onEnable} loading={busy} />
-      <Spacer />
-      <Button title="Not now" variant="ghost" onPress={onNotNow} />
-      </>}>
-      <Text style={styles.emoji}>📍🍽️</Text>
-      <Text style={styles.h1}>Log where you ate without opening the app</Text>
-      {/* 260 words became 58.
-          The cut paragraph argued for the product to somebody who has already
-          downloaded it. What survives is the mechanism in one sentence and the
-          three facts that change what they do on the very next screen.
-          The privacy reasoning is not deleted, it is one tap away: taxing
-          everybody to reassure the few who want the detail is how a permission
-          screen reaches 260 words and converts three people in nine. */}
-      <Text style={styles.p}>
-        Palate notices when you have spent a while at a restaurant, then asks
-        you once in the evening. One tap and the day is logged.
-      </Text>
-      <Spacer />
-      <Text style={styles.bullet}>
-        • Choose <Text style={styles.bulletStrong}>Always</Text>. Your phone is in your pocket
-        while you eat, so "While Using the App" sees almost nothing.
-      </Text>
-      <Text style={styles.bullet}>• Nothing is saved until you confirm it.</Text>
-      <Text style={styles.bullet}>• Home and work are filtered out on your phone.</Text>
-      <Spacer />
-      <Pressable onPress={() => setShowDetail((v) => !v)} hitSlop={8}>
-        <Text style={styles.moreLink}>
-          {showDetail ? "Hide the detail" : "What Palate can and cannot see"}
-        </Text>
-      </Pressable>
-      {showDetail && (
-        <View style={styles.detail}>
-          <Text style={styles.bullet}>• We only look at where you stopped, not everywhere you go.</Text>
-          <Text style={styles.bullet}>• Your location never leaves your phone until you confirm a visit.</Text>
-          <Text style={styles.bullet}>• Turn it off anytime in Settings.</Text>
-          <Text style={styles.bullet}>
-            • Say no and Palate still works. You will just be typing every meal
-            in yourself.
-          </Text>
-        </View>
-      )}
+      <Button title="Open iOS Settings" onPress={openSettings} loading={busy} />
+      <Spacer /><Button title="Check permission and enable" onPress={() => run(true)} disabled={busy} />
+      <Spacer /><Button title="Continue without enabling" variant="ghost" onPress={finish} disabled={busy} />
+    </>}>
+      <Text style={styles.h1}>Background permission is needed</Text>
+      <Text style={styles.p}>Choose Always in Settings → Palate → Location if you want background suggestions. Then return here and check permission. You can also keep adding visits yourself.</Text>
     </Screen>
   );
+
+  if (step === "result" && result) {
+    const reason = result.started ? null : result.reason;
+    const title = result.started ? "Background checks started"
+      : reason === "not-opted-in" ? "Background checks did not start"
+      : reason === "unknown" ? "We couldn't confirm setup"
+      : "Your preference is saved";
+    const detail = result.started
+      ? "Palate can suggest places you may have stopped for food or coffee. Confirm a suggestion to add the visit to your diary. Dish details are optional. Some stops may be missed."
+      : reason === "native-module-unavailable"
+      ? "Background checks did not start. This app build does not support them. Check for an app update; you can still add visits yourself."
+      : reason === "flag-off"
+      ? "Background checks did not start because this feature is temporarily unavailable. Your saved preference allows checks to resume when it becomes available. You can turn it off in Settings."
+      : reason === "no-always-permission"
+      ? "Background checks did not start. Allow Always location access in your phone's Settings, then return and retry."
+      : reason === "not-opted-in"
+      ? "The start was cancelled or consent is off. Review your choice in Palate Settings. Retrying here will not turn consent back on."
+      : saved
+      ? "Your preference was saved, but we couldn't confirm whether background checks started. Retry the check or review your choice in Settings."
+      : "We couldn't confirm your preference or start status. Review your choice in Settings; you can still add visits yourself.";
+    return <Screen footer={<>
+      {!result.started && reason === "no-always-permission" && <><Button title="Open iOS Settings" onPress={openSettings} disabled={busy} /><Spacer /></>}
+      {!result.started && <><Button title="Retry background check" onPress={() => run(false)} loading={busy} /><Spacer /></>}
+      <Button title="Continue" onPress={finish} disabled={busy} />
+    </>}>
+      <Text style={styles.h1}>{title}</Text><Text style={styles.p}>{detail}</Text>
+      {result.started && <Text style={styles.p}>iOS may later ask you to confirm background access. Choose Always if you want to keep background suggestions. Reminders also depend on notification permission and your phone's delivery settings.</Text>}
+    </Screen>;
+  }
+
+  return <Screen footer={<>
+    <Button title="Enable background suggestions" onPress={() => run(true)} loading={busy} />
+    <Spacer /><Button title="Not now" variant="ghost" onPress={finish} disabled={busy} />
+  </>}>
+    <Text style={styles.emoji}>📍🍽️</Text>
+    <Text style={styles.h1}>Remember a stop for food or coffee</Text>
+    <Text style={styles.p}>Palate can suggest places you visited while the app is closed. An evening reminder can help you review them. You confirm a suggestion before it becomes a diary visit.</Text>
+    <Spacer />
+    <Text style={styles.bullet}>• Background suggestions need Always location access.</Text>
+    <Text style={styles.bullet}>• Some stops may be missed or matched to the wrong place.</Text>
+    <Text style={styles.bullet}>• Add a visit yourself anytime.</Text>
+    <Spacer />
+    <Pressable onPress={() => setShowDetail(v => !v)} hitSlop={8} accessibilityRole="button" accessibilityState={{ expanded: showDetail }}>
+      <Text style={styles.moreLink}>{showDetail ? "Hide the detail" : "How location is used"}</Text>
+    </Pressable>
+    {showDetail && <View style={styles.detail}>
+      <Text style={styles.bullet}>Palate may send a stop's location to its servers and a places provider to identify nearby places. Suggested places and detection details may sync to your account before you confirm a visit.</Text>
+      <Text style={styles.bullet}>Location helps suggest a place; it does not tell Palate what you ordered. Home and work filters run on your phone, but can make mistakes. Turn background suggestions off anytime in Palate Settings.</Text>
+    </View>}
+  </Screen>;
 }
 
 /**

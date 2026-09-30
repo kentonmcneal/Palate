@@ -255,9 +255,9 @@ export default function Settings() {
         <Section title="Passive tracking">
           <Row label="Check when I open the app" right={<Switch value={tracking} onValueChange={toggleTracking} thumbColor={tracking ? colors.red : "#fff"} trackColor={{ true: colors.redTintBorder, false: colors.line }} />} />
           <Note>
-            Looks for a nearby restaurant each time you open Palate. This is the
-            manual fallback. Background logging below is the one that means you
-            never have to think about it.
+            Looks for nearby places while you use Palate. Background suggestions
+            below are a separate choice. Confirm a suggestion before it becomes
+            a diary visit, or add a visit yourself.
           </Note>
           <PassiveCaptureToggle />
         </Section>

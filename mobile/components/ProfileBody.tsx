@@ -403,7 +403,7 @@ function TargetProfileBody({ targetId }: { targetId: string }) {
                 </Text>
                 <Text style={[type.small, { marginTop: 6, lineHeight: 20 }]}>
                   {mine
-                    ? "Turn on tracking and your visits collect themselves. Your palate, top spots and Wrapped all build from them."
+                    ? "Confirm suggested stops or add visits yourself. Your palate, top spots and Wrapped build from your visit history."
                     : "Their palate and top spots will show up here once they start eating out."}
                 </Text>
               </View>

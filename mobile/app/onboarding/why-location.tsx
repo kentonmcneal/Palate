@@ -20,9 +20,9 @@ export default function WhyLocation() {
       >
         <Text style={styles.h1}>Why location?</Text>
         <Spacer />
-        <Bullet emoji="📍" text="Palate uses your location only to detect nearby restaurants when the app is open." />
-        <Bullet emoji="🙋" text="We always ask before we save a visit. You can say no, or pick the right place." />
-        <Bullet emoji="🔕" text="Pause tracking anytime in Settings. Your past visits stay, and nothing new is recorded." />
+        <Bullet emoji="📍" text="Use location to find nearby places while Palate is open. Background visit suggestions are a separate, optional choice." />
+        <Bullet emoji="🙋" text="You confirm a suggestion before it becomes a diary visit. You can dismiss it or choose a different place." />
+        <Bullet emoji="🔕" text="Manage foreground checks and background suggestions separately in Settings. You can also add visits yourself." />
         <Bullet emoji="🗑️" text="Delete a single visit, your whole history, or your entire account whenever you want." />
       </ScrollView>
       <View style={styles.cta}>
