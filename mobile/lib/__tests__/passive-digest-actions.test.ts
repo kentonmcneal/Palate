@@ -40,7 +40,7 @@ it("multiple stops open the digest without direct confirmation of the first", as
  const content=await scheduled([entry("high",1,"a"),entry("high",1,"b")]);
  expect(content.categoryIdentifier).toBeUndefined();
  expect(content.data.place_id).toBeUndefined();
- expect(content.title).toBe("Food or drinks at 2 places today?");
+ expect(content.title).toBe("Food or drinks at 2 places?");
 });
 it("low-only coffee keeps a review prompt without direct confirmation",async()=>{
  const content=await scheduled([entry("low",1)]);
@@ -53,7 +53,7 @@ it("legacy high-band ambiguous stops stay visible but are never preselected",()=
  expect(digest.high).toHaveLength(1);
  expect(digest.high[0].preChecked).toBe(false);
  expect(digest.high[0].ambiguous).toBe(true);
- expect(digestNotificationTitle(digest)).toBe("Were you out today?");
+ expect(digestNotificationTitle(digest)).toBe("Any food or drink stops to confirm?");
 });
 it("mixed high-band title counts only stops actually preselected",()=>{
  const digest=buildDigest([entry("high",2,"ambiguous"),{...entry("high",1,"clear"),name:"Clear cafe"}],now);
@@ -87,7 +87,7 @@ it.each(legacyAmbiguityCases)("legacy $label stays visible, unchecked and unname
   expect(digest.total).toBe(1);
   expect(digest.high).toHaveLength(1);
   expect(digest.high[0]).toMatchObject({ id: "coffee", ambiguous: true, preChecked: false });
-  expect(digestNotificationTitle(digest)).toBe("Were you out today?");
+  expect(digestNotificationTitle(digest)).toBe("Any food or drink stops to confirm?");
 });
 
 it.each(legacyAmbiguityCases)("legacy $label cannot receive direct scheduler confirmation actions", async ({ metadata }) => {
@@ -95,7 +95,19 @@ it.each(legacyAmbiguityCases)("legacy $label cannot receive direct scheduler con
   expect(content.categoryIdentifier).toBeUndefined();
   expect(content.data.place_id).toBeUndefined();
   expect(content.data.inbox_id).toBeUndefined();
-  expect(content.title).toBe("Were you out today?");
+  expect(content.title).toBe("Any food or drink stops to confirm?");
   expect(content.body).toMatch(/several places.*tap to choose/i);
   expect(content.body).not.toMatch(/answer here/i);
+});
+
+// Local notification text is frozen when scheduled; late stops must carry
+// their capture date even though delivery occurs on a different calendar day.
+it.each([new Date(2026,8,28,23),new Date(2026,9,2,23)])("delayed singleton reminder keeps the stop date (%s)",async(captured)=>{
+ const e={...entry("medium",1),detectedAt:captured.getTime()};
+ await scheduleDigest([e],async()=>null,async()=>{},captured);
+ const request=(Notifications.scheduleNotificationAsync as jest.Mock).mock.calls[0][0];
+ expect(request.trigger.date.getDate()).not.toBe(captured.getDate());
+ expect(request.content.body).toContain(captured.toLocaleDateString([], {month:"short",day:"numeric"}));
+ expect(request.content.body).not.toMatch(/today/i);expect(request.content.title).not.toMatch(/today/i);
+ expect(request.content.categoryIdentifier).toBe(CONFIRM_CATEGORY);
 });

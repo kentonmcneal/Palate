@@ -136,7 +136,7 @@ describe("isDigestWorthSending", () => {
     const d = buildDigest([entry({ id: "a", detectedAt: at(12), confidenceBand: "low" })], DAY);
     expect(isDigestWorthSending(d)).toBe(true);
     expect(isLowOnlyDigest(d)).toBe(true);
-    expect(digestNotificationTitle(d)).toBe("Were you out today?");
+    expect(digestNotificationTitle(d)).toBe("Any food or drink stops to confirm?");
   });
 });
 
@@ -163,7 +163,7 @@ describe("digestNotificationBody", () => {
       // Chipotle?" — one confident place, asked about the rest on the screen.
       entry({ id: "Ruby's", detectedAt: at(19), confidenceBand: "high" }),
     ], DAY);
-    expect(digestNotificationTitle(d)).toBe("Food or drinks at 2 places today?");
+    expect(digestNotificationTitle(d)).toBe("Food or drinks at 2 places?");
     expect(digestNotificationBody(d, fmt)).toMatch(/can you confirm/i);
   });
 

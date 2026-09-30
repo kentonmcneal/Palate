@@ -339,11 +339,11 @@ export function digestNotificationTitle(digest: Digest): string {
   // A digest with nothing in High still fires — those entries are worth
   // asking about — but it asks rather than asserts.
   const confident = digest.high.filter(entry => entry.preChecked);
-  if (confident.length === 0) return "Were you out today?";
+  if (confident.length === 0) return "Any food or drink stops to confirm?";
   if (confident.length === 1) {
     return `Food or a drink at ${confident[0].name}?`;
   }
-  return `Food or drinks at ${confident.length} places today?`;
+  return `Food or drinks at ${confident.length} places?`;
 }
 
 export function digestNotificationBody(digest: Digest, formatTime: (ms: number) => string): string {
@@ -357,8 +357,8 @@ export function digestNotificationBody(digest: Digest, formatTime: (ms: number) 
   if (!shown.length) return "";
   if (shown.length === 1) {
     return shown[0].ambiguous
-      ? `${formatTime(shown[0].detectedAt)} today. Several places were nearby. Tap to choose where you stopped.`
-      : `${shown[0].name}, ${formatTime(shown[0].detectedAt)} today. Answer here, no need to open the app.`;
+      ? `${formatTime(shown[0].detectedAt)}. Several places were nearby. Tap to choose where you stopped.`
+      : `${shown[0].name}, ${formatTime(shown[0].detectedAt)}. Answer here, no need to open the app.`;
   }
   const names = shown.slice(0, 2).map((e) => e.name).join(" and ");
   const rest = shown.length - 2;
@@ -552,8 +552,10 @@ export async function scheduleDigest(
 
   if (!isDigestWorthSending(digest)) return null;
 
+  // Copy is fixed now but may be delivered tomorrow or after midnight.
+  // Include the actual stop date instead of mislabelling it as "today".
   const body = digestNotificationBody(digest, (ms) =>
-    new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+    new Date(ms).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
   );
 
   // One confident place is a yes/no question, so it gets the Yes/No buttons

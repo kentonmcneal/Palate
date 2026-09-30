@@ -318,3 +318,7 @@ Main75durable actual-SDK controls pass; independent10 actual-source read/caller 
 ## Coffee-inclusive confirmation wording — 2026-09-30
 - WORKING TREE (committed with entry): single-stop, multiple-stop and daily confirmation screens explicitly include drinks. Removed the requirement implied by asking whether someone is inside, which excludes a drive-through coffee purchase; retrospective copy no longer says the person is currently there. Shared Yes action and dormant real-time copy align with the nightly reminder. No capture/action/notification timing changes.
 - TypeScript and35 existing digest/confirmation tests in3suites pass. Source diff reviewed; no physical layout/notification evidence. Rollback: revert this copy-only commit; earlier reminder safeguards remain.
+
+## Delayed digest date wording — 2026-09-30
+- WORKING TREE (committed with entry): singleton notification body includes the actual stop date/time, and titles no longer assume every stop happened today. Covers late captures rolling to tomorrow and weekend midnight delivery without changing schedule/window/actions. Device timezone changes after scheduling can still leave frozen local text; not an OS presentation guarantee.
+- TypeScript and48 existing/new digest/scheduler cases pass in3suites. New actualscheduler controls cover Monday23:00→Tuesday and Friday23:00→Saturday dates. No real notifications or device tests. Rollback this copy/formatter/test commit.
