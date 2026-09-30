@@ -95,7 +95,7 @@ export type QualifyOutcome =
   | { ok: true; dwellMin: number }
   | {
       ok: false;
-      reason: "open-visit" | "dwell-too-short" | "dwell-too-long" | "low-accuracy" | "home-work-suppressed";
+      reason: "invalid-observation" | "open-visit" | "dwell-too-short" | "dwell-too-long" | "low-accuracy" | "home-work-suppressed";
     };
 
 export type ResolvedVisit = {
@@ -108,6 +108,18 @@ export type ResolvedVisit = {
   confidence?: number;
   confidenceBand?: ConfidenceBand;
 };
+
+/** Native/queued JSON is runtime input despite its TypeScript annotation.
+ * Reject malformed values before history or venue lookup; comparisons alone
+ * allow NaN through, and subtraction silently coerces timestamp strings. */
+function validObservation(raw: RawVisit): boolean {
+  const validTime = (value: unknown) => typeof value === "number" &&
+    Number.isFinite(value) && Number.isFinite(new Date(value).getTime());
+  return Number.isFinite(raw.lat) && Math.abs(raw.lat) <= 90 &&
+    Number.isFinite(raw.lng) && Math.abs(raw.lng) <= 180 &&
+    Number.isFinite(raw.horizontalAccuracy) && raw.horizontalAccuracy >= 0 &&
+    validTime(raw.capturedAt) && validTime(raw.arrivalAt) && validTime(raw.departureAt);
+}
 
 export function dwellMinutes(raw: RawVisit): number | null {
   if (raw.arrivalAt == null || raw.departureAt == null) return null;
@@ -149,6 +161,7 @@ async function loadClusterHistory(): Promise<ClusterPoint[]> {
 
 /** Record a raw visit centroid into the on-device clustering history (capped). */
 export async function recordForClustering(raw: RawVisit): Promise<void> {
+  if (!validObservation(raw)) return;
   const dwell = dwellMinutes(raw);
   // Retain long work/home stays even when they fail the meal-duration ceiling.
   // Incomplete, invalid or very coarse observations cannot teach a location.
@@ -280,6 +293,7 @@ export async function isHomeOrWorkSuppressed(raw: RawVisit): Promise<boolean> {
 export async function qualifyVisit(raw: RawVisit): Promise<QualifyOutcome> {
   const dwell = dwellMinutes(raw);
   if (dwell == null) return { ok: false, reason: "open-visit" };
+  if (!validObservation(raw)) return { ok: false, reason: "invalid-observation" };
   const away = isAwayFromKnownAreas(raw.lat, raw.lng, await loadClusterHistory());
   if (dwell < minDwellFor(away)) return { ok: false, reason: "dwell-too-short" };
   if (dwell > MAX_DWELL_MIN) return { ok: false, reason: "dwell-too-long" };

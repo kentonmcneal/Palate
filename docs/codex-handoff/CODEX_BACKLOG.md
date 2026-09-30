@@ -5,11 +5,12 @@ Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deploym
 Current checkpoint: read/ambiguity24f63d5 plus the Add search batch committed with this entry. The chronological notes below preserve earlier evidence; this top section supersedes their older in-progress labels.
 
 ## In progress
-- Add save completion/celebration/navigation ownership: scratch authoring; explicit-search safeguards completed locally.
+- Native completion reconciliation: design/synthetic packet ready, production native/JS coordination unimplemented. Add save completion and search safeguards completed locally.
 - Passive capture-time account ownership remains a coordinated follow-up; design exists, full isolation unimplemented.
 - Broader friends/feed/profile design, typo and recommendation evaluation coverage remain unfinished.
 
 ## Completed locally
+- Add save UI ownership and malformed passive-input rejection:167suites/2,061tests,1skip;TypeScript and27 independent actualrunner controls passed offline.
 - Strict inbox mutation reads preserve unreadable/corrupt storage:163suites/1,963tests,1skip;TypeScript plus29 focused author/independent cases pass. Concurrency and bounded-retry loss remain.
 - Add search duplicate/stale admission and result ownership:162suites/1,940tests,1skip andTypeScript pass;48 mounted author/independent controls. No live cost guarantee.
 - e22348c initiating-account visit/decision/feed/analytics credentials;54 durable SDK transport controls,160 mobile suites/1,884tests passed,1skip andTypeScript at e22348c. Latest read/ambiguity batch:160suites/1,892tests,75durable SDKcontrols andTypeScript pass.

@@ -20,6 +20,8 @@ type SearchRequest = {
   life: object;
   promise: Promise<SearchAnswer | null>;
 };
+type SaveTicket = { life: object };
+
 type SearchInput = { text: string };
 type SearchTicket = { input: SearchInput; request: SearchRequest };
 
@@ -36,6 +38,8 @@ function AddSession({ account }: { account: AccountWriteSession }) {
   const lifeRef = useRef<object | null>(null);
   const activeSearch = useRef<SearchTicket | null>(null);
   const pendingSearches = useRef(new Map<string, SearchRequest>());
+  const saveOwner = useRef<SaveTicket | null>(null);
+  const navigationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useLayoutEffect(() => {
     const life = {};
     lifeRef.current = life;
@@ -43,12 +47,16 @@ function AddSession({ account }: { account: AccountWriteSession }) {
       lifeRef.current = null;
       activeSearch.current = null;
       pendingSearches.current.clear();
+      saveOwner.current = null;
+      savingRef.current = false;
+      if (navigationTimer.current !== null) clearTimeout(navigationTimer.current);
+      navigationTimer.current = null;
     };
   }, []);
   const [results, setResults] = useState<Restaurant[]>([]);
   const [degraded, setDegraded] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [celebration, setCelebration] = useState<{ name: string } | null>(null);
+  const [celebration, setCelebration] = useState<{ name: string; owner: SaveTicket } | null>(null);
   const [burst, setBurst] = useState(0);
   const [saving, setSaving] = useState(false);
   // Synchronous guard: React state updates aren't immediate, so a fast
@@ -149,24 +157,39 @@ function AddSession({ account }: { account: AccountWriteSession }) {
     // Guard against a rapid double-tap logging the same visit twice —
     // saveVisit's dedup is a non-atomic select-then-insert, so two concurrent
     // calls can both slip through and corrupt visit counts.
-    if (savingRef.current) return;
+    const life = lifeRef.current;
+    if (!life || !isAccountWriteSession(account) || savingRef.current) return;
+    const owner: SaveTicket = { life };
+    saveOwner.current = owner;
+    if (navigationTimer.current !== null) clearTimeout(navigationTimer.current);
+    navigationTimer.current = null;
+    setCelebration(null);
+    const current = () => lifeRef.current === life && isAccountWriteSession(account) && saveOwner.current === owner;
     savingRef.current = true;
     setSaving(true);
     try {
       const result = await saveVisit({ googlePlaceId: p.google_place_id, source: "manual" });
+      if (!current()) return;
       if (result.isFirstVisit) {
-        setCelebration({ name: p.name });
+        setCelebration({ name: p.name, owner });
       } else {
         // Lightweight celebration on every visit. Auto-dismisses, then we
         // route home so the user sees the new entry in Recent.
         setBurst((k) => k + 1);
-        setTimeout(() => router.replace("/(tabs)"), 1100);
+        navigationTimer.current = setTimeout(() => {
+          if (!current()) return;
+          navigationTimer.current = null;
+          saveOwner.current = null;
+          router.replace("/(tabs)");
+        }, 1100);
       }
     } catch (e: any) {
-      Alert.alert("Couldn't save", typeof e?.message === "string" && e.message.trim() ? e.message : "Try again");
+      if (current()) Alert.alert("Couldn't save", typeof e?.message === "string" && e.message.trim() ? e.message : "Try again");
     } finally {
-      savingRef.current = false;
-      setSaving(false);
+      if (current()) {
+        savingRef.current = false;
+        setSaving(false);
+      }
     }
   }
 
@@ -233,7 +256,13 @@ function AddSession({ account }: { account: AccountWriteSession }) {
       <FirstVisitCelebration
         visible={!!celebration}
         restaurantName={celebration?.name ?? ""}
-        onDismiss={() => { setCelebration(null); router.replace("/(tabs)"); }}
+        onDismiss={() => {
+          const owner = celebration?.owner;
+          if (!owner || lifeRef.current !== owner.life || !isAccountWriteSession(account) || saveOwner.current !== owner) return;
+          saveOwner.current = null;
+          setCelebration(null);
+          router.replace("/(tabs)");
+        }}
       />
       <VisitCelebration fire={burst} />
     </SafeAreaView>
