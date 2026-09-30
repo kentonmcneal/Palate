@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { View, StyleSheet, FlatList, Pressable, Alert } from "react-native";
 import { TextInput } from "../../components/TextInput";
 import { Text } from "../../components/Text";
@@ -13,9 +13,38 @@ import { getCurrentLocation } from "../../lib/location";
 import { FirstVisitCelebration } from "../../components/FirstVisitCelebration";
 import { VisitCelebration } from "../../components/VisitCelebration";
 
+import { accountWriteSession, isAccountWriteSession, type AccountWriteSession } from "../../lib/account-write";
+
+type SearchAnswer = Awaited<ReturnType<typeof searchRestaurantsDetailed>>;
+type SearchRequest = {
+  life: object;
+  promise: Promise<SearchAnswer | null>;
+};
+type SearchInput = { text: string };
+type SearchTicket = { input: SearchInput; request: SearchRequest };
+
 export default function AddTab() {
+  const account = accountWriteSession();
+  return <AddSession key={account.generation} account={account} />;
+}
+
+function AddSession({ account }: { account: AccountWriteSession }) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
+  const [input, setInput] = useState<SearchInput>({ text: "" });
+  const query = input.text;
+  const inputRef = useRef(input);
+  const lifeRef = useRef<object | null>(null);
+  const activeSearch = useRef<SearchTicket | null>(null);
+  const pendingSearches = useRef(new Map<string, SearchRequest>());
+  useLayoutEffect(() => {
+    const life = {};
+    lifeRef.current = life;
+    return () => {
+      lifeRef.current = null;
+      activeSearch.current = null;
+      pendingSearches.current.clear();
+    };
+  }, []);
   const [results, setResults] = useState<Restaurant[]>([]);
   const [degraded, setDegraded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -29,8 +58,13 @@ export default function AddTab() {
   // distance. Absent is fine — the lookup falls back to a plain name search.
   const [near, setNear] = useState<{ lat: number; lng: number } | undefined>();
   useEffect(() => {
+    const life = lifeRef.current;
     void getCurrentLocation()
-      .then((l) => setNear({ lat: l.lat, lng: l.lng }))
+      .then((l) => {
+        if (lifeRef.current === life && isAccountWriteSession(account)) {
+          setNear({ lat: l.lat, lng: l.lng });
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -46,27 +80,68 @@ export default function AddTab() {
   // until the query changes again.
   const showing = results.length > 0 ? results : suggestions;
 
+  function changeQuery(text: string) {
+    if (!lifeRef.current || !isAccountWriteSession(account)) return;
+    // Update now, before a saved submit callback or an awaited location resumes.
+    const next = { text };
+    inputRef.current = next;
+    activeSearch.current = null;
+    setInput(next);
+    setResults([]);
+    setDegraded(false);
+    setLoading(false);
+  }
+
   async function handleSearch() {
-    if (!query.trim()) return;
+    const q = input.text.trim();
+    const life = lifeRef.current;
+    if (!q || !life || inputRef.current !== input || !isAccountWriteSession(account)) return;
+    // Keyboard and button can submit within the same React update batch.
+    if (activeSearch.current?.input === input) return;
+
+    let request = pendingSearches.current.get(q);
+    const fresh = !request || request.life !== life;
+    if (fresh) {
+      request = { life, promise: Promise.resolve(null) };
+      pendingSearches.current.set(q, request);
+    }
+    const ownedRequest = request!;
+    const ticket: SearchTicket = { input, request: ownedRequest };
+    activeSearch.current = ticket;
     setLoading(true);
+
+    const alive = () => lifeRef.current === life && isAccountWriteSession(account);
+    const current = () => alive() && activeSearch.current === ticket && inputRef.current === input;
+    if (fresh) {
+      ownedRequest.promise = (async () => {
+        let bias: { lat: number; lng: number } | undefined;
+        try {
+          const loc = await getCurrentLocation();
+          bias = { lat: loc.lat, lng: loc.lng };
+        } catch {
+          // Location denied/unavailable: a still-current explicit search is allowed.
+        }
+        // A new explicit submit for the same pending query may join this request.
+        // Typing alone never authorizes the paid boundary.
+        const active = activeSearch.current;
+        if (!alive() || active?.request !== ownedRequest || active.input !== inputRef.current) return null;
+        return searchRestaurantsDetailed(q, bias);
+      })().finally(() => {
+        if (pendingSearches.current.get(q) === ownedRequest) pendingSearches.current.delete(q);
+      });
+    }
     try {
-      let near: { lat: number; lng: number } | undefined;
-      try {
-        const loc = await getCurrentLocation();
-        near = { lat: loc.lat, lng: loc.lng };
-      } catch {
-        // location not granted — search without bias
-      }
-      const { places: r, degraded } = await searchRestaurantsDetailed(query.trim(), near);
-      // An empty list from a degraded search means we did not look, not that
-      // the place is not there. Saying "nothing by that name" would be the app
-      // denying a restaurant exists because a budget somewhere ran out.
-      setDegraded(degraded && r.length === 0);
-      setResults(r);
+      const answer = await ownedRequest.promise;
+      if (!current() || !answer) return;
+      setDegraded(answer.degraded && answer.places.length === 0);
+      setResults(answer.places);
     } catch (e: any) {
-      Alert.alert("Search failed", e.message ?? "Try again");
+      if (current()) Alert.alert("Search failed", typeof e?.message === "string" && e.message.trim() ? e.message : "Try again");
     } finally {
-      setLoading(false);
+      if (current()) {
+        activeSearch.current = null;
+        setLoading(false);
+      }
     }
   }
 
@@ -88,7 +163,7 @@ export default function AddTab() {
         setTimeout(() => router.replace("/(tabs)"), 1100);
       }
     } catch (e: any) {
-      Alert.alert("Couldn't save", e.message ?? "Try again");
+      Alert.alert("Couldn't save", typeof e?.message === "string" && e.message.trim() ? e.message : "Try again");
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -106,7 +181,7 @@ export default function AddTab() {
         <View style={styles.searchRow}>
           <TextInput
             value={query}
-            onChangeText={(t: string) => { setQuery(t); if (results.length) setResults([]); }}
+            onChangeText={changeQuery}
             placeholder="Search restaurants, cafés…"
             autoCorrect={false}
             placeholderTextColor={colors.mute}

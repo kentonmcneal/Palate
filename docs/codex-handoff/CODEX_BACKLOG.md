@@ -2,14 +2,15 @@
 
 Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deployment or paid services.
 
-Current checkpoint: application HEAD e22348c. The chronological notes below preserve earlier evidence; this top section supersedes their older in-progress labels.
+Current checkpoint: read/ambiguity24f63d5 plus the Add search batch committed with this entry. The chronological notes below preserve earlier evidence; this top section supersedes their older in-progress labels.
 
 ## In progress
-- Add screen explicit-search stale/duplicate request safeguards: authoring; fail-closed dedup/count reads and legacy ambiguity completed locally.
+- Add save completion/celebration/navigation ownership: scratch authoring; explicit-search safeguards completed locally.
 - Passive capture-time account ownership remains a coordinated follow-up; design exists, full isolation unimplemented.
 - Broader friends/feed/profile design, typo and recommendation evaluation coverage remain unfinished.
 
 ## Completed locally
+- Add search duplicate/stale admission and result ownership:162suites/1,940tests,1skip andTypeScript pass;48 mounted author/independent controls. No live cost guarantee.
 - e22348c initiating-account visit/decision/feed/analytics credentials;54 durable SDK transport controls,160 mobile suites/1,884tests passed,1skip andTypeScript at e22348c. Latest read/ambiguity batch:160suites/1,892tests,75durable SDKcontrols andTypeScript pass.
 - 99cc3b5 coffee-inclusive reminder copy, ambiguous venue choice instead of direct Yes/No, durable attribution regression.
 - 58a7f6a unavailable-inbox and cancellation recovery; conservative source/distance confidence. Actual delivery remains unverified.
@@ -18,7 +19,7 @@ Current checkpoint: application HEAD e22348c. The chronological notes below pres
 - fe08e2a confirmed LLM admission source integration and disabled paid shortcuts;123 offline cases. SQL remains disabled/zero draft outside active migrations, no live spending guarantee.
 
 ## Priority limits
-- No actual7Brew incident trace/venue row or device notification delivery verified. Sub5min native capture, early5min one-shot emission versus12min travel qualification, stale fixes/120m NYC grouping, ownerless old data and legacy ambiguous prechecks remain.
+- No actual7Brew incident trace/venue row or device notification delivery verified. Sub5min native capture, early5min one-shot emission versus12min travel qualification, stale fixes/120m NYC grouping, ownerless old data remain; legacy ambiguous prechecks are corrected locally.
 - Notification queue acceptance is not OS presentation. All new work used mocks/synthetic data; no real-user notifications, deployment or paid calls.
 
 ## Completed before this window
