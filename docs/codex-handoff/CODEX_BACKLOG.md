@@ -2,14 +2,24 @@
 
 Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deployment or paid services.
 
+Current checkpoint: application HEAD e22348c. The chronological notes below preserve earlier evidence; this top section supersedes their older in-progress labels.
+
 ## In progress
-- User priority: trace end-of-day visit confirmation notifications through capture, qualification, inbox and OS scheduling. Mocked tests only; real delivery remains unverified.
-- User priority: reduce dense-city/bus-stop false positives and missed short/repeated coffee stops such as 7 Brew. Audit duration, precision, work-cluster suppression and venue attribution before changing thresholds.
-- Right Now chain eligibility consistency: remove duplicate substring filtering while preserving known-brand exclusions in the shared registry; final independent review pending.
-- Broader social/layout/typo work remains unfinished.
+- Add screen explicit-search stale/duplicate request safeguards: authoring; fail-closed dedup/count reads and legacy ambiguity completed locally.
+- Passive capture-time account ownership remains a coordinated follow-up; design exists, full isolation unimplemented.
+- Broader friends/feed/profile design, typo and recommendation evaluation coverage remain unfinished.
 
 ## Completed locally
-- Confirmed LLM admission source integration and disabled paid operator/evaluation shortcuts: fe08e2a.123 offline cases,154 mobile suites/1686 tests passed,1 skipped. SQL policies remain disabled/zero drafts outside active migrations; no deployment or live spending guarantee.
+- e22348c initiating-account visit/decision/feed/analytics credentials;54 durable SDK transport controls,160 mobile suites/1,884tests passed,1skip andTypeScript at e22348c. Latest read/ambiguity batch:160suites/1,892tests,75durable SDKcontrols andTypeScript pass.
+- 99cc3b5 coffee-inclusive reminder copy, ambiguous venue choice instead of direct Yes/No, durable attribution regression.
+- 58a7f6a unavailable-inbox and cancellation recovery; conservative source/distance confidence. Actual delivery remains unverified.
+- 7ddd2a2 unknown-confirmation retry, runner admission, brief-coffee workplace/history corrections; no relaxed dwell floor.
+- f40e40e shared conservative chain eligibility; independent substring false positives removed, reviewed chain exclusions retained.
+- fe08e2a confirmed LLM admission source integration and disabled paid shortcuts;123 offline cases. SQL remains disabled/zero draft outside active migrations, no live spending guarantee.
+
+## Priority limits
+- No actual7Brew incident trace/venue row or device notification delivery verified. Sub5min native capture, early5min one-shot emission versus12min travel qualification, stale fixes/120m NYC grouping, ownerless old data and legacy ambiguous prechecks remain.
+- Notification queue acceptance is not OS presentation. All new work used mocks/synthetic data; no real-user notifications, deployment or paid calls.
 
 ## Completed before this window
 - Nearby request coalescing, malformed-cache and budget config checks.

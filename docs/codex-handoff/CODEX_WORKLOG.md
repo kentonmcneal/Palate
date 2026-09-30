@@ -287,3 +287,12 @@ WORKING TREE offline verified: saveVisit and recordPromptDecision capture initia
 Main durable54 installed-Supabase2.110.7 controls pass with injected transport, zero cancelled tests; approved visits source hash matches independent4878cb4…ea7. Independent12 additional actual-public-helper/transport controls passed, no-header mutant rejected. Full160suites1,884tests passed,1skip andTypeScript passed (/tmp/palate-visit-write-all.log, -types.log); durable runner command in mobile/scripts/visit-write-account.README.md.
 
 Limits: already-started A requests may commit and trigger effects under A; stale rejection does not mean no row exists. Ownerless A payload first submitted while B is current, earlier/later caller steps, photo/rating/delete writers, passive account storage and native capture-time identity remain separate. No production RLS, device or live claims. No deployment or paid services. Rollback this coherent batch, preserving passive/recommendation safeguards and baseline tag.
+
+
+## 2026-09-30 — unavailable visit reads and older ambiguous stops
+
+WORKING TREE offline verified: saveVisit rejects failed dedup/count reads and missing/invalid exposed counts rather than inserting or inventing a first-visit reward; account-generation checks remain before errors. Valid zero still supports first visit. SDK error preserved; blank HEAD error messages remain a caller-copy follow-up. Dedup/count/insert are not transactional and lost-write responses remain uncertain.
+
+High-band entries with candidateCount>=2, nonempty alternates or cluster=true stay visible but unchecked, including legacy entries missing a count. Reminder titles count only actually prechecked high entries. Existing explicit alternate/top-guess choice remains; notification direct-action guard now uses all known ambiguity evidence. Missing count without other ambiguity preserves legacy behavior; no retrospective GPS rescore.
+
+Main75durable actual-SDK controls pass; independent10 actual-source read/caller controls and14 actual mobile renderer/scheduler controls pass, latter rerun on actual repo. Main full160suites1,892tests pass,1skip;TypeScript pass (/tmp/palate-read-ambiguity-final-all.log and -types.log). Six durable metadata cases plus main two legacy tests included. No device/OS delivery/live backend claim. Rollback this coherent batch, retaining e22348c account-credential safeguards and earlier passive fixes.

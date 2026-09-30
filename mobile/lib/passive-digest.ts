@@ -31,7 +31,7 @@ import { loadEatingPattern, type EatingPattern } from "./eating-pattern";
 
 export type DigestEntry = InboxEntry & {
   band: ConfidenceBand;
-  /** High-band entries arrive pre-checked; everything else is opt-in. */
+  /** Unambiguous high-band entries arrive pre-checked; everything else is opt-in. */
   preChecked: boolean;
   /** Several plausible venues — ask "which one?" rather than yes/no. */
   ambiguous: boolean;
@@ -121,6 +121,10 @@ export function bandFor(entry: InboxEntry): ConfidenceBand {
 
 function toDigestEntry(entry: InboxEntry): DigestEntry {
   const band = bandFor(entry);
+  // Older inbox records may omit the count while retaining alternatives or
+  // an explicit cluster flag. Do not invent certainty from missing metadata.
+  const ambiguous = (entry.candidateCount ?? 1) >= AMBIGUOUS_CANDIDATE_COUNT ||
+    (entry.alternates?.length ?? 0) > 0 || entry.cluster === true;
   return {
     ...entry,
     band,
@@ -128,10 +132,11 @@ function toDigestEntry(entry: InboxEntry): DigestEntry {
     // digest is the only confirmation path in production — one tap on Confirm
     // writes every ticked row into the diary, the taste graph, Wrapped and the
     // public profile, irreversibly. High earns that; Medium, the largest band,
-    // does not. The notification's count was changed to match this rather than
+    // does not. Ambiguous high-band legacy entries also require a choice.
+    // The notification's count was changed to match this rather than
     // the other way round.
-    preChecked: band === "high",
-    ambiguous: (entry.candidateCount ?? 1) >= AMBIGUOUS_CANDIDATE_COUNT,
+    preChecked: band === "high" && !ambiguous,
+    ambiguous,
   };
 }
 
@@ -333,11 +338,12 @@ export function digestNotificationTitle(digest: Digest): string {
   //
   // A digest with nothing in High still fires — those entries are worth
   // asking about — but it asks rather than asserts.
-  if (digest.high.length === 0) return "Were you out today?";
-  if (digest.high.length === 1) {
-    return `Food or a drink at ${digest.high[0].name}?`;
+  const confident = digest.high.filter(entry => entry.preChecked);
+  if (confident.length === 0) return "Were you out today?";
+  if (confident.length === 1) {
+    return `Food or a drink at ${confident[0].name}?`;
   }
-  return `Food or drinks at ${digest.high.length} places today?`;
+  return `Food or drinks at ${confident.length} places today?`;
 }
 
 export function digestNotificationBody(digest: Digest, formatTime: (ms: number) => string): string {

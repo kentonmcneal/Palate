@@ -116,6 +116,14 @@ export function rewardCopy(totalVisits: number): { title: string; message: strin
 // or auto-detect re-fires within the same meal.
 const VISIT_DEDUP_WINDOW_HOURS = 4;
 
+// A missing/invalid exact count is unavailable evidence, not a first visit.
+function requireVisitCount(count: number | null): number {
+  if (count === null || !Number.isSafeInteger(count) || count < 0) {
+    throw new Error("Visit count is unavailable. Please try again.");
+  }
+  return count;
+}
+
 export async function saveVisit(opts: {
   googlePlaceId: string;
   visitedAt?: Date;
@@ -135,7 +143,7 @@ export async function saveVisit(opts: {
   // Dedup: if the user already logged this restaurant within the window,
   // return that existing row instead of creating a duplicate.
   const dedupCutoff = new Date(visitedAt.getTime() - VISIT_DEDUP_WINDOW_HOURS * 3_600_000);
-  const { data: existing } = await supabase
+  const { data: existing, error: dedupError } = await supabase
     .from("visits")
     .select("*")
     .eq("user_id", userId)
@@ -146,24 +154,31 @@ export async function saveVisit(opts: {
     .maybeSingle().setHeader("Authorization", authorization);
   assertAccountWriteSession(token);
 
+  if (dedupError) throw dedupError;
+
   if (existing) {
-    const { count } = await supabase
+    const { count, error: countError } = await supabase
       .from("visits")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId).setHeader("Authorization", authorization);
     assertAccountWriteSession(token);
+    if (countError) throw countError;
+    const totalVisits = requireVisitCount(count);
     return {
       ...(existing as Visit),
       isFirstVisit: false,
-      totalVisits: count ?? 1,
+      totalVisits,
     };
   }
 
-  const { count: priorCount } = await supabase
+  const { count: priorCount, error: countError } = await supabase
     .from("visits")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId).setHeader("Authorization", authorization);
   assertAccountWriteSession(token);
+
+  if (countError) throw countError;
+  const verifiedPriorCount = requireVisitCount(priorCount);
 
   const meta = buildVisitTimeMeta(visitedAt);
   const insertPayload: Record<string, unknown> = {
@@ -207,7 +222,7 @@ export async function saveVisit(opts: {
   }
 
   if (error) throw error;
-  const total = (priorCount ?? 0) + 1;
+  const total = verifiedPriorCount + 1;
   void trackVisitWrite(token, authorization, "visit_logged", { source: opts.source, visit_total: total });
   void triggerHapticSuccess();
   // Invalidate the personal-signal cache so the next recs / scoring pass sees

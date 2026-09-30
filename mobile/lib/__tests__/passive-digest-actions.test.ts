@@ -1,5 +1,5 @@
 import * as Notifications from "expo-notifications";
-import { scheduleDigest, CONFIRM_CATEGORY } from "../passive-digest";
+import { scheduleDigest, CONFIRM_CATEGORY, buildDigest, digestNotificationTitle } from "../passive-digest";
 import type { InboxEntry } from "../passive-confirm";
 jest.mock("expo-notifications", () => ({
   getAllScheduledNotificationsAsync: jest.fn().mockResolvedValue([]),
@@ -46,4 +46,56 @@ it("low-only coffee keeps a review prompt without direct confirmation",async()=>
  const content=await scheduled([entry("low",1)]);
  expect(content.categoryIdentifier).toBeUndefined();
  expect(content.body).toMatch(/food or drink stops/i);
+});
+
+it("legacy high-band ambiguous stops stay visible but are never preselected",()=>{
+ const digest=buildDigest([entry("high",2)],now);
+ expect(digest.high).toHaveLength(1);
+ expect(digest.high[0].preChecked).toBe(false);
+ expect(digest.high[0].ambiguous).toBe(true);
+ expect(digestNotificationTitle(digest)).toBe("Were you out today?");
+});
+it("mixed high-band title counts only stops actually preselected",()=>{
+ const digest=buildDigest([entry("high",2,"ambiguous"),{...entry("high",1,"clear"),name:"Clear cafe"}],now);
+ expect(digest.high.filter(e=>e.preChecked).map(e=>e.id)).toEqual(["clear"]);
+ expect(digestNotificationTitle(digest)).toBe("Food or a drink at Clear cafe?");
+});
+
+const legacyAmbiguityCases: { label: string; metadata: Partial<InboxEntry> }[] = [
+  {
+    label: "missing count with an alternate",
+    metadata: {
+      candidateCount: undefined,
+      alternates: [{ google_place_id: "other-cafe", name: "Other cafe" }] as InboxEntry["alternates"],
+    },
+  },
+  {
+    label: "incorrect count of one with an alternate",
+    metadata: {
+      candidateCount: 1,
+      alternates: [{ google_place_id: "other-cafe", name: "Other cafe" }] as InboxEntry["alternates"],
+    },
+  },
+  {
+    label: "cluster flag without a count",
+    metadata: { candidateCount: undefined, cluster: true },
+  },
+];
+
+it.each(legacyAmbiguityCases)("legacy $label stays visible, unchecked and unnamed in the title", ({ metadata }) => {
+  const digest = buildDigest([{ ...entry("high", 1), confidence: 0.9, ...metadata }], now);
+  expect(digest.total).toBe(1);
+  expect(digest.high).toHaveLength(1);
+  expect(digest.high[0]).toMatchObject({ id: "coffee", ambiguous: true, preChecked: false });
+  expect(digestNotificationTitle(digest)).toBe("Were you out today?");
+});
+
+it.each(legacyAmbiguityCases)("legacy $label cannot receive direct scheduler confirmation actions", async ({ metadata }) => {
+  const content = await scheduled([{ ...entry("high", 1), confidence: 0.9, ...metadata }]);
+  expect(content.categoryIdentifier).toBeUndefined();
+  expect(content.data.place_id).toBeUndefined();
+  expect(content.data.inbox_id).toBeUndefined();
+  expect(content.title).toBe("Were you out today?");
+  expect(content.body).toMatch(/several places.*tap to choose/i);
+  expect(content.body).not.toMatch(/answer here/i);
 });

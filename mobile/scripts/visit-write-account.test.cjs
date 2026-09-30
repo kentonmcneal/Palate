@@ -31,10 +31,12 @@ function harness(config={}) {
         :table==='restaurants_resolved'?'feedLookup':table==='feed_events'?'feedInsert':table==='prompt_decisions'?'decision':'analytics';
       calls.push({stage,table,method,body,authorization:new Headers(init.headers).get('Authorization'),query:url.search});
       await step(stage);
+      if(config.abort===stage) { const error=Error(`aborted ${stage}`); error.name='AbortError'; throw error; }
       if(config.reject===stage) throw Error(`transport ${stage}`);
       const error=config.error===stage || (config.fallback && stage==='insert');
+      if(error && method==='HEAD') return new Response(null,{status:400});
       if(error) return new Response(JSON.stringify({message:config.fallback&&stage==='insert'?'column local_date does not exist':`failed ${stage}`,code:'TEST'}),{status:400});
-      if(method==='HEAD') return new Response(null,{status:200,headers:{'content-range':'0-0/3'}});
+      if(method==='HEAD') return new Response(null,{status:200,headers:config.missingCount?{}:{'content-range':`0-0/${config.countValue ?? 3}`} });
       const data=stage==='dedup'?(config.existing?[row]:[]):stage==='feedLookup'?[{name:'synthetic venue',cuisine_type:'coffee',neighborhood:'synthetic'}]:stage==='insert'||stage==='fallback'?row:stage==='feedInsert'?{id:'feed'}:null;
       return new Response(data===null?'':JSON.stringify(data),{status:data===null?201:200});
     }},auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},
@@ -131,4 +133,45 @@ for(const transition of ['A-B','A-B-A'])for(const [stage,index] of [['analytics'
 });
 for(const cfg of [{noSession:true},{sessionError:true}])test(`unavailable pinned session stops before restaurant: ${JSON.stringify(cfg)}`,async()=>{
  const h=harness(cfg);await assert.rejects(h.save());assert.equal(h.stages.includes('restaurant'),false);assert.equal(h.calls.length,0);
+});
+
+// A failed read must never authorize an insert or invent a reward count.
+for (const existing of [false, true]) for (const stage of existing ? ['count'] : ['dedup', 'count']) {
+  for (const mode of ['error', 'abort']) test(`read ${mode} at ${stage} existing=${existing} stops and recovers`, async()=>{
+    const cfg={existing,[mode]:stage}; const h=harness(cfg);
+    const failed=await settled(h.save());await flush();
+    assert.ok(failed.error,'read failure must reject');
+    if(mode==='error') assert.equal(failed.error.message,stage==='count'?'':`failed ${stage}`,'preserve SDK read error');
+    else assert.match(failed.error.message,/AbortError/);
+    assert.equal(h.calls.filter(c=>c.method==='POST').length,0);
+    assert.deepEqual(h.effects,[]);pinned(h);
+    if(stage==='dedup') assert.equal(h.calls.some(c=>c.stage==='count'),false);
+    delete cfg[mode];
+    const recovered=await h.save();await flush();pinned(h);
+    assert.equal(recovered.totalVisits,existing?3:4);
+    assert.equal(h.calls.filter(c=>c.stage==='insert').length,existing?0:1);
+    assert.equal(h.effects.filter(e=>e==='haptic').length,existing?0:1);
+  });
+}
+for(const existing of [false,true]) for(const value of ['missing','*','NaN','-1','9007199254740992']) {
+  test(`unavailable exact count ${value} existing=${existing} rejects and recovers`,async()=>{
+    const cfg={existing,missingCount:value==='missing',countValue:value}; const h=harness(cfg);
+    const failed=await settled(h.save());await flush();
+    assert.match(failed.error?.message||'',/count is unavailable/);
+    assert.equal(h.calls.filter(c=>c.method==='POST').length,0);assert.deepEqual(h.effects,[]);pinned(h);
+    cfg.missingCount=false;cfg.countValue=3;
+    const recovered=await h.save();await flush();assert.equal(recovered.totalVisits,existing?3:4);pinned(h);
+  });
+}
+for(const transition of ['A-B','A-B-A'])for(const existing of [false,true]) {
+  test(`account guard wins over failed count ${transition} existing=${existing}`,async()=>{
+    const h=harness({pause:'count',error:'count',existing}),p=settled(h.save());
+    await reach(h,p);h.switch(transition);h.release();
+    assert.match((await p).error?.message||'',/Account changed/);await flush();
+    assert.equal(h.calls.filter(c=>c.method==='POST').length,0);assert.deepEqual(h.effects,[]);pinned(h);
+  });
+}
+test('verified zero count permits a real first visit',async()=>{
+  const h=harness({countValue:0});const saved=await h.save();await flush();
+  assert.equal(saved.totalVisits,1);assert.equal(saved.isFirstVisit,true);pinned(h);
 });
