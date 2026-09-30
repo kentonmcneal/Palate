@@ -111,4 +111,4 @@ Kept briefly so the next session can see what was just touched.
 
 | codex | `codex/handoff-priorities` | `mobile/lib/passive-digest.ts` `mobile/lib/__tests__/passive-digest*` `docs/codex-handoff/CODEX_WORKLOG.md` `docs/codex-handoff/CODEX_BACKLOG.md` | 2026-09-30T01:30Z | 2026-09-30T03:30Z | Task01a0e643 accurate delayed-reminder date wording; no schedule changes. |
 
-| codex | `codex/handoff-priorities` | `mobile/lib/passive-runner.ts` `mobile/lib/passive-capture.ts` `mobile/lib/__tests__/passive-storage-*` `docs/codex-handoff/PASSIVE_STORAGE_*` `docs/codex-handoff/CODEX_WORKLOG.md` `docs/codex-handoff/CODEX_BACKLOG.md` | 2026-09-30T01:37Z | 2026-09-30T03:37Z | Task01a0e643 preserve unreadable retry/processed/raw queues before native acknowledgement; offline. |
+| codex | `codex/handoff-priorities` | `mobile/lib/passive-runner.ts` `mobile/lib/passive-capture.ts` `mobile/lib/__tests__/passive-storage-*` `docs/codex-handoff/PASSIVE_STORAGE_*` `docs/codex-handoff/CODEX_WORKLOG.md` `docs/codex-handoff/CODEX_BACKLOG.md` | 2026-09-30T01:31Z | 2026-09-30T03:31Z | Task01a0e643 preserve unreadable retry/processed/raw queues before native acknowledgement; offline. |
