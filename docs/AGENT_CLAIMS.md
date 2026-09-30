@@ -106,3 +106,5 @@ Kept briefly so the next session can see what was just touched.
 | codex | `codex/handoff-priorities` | `mobile/lib/passive-pipeline.ts` `mobile/lib/passive-confirm.ts` `mobile/lib/__tests__/passive-*` `docs/codex-handoff/PASSIVE_*` `docs/codex-handoff/CODEX_WORKLOG.md` `docs/codex-handoff/CODEX_BACKLOG.md` | 2026-09-30T01:09Z | 2026-09-30T03:09Z | Task01a0e643 offline passive input validation and inbox recovery; no native/deployment. |
 
 | codex | `codex/handoff-priorities` | `mobile/app/(tabs)/add.tsx` `mobile/lib/__tests__/add-save-*` `docs/codex-handoff/ADD_SAVE_*` `docs/codex-handoff/CODEX_WORKLOG.md` `docs/codex-handoff/CODEX_BACKLOG.md` | 2026-09-30T01:14Z | 2026-09-30T03:14Z | Task01a0e643 independently reviewed Add save completion ownership; offline only. |
+
+| codex | `codex/handoff-priorities` | `mobile/app/confirm-visit.tsx` `mobile/app/confirm-multi.tsx` `mobile/app/digest.tsx` `docs/codex-handoff/CODEX_WORKLOG.md` `docs/codex-handoff/CODEX_BACKLOG.md` | 2026-09-30T01:23Z | 2026-09-30T03:23Z | Task01a0e643 coffee-inclusive confirmation copy, no flow changes. |
