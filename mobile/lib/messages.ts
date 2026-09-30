@@ -89,7 +89,18 @@ export async function markRead(threadId: string): Promise<void> {
 export function subscribeToThread(
   threadId: string,
   onMessage: (m: DmMessage) => void,
+  onResubscribed?: () => void,
 ): () => void {
+  // A postgres_changes subscription delivers only what happens while it is
+  // connected. Anything inserted between a drop and a reconnect is never
+  // pushed, and nothing here refetched — so a brief loss of signal silently
+  // ATE messages until the screen was left and re-entered. The socket coming
+  // back looked identical to never having lost it.
+  //
+  // Supabase reconnects on its own and reports SUBSCRIBED again. The first one
+  // is the initial connection, which the caller's own load() already covers;
+  // every later one means there is a hole to fill.
+  let everSubscribed = false;
   const channel = supabase
     .channel(`dm:${threadId}`)
     .on(
@@ -97,8 +108,69 @@ export function subscribeToThread(
       { event: "INSERT", schema: "public", table: "dm_messages", filter: `thread_id=eq.${threadId}` },
       (payload) => onMessage(payload.new as DmMessage),
     )
-    .subscribe();
+    .subscribe((status: string) => {
+      if (status !== "SUBSCRIBED") return;
+      if (everSubscribed) onResubscribed?.();
+      everSubscribed = true;
+    });
   return () => { void supabase.removeChannel(channel); };
+}
+
+/**
+ * Messages inserted after `afterIso`, oldest-first. Used to fill the gap left
+ * by a dropped subscription.
+ */
+export async function listMessagesSince(
+  threadId: string,
+  afterIso: string,
+  limit = 200,
+): Promise<DmMessage[]> {
+  const { data, error } = await supabase
+    .from("dm_messages")
+    .select("id, thread_id, sender_id, body, created_at")
+    .eq("thread_id", threadId)
+    .gt("created_at", afterIso)
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as DmMessage[];
+}
+
+/**
+ * The newest timestamp we have that came FROM THE SERVER.
+ *
+ * Pending rows are excluded deliberately. Their created_at is the local clock,
+ * which can run ahead of the database — using one as the catch-up boundary
+ * would skip real messages and reintroduce exactly the hole this is closing.
+ * Null means we hold nothing server-confirmed and the caller should refetch the
+ * window rather than guess a boundary.
+ */
+export function newestServerTimestamp(list: DmMessage[] | null): string | null {
+  let newest: string | null = null;
+  for (const m of list ?? []) {
+    if (isPending(m)) continue;
+    if (newest === null || m.created_at > newest) newest = m.created_at;
+  }
+  return newest;
+}
+
+/**
+ * Fold a catch-up batch into the list.
+ *
+ * Reuses applyIncoming per message, so it inherits both dedupe rules: a server
+ * id already present is ignored, and one of our own messages consumes a
+ * matching pending row instead of duplicating it. That makes replaying the same
+ * batch harmless, which matters because a flapping connection can resubscribe
+ * several times before it settles.
+ */
+export function mergeCatchUp(
+  prev: DmMessage[] | null,
+  fetched: DmMessage[],
+  me: string | null,
+): DmMessage[] {
+  let next = prev ?? [];
+  for (const m of fetched) next = applyIncoming(next, m, me);
+  return next;
 }
 
 // ----------------------------------------------------------------------------

@@ -54,11 +54,7 @@ Re-subscribing on `me` would tear down a live socket instead.
 
 Scoped out deliberately; each needs its own batch and evidence.
 
-1. **`subscribeToThread` has no reconnect recovery.** It subscribes to `INSERT`
-   only, and nothing refetches on resubscribe. A brief network drop silently
-   loses every message sent during the gap until the screen is left and
-   re-entered. `load()` runs on mount and threadId change only. This is the
-   largest remaining defect on this surface.
+1. ~~`subscribeToThread` has no reconnect recovery.~~ **Fixed — see below.**
 2. **`markRead` swallows every error** (`.then(() => {}, () => {})`), so a failed
    read receipt is invisible and the unread badge stays wrong.
 3. **`unreadTotal` returns 0 on error**, so a persistent failure is
@@ -73,3 +69,46 @@ Offline and synthetic only. No deployment, no paid calls, no device run — Xcod
 licence remains unaccepted, so none of this is verified on a phone. The tests
 exercise the pure reconciliation functions, not the rendered ScrollView, realtime
 transport, or RLS. Nothing here proves the server's participant-only policy.
+
+## Fixed: a dropped subscription silently ate messages — `RUN`
+
+`postgres_changes` delivers only what happens while the channel is connected.
+Anything inserted between a drop and a reconnect is never pushed, and nothing
+refetched it — `load()` ran on mount and threadId change only. So a brief loss of
+signal **lost every message sent during the gap** until the screen was left and
+re-entered, and the socket returning looked identical to never having lost it.
+
+**Fix.** `subscribeToThread` now takes an `onResubscribed` callback and invokes it
+on each `SUBSCRIBED` transition *after the first* — the first is the initial
+connection, which `load()` already covers; every later one means there is a hole.
+The screen then fetches `listMessagesSince(threadId, boundary)` and folds the
+result through `mergeCatchUp`.
+
+Two details carry the correctness:
+
+- **The boundary comes from the server's clock, never ours.**
+  `newestServerTimestamp` skips `pending` rows, because their `created_at` is the
+  local clock and can run *ahead* of the database. Using one as the boundary
+  would skip real messages and reopen the exact hole being closed. When nothing
+  server-confirmed exists it returns null and the caller refetches the window
+  rather than inventing an anchor.
+- **The merge is idempotent.** `mergeCatchUp` folds each message through
+  `applyIncoming`, inheriting both dedupe rules, because a flapping connection
+  resubscribes several times before it settles and the same batch can arrive
+  repeatedly. It also means one of my own messages returning in a catch-up
+  consumes its pending row instead of duplicating it — the same race as the
+  realtime echo, by the same mechanism.
+
+A failed catch-up is swallowed deliberately: it must not break a live thread, the
+next reconnect retries, and leaving the screen reloads from scratch.
+
+**Evidence.** `lib/__tests__/dm-reconnect.test.ts`, 8 cases. Verified by breaking
+each guard: a naive concat instead of the folded merge, and including pending rows
+in the boundary — 4 tests fail for those two changes. Full suite 192 suites /
+2,368 tests, 1 skipped; TypeScript clean.
+
+**Limit.** Recovered messages are appended in fetch order, so a message from the
+gap can land after an unacknowledged local send that is chronologically later.
+Pending rows are by definition the newest local thing, so this is a display
+ordering nuance rather than loss. No sort protocol was added — ordering across two
+clocks is not something these tests could verify.

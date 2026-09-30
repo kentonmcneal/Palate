@@ -10,7 +10,8 @@ import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { colors, spacing, type } from "../../theme";
 import {
   listMessages, listThreads, sendMessage, markRead, subscribeToThread,
-  applyIncoming, reconcileSent, dropOptimistic, PENDING_PREFIX, type DmMessage,
+  applyIncoming, reconcileSent, dropOptimistic, PENDING_PREFIX,
+  listMessagesSince, newestServerTimestamp, mergeCatchUp, type DmMessage,
 } from "../../lib/messages";
 import { supabase } from "../../lib/supabase";
 import { reportContent, blockUser, REPORT_REASONS } from "../../lib/moderation";
@@ -47,6 +48,11 @@ export default function ThreadScreen() {
   // echo-matching in applyIncoming would never fire. Re-subscribing on `me`
   // instead would tear down a live socket for no reason.
   const meRef = useRef<string | null>(null);
+  // The catch-up handler below is created once per [threadId, isNew]. Reading
+  // `messages` from state inside it would pin the list as it was when the
+  // channel opened, so the boundary it computes would be stale and the gap it
+  // fetched would be wrong.
+  const messagesRef = useRef<DmMessage[] | null>(null);
 
   useEffect(() => {
     void supabase.auth.getUser().then(({ data }) => {
@@ -78,15 +84,43 @@ export default function ThreadScreen() {
   }, [threadId, isNew]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   // Live. RLS on dm_messages is participant-only, so a subscription cannot
   // deliver somebody else's conversation even if this filter were wrong.
   useEffect(() => {
     if (isNew) return;
-    const off = subscribeToThread(threadId, (m) => {
-      setMessages((prev) => applyIncoming(prev, m, meRef.current));
-      void markRead(threadId);
-    });
+    // Fill the hole a dropped subscription leaves. postgres_changes delivers
+    // only what happens while connected, so messages inserted between a drop
+    // and a reconnect were never pushed and nothing refetched them — they were
+    // simply lost until the screen was left and re-entered.
+    const catchUp = async () => {
+      try {
+        const since = newestServerTimestamp(messagesRef.current);
+        if (since === null) {
+          // Nothing server-confirmed to anchor on; refetch the window rather
+          // than invent a boundary from a local clock.
+          await load();
+          return;
+        }
+        const missed = await listMessagesSince(threadId, since);
+        if (missed.length === 0) return;
+        setMessages((prev) => mergeCatchUp(prev, missed, meRef.current));
+        void markRead(threadId);
+      } catch {
+        // A failed catch-up must not break a live thread. The next reconnect
+        // tries again, and leaving the screen reloads from scratch.
+      }
+    };
+
+    const off = subscribeToThread(
+      threadId,
+      (m) => {
+        setMessages((prev) => applyIncoming(prev, m, meRef.current));
+        void markRead(threadId);
+      },
+      () => { void catchUp(); },
+    );
     return off;
   }, [threadId, isNew]);
 
