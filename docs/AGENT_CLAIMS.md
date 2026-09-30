@@ -102,3 +102,5 @@ Kept briefly so the next session can see what was just touched.
 | codex | `codex/handoff-priorities` | `mobile/lib/observability*`, `supabase/functions/delete-account/index.ts` | 2026-09-29 | in flight at time of writing |
 
 | codex | `codex/handoff-priorities` | `mobile/app/(tabs)/add.tsx` `mobile/lib/__tests__/add-search-*` `docs/codex-handoff/ADD_SEARCH_*` `docs/codex-handoff/CODEX_WORKLOG.md` `docs/codex-handoff/CODEX_BACKLOG.md` | 2026-09-30T00:39Z | 2026-09-30T02:39Z | Task01a0e643 reviewed Add search admission integration, offline only. |
+
+| codex | `codex/handoff-priorities` | `mobile/lib/passive-pipeline.ts` `mobile/lib/passive-confirm.ts` `mobile/lib/__tests__/passive-*` `docs/codex-handoff/PASSIVE_*` `docs/codex-handoff/CODEX_WORKLOG.md` `docs/codex-handoff/CODEX_BACKLOG.md` | 2026-09-30T01:09Z | 2026-09-30T03:09Z | Task01a0e643 offline passive input validation and inbox recovery; no native/deployment. |
