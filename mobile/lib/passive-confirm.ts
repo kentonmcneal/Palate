@@ -226,7 +226,8 @@ async function readInbox(): Promise<InboxEntry[]> {
 }
 
 export async function getInbox(): Promise<InboxEntry[]> {
-  // Preserve existing display/caller behavior; scheduling uses the strict read.
+  // Display is best effort. Scheduling and mutations require the strict read;
+  // unreadable storage is never authority to replace existing entries.
   try { return await readInbox(); } catch { return []; }
 }
 
@@ -248,7 +249,7 @@ export function isSameMeal(
 /** Returns false when this was a duplicate of an entry we already hold. The
  *  caller needs that answer: a duplicate must not produce a second buzz. */
 async function addToInbox(entry: InboxEntry): Promise<boolean> {
-  const existing = await getInbox();
+  const existing = await readInbox();
 
   // Same place, same LOCAL DAY. This used to be a one-hour window, and an
   // hour is shorter than a meal: iOS emits a fresh stop whenever the location
@@ -308,7 +309,7 @@ export async function seedDigestFixtures(): Promise<number> {
       confidence: 0.22, confidenceBand: "low", candidateCount: 4, source: "stop",
     },
   ];
-  const existing = await getInbox();
+  const existing = await readInbox();
   await AsyncStorage.setItem(INBOX_KEY, JSON.stringify([...fixtures, ...existing]));
   return fixtures.length;
 }
@@ -322,7 +323,7 @@ export async function seedDigestFixtures(): Promise<number> {
  */
 export async function restoreInboxFromServer(): Promise<number> {
   try {
-    const local = await getInbox();
+    const local = await readInbox();
     const restored = await hydrateInboxIfEmpty(local.length);
     if (!restored || restored.length === 0) return 0;
     await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(restored));
@@ -337,7 +338,7 @@ export async function restoreInboxFromServer(): Promise<number> {
 }
 
 export async function removeFromInbox(id: string): Promise<void> {
-  const existing = await getInbox();
+  const existing = await readInbox();
   const remaining = existing.filter((e) => e.id !== id);
   await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(remaining));
   void mirrorInbox(remaining);

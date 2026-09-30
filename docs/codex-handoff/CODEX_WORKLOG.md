@@ -302,3 +302,9 @@ Main75durable actual-SDK controls pass; independent10 actual-source read/caller 
 - Main validation:162 Jest suites,1,940 tests passed,1skip; TypeScript passed.39 author and9 independent mounted controls included durably. Baseline37/48 failures independently demonstrated. Expo lazy-fetch teardown corrected with explicit throwing test network boundary; no logging suppression.
 - Evidence:ADD_SEARCH_AUTHOR_20260930.md and ADD_SEARCH_REVIEW_20260930.md. All mocked/offline; client admission is not a verified live bill cap. No deployed/provider/device claims. Existing save-completion/timer ownership is a separate pending follow-up.
 - Rollback: revert this coherent Add source/tests/reports commit; keep earlier initiating-account write safeguards and baseline tag.
+
+## Strict inbox mutation reads — 2026-09-30
+- WORKING TREE (committed with entry): add/remove/debug-seed/server-restore now require the existing strict inbox read. Failed/corrupt storage or failed expiry write cannot authorize a replacement, mirror or remote hydration. Display fallback unchanged.
+- Main163suites/1,963tests pass,1skip;TypeScript passes. Subsequently integrated6 independent controls:29/29 focused pass. Independent corrected-boundary baseline27fail/2pass, candidate29pass. Initial author tests had fixture-call history/officialmock emptystring normalization issues; corrected without suppressing errors.
+- PASSIVE_INBOX_READ_REVIEW_20260930.md documents actual-function scope and caller analysis. Ordinary storage errors still consume runner attempts and can exhaust after3; swallowed post-confirm removal errors can leave repeat prompts. Concurrent writers/stale hydration and ownerless queues remain unresolved. No indefinite-retry/no-loss/live/device claim.
+- Rollback: revert this strict-read source/tests/report commit; preserve scheduler and initiating-account safeguards.

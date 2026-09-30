@@ -10,6 +10,7 @@ Current checkpoint: read/ambiguity24f63d5 plus the Add search batch committed wi
 - Broader friends/feed/profile design, typo and recommendation evaluation coverage remain unfinished.
 
 ## Completed locally
+- Strict inbox mutation reads preserve unreadable/corrupt storage:163suites/1,963tests,1skip;TypeScript plus29 focused author/independent cases pass. Concurrency and bounded-retry loss remain.
 - Add search duplicate/stale admission and result ownership:162suites/1,940tests,1skip andTypeScript pass;48 mounted author/independent controls. No live cost guarantee.
 - e22348c initiating-account visit/decision/feed/analytics credentials;54 durable SDK transport controls,160 mobile suites/1,884tests passed,1skip andTypeScript at e22348c. Latest read/ambiguity batch:160suites/1,892tests,75durable SDKcontrols andTypeScript pass.
 - 99cc3b5 coffee-inclusive reminder copy, ambiguous venue choice instead of direct Yes/No, durable attribution regression.
