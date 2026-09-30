@@ -23,6 +23,7 @@ import {
 export { CONFIRM_CATEGORY, confirmParamsFor } from "./passive-digest";
 import { serialize } from "./notification-dedupe";
 import { mirrorInbox, hydrateInboxIfEmpty } from "./passive-inbox-sync";
+import { accountWriteSession, assertAccountWriteSession } from "./account-write";
 
 // Quiet hours (local): default ~9pm–8am. Suppressed visits go to the inbox.
 const QUIET_START_HOUR = 21;
@@ -213,8 +214,10 @@ function readInbox(): Promise<InboxEntry[]> {
 
 /** Throw when inbox contents or expiry persistence are unavailable. A scheduler
  * must never mistake that state for a verified empty inbox. */
-async function readInboxLocked(): Promise<InboxEntry[]> {
+async function readInboxLocked(checkCurrent?: () => void): Promise<InboxEntry[]> {
+  checkCurrent?.();
   const raw = await AsyncStorage.getItem(INBOX_KEY);
+  checkCurrent?.();
   const all = raw === null ? [] : (JSON.parse(raw) as InboxEntry[]);
   if (!Array.isArray(all) || all.some(e => !e || !Number.isFinite(e.detectedAt))) {
     throw new Error("Inbox storage is not a valid dated-entry array");
@@ -223,6 +226,7 @@ async function readInboxLocked(): Promise<InboxEntry[]> {
   const live = all.filter((e) => e.detectedAt >= cutoff);
   if (live.length !== all.length) {
     await writeInboxLocked(live);
+    checkCurrent?.();
     void mirrorInbox(live);
     // An entry that expires unanswered is an IGNORE, and ignores are almost
     // certainly the most common outcome. Dropping them silently would bias
@@ -345,26 +349,35 @@ export async function seedDigestFixtures(): Promise<number> {
  * restarts or a later fresh restore after a removal (there are no tombstones).
  */
 export async function restoreInboxFromServer(): Promise<number> {
+  const token = accountWriteSession();
+  const checkCurrent = () => assertAccountWriteSession(token);
   try {
+    checkCurrent();
     const snapshot = await withInbox(async () => {
-      const local = await readInboxLocked();
+      const local = await readInboxLocked(checkCurrent);
       return { count: local.length, revision: inboxRevision };
     });
+    checkCurrent();
     // Network stays outside the local queue: a slow mirror cannot block edits.
-    const restored = await hydrateInboxIfEmpty(snapshot.count);
+    const restored = await hydrateInboxIfEmpty(snapshot.count, token);
+    checkCurrent();
     if (snapshot.count !== 0 || !restored || restored.length === 0) return 0;
     if (!Array.isArray(restored) || restored.some(e => !e || !Number.isFinite(e.detectedAt))) return 0;
     const accepted = await withInbox(async () => {
-      const local = await readInboxLocked();
+      const local = await readInboxLocked(checkCurrent);
       if (inboxRevision !== snapshot.revision || local.length !== 0) return false;
+      checkCurrent();
       await writeInboxLocked(restored);
+      checkCurrent();
       return true;
     });
+    checkCurrent();
     if (!accepted) return 0;
     void track("passive_inbox_restored", { count: restored.length });
     // The digest that would have announced these was scheduled on a device
     // that no longer exists.
     await rescheduleDigest();
+    checkCurrent();
     return restored.length;
   } catch {
     return 0;

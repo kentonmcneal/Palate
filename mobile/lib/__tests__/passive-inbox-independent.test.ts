@@ -1,3 +1,4 @@
+import { setUsernameGateAccount } from "../username-gate";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getInbox, notifyOrInbox, removeFromInbox, restoreInboxFromServer, seedDigestFixtures } from "../passive-confirm";
 import { mirrorInbox, hydrateInboxIfEmpty } from "../passive-inbox-sync";
@@ -12,7 +13,7 @@ const KEY="palate.passive.inbox";
 const entry=()=>({id:"existing",place_id:"cafe",name:"Synthetic cafe",address:"",alternates:[],detectedAt:Date.now(),dwellMin:10});
 const resolved=()=>({raw:{id:"new",capturedAt:Date.now(),departureAt:Date.now(),horizontalAccuracy:10,source:"stop"},candidates:[{google_place_id:"new-place",name:"Synthetic diner"}],cacheHit:true,confidence:.6,confidenceBand:"medium"} as any);
 const operations=[ ["capture",()=>notifyOrInbox(resolved(),10)], ["remove",()=>removeFromInbox("existing")], ["debug seed",()=>seedDigestFixtures()], ["restore",()=>restoreInboxFromServer()] ] as const;
-beforeEach(async()=>{jest.restoreAllMocks();jest.clearAllMocks();await AsyncStorage.clear();(hydrateInboxIfEmpty as jest.Mock).mockResolvedValue([{...entry(),id:"remote"}]);});
+beforeEach(async()=>{setUsernameGateAccount("test-owner");jest.restoreAllMocks();jest.clearAllMocks();await AsyncStorage.clear();(hydrateInboxIfEmpty as jest.Mock).mockResolvedValue([{...entry(),id:"remote"}]);});
 afterEach(()=>jest.restoreAllMocks());
 
 for(const [label,run] of operations)test(`${label}: expiry-write failure preserves stored snapshot and denies downstream work`,async()=>{
@@ -26,5 +27,5 @@ test("removal after read recovery preserves unrelated live entries",async()=>{
 });
 test("restore read recovery uses latest nonempty snapshot",async()=>{
  await AsyncStorage.setItem(KEY,JSON.stringify([entry()]));jest.spyOn(AsyncStorage,"getItem").mockRejectedValueOnce(Error("unavailable"));expect(await restoreInboxFromServer()).toBe(0);expect(hydrateInboxIfEmpty).not.toHaveBeenCalled();
- (hydrateInboxIfEmpty as jest.Mock).mockResolvedValue(null);await restoreInboxFromServer();expect(hydrateInboxIfEmpty).toHaveBeenCalledWith(1);expect((await getInbox()).map(e=>e.id)).toEqual(["existing"]);
+ (hydrateInboxIfEmpty as jest.Mock).mockResolvedValue(null);await restoreInboxFromServer();expect(hydrateInboxIfEmpty).toHaveBeenCalledWith(1, expect.objectContaining({accountId:"test-owner"}));expect((await getInbox()).map(e=>e.id)).toEqual(["existing"]);
 });

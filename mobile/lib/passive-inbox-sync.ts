@@ -25,6 +25,7 @@
 // ============================================================================
 
 import { supabase } from "./supabase";
+import { accountWriteSession, requireAccountWriteUser, accountWriteAuthorization, assertAccountWriteSession, type AccountWriteSession } from "./account-write";
 import type { InboxEntry } from "./passive-confirm";
 
 /**
@@ -70,27 +71,33 @@ function mirrorPayload(e: InboxEntry): Record<string, unknown> {
 
 /** Push the whole inbox up. Idempotent on (user_id, entry_id). */
 export async function mirrorInbox(entries: InboxEntry[]): Promise<void> {
+  // Operation ownership only: entries still have no capture-time owner.
+  const token = accountWriteSession();
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    const userId = await requireAccountWriteUser(token);
+    const authorization = await accountWriteAuthorization(token);
+    assertAccountWriteSession(token);
 
     if (entries.length === 0) {
       // An emptied inbox means everything was answered or expired. Clearing
       // the mirror is what stops a reinstall resurrecting prompts somebody
       // already dealt with.
-      await supabase.from("passive_inbox").delete().eq("user_id", user.id);
+      await supabase.from("passive_inbox").delete().eq("user_id", userId).setHeader("Authorization", authorization);
+      assertAccountWriteSession(token);
       return;
     }
 
-    await supabase.from("passive_inbox").upsert(
+    const { error } = await supabase.from("passive_inbox").upsert(
       entries.map((e) => ({
-        user_id: user.id,
+        user_id: userId,
         entry_id: e.id,
         payload: mirrorPayload(e),
         detected_at: new Date(e.detectedAt).toISOString(),
       })),
       { onConflict: "user_id,entry_id" },
-    );
+    ).setHeader("Authorization", authorization);
+    assertAccountWriteSession(token);
+    if (error) return;
 
     // Remove anything the device no longer holds, so an answered entry cannot
     // come back from the mirror.
@@ -98,8 +105,10 @@ export async function mirrorInbox(entries: InboxEntry[]): Promise<void> {
     await supabase
       .from("passive_inbox")
       .delete()
-      .eq("user_id", user.id)
-      .not("entry_id", "in", `(${keep.map((k) => `"${k}"`).join(",")})`);
+      .eq("user_id", userId)
+      .not("entry_id", "in", `(${keep.map((k) => `"${k}"`).join(",")})`)
+      .setHeader("Authorization", authorization);
+    assertAccountWriteSession(token);
   } catch {
     // Silent on purpose. See the header.
   }
@@ -108,25 +117,28 @@ export async function mirrorInbox(entries: InboxEntry[]): Promise<void> {
 /**
  * Rebuild the local inbox from the mirror, but ONLY when local is empty.
  *
- * The guard is the whole safety property. Merging would let the server
- * resurrect an entry the device has deliberately removed — a confirmation, a
- * dismissal, an expiry — and the user would be asked about the same meal
- * twice. Empty-local is unambiguous: a fresh install, or an inbox that has
- * genuinely been cleared, and in the second case the mirror is empty too.
+ * Bind this read to the operation's initiating account, not the account current
+ * after an await. The caller must still recheck account and local revision at
+ * commit. Empty local data is not proof of reinstall: mirror ordering and
+ * durable removal tombstones remain unresolved. Neither this token nor existing
+ * user_id rows establish capture-time ownership of legacy/ownerless payloads.
  */
 export async function hydrateInboxIfEmpty(
   localCount: number,
+  token: AccountWriteSession = accountWriteSession(),
 ): Promise<InboxEntry[] | null> {
   if (localCount > 0) return null;
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+    const userId = await requireAccountWriteUser(token);
+    const authorization = await accountWriteAuthorization(token);
+    assertAccountWriteSession(token);
     const { data, error } = await supabase
       .from("passive_inbox")
       .select("payload")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .order("detected_at", { ascending: false })
-      .limit(50);
+      .limit(50).setHeader("Authorization", authorization);
+    assertAccountWriteSession(token);
     if (error || !data || data.length === 0) return null;
     return data
       .map((r) => (r as { payload: InboxEntry }).payload)

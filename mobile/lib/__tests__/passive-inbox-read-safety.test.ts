@@ -1,3 +1,4 @@
+import { setUsernameGateAccount } from "../username-gate";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getInbox, notifyOrInbox, removeFromInbox, restoreInboxFromServer, seedDigestFixtures } from "../passive-confirm";
 import { mirrorInbox, hydrateInboxIfEmpty } from "../passive-inbox-sync";
@@ -12,7 +13,7 @@ const KEY="palate.passive.inbox";
 const entry=()=>({id:"existing",place_id:"cafe",name:"Synthetic cafe",address:"",alternates:[],detectedAt:Date.now(),dwellMin:10});
 const resolved=()=>({raw:{id:"new",capturedAt:Date.now(),departureAt:Date.now(),horizontalAccuracy:10,source:"stop"},candidates:[{google_place_id:"new-place",name:"Synthetic diner"}],cacheHit:true,confidence:.6,confidenceBand:"medium"} as any);
 const operations=[ ["capture",()=>notifyOrInbox(resolved(),10)], ["remove",()=>removeFromInbox("existing")], ["debug seed",()=>seedDigestFixtures()], ["restore",()=>restoreInboxFromServer()] ] as const;
-beforeEach(async()=>{jest.restoreAllMocks();jest.clearAllMocks();await AsyncStorage.clear();(hydrateInboxIfEmpty as jest.Mock).mockResolvedValue([{...entry(),id:"remote"}]);});
+beforeEach(async()=>{setUsernameGateAccount("test-owner");jest.restoreAllMocks();jest.clearAllMocks();await AsyncStorage.clear();(hydrateInboxIfEmpty as jest.Mock).mockResolvedValue([{...entry(),id:"remote"}]);});
 afterEach(()=>jest.restoreAllMocks());
 for(const [label,run] of operations){
  test.each(["reject","invalid-json","wrong-shape","invalid-date","empty-string"])(`${label}: %s cannot overwrite unavailable inbox`,async(failure)=>{
@@ -30,6 +31,6 @@ test("capture succeeds after read recovery preserving prior entry",async()=>{
  await AsyncStorage.setItem(KEY,JSON.stringify([entry()]));jest.spyOn(AsyncStorage,"getItem").mockRejectedValueOnce(Error("unavailable"));await expect(notifyOrInbox(resolved(),10)).rejects.toThrow();await expect(notifyOrInbox(resolved(),10)).resolves.toBe("inboxed-digest");expect((await getInbox()).map(e=>e.id).sort()).toEqual(["existing","new"]);
 });
 test("verified empty can restore and missing inbox accepts capture",async()=>{
- await expect(restoreInboxFromServer()).resolves.toBe(1);expect(hydrateInboxIfEmpty).toHaveBeenCalledWith(0);await AsyncStorage.removeItem(KEY);await notifyOrInbox(resolved(),10);expect((await getInbox()).map(e=>e.id)).toEqual(["new"]);
+ await expect(restoreInboxFromServer()).resolves.toBe(1);expect(hydrateInboxIfEmpty).toHaveBeenCalledWith(0, expect.objectContaining({accountId:"test-owner"}));await AsyncStorage.removeItem(KEY);await notifyOrInbox(resolved(),10);expect((await getInbox()).map(e=>e.id)).toEqual(["new"]);
 });
 test("display fallback does not write",async()=>{await AsyncStorage.setItem(KEY,"{");await expect(getInbox()).resolves.toEqual([]);expect(await AsyncStorage.getItem(KEY)).toBe("{");});

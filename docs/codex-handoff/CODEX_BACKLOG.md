@@ -117,3 +117,5 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 - In progress: account ownership design; no claim of complete passive privacy isolation.
 - Unverified: actual7Brew trace/venue row, OS permission/delivery, NYC native stale-fix behavior, device background lifecycle.
 - Remaining: native early5min emission versus12min travel reconciliation; sub5min capture; separate owner-scoped queues/actions/native lease; opt-out reminder semantics and coffee-inclusive copy.
+
+2026-09-30 COMMITTED with entry: initiating-account mirror/hydration and queuedrestoreguards;170suites/2107tests+types and58SDK/sourcecontrols pass. IN PROGRESS honest inbox read/retry UI. UNVERIFIED/remaining full capture ownership, mirror ordering/tombstones, native short-stop/departure behavior and physical notification delivery.

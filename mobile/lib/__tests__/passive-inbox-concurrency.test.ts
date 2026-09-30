@@ -1,3 +1,4 @@
+import { setUsernameGateAccount } from "../username-gate";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {getInbox,notifyOrInbox,removeFromInbox,restoreInboxFromServer,seedDigestFixtures} from '../passive-confirm';
 import {hydrateInboxIfEmpty} from '../passive-inbox-sync';
@@ -15,7 +16,7 @@ const entry=(id:string,age=0)=>({id,place_id:id,name:id,address:'',alternates:[]
 const add=(id:string)=>notifyOrInbox({raw:{id,departureAt:Date.now(),capturedAt:Date.now(),horizontalAccuracy:10,source:'stop'},candidates:[{google_place_id:id,name:id}],cacheHit:true,confidence:.8,confidenceBand:'high'} as any,15);
 const ids=async()=>JSON.parse((await AsyncStorage.getItem(KEY))??'[]').map((e:any)=>e.id).sort();
 function blockRead(){const started=deferred(),release=deferred(),get=AsyncStorage.getItem.bind(AsyncStorage);jest.spyOn(AsyncStorage,'getItem').mockImplementationOnce(async key=>{const value=await get(key);started.resolve();await release.promise;return value});return{started,release}}
-beforeEach(async()=>{jest.restoreAllMocks();jest.clearAllMocks();await AsyncStorage.clear();(hydrateInboxIfEmpty as jest.Mock).mockResolvedValue(null)});
+beforeEach(async()=>{setUsernameGateAccount("test-owner");jest.restoreAllMocks();jest.clearAllMocks();await AsyncStorage.clear();(hydrateInboxIfEmpty as jest.Mock).mockResolvedValue(null)});
 afterEach(()=>jest.restoreAllMocks());
 test('concurrent adds preserve both rows',async()=>{const g=blockRead(),a=add('a');await g.started.promise;const b=add('b');await tick();g.release.resolve();await Promise.all([a,b]);expect(await ids()).toEqual(['a','b'])});
 test('concurrent same-meal additions deduplicate inside storage transaction',async()=>{const g=blockRead(),a=add('a');await g.started.promise;const b=add('a');await tick();g.release.resolve();expect((await Promise.all([a,b])).sort()).toEqual(['inboxed-digest','suppressed-duplicate']);expect(await ids()).toEqual(['a'])});
