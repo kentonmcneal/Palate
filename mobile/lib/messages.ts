@@ -100,3 +100,79 @@ export function subscribeToThread(
     .subscribe();
   return () => { void supabase.removeChannel(channel); };
 }
+
+// ----------------------------------------------------------------------------
+// Reconciling an optimistic send with its realtime echo.
+//
+// These are pure and exported so the race below can be tested. It used to live
+// inline in app/thread/[id].tsx, where it could not be.
+//
+// THE BUG THIS FIXES. Sending is optimistic: the message is appended as
+// `pending-<ts>`, then renamed when dm_send returns the real id. The realtime
+// handler deduped on the SERVER id — `prev.some(x => x.id === m.id)` — so it
+// only recognised its own echo if dm_send had already answered. When the echo
+// won that race the list still held `pending-…`, nothing matched, the echo was
+// appended, and then the optimistic row was renamed to the same id. The message
+// appeared TWICE, both rows carrying the real id.
+//
+// It is worst exactly where optimism matters: a slow connection is what makes
+// the echo beat the response. Zero tests covered this path.
+//
+// The fix is to stop treating the server id as the only identity. A pending row
+// is matched by (mine + identical body), which is information both sides have
+// without a schema change.
+// ----------------------------------------------------------------------------
+
+/** Client-side marker for a message that has not been acknowledged yet. */
+export const PENDING_PREFIX = "pending-";
+export const isPending = (m: DmMessage): boolean => m.id.startsWith(PENDING_PREFIX);
+
+/**
+ * Fold a realtime message into the list.
+ *
+ * Order of checks matters: identity by server id first (already reconciled),
+ * then the pending match, then append.
+ */
+export function applyIncoming(
+  prev: DmMessage[] | null,
+  incoming: DmMessage,
+  me: string | null,
+): DmMessage[] {
+  if (!prev) return [incoming];
+  if (prev.some((m) => m.id === incoming.id)) return prev;
+
+  // Our own echo, arriving before dm_send answered. Replace the pending row
+  // in place so the message does not jump position as it is acknowledged.
+  if (me && incoming.sender_id === me) {
+    const i = prev.findIndex((m) => isPending(m) && m.body === incoming.body);
+    if (i !== -1) {
+      const next = prev.slice();
+      next[i] = incoming;
+      return next;
+    }
+  }
+  return [...prev, incoming];
+}
+
+/**
+ * Attach the real id once dm_send answers.
+ *
+ * If the echo already arrived and replaced the pending row, the optimistic
+ * entry is simply dropped — renaming it would duplicate the message, which is
+ * the other half of the same race.
+ */
+export function reconcileSent(
+  prev: DmMessage[] | null,
+  optimisticId: string,
+  realId: string,
+): DmMessage[] {
+  if (!prev) return [];
+  const already = prev.some((m) => m.id === realId);
+  if (already) return prev.filter((m) => m.id !== optimisticId);
+  return prev.map((m) => (m.id === optimisticId ? { ...m, id: realId } : m));
+}
+
+/** Remove a failed optimistic send. */
+export function dropOptimistic(prev: DmMessage[] | null, optimisticId: string): DmMessage[] {
+  return (prev ?? []).filter((m) => m.id !== optimisticId);
+}

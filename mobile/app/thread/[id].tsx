@@ -9,7 +9,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { colors, spacing, type } from "../../theme";
 import {
-  listMessages, listThreads, sendMessage, markRead, subscribeToThread, type DmMessage,
+  listMessages, listThreads, sendMessage, markRead, subscribeToThread,
+  applyIncoming, reconcileSent, dropOptimistic, PENDING_PREFIX, type DmMessage,
 } from "../../lib/messages";
 import { supabase } from "../../lib/supabase";
 import { reportContent, blockUser, REPORT_REASONS } from "../../lib/moderation";
@@ -40,9 +41,29 @@ export default function ThreadScreen() {
   const [me, setMe] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
+  // Also a ref: the realtime effect below closes over the viewer id, and its
+  // deps are [threadId, isNew]. Reading state there would pin whatever `me` was
+  // when the channel opened — null, if getUser() had not resolved — and the
+  // echo-matching in applyIncoming would never fire. Re-subscribing on `me`
+  // instead would tear down a live socket for no reason.
+  const meRef = useRef<string | null>(null);
 
   useEffect(() => {
-    void supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
+    void supabase.auth.getUser().then(({ data }) => {
+      const id = data.user?.id ?? null;
+      meRef.current = id;
+      setMe(id);
+    });
+  }, []);
+
+  /** The viewer id, resolved on demand. A fast sender can beat getUser(). */
+  const whoAmI = useCallback(async (): Promise<string | null> => {
+    if (meRef.current) return meRef.current;
+    const { data } = await supabase.auth.getUser();
+    const id = data.user?.id ?? null;
+    meRef.current = id;
+    setMe(id);
+    return id;
   }, []);
 
   const load = useCallback(async () => {
@@ -63,11 +84,7 @@ export default function ThreadScreen() {
   useEffect(() => {
     if (isNew) return;
     const off = subscribeToThread(threadId, (m) => {
-      setMessages((prev) => {
-        if (!prev) return [m];
-        if (prev.some((x) => x.id === m.id)) return prev; // our own echo
-        return [...prev, m];
-      });
+      setMessages((prev) => applyIncoming(prev, m, meRef.current));
       void markRead(threadId);
     });
     return off;
@@ -78,21 +95,23 @@ export default function ThreadScreen() {
     if (!body || sending) return;
     setSending(true);
     setDraft("");
-    // Optimistic. The id is replaced when the server answers; the realtime
-    // echo dedupes on it.
+    // Resolved before the optimistic row is built, not after. sender_id drives
+    // both the mine-or-theirs styling and the echo match, and `me ?? ""`
+    // silently broke each of them for anyone who sent before getUser() landed.
+    const mine = await whoAmI();
+    // Optimistic. Reconciled by reconcileSent when dm_send answers, or by
+    // applyIncoming if the realtime echo gets here first — either order.
     const optimistic: DmMessage = {
-      id: `pending-${Date.now()}`,
+      id: `${PENDING_PREFIX}${Date.now()}`,
       thread_id: threadId,
-      sender_id: me ?? "",
+      sender_id: mine ?? "",
       body,
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...(prev ?? []), optimistic]);
     try {
       const realId = await sendMessage(otherId, body);
-      setMessages((prev) =>
-        (prev ?? []).map((m) => (m.id === optimistic.id ? { ...m, id: realId } : m)),
-      );
+      setMessages((prev) => reconcileSent(prev, optimistic.id, realId));
       // The first message is what creates the thread, so this is where a
       // conversation opened from a profile learns its own id — and where the
       // realtime subscription becomes possible.
@@ -103,7 +122,7 @@ export default function ThreadScreen() {
       }
     } catch (e: any) {
       // Put the words back rather than losing them.
-      setMessages((prev) => (prev ?? []).filter((m) => m.id !== optimistic.id));
+      setMessages((prev) => dropOptimistic(prev, optimistic.id));
       setDraft(body);
       setError(e?.message ?? "That didn't send.");
     } finally {
