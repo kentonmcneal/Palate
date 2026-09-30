@@ -129,3 +129,6 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 2026-09-30 COMMITTED with entry: strictserializedhistory prevents failedread/new-user and lostupdate behavior; malformednewIDs rejected.181suites/2229tests/typespass. Native stop completion/captureownership, corruptdata recovery and real7Brew/device verification remain open.
 
 - Completed: saved-consent capturetoggle, unknown/retry and repair ownership;183suites/2265tests/typespass. Sharedcorestart/stop and digest/onboarding followups pending.
+
+- Completed: same-runtime consent/startstopordering;185suites/2289tests/typespass. Nativecoldresume/durableoff/accountownership remainunverified.
+- LIVE: paused oldLLMbackfillcron14, readbackinactive. NewadmissionRPCsabsent; do notreactivatewithoutcostsafeprotocol. No appdeployyet.

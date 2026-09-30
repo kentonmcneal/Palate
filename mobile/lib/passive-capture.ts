@@ -44,24 +44,50 @@ export type StartResult =
  * monitoring under a provisional grant is exactly what we want — iOS holds the
  * events until it has asked the user, then delivers.
  */
-export async function startPassiveCaptureIfEnabled(): Promise<StartResult> {
-  if (!isVisitMonitorAvailable || !PalateVisitMonitor) {
-    return { started: false, reason: "native-module-unavailable" };
-  }
-  if (!(await isFlagEnabled(PASSIVE_CAPTURE_FLAG))) {
-    // Off means off on the device too, not only in the JS pipeline. Without
-    // this the native manager kept running on every phone that had started.
-    PalateVisitMonitor.stopMonitoring();
-    return { started: false, reason: "flag-off" };
-  }
-  if (PalateVisitMonitor.authorizationStatus() !== "always") {
-    return { started: false, reason: "no-always-permission" };
-  }
-  PalateVisitMonitor.startMonitoring();
-  return { started: true };
+// Same-runtime intent clock. Revocation invalidates pending starts immediately,
+// independently of storage or flag latency. This is not capture-account ownership.
+let consentGeneration = 0;
+// A debug stop cancels starts without revoking a pending consent write.
+let startGeneration = 0;
+let consentBlocked = false;
+let consentWrites: Promise<unknown> = Promise.resolve();
+let starts: Promise<unknown> = Promise.resolve();
+
+export function startPassiveCaptureIfEnabled(): Promise<StartResult> {
+  const generation = startGeneration;
+  const current = () => generation === startGeneration && !consentBlocked;
+  const run = async (): Promise<StartResult> => {
+    await consentWrites;
+    if (!current()) return { started: false, reason: "not-opted-in" };
+    // Strict read: unavailable or malformed consent rejects, never starts.
+    if (!(await readPassiveOptInForStatus()) || !current()) {
+      return { started: false, reason: "not-opted-in" };
+    }
+    if (!isVisitMonitorAvailable || !PalateVisitMonitor) {
+      return { started: false, reason: "native-module-unavailable" };
+    }
+    const enabled = await isFlagEnabled(PASSIVE_CAPTURE_FLAG);
+    if (!current()) return { started: false, reason: "not-opted-in" };
+    if (!enabled) {
+      PalateVisitMonitor.stopMonitoring();
+      return { started: false, reason: "flag-off" };
+    }
+    if (PalateVisitMonitor.authorizationStatus() !== "always") {
+      return { started: false, reason: "no-always-permission" };
+    }
+    // Native bridge operations are synchronous: no await between final guard
+    // and start, so a same-runtime opt-out cannot interleave here.
+    if (!current()) return { started: false, reason: "not-opted-in" };
+    PalateVisitMonitor.startMonitoring();
+    return { started: true };
+  };
+  const result = starts.then(run);
+  starts = result.catch(() => undefined);
+  return result;
 }
 
 export function stopPassiveCapture(): void {
+  ++startGeneration;
   if (isVisitMonitorAvailable && PalateVisitMonitor) {
     PalateVisitMonitor.stopMonitoring();
   }
@@ -91,13 +117,29 @@ export async function isPassiveOptedIn(): Promise<boolean> {
   }
 }
 
-export async function setPassiveOptIn(value: boolean): Promise<void> {
-  await AsyncStorage.setItem(OPT_IN_KEY, value ? "1" : "0");
-  // Stamp the first opt-in so the day-7 permission check has an origin. Not
-  // overwritten on a re-opt-in: the question is how long the grant has survived.
-  if (value && !(await AsyncStorage.getItem(OPT_IN_AT_KEY))) {
-    await AsyncStorage.setItem(OPT_IN_AT_KEY, String(Date.now()));
+export function setPassiveOptIn(value: boolean): Promise<void> {
+  const generation = ++consentGeneration;
+  ++startGeneration;
+  consentBlocked = true;
+  // Stop before any storage await. A failed stop must not skip persisting off.
+  let stopError: unknown;
+  if (!value) {
+    try {
+      if (isVisitMonitorAvailable && PalateVisitMonitor) PalateVisitMonitor.stopMonitoring();
+    } catch (error) { stopError = error; }
   }
+  const result = consentWrites.then(async () => {
+    await AsyncStorage.setItem(OPT_IN_KEY, value ? "1" : "0");
+    // Preserve first-opt-in semantics and existing write order. If timestamp
+    // persistence fails after consent succeeds, remain blocked in this runtime.
+    if (value && !(await AsyncStorage.getItem(OPT_IN_AT_KEY))) {
+      await AsyncStorage.setItem(OPT_IN_AT_KEY, String(Date.now()));
+    }
+    if (value && generation === consentGeneration) consentBlocked = false;
+    if (stopError !== undefined) throw stopError;
+  });
+  consentWrites = result.catch(() => undefined);
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,7 +197,6 @@ export async function reportDay7PermissionState(
 /** Turn passive capture off for real: forget the opt-in and disarm the native monitor. */
 export async function optOutOfPassiveCapture(): Promise<void> {
   await setPassiveOptIn(false);
-  stopPassiveCapture();
 }
 
 /**
@@ -166,7 +207,6 @@ export async function optOutOfPassiveCapture(): Promise<void> {
  * Never prompts — a user who hasn't opted in is left alone.
  */
 export async function resumePassiveCaptureIfOptedIn(): Promise<StartResult> {
-  if (!(await isPassiveOptedIn())) return { started: false, reason: "not-opted-in" };
   return startPassiveCaptureIfEnabled();
 }
 

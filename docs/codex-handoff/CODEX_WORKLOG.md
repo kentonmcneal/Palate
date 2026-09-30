@@ -368,3 +368,12 @@ Main75durable actual-SDK controls pass; independent10 actual-source read/caller 
 - Sharedhelper startup/optout races remain separate pendingreview; no coldrestart/native/device proof. Journey audit identified misleadingconsent/automaticlogging copy and digest unavailable/partialsave followups. No native activation ornotifications sent.
 - User now authorizes tested deployments subject continuingno-cost rule. EASread-only:Starter account,400/4500buildcreditcents used,21/3000Updateusers,568MiB/100GiB,zerooverage reported; no release yet. Requires dependency/runtimeverification, no spend authorization implied.
 - Rollback this component/settings/tests/report commit together. Preserve priorprivacywork and baseline.
+
+## Passive startup/stop consent ordering — 2026-09-30
+- COMMITTED with entry: eachstart strictlychecksconsent/flag/Always; failed/malformedconsent neverauthorizesstart. Same-runtime startgeneration cancels oldawaits afteroptout/stop, consentwrites serialize, optoutattemptsnativestop beforeawaitingstorage evenonfailedsave. Independentcorrection separates debugstop fromconsentgeneration so a completingenablecanrecoverfreshresume withoutrevivingoldstart.
+- Main185suites/2289tests pass,1skip; TypeScript pass. Author16+independent8actualhelpercontrols; mountedtoggle expectationchanges only reflect immediate stoponfailedpersistence. NoOScalls.
+- LIMITS: nativecoldresume consults separate enabledbit; JSblockdoesnotsurviveprocessdeath. Failedstop cannotguaranteeOSceased; failedoffwritecanpermitfuturecoldresume. Hungflagserializeslaterstarts butcannotblockimmediateoptout. Noownerprovenance/nativecompletionrewrite.
+- Rollback helper/tests/reports together. No nativebuild orcaptureactivation performed.
+
+## Live cost containment — 2026-09-30
+- LIVE: management readconfirmed classifiercron active and olddeployedpath/newadmissionRPCsabsent. Pausedjob14 llm_cuisine_backfill; readbackactivefalse. No paidcall/jobinvocation, deletion orappdeployment. PASSIVE_LIVE_RELEASE_AUDIT_20260930 recordsrollback/limits. Allotherlivecostpathsremainunverified.
