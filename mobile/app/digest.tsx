@@ -177,7 +177,7 @@ export default function DigestScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.h1}>Your day</Text>
-        <Text style={styles.sub}>Tick the places you ate at and untick any you didn't.</Text>
+        <Text style={styles.sub}>Select the places where you got food or a drink. Leave the others unchecked.</Text>
         <Text style={styles.why}>{WHY_IT_MATTERS}</Text>
 
         {nothing && (

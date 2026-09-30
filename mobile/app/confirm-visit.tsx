@@ -193,7 +193,7 @@ export default function ConfirmVisit() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.body}>
         <Text style={type.micro}>
-          {params.confidence === "medium" ? "MIGHT BE NEARBY" : "WE THINK YOU'RE AT"}
+          {params.confidence === "medium" ? "POSSIBLE STOP" : "CHECK THIS STOP"}
         </Text>
         <Spacer size={6} />
         <Text style={styles.h1}>{params.name}</Text>
@@ -202,8 +202,8 @@ export default function ConfirmVisit() {
         <Spacer size={32} />
         <Text style={[type.body, { color: colors.ink }]}>
           {params.confidence === "medium"
-            ? `Are you inside ${params.name}, or just nearby?`
-            : `Are you eating at ${params.name}?`}
+            ? `Did you get food or a drink at ${params.name}, or were you just nearby?`
+            : `Did you get food or a drink at ${params.name}?`}
         </Text>
         <Spacer />
         <Button title="Yes, log visit" onPress={handleYes} loading={busy} />

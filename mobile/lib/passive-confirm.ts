@@ -368,7 +368,7 @@ export async function registerConfirmCategory(): Promise<void> {
     await Notifications.setNotificationCategoryAsync(CONFIRM_CATEGORY, [
       {
         identifier: "confirm_yes",
-        buttonTitle: "Yes, I ate here",
+        buttonTitle: "Yes",
         options: { opensAppToForeground: false },
       },
       {
@@ -391,12 +391,12 @@ async function scheduleConfirmNotification(entry: InboxEntry): Promise<void> {
   await Notifications.scheduleNotificationAsync({
     content: isCluster
       ? {
-          title: `Where'd you eat near ${entry.name}?`,
-          body: `${count} spots in range. Tap to check off the ones you ate at.`,
+          title: `Food or drinks near ${entry.name}?`,
+          body: `${count} spots in range. Choose where you got food or a drink.`,
           data: { kind: "passive_confirm", multi: "1", ...confirmParamsFor(entry) },
         }
       : {
-          title: `Did you eat at ${entry.name}?`,
+          title: `Food or a drink at ${entry.name}?`,
           body: "Yes or No, no need to open the app.",
           categoryIdentifier: CONFIRM_CATEGORY,
           data: { kind: "passive_confirm", ...confirmParamsFor(entry) },
