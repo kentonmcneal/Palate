@@ -61,7 +61,7 @@ Scoped out deliberately; each needs its own batch and evidence.
    `no-new-dead-exports.test.ts:40`, with the reason recorded at line 16. There is
    no global unread badge to be silently absent. The badge that exists is
    per-thread, rendered from `dm_threads_list` in `app/messages.tsx:74`.
-4. **`app/profile/[id].tsx` (45 lines, untouched since 09-05) not yet audited.**
+4. ~~`app/profile/[id].tsx` not yet audited.~~ **Audited — see below.**
 5. `lib/friends.ts` still exports `loadFriendsLeaderboard`, dead and allowlisted
    in `no-new-dead-exports.test.ts`.
 
@@ -154,3 +154,56 @@ old code could not see at all — and every retry assertion. Full suite 193 suit
 not reconcile a receipt that fails while the app is being backgrounded or killed,
 and there is no queue that survives a restart. Nothing here is verified against a
 real server or on a device.
+
+## Fixed: a bad deep-link made a false alarm on a watched RPC — `RUN`
+
+`app/profile/[id].tsx` passed its route param straight to `ProfileBody` as
+`id as string` — a cast asserting a shape nobody had checked. That matters because
+of where the ids come from.
+
+**Three of the four notification deep-links in `app/_layout.tsx` push
+`` `/profile/${String(data.user_id ?? "")}` ``.** Only the fourth (`new_follower`,
+line 345) guards with `data.user_id &&` first. So a push payload without
+`user_id` navigates here with an **empty id**.
+
+`ProfileBody`'s snapshot load has no empty-id guard — it guards the shared-places
+load at line 62 and not the snapshot at line 99 — so
+`get_friend_profile_snapshot("")` runs, Postgres rejects the invalid uuid, and
+`captureError` fires with `at: "ProfileBody.snapshot"`.
+
+That RPC is the one this project's own comment describes as having **"failed
+silently for sixty-five migrations"**, watched precisely so a regression is never
+missed again. A malformed push payload therefore manufactures a false alarm on the
+single signal most likely to be believed — and the user sees "Couldn't load this
+profile", which reads as the server being broken.
+
+**Fix (screen boundary only).** `lib/profile-route.ts` validates before rendering:
+the param is normalised (expo-router types it `string | string[]`, and a repeated
+segment arrives as an array the old cast would have interpolated as `"a,b"`), and
+checked against a uuid shape, because `profiles.id` is a uuid and anything else is
+a 22P02 at the database rather than a profile that happens to be missing. An
+unusable id renders "Profile unavailable" and **never spends a round trip**, so no
+error is reported. The back button still works — it is the only way out of a modal.
+
+Also added the missing `accessibilityRole`/`accessibilityLabel` on that back
+button. It was a bare `←` glyph, which reads as "left arrow" or as nothing.
+
+**Evidence.** `lib/__tests__/profile-route-id.test.ts`, 16 cases. Verified by
+dropping the uuid check: 5 fail, including the literal strings `"undefined"` and
+`"null"` that string interpolation produces. Full suite 194 suites / 2,393 tests,
+1 skipped; TypeScript clean.
+
+### Not fixed — Codex's files, reported not touched
+
+- **`app/_layout.tsx`:** three deep-links should guard `data.user_id` the way the
+  fourth already does, rather than relying on the screen to reject `""`. The
+  screen guard prevents the false alarm; it does not make the navigation correct.
+  A push with no `user_id` still opens a modal saying nothing is there.
+- **`components/ProfileBody.tsx`:** the snapshot load would still call the RPC
+  with an empty id if reached from anywhere other than this screen. Line 62
+  already guards the shared-places load, so the pattern exists and was simply not
+  applied at line 99.
+
+Both are in Codex's live area (`components/` touched 09-30 01:07, `_layout.tsx`
+carries their account-keyed root work), so they are recorded here rather than
+edited.
