@@ -134,3 +134,5 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 - LIVE: paused oldLLMbackfillcron14, readbackinactive. NewadmissionRPCsabsent; do notreactivatewithoutcostsafeprotocol. No appdeployyet.
 
 - Completed local verification2026-09-30: truthful passive intro and recoverable evening confirmation, including independent corrections;189suites/2345tests/types pass. Remaining: native/device tracking and delivery, legacy record ownership, durable retry transaction, rating helper account boundary. See PASSIVE_INTRO and PASSIVE_DIGEST_SCREEN reports.
+
+- Completed2026-09-30: rating initiating-account/header/filter/stale-invalidation safeguard,190suites2349tests/typespass. Durable affected-row acknowledgement and liveRLS remain unverified; ownerlesscapture migration remains pending.
