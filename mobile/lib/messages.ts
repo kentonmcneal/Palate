@@ -17,6 +17,7 @@
 // ============================================================================
 
 import { supabase } from "./supabase";
+import { captureError } from "./observability";
 
 export type DmThread = {
   thread_id: string;
@@ -70,8 +71,55 @@ export async function sendMessage(toUserId: string, body: string): Promise<strin
   return data as string;
 }
 
-export async function markRead(threadId: string): Promise<void> {
-  await supabase.rpc("dm_mark_read", { p_thread: threadId }).then(() => {}, () => {});
+/**
+ * Record that this conversation has been read. Returns whether the server
+ * actually accepted it.
+ *
+ * This was `.then(() => {}, () => {})` — a no-op on both branches — and it went
+ * wrong in two ways at once.
+ *
+ * First, `supabase.rpc()` RESOLVES with `{ error }`; it does not reject on a
+ * server-side failure. So the rejection handler caught network faults while the
+ * success handler discarded the error field, and a refused or failed
+ * `dm_mark_read` was indistinguishable from one that worked.
+ *
+ * Second, nothing retried. The per-thread unread badge in app/messages.tsx is
+ * rendered from `dm_threads_list`, which reads the server's state — so one
+ * transient failure left a conversation you had just read showing unread, and
+ * nothing in the app ever tried again. Leaving and re-entering the thread fires
+ * another attempt, but only if you happen to do it.
+ *
+ * A bounded retry fixes the common case, which is a momentary network fault. If
+ * it still fails the badge correctly stays unread — the server genuinely has not
+ * recorded the read — and the failure is reported rather than swallowed.
+ *
+ * `sleep` is injectable so the retry is testable without real delays.
+ */
+export async function markRead(
+  threadId: string,
+  opts: { tries?: number; baseDelayMs?: number; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<boolean> {
+  const tries = opts.tries ?? 3;
+  const base = opts.baseDelayMs ?? 200;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  let last: unknown = null;
+
+  for (let attempt = 1; attempt <= tries; attempt++) {
+    try {
+      const { error } = await supabase.rpc("dm_mark_read", { p_thread: threadId });
+      if (!error) return true;
+      last = error;
+    } catch (thrown) {
+      last = thrown;
+    }
+    if (attempt < tries) await sleep(base * attempt);
+  }
+  // Reported, not swallowed. A stale unread badge with no trace of why is how
+  // this stayed invisible.
+  void captureError(last ?? new Error("dm_mark_read failed"), {
+    at: "messages:markRead", thread_id: threadId, tries,
+  });
+  return false;
 }
 
 /**

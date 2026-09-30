@@ -55,10 +55,12 @@ Re-subscribing on `me` would tear down a live socket instead.
 Scoped out deliberately; each needs its own batch and evidence.
 
 1. ~~`subscribeToThread` has no reconnect recovery.~~ **Fixed — see below.**
-2. **`markRead` swallows every error** (`.then(() => {}, () => {})`), so a failed
-   read receipt is invisible and the unread badge stays wrong.
-3. **`unreadTotal` returns 0 on error**, so a persistent failure is
-   indistinguishable from an empty inbox — the badge simply never appears.
+2. ~~`markRead` swallows every error.~~ **Fixed — see below.**
+3. ~~`unreadTotal` returns 0 on error.~~ **Not a defect — I was wrong.** It has no
+   caller at all and is deliberately allowlisted as dormant in
+   `no-new-dead-exports.test.ts:40`, with the reason recorded at line 16. There is
+   no global unread badge to be silently absent. The badge that exists is
+   per-thread, rendered from `dm_threads_list` in `app/messages.tsx:74`.
 4. **`app/profile/[id].tsx` (45 lines, untouched since 09-05) not yet audited.**
 5. `lib/friends.ts` still exports `loadFriendsLeaderboard`, dead and allowlisted
    in `no-new-dead-exports.test.ts`.
@@ -112,3 +114,43 @@ gap can land after an unacknowledged local send that is chronologically later.
 Pending rows are by definition the newest local thing, so this is a display
 ordering nuance rather than loss. No sort protocol was added — ordering across two
 clocks is not something these tests could verify.
+
+## Fixed: a failed read receipt left a conversation unread forever — `RUN`
+
+The per-thread unread badge (`app/messages.tsx:74`) is rendered from
+`dm_threads_list`, i.e. from the **server's** state. So whether a conversation
+looks read depends entirely on `dm_mark_read` having landed. `markRead` was:
+
+```ts
+await supabase.rpc("dm_mark_read", { p_thread: threadId }).then(() => {}, () => {});
+```
+
+A no-op on both branches, and wrong twice over.
+
+**`supabase.rpc()` resolves with `{ error }` — it does not reject** on a
+server-side failure. So the rejection handler caught network faults while the
+success handler discarded the error field entirely. A refused `dm_mark_read` was
+indistinguishable from one that worked. This is the same shape as the push
+drain's kill-switch read and the classifier's spend gate: the failure mode was
+invisible because the error was thrown away at the point it was returned.
+
+**And nothing retried.** One momentary fault left a thread you had just read
+showing unread, permanently, unless you happened to open it again.
+
+**Fix.** `markRead` returns whether the server accepted it, retries a bounded
+three times with linear backoff, and reports a final failure through
+`captureError` instead of swallowing it. If it still fails the badge correctly
+stays unread — the server genuinely has not recorded the read — but there is now
+a trace of why. `sleep` is injectable so the retry is tested without real delays.
+
+**Evidence.** `lib/__tests__/dm-read-receipt.test.ts`, 9 cases, with the supabase
+client and observability mocked (the `feed-loading-races` precedent). Verified by
+restoring the shipped swallow-and-succeed implementation: **6 of 9 fail**,
+including both "returns false when the RPC resolves with an error" — the case the
+old code could not see at all — and every retry assertion. Full suite 193 suites
+/ 2,377 tests, 1 skipped; TypeScript clean.
+
+**Limit.** The retry covers a transient fault at the moment of reading. It does
+not reconcile a receipt that fails while the app is being backgrounded or killed,
+and there is no queue that survives a restart. Nothing here is verified against a
+real server or on a device.
