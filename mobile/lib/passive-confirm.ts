@@ -24,6 +24,7 @@ export { CONFIRM_CATEGORY, confirmParamsFor } from "./passive-digest";
 import { serialize } from "./notification-dedupe";
 import { mirrorInbox, hydrateInboxIfEmpty } from "./passive-inbox-sync";
 import { accountWriteSession, assertAccountWriteSession } from "./account-write";
+import { INBOX_EXPIRY_HOURS } from "./passive-inbox-policy";
 
 // Quiet hours (local): default ~9pm–8am. Suppressed visits go to the inbox.
 const QUIET_START_HOUR = 21;
@@ -49,7 +50,7 @@ export const DEMOTED_CONFIDENCE_CAP = 0.39;
 // names the place; at 24h the entry was purged five minutes after that
 // notification, so tapping it showed "nothing captured". Two days covers the
 // longest cycle (Friday 23:00 → Saturday 23:00) plus a reasonable evening.
-const INBOX_EXPIRY_HOURS = 48;
+
 
 const INBOX_KEY = "palate.passive.inbox";
 const RATE_KEY = "palate.passive.notifRate"; // { day: "YYYY-MM-DD", count: n }
@@ -252,6 +253,16 @@ export async function getInbox(): Promise<InboxEntry[]> {
   // Display is best effort. Scheduling and mutations require the strict read;
   // unreadable storage is never authority to replace existing entries.
   try { return await readInbox(); } catch { return []; }
+}
+
+/** Display callers must distinguish an unavailable read from verified emptiness.
+ * Reuses the serialized strict reader; does not alter legacy getInbox callers. */
+export type InboxReadResult =
+  | { status: "ready"; entries: InboxEntry[] }
+  | { status: "unavailable" };
+export async function getInboxReadResult(): Promise<InboxReadResult> {
+  try { return { status: "ready", entries: await readInbox() }; }
+  catch { return { status: "unavailable" }; }
 }
 
 /** The calendar day a detection belongs to, on THIS device, in local time.

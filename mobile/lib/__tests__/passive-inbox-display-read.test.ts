@@ -1,0 +1,21 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getInboxReadResult, getInbox, notifyOrInbox, removeFromInbox, restoreInboxFromServer, seedDigestFixtures } from "../passive-confirm";
+import { mirrorInbox, hydrateInboxIfEmpty } from "../passive-inbox-sync";
+import { scheduleDigest } from "../passive-digest";
+jest.mock("../analytics", () => ({ track: jest.fn() }));
+jest.mock("../observability", () => ({ captureError: jest.fn() }));
+jest.mock("../passive-inbox-sync", () => ({ mirrorInbox: jest.fn(), hydrateInboxIfEmpty: jest.fn() }));
+jest.mock("../passive-digest", () => ({ scheduleDigest: jest.fn(), DIGEST_NOTIF_ID_STORAGE_KEY: "digest", allowsRealtimePrompt: () => false }));
+jest.mock("../visits", () => ({ recentlyPrompted: jest.fn(async () => false), placeRefusals: jest.fn(async () => 0), shouldDemote: () => false }));
+jest.mock("expo-notifications", () => ({}));
+
+const KEY="palate.passive.inbox";
+const entry=(id="saved",age=0)=>({id,place_id:id,name:id,address:"",alternates:[],detectedAt:Date.now()-age,dwellMin:10});
+beforeEach(async()=>{jest.restoreAllMocks();jest.clearAllMocks();await AsyncStorage.clear()});
+afterEach(()=>jest.restoreAllMocks());
+test.each([null,"[]"])("verified empty %s is ready",async raw=>{if(raw!==null)await AsyncStorage.setItem(KEY,raw);await expect(getInboxReadResult()).resolves.toEqual({status:"ready",entries:[]})});
+test.each(["{","{}","",JSON.stringify([{detectedAt:"bad"}])])("invalid contents %s unavailable without writes",async raw=>{await AsyncStorage.setItem(KEY,raw);jest.spyOn(AsyncStorage,"getItem").mockResolvedValueOnce(raw);const write=jest.spyOn(AsyncStorage,"setItem").mockClear();await expect(getInboxReadResult()).resolves.toEqual({status:"unavailable"});expect(write).not.toHaveBeenCalled();expect(mirrorInbox).not.toHaveBeenCalled()});
+test("failed read preserves bytes and recovers",async()=>{const saved=entry();const raw=JSON.stringify([saved]);await AsyncStorage.setItem(KEY,raw);jest.spyOn(AsyncStorage,"getItem").mockRejectedValueOnce(Error("storage"));await expect(getInboxReadResult()).resolves.toEqual({status:"unavailable"});expect(await AsyncStorage.getItem(KEY)).toBe(raw);await expect(getInboxReadResult()).resolves.toEqual({status:"ready",entries:[saved]})});
+test("expiry persistence failure is unavailable, not verified empty",async()=>{const raw=JSON.stringify([entry("expired",49*3600000)]);await AsyncStorage.setItem(KEY,raw);jest.spyOn(AsyncStorage,"setItem").mockRejectedValueOnce(Error("write"));await expect(getInboxReadResult()).resolves.toEqual({status:"unavailable"});expect(await AsyncStorage.getItem(KEY)).toBe(raw);expect(mirrorInbox).not.toHaveBeenCalled();await expect(getInboxReadResult()).resolves.toEqual({status:"ready",entries:[]})});
+test("serialized read recovers after rejected predecessor",async()=>{await AsyncStorage.setItem(KEY,JSON.stringify([entry()]));jest.spyOn(AsyncStorage,"getItem").mockRejectedValueOnce(Error("once"));const [one,two]=await Promise.all([getInboxReadResult(),getInboxReadResult()]);expect(one.status).toBe("unavailable");expect(two.status).toBe("ready");if(two.status==="ready")expect(two.entries).toHaveLength(1)});
+test("legacy fallback contract remains unchanged",async()=>{await AsyncStorage.setItem(KEY,"{");await expect(getInbox()).resolves.toEqual([]);await expect(getInboxReadResult()).resolves.toEqual({status:"unavailable"})});

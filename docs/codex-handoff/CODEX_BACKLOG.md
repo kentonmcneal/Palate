@@ -119,3 +119,5 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 - Remaining: native early5min emission versus12min travel reconciliation; sub5min capture; separate owner-scoped queues/actions/native lease; opt-out reminder semantics and coffee-inclusive copy.
 
 2026-09-30 COMMITTED with entry: initiating-account mirror/hydration and queuedrestoreguards;170suites/2107tests+types and58SDK/sourcecontrols pass. IN PROGRESS honest inbox read/retry UI. UNVERIFIED/remaining full capture ownership, mirror ordering/tombstones, native short-stop/departure behavior and physical notification delivery.
+
+2026-09-30 COMMITTED with entry: honest inbox loading/retry/stale callback protection; weekend low-only deferral cannot intentionally outlive shown entry retention. Main175suites/2150tests+types, then24independentexpiry executions pass. IN PROGRESS capture-status truthfulness; native stop duration/provenance and actual7Brew/device delivery remain unresolved.

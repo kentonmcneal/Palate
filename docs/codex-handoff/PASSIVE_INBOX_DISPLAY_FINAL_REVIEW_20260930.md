@@ -1,0 +1,13 @@
+# Final baseline recheck: e80408a
+
+**WORKING TREE / offline: approve READY display packet with the existing BACK_GUARD.patch.** Confirmed main HEAD e80408ae65e0e84be4a8a5b8041b36e635f3ce23; copied current mobile source into a fresh scratch tree, applied the latest author patch, Back correction and independent tests. No repository writes.
+
+Final **78/78 tests in seven suites pass, exit0**, E80408A_VERIFIED.log: the previous 76 controls plus two actual-helper mounted route controls. Exact final patch/report/source hashes: E80408A_HASHES.json. Author patch applies cleanly against sync-integrated main. The shared result wrapper is additive; sync/restore guards remain in the tested copy.
+
+The new tests load the actual passive-confirm module and its actual confirmParamsFor re-export from passive-digest. Only getInboxReadResult is replaced for controlled UI read outcomes. Mounted single and cluster presses pass actual inbox_id/place_id/alternates/confidence/cluster parameters to their respective routes. Native notifications and unrelated dependency boundaries are mocked. EXPORT_TESTS.patch provides these two controls; no mocked helper implementation is used for their route assertions.
+
+The stale Back issue and one-line correction are unchanged: require current focus and exact account snapshot identity, allowing current signed-out Back. Original independent controls reproduce both stale navigation failures; corrected runs pass. See REVIEW.md for substantive read/retry/lifetime/account findings and limits. Global ownerless bytes, side effects of strict reads, and already-issued writes remain outside UI ownership protection. Actual native primitives/focus are mocked: no device or real navigation timing claim.
+
+Execution disclosure: E80408A_FINAL.log is an accidentally broad scratch test invocation stopped with exit130, not full-suite evidence. E80408A_FOCUSED.log had 76 passing tests but one helper suite failed during setup because the native notification import needed an explicit boundary mock. The corrected helper suite passes, and E80408A_VERIFIED.log is the complete final seven-suite green run. Neither earlier run is counted as a successful full run. Main's reported full170/2107/types result remains main evidence, not independently reproduced here.
+
+Latest author REPORT.md was reread after its integrated-source update. Direct Mendel messaging is unavailable; shared coordination/report artifacts contain the finding. Integration order: author display patch, BACK_GUARD.patch, optional DURABLE_TESTS.patch and EXPORT_TESTS.patch. No additional production correction required.

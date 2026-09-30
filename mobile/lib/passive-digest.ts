@@ -25,6 +25,7 @@
 // ============================================================================
 
 import type { InboxEntry } from "./passive-confirm";
+import { INBOX_EXPIRY_HOURS } from "./passive-inbox-policy";
 import type { ConfidenceBand } from "./passive-confidence";
 import { confidenceBand, HIGH_BAND_MIN } from "./passive-confidence";
 import { loadEatingPattern, type EatingPattern } from "./eating-pattern";
@@ -493,7 +494,13 @@ export function digestTimeFor(
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const slot = digestMomentOn(tomorrow, pattern);
-    if (slot.getTime() > now.getTime()) return slot;
+    // Friday's early-morning low-only digest can otherwise wait until Sunday
+    // midnight, at or beyond its 48-hour inbox lifetime. Use the normal next
+    // slot instead whenever another deferral would outlive any shown entry.
+    // Strictly before expiry: a notification at expiry offers no response time.
+    const earliestExpiry = Math.min(...digest.low.map(entry =>
+      entry.detectedAt + INBOX_EXPIRY_HOURS * 3_600_000));
+    if (slot.getTime() > now.getTime() && slot.getTime() < earliestExpiry) return slot;
   }
   const at = digestMomentOn(now, pattern);
   // Past tonight's slot, roll to tomorrow's rather than returning null.
