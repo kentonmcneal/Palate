@@ -44,41 +44,23 @@ export function HomeHero({ state, now = new Date() }: { state: HomeState; now?: 
   );
 }
 
-/**
- * A sentence, not a dashboard. Never exposes detector internals.
- *
- * Off is a problem, not a neutral state: the point of the app is that it logs
- * meals for you, and a grey dot said "off" the way it would say "n/a". So off
- * gets the red dot, says what it costs, and offers the one tap that fixes it.
- * On stays a quiet green status light.
- */
-export function TrackingLine({ on, lastCheck }: { on: boolean; lastCheck: string | null }) {
-  // The same destination the strip and the Profile row use, so three "Fix"
-  // buttons for one fault never send people three different places.
-  const router = useRouter();
+/** Permission settings are not evidence that the monitor is running. Keep
+ * legacy props for callers, but use the shared status rather than their cached
+ * permission-only "on" flag or a timestamp that was not a detection check. */
+export function TrackingLine(_props: { on: boolean; lastCheck: string | null }) {
   const status = useCaptureStatus();
   const fix = useCaptureFix("home_footer");
+  const actionable = status && "fix" in status;
   return (
     <View style={styles.trackWrap}>
-      <View style={[styles.dot, { backgroundColor: on ? colors.live : colors.red }]} />
-      <Text style={styles.trackText}>
-        <Text style={{ color: colors.ink, fontWeight: "700" }}>
-          {on ? "Tracking is on." : "Tracking is off."}
-        </Text>
-        {on && lastCheck ? ` Last checked ${lastCheck}.` : ""}
-        {!on ? " Palate can't log meals for you." : ""}
-      </Text>
-      {!on && (
-        <Pressable
-          onPress={() => (status && status.kind !== "ok" ? fix(status) : router.push("/passive-capture-intro" as never))}
-          style={styles.fix}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Fix tracking"
-        >
-          <Text style={styles.fixText} maxFontSizeMultiplier={FONT_CAP.chrome}>Fix</Text>
-        </Pressable>
-      )}
+      <View style={[styles.dot, { backgroundColor: !status || status.kind === "unknown" ? colors.mute : status.kind === "ok" ? colors.live : colors.red }]} />
+      <Text style={styles.trackText}>{status?.body ?? "Checking capture settings…"}</Text>
+      {actionable && <Pressable
+        onPress={() => fix(status)} style={styles.fix} hitSlop={8}
+        accessibilityRole="button" accessibilityLabel="Review capture settings"
+      >
+        <Text style={styles.fixText} maxFontSizeMultiplier={FONT_CAP.chrome}>Review</Text>
+      </Pressable>}
     </View>
   );
 }

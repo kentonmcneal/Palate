@@ -123,3 +123,5 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 2026-09-30 COMMITTED with entry: honest inbox loading/retry/stale callback protection; weekend low-only deferral cannot intentionally outlive shown entry retention. Main175suites/2150tests+types, then24independentexpiry executions pass. IN PROGRESS capture-status truthfulness; native stop duration/provenance and actual7Brew/device delivery remain unresolved.
 
 2026-09-30 COMMITTED with entry: current-stop radius filtering prevents inherited out-of-radius cached suggestions; degraded filtered provider responses retry. Main177suites/2170tests/typespass. IN PROGRESS truthful capture status and strictserializedclusterhistory. Native sub5mincoffee/completion/captureownership remain unresolved.
+
+2026-09-30 COMMITTED with entry: capture status respects optout and unknown reads; shared Home/Profile copy no longer promises tracking/delivery; auth bootstrap ordering corrected.179suites/2199tests/typespass. IN PROGRESS strictserializedhistory; activation toggle races and native/device verification remain.

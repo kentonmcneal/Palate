@@ -7,35 +7,15 @@ import { categoryColors, colors, spacing } from "../theme";
 import { FONT_CAP, useFontScale } from "../lib/a11y";
 import { track } from "../lib/analytics";
 import { supabase } from "../lib/supabase";
-import { currentPermissionState } from "../lib/passive-permissions";
-import { notificationsGranted } from "../lib/notifications";
-import { isPassiveOptedIn } from "../lib/passive-capture";
+import { readPermissionStateForStatus } from "../lib/passive-permissions";
+import { readNotificationPermissionForStatus } from "../lib/notifications";
+import { readPassiveOptInForStatus } from "../lib/passive-capture";
 import { triggerHapticSelection } from "../lib/haptics";
 
 // ============================================================================
-// CaptureWarning: the strip that will not go away while the core feature is off.
-// ----------------------------------------------------------------------------
-// Passive capture is the whole product thesis, and it needs two things the
-// person can switch off without ever telling us: Location set to Always, and
-// notifications allowed. Everything the app already had for this was polite.
-// PermissionRepairBanner appears only after a DOWNGRADE, and it has a close
-// button. NextStepCard shows one step on Home, and Home is one tab of five.
-// Somebody could sit on While Using with notifications denied for weeks,
-// using an app that looked like it did nothing, and never be told why.
-//
-// This strip sits above the tab navigator, so it is on every tab, and it has
-// no close button. It goes away the moment the setting is fixed and not
-// before. That is deliberate: a warning you can dismiss is a warning you
-// dismiss once and forget, and the point here is that nobody opts out of the
-// feature by accident.
-//
-// One strip at a time, in priority order. Location comes first because
-// notifications are worthless with nothing to notify about. Notifications
-// second, because Always with no way to ask is the most wasteful state the app
-// can be in: it is watching, resolving, and asking nobody.
-//
-// The decision (captureStatus) is pure so both this strip and the Profile
-// status row read the same answer and say the same words.
+// CaptureWarning: shared opt-in and permission guidance.
+// Reads report settings only, not proof of monitoring or complete capture.
+// Opt-out is distinct from missing grants. Unknown reads stay unknown.
 // ============================================================================
 
 export {
@@ -55,22 +35,22 @@ import { captureStatus, type CaptureWarningKind, type CaptureStatus } from "../l
 export function useCaptureStatus(): CaptureStatus | null {
   const [status, setStatus] = useState<CaptureStatus | null>(null);
   const alive = useRef(true);
+  const generation = useRef(0);
 
   const evaluate = useCallback(async () => {
-    // Every read is local: CoreLocation's status, the notification grant, and
-    // an AsyncStorage flag. Nothing here touches the network.
+    const token = ++generation.current;
+    setStatus(null);
     const [perms, notifs, optedIn] = await Promise.all([
-      currentPermissionState().catch(() => ({ whenInUse: false, always: false })),
-      // Fail closed on the nag, the same way Home does: if we cannot read the
-      // grant, assume it is on rather than accuse somebody who said yes.
-      notificationsGranted().catch(() => true),
-      isPassiveOptedIn().catch(() => false),
+      readPermissionStateForStatus().catch(() => null),
+      readNotificationPermissionForStatus().catch(() => null),
+      readPassiveOptInForStatus().catch(() => null),
     ]);
-    if (!alive.current) return;
+    if (!alive.current || token !== generation.current) return;
     setStatus(captureStatus({
-      always: perms.always,
-      whenInUse: perms.whenInUse,
-      notifications: notifs,
+      always: perms?.always ?? null,
+      whenInUse: perms?.whenInUse ?? null,
+      notifications: notifs?.granted ?? null,
+      quietNotifications: notifs?.quiet,
       optedIn,
     }));
   }, []);
@@ -83,11 +63,12 @@ export function useCaptureStatus(): CaptureStatus | null {
     });
     return () => {
       alive.current = false;
+      generation.current++;
       sub.remove();
     };
   }, [evaluate]);
 
-  useFocusEffect(useCallback(() => { void evaluate(); }, [evaluate]));
+  useFocusEffect(useCallback(() => { void evaluate(); return () => { generation.current++; }; }, [evaluate]));
 
   return status;
 }
@@ -101,7 +82,7 @@ export function useCaptureStatus(): CaptureStatus | null {
 export function useCaptureFix(surface: "strip" | "profile" | "home_footer"): (status: CaptureStatus) => void {
   const router = useRouter();
   return useCallback((status: CaptureStatus) => {
-    if (status.kind === "ok") return;
+    if (!("fix" in status)) return;
     void triggerHapticSelection();
     void track("capture_warning_fix_tapped", { kind: status.kind, surface });
     if (status.fix === "passive-intro") {
@@ -123,11 +104,12 @@ function useHasSession(): boolean {
   const [has, setHas] = useState(false);
   useEffect(() => {
     let alive = true;
+    let authRevision = 0;
     supabase.auth.getSession()
-      .then(({ data }) => { if (alive) setHas(!!data.session); })
+      .then(({ data }) => { if (alive && authRevision === 0) setHas(!!data.session); })
       .catch(() => {});
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      if (alive) setHas(!!s);
+      if (alive) { authRevision++; setHas(!!s); }
     });
     return () => {
       alive = false;
@@ -150,7 +132,7 @@ export function CaptureWarning() {
   const fix = useCaptureFix("strip");
 
   useEffect(() => {
-    if (!hasSession || !status || status.kind === "ok") return;
+    if (!hasSession || !status || !("fix" in status)) return;
     if (shownKinds.has(status.kind)) return;
     shownKinds.add(status.kind);
     void track("capture_warning_shown", { kind: status.kind });
@@ -161,7 +143,7 @@ export function CaptureWarning() {
   // Brand red is reserved for the primary CTA and for states that need
   // attention; a missing Always grant is the second. Notifications are the
   // lesser fault, so they get the amber the app already uses for ratings.
-  const hue = status.kind === "location" ? colors.red : categoryColors.saffron;
+  const hue = status.kind === "unknown" ? colors.mute : status.kind === "location" ? colors.red : categoryColors.saffron;
 
   return (
     // The wrapper paints the status bar area too, so the strip reads as part
@@ -183,7 +165,7 @@ export function CaptureWarning() {
             {status.body}
           </Text>
         </View>
-        <Pressable
+        {"fix" in status && <Pressable
           onPress={() => fix(status)}
           style={({ pressed }) => [styles.fixBtn, pressed && styles.fixBtnPressed]}
           hitSlop={8}
@@ -191,7 +173,7 @@ export function CaptureWarning() {
           accessibilityLabel={`Fix. ${status.title}.`}
         >
           <Text style={styles.fixText} maxFontSizeMultiplier={FONT_CAP.chrome}>Fix</Text>
-        </Pressable>
+        </Pressable>}
       </View>
     </View>
   );

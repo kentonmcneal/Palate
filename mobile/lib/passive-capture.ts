@@ -75,6 +75,14 @@ export function stopPassiveCapture(): void {
 // permission.
 // ---------------------------------------------------------------------------
 
+/** Status UI needs read failures to remain unknown rather than look opted out. */
+export async function readPassiveOptInForStatus(): Promise<boolean> {
+  const raw = await AsyncStorage.getItem(OPT_IN_KEY);
+  if (raw === null || raw === "0") return false;
+  if (raw === "1") return true;
+  throw new Error("Passive opt-in is unreadable");
+}
+
 export async function isPassiveOptedIn(): Promise<boolean> {
   try {
     return (await AsyncStorage.getItem(OPT_IN_KEY)) === "1";

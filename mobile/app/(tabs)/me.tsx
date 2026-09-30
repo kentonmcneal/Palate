@@ -78,13 +78,7 @@ export default function MyProfileScreen() {
   );
 }
 
-/**
- * Whether passive capture is actually working, as a status light under the
- * Profile header. The strip in the tab layout carries the same message while
- * something is off; this row is the place that also says so when everything
- * is ON, so a person can confirm the feature is running instead of wondering.
- * Same decision, same words, same fix as the strip (components/CaptureWarning).
- */
+/** Shared opt-in/permission status, not a monitor-health claim. */
 function CaptureStatusRow() {
   const status = useCaptureStatus();
   const fix = useCaptureFix("profile");
@@ -93,7 +87,7 @@ function CaptureStatusRow() {
 
   const content = (
     <>
-      <View style={[styles.statusDot, { backgroundColor: ok ? colors.live : colors.red }]} />
+      <View style={[styles.statusDot, { backgroundColor: status.kind === "unknown" ? colors.mute : ok ? colors.live : colors.red }]} />
       <View style={styles.statusCopy}>
         <Text style={styles.statusLabel} maxFontSizeMultiplier={FONT_CAP.chrome}>
           Passive capture
@@ -103,7 +97,7 @@ function CaptureStatusRow() {
     </>
   );
 
-  if (ok) {
+  if (!("fix" in status)) {
     return (
       <View style={styles.statusRow} accessible accessibilityLabel={`Passive capture. ${status.body}`}>
         {content}
@@ -115,7 +109,7 @@ function CaptureStatusRow() {
       onPress={() => fix(status)}
       style={({ pressed }) => [styles.statusRow, pressed && styles.statusRowPressed]}
       accessibilityRole="button"
-      accessibilityLabel={`Passive capture is off. ${status.body} Fix.`}
+      accessibilityLabel={`Passive capture settings. ${status.body} Review.`}
     >
       {content}
       <Text style={styles.statusFix} maxFontSizeMultiplier={FONT_CAP.chrome}>Fix</Text>

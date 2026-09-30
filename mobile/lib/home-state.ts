@@ -32,7 +32,7 @@ export type HomeInputs = {
   /** Detected visits awaiting confirmation. */
   pending: Array<{ name: string }>;
   activation: ActivationState;
-  /** Whether passive capture is actually running (opted in AND permitted). */
+  /** Legacy opt-in/location snapshot; not proof that monitoring is running. */
   trackingOn: boolean;
   /**
    * This person's eating hours, when stored. The digest fires an hour after
@@ -87,7 +87,7 @@ export function homeState(input: HomeInputs, now = new Date()): HomeState {
       headline: pending.length === 1
         ? "One visit is ready\nto review."
         : `${pending.length} visits are\nready to review.`,
-      body: names.length ? listNames(names) + "." : "Tap to confirm where you ate.",
+      body: names.length ? listNames(names) + "." : "Review this possible food or drink stop.",
       cta: pending.length === 1 ? "Review it" : "Review them",
       route: "/digest",
     };
@@ -115,7 +115,7 @@ export function homeState(input: HomeInputs, now = new Date()): HomeState {
     return {
       kind: "waiting",
       headline: "Nothing to confirm\nyet.",
-      body: `Tonight's visits will be ready at ${digestTimeLabel(now, pattern)}.`,
+      body: `Check for possible food or drink stops around ${digestTimeLabel(now, pattern)}. Some stops may be missed; you confirm visits before they are logged.`,
     };
   }
 
@@ -123,7 +123,7 @@ export function homeState(input: HomeInputs, now = new Date()): HomeState {
     kind: "steady",
     headline: trackingOn ? "You're all caught up." : "Nothing to confirm.",
     body: trackingOn
-      ? "Anywhere you eat from here gets picked up on its own."
-      : "Turn tracking on and your visits collect themselves.",
+      ? "Possible food or drink stops may appear for review. Some stops may be missed; you confirm visits before they are logged."
+      : "Turn tracking on to help find possible food or drink stops for review. You can also add visits yourself.",
   };
 }

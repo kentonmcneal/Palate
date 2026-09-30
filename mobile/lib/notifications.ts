@@ -347,6 +347,17 @@ export async function disableSundayWrappedReminder(): Promise<void> {
  * and notifications off, which is the most wasteful state the app can be in:
  * it is watching, it is resolving, and it is asking nobody.
  */
+/** Status-only read: do not turn an unavailable check into a denial. Expo's
+ * iOS provisional status permits quiet delivery even when granted is false. */
+export async function readNotificationPermissionForStatus(): Promise<{ granted: boolean; quiet: boolean }> {
+  const Notifications = await loadNotificationsLib();
+  if (!Notifications) throw new Error("Notification permissions unavailable");
+  const perm = await Notifications.getPermissionsAsync();
+  if (perm.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL) return { granted: true, quiet: true };
+  if (typeof perm.granted !== "boolean") throw new Error("Notification permission is unreadable");
+  return { granted: perm.granted, quiet: false };
+}
+
 export async function notificationsGranted(): Promise<boolean> {
   try {
     const Notifications = await loadNotificationsLib();

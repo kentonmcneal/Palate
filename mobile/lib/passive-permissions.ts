@@ -150,6 +150,25 @@ export async function checkPermissionDowngrade(): Promise<boolean> {
   return false;
 }
 
+/** Read-only status check. Preserve failures/unknown native authorization for
+ * the UI; the legacy boolean permission helpers keep their existing behavior. */
+export async function readPermissionStateForStatus(): Promise<{ whenInUse: boolean; always: boolean }> {
+  if (isVisitMonitorAvailable && PalateVisitMonitor) {
+    const status = PalateVisitMonitor.authorizationStatus();
+    if (status === "always") return { whenInUse: true, always: true };
+    if (status === "whenInUse") return { whenInUse: true, always: false };
+    if (["denied", "restricted", "notDetermined"].includes(status)) return { whenInUse: false, always: false };
+    throw new Error("Location authorization is unknown");
+  }
+  const [foreground, background] = await Promise.all([
+    Location.getForegroundPermissionsAsync(), Location.getBackgroundPermissionsAsync(),
+  ]);
+  if (![foreground, background].every(result => ["granted", "denied", "undetermined"].includes(result.status))) {
+    throw new Error("Location permission is unreadable");
+  }
+  return { whenInUse: foreground.status === "granted" || background.status === "granted", always: background.status === "granted" };
+}
+
 export async function currentPermissionState(): Promise<{ whenInUse: boolean; always: boolean }> {
   return { whenInUse: await hasWhenInUse(), always: await hasAlways() };
 }

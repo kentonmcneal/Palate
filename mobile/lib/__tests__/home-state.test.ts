@@ -155,3 +155,17 @@ describe("notifications off", () => {
     expect(s.kind).toBe("review");
   });
 });
+
+
+describe("bounded capture promises", () => {
+  it("includes drinks and review without promising detection or delivery", () => {
+    const states = [homeState(inputs(), at(14)), homeState(inputs(), at(23)), homeState(inputs({trackingOn: false}), at(23)), homeState(inputs({pending: [{name: ""}]}), at(23))];
+    for (const state of states) {
+      expect(state.body).toContain("food or drink");
+      expect(state.body.toLowerCase()).toMatch(/review|confirm/);
+      expect(state.body).not.toMatch(/will be ready|gets picked up|collect themselves/);
+    }
+    expect(states[0].body).toContain("may be missed");
+    expect(states[1].body).toContain("may be missed");
+  });
+});

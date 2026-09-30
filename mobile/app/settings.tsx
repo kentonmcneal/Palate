@@ -591,7 +591,7 @@ function PassiveCaptureEntry() {
     <>
       <Spacer />
       <Row
-        label="Log visits in the background"
+        label="Find possible food or drink stops"
         right={
           <Switch
             value={on}
@@ -603,10 +603,10 @@ function PassiveCaptureEntry() {
       />
       <Note>
         {needsRepair
-          ? "Paused. iOS set Location back to \"While Using.\" Switch it to Always and Palate goes back to logging for you."
+          ? "Location Always has not been confirmed. Review location permissions to help find possible food or drink stops. Visits need your confirmation."
           : on
-            ? "Notices restaurant stops with the app closed, then asks once at the end of the day. Nothing is logged until you confirm."
-            : "Turn this on, and set Location to Always, and your meals log themselves. Your phone is in your pocket while you eat, so on \"While Using the App\" Palate sees almost nothing and you are back to typing every meal in by hand."}
+            ? "Opt-in saved. Possible food or drink stops may appear for review, but some stops may be missed. Nothing is logged until you confirm."
+            : "Choose whether Palate may look for possible food or drink stops in the background. Location Always is required. It may miss stops; you can review detected visits or add your own."}
       </Note>
       {needsRepair && (
         <>

@@ -22,7 +22,7 @@ describe("captureStatus", () => {
   it("sends somebody who never opted in to the intro, and everyone else to Settings", () => {
     const fresh = captureStatus({ ...base, always: false, optedIn: false });
     const opted = captureStatus({ ...base, always: false, optedIn: true });
-    expect(fresh.kind === "location" && fresh.fix).toBe("passive-intro");
+    expect(fresh.kind === "opt-in" && fresh.fix).toBe("passive-intro");
     expect(opted.kind === "location" && opted.fix).toBe("ios-settings");
   });
 
