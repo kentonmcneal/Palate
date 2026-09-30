@@ -169,9 +169,9 @@ export async function resumePassiveCaptureIfOptedIn(): Promise<StartResult> {
  * local persistence must never block on connectivity.
  */
 export async function drainNativeVisits(): Promise<RawVisit[]> {
-  if (!isVisitMonitorAvailable || !PalateVisitMonitor) return getQueuedVisits();
+  if (!isVisitMonitorAvailable || !PalateVisitMonitor) return readQueuedVisits();
   const pending = PalateVisitMonitor.getPendingVisits();
-  const existing = await getQueuedVisits();
+  const existing = await readQueuedVisits();
   if (!pending.length) return existing;
 
   const seen = new Set(existing.map((v) => v.id));
@@ -182,13 +182,22 @@ export async function drainNativeVisits(): Promise<RawVisit[]> {
   return merged;
 }
 
-export async function getQueuedVisits(): Promise<RawVisit[]> {
-  try {
-    const raw = await AsyncStorage.getItem(QUEUE_KEY);
-    return raw ? (JSON.parse(raw) as RawVisit[]) : [];
-  } catch {
-    return [];
+/** A failed read must not authorize replacing the durable queue and clearing
+ * its native copy. Validate identity envelopes here; qualification validates
+ * observation fields later without guessing at corrupt stored data. */
+async function readQueuedVisits(): Promise<RawVisit[]> {
+  const raw = await AsyncStorage.getItem(QUEUE_KEY);
+  const visits: unknown = raw === null ? [] : JSON.parse(raw);
+  if (!Array.isArray(visits) || visits.some(visit => !visit ||
+      typeof visit.id !== "string" || !visit.id.trim())) {
+    throw new Error("Passive raw queue is unavailable or malformed");
   }
+  return visits;
+}
+
+export async function getQueuedVisits(): Promise<RawVisit[]> {
+  // Debug/display remains best effort; draining requires the strict read.
+  try { return await readQueuedVisits(); } catch { return []; }
 }
 
 export async function clearQueuedVisits(): Promise<void> {

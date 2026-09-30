@@ -48,12 +48,12 @@ export type RunSummary = {
 };
 
 async function loadProcessed(): Promise<Set<string>> {
-  try {
-    const raw = await AsyncStorage.getItem(PROCESSED_KEY);
-    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
-  } catch {
-    return new Set();
+  const raw = await AsyncStorage.getItem(PROCESSED_KEY);
+  const ids: unknown = raw === null ? [] : JSON.parse(raw);
+  if (!Array.isArray(ids) || ids.some(id => typeof id !== "string" || !id.trim())) {
+    throw new Error("Passive processed IDs are unavailable or malformed");
   }
+  return new Set(ids);
 }
 
 async function markProcessed(ids: Set<string>): Promise<void> {
@@ -63,12 +63,15 @@ async function markProcessed(ids: Set<string>): Promise<void> {
 }
 
 async function loadRetries(): Promise<RetryItem[]> {
-  try {
-    const raw = await AsyncStorage.getItem(RETRY_KEY);
-    return raw ? (JSON.parse(raw) as RetryItem[]) : [];
-  } catch {
-    return [];
+  const raw = await AsyncStorage.getItem(RETRY_KEY);
+  const items: unknown = raw === null ? [] : JSON.parse(raw);
+  if (!Array.isArray(items) || items.some(item => !item || !item.raw ||
+      typeof item.raw.id !== "string" || !item.raw.id.trim() ||
+      !Number.isSafeInteger(item.attempts) || item.attempts < 0 ||
+      !Number.isFinite(item.firstFailedAt) || item.firstFailedAt < 0)) {
+    throw new Error("Passive retry queue is unavailable or malformed");
   }
+  return items;
 }
 
 async function saveRetries(items: RetryItem[]): Promise<void> {
@@ -206,9 +209,11 @@ async function runProcess(): Promise<RunSummary> {
   // did — destroyed the visit permanently: the native copy was already gone and
   // the id would never be picked up again. A transient network blip while
   // resolving the venue was enough to lose a real meal, silently.
-  const drained = await drainNativeVisits();
+  // Read bookkeeping first: unknown is not empty and cannot authorize
+  // native acknowledgement or a repeat potentially paid venue lookup.
   const processed = await loadProcessed();
   const retries = await loadRetries();
+  const drained = await drainNativeVisits();
   const retryIds = new Set(retries.map((r) => r.raw.id));
 
   const fresh = drained.filter((v) => !processed.has(v.id) && !retryIds.has(v.id));

@@ -10,6 +10,7 @@ Current checkpoint: read/ambiguity24f63d5 plus the Add search batch committed wi
 - Broader friends/feed/profile design, typo and recommendation evaluation coverage remain unfinished.
 
 ## Completed locally
+- Strict raw/retry/processed reads and local inbox serialization/stale in-flight hydration protection:169suites/2,097tests,1skip andTypeScript; independent reviewed cases. Global ownership, remote mirror ordering and fresh stale restoration remain.
 - Add save UI ownership and malformed passive-input rejection:167suites/2,061tests,1skip;TypeScript and27 independent actualrunner controls passed offline.
 - Strict inbox mutation reads preserve unreadable/corrupt storage:163suites/1,963tests,1skip;TypeScript plus29 focused author/independent cases pass. Concurrency and bounded-retry loss remain.
 - Add search duplicate/stale admission and result ownership:162suites/1,940tests,1skip andTypeScript pass;48 mounted author/independent controls. No live cost guarantee.

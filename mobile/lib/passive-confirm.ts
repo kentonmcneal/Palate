@@ -192,9 +192,28 @@ export async function bumpNotifCount(): Promise<void> {
 // Inbox
 // ----------------------------------------------------------------------------
 
+// One same-runtime queue owns every local inbox read/modify/write, including
+// expiry performed by reads. Never await scheduling or hydration inside it.
+let inboxTail: Promise<void> = Promise.resolve();
+let inboxRevision = 0;
+function withInbox<T>(work: () => Promise<T>): Promise<T> {
+  const result = inboxTail.then(work);
+  inboxTail = result.then(() => {}, () => {});
+  return result;
+}
+async function writeInboxLocked(entries: InboxEntry[]): Promise<void> {
+  // Invalidate in-flight hydration even if this write rejects after committing.
+  // This is an in-memory revision, not a durable tombstone or owner boundary.
+  inboxRevision++;
+  await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(entries));
+}
+function readInbox(): Promise<InboxEntry[]> {
+  return withInbox(readInboxLocked);
+}
+
 /** Throw when inbox contents or expiry persistence are unavailable. A scheduler
  * must never mistake that state for a verified empty inbox. */
-async function readInbox(): Promise<InboxEntry[]> {
+async function readInboxLocked(): Promise<InboxEntry[]> {
   const raw = await AsyncStorage.getItem(INBOX_KEY);
   const all = raw === null ? [] : (JSON.parse(raw) as InboxEntry[]);
   if (!Array.isArray(all) || all.some(e => !e || !Number.isFinite(e.detectedAt))) {
@@ -203,7 +222,7 @@ async function readInbox(): Promise<InboxEntry[]> {
   const cutoff = Date.now() - INBOX_EXPIRY_HOURS * 3_600_000;
   const live = all.filter((e) => e.detectedAt >= cutoff);
   if (live.length !== all.length) {
-    await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(live));
+    await writeInboxLocked(live);
     void mirrorInbox(live);
     // An entry that expires unanswered is an IGNORE, and ignores are almost
     // certainly the most common outcome. Dropping them silently would bias
@@ -249,31 +268,33 @@ export function isSameMeal(
 /** Returns false when this was a duplicate of an entry we already hold. The
  *  caller needs that answer: a duplicate must not produce a second buzz. */
 async function addToInbox(entry: InboxEntry): Promise<boolean> {
-  const existing = await readInbox();
+  return withInbox(async () => {
+    const existing = await readInboxLocked();
 
-  // Same place, same LOCAL DAY. This used to be a one-hour window, and an
-  // hour is shorter than a meal: iOS emits a fresh stop whenever the location
-  // settles again, so sitting somewhere for two hours, or stepping out to the
-  // car and back, produced a second entry and a second prompt for one dinner.
-  // Measured on live data: one place resolved up to TWELVE times for one user
-  // in a single day, across 74 (user, place, day) triples.
-  //
-  // A day is the right unit because it is the unit the digest asks in. Going
-  // to the same restaurant twice in one day is rare, and the cost of getting
-  // it wrong is one unlogged repeat visit the person can add by hand --
-  // against twelve notifications about a meal they already confirmed.
-  //
-  // Local day, not UTC: the boundary has to be the one the person is living
-  // in, or a late dinner splits into two days for anyone west of Greenwich.
-  if (existing.some((e) => isSameMeal(e, entry))) {
-    return false;
-  }
-  const next = [entry, ...existing];
-  await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(next));
-  // Mirror it. Best-effort and never awaited into the caller's path: a
-  // detection must land locally whether or not there is a network.
-  void mirrorInbox(next);
-  return true;
+    // Same place, same LOCAL DAY. This used to be a one-hour window, and an
+    // hour is shorter than a meal: iOS emits a fresh stop whenever the location
+    // settles again, so sitting somewhere for two hours, or stepping out to the
+    // car and back, produced a second entry and a second prompt for one dinner.
+    // Measured on live data: one place resolved up to TWELVE times for one user
+    // in a single day, across 74 (user, place, day) triples.
+    //
+    // A day is the right unit because it is the unit the digest asks in. Going
+    // to the same restaurant twice in one day is rare, and the cost of getting
+    // it wrong is one unlogged repeat visit the person can add by hand --
+    // against twelve notifications about a meal they already confirmed.
+    //
+    // Local day, not UTC: the boundary has to be the one the person is living
+    // in, or a late dinner splits into two days for anyone west of Greenwich.
+    if (existing.some((e) => isSameMeal(e, entry))) {
+      return false;
+    }
+    const next = [entry, ...existing];
+    await writeInboxLocked(next);
+    // Mirror it. Best-effort and never awaited into the caller's path: a
+    // detection must land locally whether or not there is a network.
+    void mirrorInbox(next);
+    return true;
+  });
 }
 
 /**
@@ -309,24 +330,37 @@ export async function seedDigestFixtures(): Promise<number> {
       confidence: 0.22, confidenceBand: "low", candidateCount: 4, source: "stop",
     },
   ];
-  const existing = await readInbox();
-  await AsyncStorage.setItem(INBOX_KEY, JSON.stringify([...fixtures, ...existing]));
-  return fixtures.length;
+  return withInbox(async () => {
+    const existing = await readInboxLocked();
+    await writeInboxLocked([...fixtures, ...existing]);
+    return fixtures.length;
+  });
 }
 
 /**
  * Rebuild the inbox from the server mirror after a reinstall.
  *
- * Called on launch. Does nothing unless the local inbox is empty, which is the
- * only unambiguous signal — merging would let the mirror resurrect an entry
- * the device deliberately removed, and ask somebody about the same meal twice.
+ * Called on launch. Restore only if local stays empty and unchanged while the
+ * mirror is read. This guards in-flight hydration, not stale mirrors across
+ * restarts or a later fresh restore after a removal (there are no tombstones).
  */
 export async function restoreInboxFromServer(): Promise<number> {
   try {
-    const local = await readInbox();
-    const restored = await hydrateInboxIfEmpty(local.length);
-    if (!restored || restored.length === 0) return 0;
-    await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(restored));
+    const snapshot = await withInbox(async () => {
+      const local = await readInboxLocked();
+      return { count: local.length, revision: inboxRevision };
+    });
+    // Network stays outside the local queue: a slow mirror cannot block edits.
+    const restored = await hydrateInboxIfEmpty(snapshot.count);
+    if (snapshot.count !== 0 || !restored || restored.length === 0) return 0;
+    if (!Array.isArray(restored) || restored.some(e => !e || !Number.isFinite(e.detectedAt))) return 0;
+    const accepted = await withInbox(async () => {
+      const local = await readInboxLocked();
+      if (inboxRevision !== snapshot.revision || local.length !== 0) return false;
+      await writeInboxLocked(restored);
+      return true;
+    });
+    if (!accepted) return 0;
     void track("passive_inbox_restored", { count: restored.length });
     // The digest that would have announced these was scheduled on a device
     // that no longer exists.
@@ -338,10 +372,12 @@ export async function restoreInboxFromServer(): Promise<number> {
 }
 
 export async function removeFromInbox(id: string): Promise<void> {
-  const existing = await readInbox();
-  const remaining = existing.filter((e) => e.id !== id);
-  await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(remaining));
-  void mirrorInbox(remaining);
+  await withInbox(async () => {
+    const existing = await readInboxLocked();
+    const remaining = existing.filter((e) => e.id !== id);
+    await writeInboxLocked(remaining);
+    void mirrorInbox(remaining);
+  });
   // AND rewrite tonight's digest.
   //
   // This line is the whole of the founder's "it fires even though I already

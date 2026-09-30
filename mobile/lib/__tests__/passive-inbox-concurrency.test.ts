@@ -1,0 +1,29 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {getInbox,notifyOrInbox,removeFromInbox,restoreInboxFromServer,seedDigestFixtures} from '../passive-confirm';
+import {hydrateInboxIfEmpty} from '../passive-inbox-sync';
+import {scheduleDigest} from '../passive-digest';
+jest.mock('../analytics',()=>({track:jest.fn()}));
+jest.mock('../observability',()=>({captureError:jest.fn()}));
+jest.mock('../passive-inbox-sync',()=>({mirrorInbox:jest.fn(),hydrateInboxIfEmpty:jest.fn()}));
+jest.mock('../passive-digest',()=>({scheduleDigest:jest.fn(),DIGEST_NOTIF_ID_STORAGE_KEY:'digest',allowsRealtimePrompt:()=>false}));
+jest.mock('../visits',()=>({recentlyPrompted:async()=>false,placeRefusals:async()=>0,shouldDemote:()=>false}));
+jest.mock('expo-notifications',()=>({}));
+const KEY='palate.passive.inbox';
+function deferred<T=void>(){let resolve!:(v:T)=>void;const promise=new Promise<T>(r=>resolve=r);return{promise,resolve}}
+const tick=async()=>{for(let i=0;i<40;i++)await Promise.resolve()};
+const entry=(id:string,age=0)=>({id,place_id:id,name:id,address:'',alternates:[],detectedAt:Date.now()-age,dwellMin:15});
+const add=(id:string)=>notifyOrInbox({raw:{id,departureAt:Date.now(),capturedAt:Date.now(),horizontalAccuracy:10,source:'stop'},candidates:[{google_place_id:id,name:id}],cacheHit:true,confidence:.8,confidenceBand:'high'} as any,15);
+const ids=async()=>JSON.parse((await AsyncStorage.getItem(KEY))??'[]').map((e:any)=>e.id).sort();
+function blockRead(){const started=deferred(),release=deferred(),get=AsyncStorage.getItem.bind(AsyncStorage);jest.spyOn(AsyncStorage,'getItem').mockImplementationOnce(async key=>{const value=await get(key);started.resolve();await release.promise;return value});return{started,release}}
+beforeEach(async()=>{jest.restoreAllMocks();jest.clearAllMocks();await AsyncStorage.clear();(hydrateInboxIfEmpty as jest.Mock).mockResolvedValue(null)});
+afterEach(()=>jest.restoreAllMocks());
+test('concurrent adds preserve both rows',async()=>{const g=blockRead(),a=add('a');await g.started.promise;const b=add('b');await tick();g.release.resolve();await Promise.all([a,b]);expect(await ids()).toEqual(['a','b'])});
+test('concurrent same-meal additions deduplicate inside storage transaction',async()=>{const g=blockRead(),a=add('a');await g.started.promise;const b=add('a');await tick();g.release.resolve();expect((await Promise.all([a,b])).sort()).toEqual(['inboxed-digest','suppressed-duplicate']);expect(await ids()).toEqual(['a'])});
+test('two removes cannot resurrect either row',async()=>{await AsyncStorage.setItem(KEY,JSON.stringify([entry('a'),entry('b')]));const g=blockRead(),a=removeFromInbox('a');await g.started.promise;const b=removeFromInbox('b');await tick();g.release.resolve();await Promise.all([a,b]);expect(await ids()).toEqual([])});
+test('debug seed cannot overwrite concurrent capture',async()=>{const g=blockRead(),seed=seedDigestFixtures();await g.started.promise;const a=add('a');await tick();g.release.resolve();await Promise.all([seed,a]);expect((await ids()).length).toBe(4);expect(await ids()).toContain('a')});
+test('expiry persistence cannot overwrite queued capture',async()=>{await AsyncStorage.setItem(KEY,JSON.stringify([entry('expired',49*3600000)]));const started=deferred(),release=deferred(),set=AsyncStorage.setItem.bind(AsyncStorage);jest.spyOn(AsyncStorage,'setItem').mockImplementationOnce(async(k,v)=>{started.resolve();await release.promise;return set(k,v)});const read=getInbox();await started.promise;const a=add('a');await tick();release.resolve();await Promise.all([read,a]);expect(await ids()).toEqual(['a'])});
+test('hydration outside local queue cannot overwrite a newly captured row',async()=>{const d=deferred<any>();(hydrateInboxIfEmpty as jest.Mock).mockReturnValueOnce(d.promise);const r=restoreInboxFromServer();await tick();await add('local');d.resolve([entry('remote')]);expect(await r).toBe(0);expect(await ids()).toEqual(['local'])});
+test('empty-to-nonempty-to-empty invalidates older hydration',async()=>{const d=deferred<any>();(hydrateInboxIfEmpty as jest.Mock).mockReturnValueOnce(d.promise);const r=restoreInboxFromServer();await tick();await add('a');await removeFromInbox('a');d.resolve([entry('a')]);expect(await r).toBe(0);expect(await ids()).toEqual([])});
+test('concurrent hydration snapshots commit only once and schedule outside lock',async()=>{const d=deferred<any>();(hydrateInboxIfEmpty as jest.Mock).mockReturnValue(d.promise);const a=restoreInboxFromServer(),b=restoreInboxFromServer();await tick();d.resolve([entry('a')]);expect((await Promise.all([a,b])).sort()).toEqual([0,1]);expect(scheduleDigest).toHaveBeenCalledTimes(1)});
+test('failed mutation invalidates old hydration and does not poison queue',async()=>{const d=deferred<any>();(hydrateInboxIfEmpty as jest.Mock).mockReturnValueOnce(d.promise);const r=restoreInboxFromServer();await tick();jest.spyOn(AsyncStorage,'setItem').mockRejectedValueOnce(Error('uncertain'));await expect(add('a')).rejects.toThrow('uncertain');d.resolve([entry('a')]);expect(await r).toBe(0);await add('b');expect(await ids()).toEqual(['b'])});
+test('even no-op removal invalidates older hydration',async()=>{const d=deferred<any>();(hydrateInboxIfEmpty as jest.Mock).mockReturnValueOnce(d.promise);const r=restoreInboxFromServer();await tick();await removeFromInbox('remote');d.resolve([entry('remote')]);expect(await r).toBe(0);expect(await ids()).toEqual([])});
