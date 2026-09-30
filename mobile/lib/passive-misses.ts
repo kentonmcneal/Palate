@@ -28,6 +28,7 @@ const MAX_ENTRIES = 20;
 export type MissReason =
   | "no_places_returned"
   | "all_filtered_out"
+  | "outside_search_radius"
   | "ranked_empty"
   // Everything in range was refused by this person AT THIS SPOT. A silence we
   // learned rather than one we could not explain, and worth telling apart in
@@ -78,6 +79,8 @@ export function describeMiss(m: PassiveMiss): string {
       return `Nothing within ${m.radiusM}m${m.accuracyM ? ` (fix ±${Math.round(m.accuracyM)}m)` : ""}`;
     case "all_filtered_out":
       return `${m.placesFound} nearby, all rejected as non-dining`;
+    case "outside_search_radius":
+      return `No food or drink candidates within this stop’s ${m.radiusM}m search radius`;
     case "ranked_empty":
       return `${m.loggableCount} loggable but ranking returned none`;
     case "all_refused_here":

@@ -581,6 +581,7 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
   const cached = await getCachedNearby(raw.lat, raw.lng, radius);
   let places: Restaurant[];
   let cacheHit: boolean;
+  let degradedResponse = false;
   // Resolved once, before the branch. This ran catalogueCandidates twice — once
   // in the condition and again in the body — which is two identical round trips
   // for one answer.
@@ -613,6 +614,7 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
   } else {
     const res = await nearbyRestaurantsDetailed(raw.lat, raw.lng, radius);
     places = res.places;
+    degradedResponse = res.degraded;
     cacheHit = false;
     void breadcrumb("passive: candidates from google", {
       count: places.length, radius, degraded: res.degraded,
@@ -633,7 +635,20 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
   // the opening-hours check, and the personal eating pattern below.
   const endedAt = new Date(raw.departureAt ?? raw.capturedAt);
   const hour = endedAt.getHours();
-  const byType = places.filter(isLoggableVenue);
+  // Nearby cache buckets span more than a precise-source search radius.
+  // A result near the bucket's original query may be outside THIS stop's
+  // search. Do not turn that known separation into a venue suggestion.
+  // Unknown coordinates retain the existing unchecked-attribution behavior.
+  const loggable = places.filter(isLoggableVenue);
+  const byType = loggable.filter((place) => {
+    const { latitude, longitude } = place;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+        Math.abs(latitude!) > 90 || Math.abs(longitude!) > 180) return true;
+    return distanceMeters(raw.lat, raw.lng, latitude!, longitude!) <= radius;
+  });
+
+  // A degraded reply with no usable in-radius candidate is still unavailable.
+  if (degradedResponse && byType.length === 0) throw retryLater("google budget tripped");
 
   // What this person has already said no to, HERE. Two refusals at a spot and
   // the venue stops being offered at that spot — dropped, not demoted. A
@@ -663,8 +678,10 @@ export async function resolveVenue(raw: RawVisit): Promise<ResolvedVisit | null>
     // before this: the detection resolved to nothing and left no trace.
     const reason = places.length === 0
       ? "no_places_returned"
-      : byType.length === 0
+      : loggable.length === 0
         ? "all_filtered_out"
+        : byType.length === 0
+          ? "outside_search_radius"
         : eligible.length === 0
           // Not a failure. Everything in range is somewhere this person has
           // already said they were not, at this spot. Named separately so the
