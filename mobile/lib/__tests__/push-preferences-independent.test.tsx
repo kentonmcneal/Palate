@@ -21,6 +21,9 @@ function harness() {
     return async()=>false;
   }});
   let localRequire:any;const exports:any={};vm.runInNewContext(compile('../../app/settings.tsx'),{exports,console,require:localRequire=(id:string)=>{
+    // Unrelated capture control has its own real-component mounted suites.
+    // Keep this explicit: the generic async helper proxy is not a React component.
+    if (id === "../components/PassiveCaptureToggle") return { PassiveCaptureToggle: () => null };
     if(id==='react')return React;
     if(id==='react/jsx-runtime')return require('react/jsx-runtime');
     if(id==='react-native')return {View:'View',Switch:'Switch',ScrollView:'ScrollView',Pressable:'Pressable',Modal:'Modal',Platform:{OS:'ios'},UIManager:{},LayoutAnimation:{configureNext:()=>{},Presets:{easeInEaseOut:{}}},StyleSheet:{create:(x:any)=>x},Alert:{alert},Linking:{},Share:{}};

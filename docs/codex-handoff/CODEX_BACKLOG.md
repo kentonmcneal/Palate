@@ -1,6 +1,6 @@
 # Active window: September 29–30, 2026
 
-Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No production deployment or paid services.
+Deadline: 2026-09-30 16:01:54 UTC (11:01:54 a.m. Central). No paid services. User subsequently authorized tested deployments with verified no incremental cost; runtime/backend compatibility remains a release gate.
 
 Current checkpoint: read/ambiguity24f63d5 plus the Add search batch committed with this entry. The chronological notes below preserve earlier evidence; this top section supersedes their older in-progress labels.
 
@@ -127,3 +127,5 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 2026-09-30 COMMITTED with entry: capture status respects optout and unknown reads; shared Home/Profile copy no longer promises tracking/delivery; auth bootstrap ordering corrected.179suites/2199tests/typespass. IN PROGRESS strictserializedhistory; activation toggle races and native/device verification remain.
 
 2026-09-30 COMMITTED with entry: strictserializedhistory prevents failedread/new-user and lostupdate behavior; malformednewIDs rejected.181suites/2229tests/typespass. Native stop completion/captureownership, corruptdata recovery and real7Brew/device verification remain open.
+
+- Completed: saved-consent capturetoggle, unknown/retry and repair ownership;183suites/2265tests/typespass. Sharedcorestart/stop and digest/onboarding followups pending.

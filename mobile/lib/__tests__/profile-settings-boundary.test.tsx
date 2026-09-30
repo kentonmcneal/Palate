@@ -36,6 +36,9 @@ function harness(file: string) {
   } });
   const exports: any = {};
   vm.runInNewContext(compile(`../../app/${file}`), { exports, console, fetch: () => { throw Error("Network forbidden"); }, require: (id: string) => {
+    // Unrelated capture control has its own real-component mounted suites.
+    // Keep this explicit: the generic async helper proxy is not a React component.
+    if (id === "../components/PassiveCaptureToggle") return { PassiveCaptureToggle: () => null };
     if (id === "react") return React;
     if (id === "react/jsx-runtime") return require("react/jsx-runtime");
     if (id === "react-native") return { View: "View", ScrollView: "ScrollView", Pressable: "Pressable", Modal: "Modal", Switch: "Switch", StyleSheet: { create: (s: any) => s }, Alert: { alert }, Linking: {}, Share: {} };
