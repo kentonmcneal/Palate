@@ -100,3 +100,5 @@ Kept briefly so the next session can see what was just touched.
 | claude | `main` | `docs/AGENT_CLAIMS.md`, `scripts/checks/claims.sh`, `AGENTS.md`, `CLAUDE.md` | 2026-09-29 | this convention |
 | claude | `main` | `supabase/functions/send-push/index.ts`, `CODEX_HANDOFF.md` | 2026-09-29 | surfaced retry counts (S8) |
 | codex | `codex/handoff-priorities` | `mobile/lib/observability*`, `supabase/functions/delete-account/index.ts` | 2026-09-29 | in flight at time of writing |
+
+| codex | `codex/handoff-priorities` | `mobile/app/(tabs)/add.tsx` `mobile/lib/__tests__/add-search-*` `docs/codex-handoff/ADD_SEARCH_*` `docs/codex-handoff/CODEX_WORKLOG.md` `docs/codex-handoff/CODEX_BACKLOG.md` | 2026-09-30T00:39Z | 2026-09-30T02:39Z | Task01a0e643 reviewed Add search admission integration, offline only. |
