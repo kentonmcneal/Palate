@@ -150,17 +150,45 @@ type ClusterPoint = {
   dwellMin?: number;
 };
 
-async function loadClusterHistory(): Promise<ClusterPoint[]> {
+// One JS-runtime queue for every history read and read/merge/write operation.
+// A rejected job must not poison later recovery. Never nest queued operations.
+let clusterHistoryTail: Promise<unknown> = Promise.resolve();
+function withClusterHistory<T>(work: () => Promise<T>): Promise<T> {
+  const result = clusterHistoryTail.then(work);
+  clusterHistoryTail = result.catch(() => undefined);
+  return result;
+}
+
+async function readClusterHistoryLocked(): Promise<ClusterPoint[]> {
   try {
     const raw = await AsyncStorage.getItem(CLUSTER_HISTORY_KEY);
-    return raw ? (JSON.parse(raw) as ClusterPoint[]) : [];
+    if (raw === null) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.some((p) =>
+      !p || !Number.isFinite(p.lat) || Math.abs(p.lat) > 90 ||
+      !Number.isFinite(p.lng) || Math.abs(p.lng) > 180 ||
+      !Number.isInteger(p.hour) || p.hour < 0 || p.hour > 23 ||
+      typeof p.weekday !== "boolean" ||
+      (p.dwellMin !== undefined && (!Number.isFinite(p.dwellMin) || p.dwellMin < 0)) ||
+      (p.visitId !== undefined && (typeof p.visitId !== "string" || !p.visitId)))) {
+      throw new Error("Invalid cluster history");
+    }
+    return parsed;
   } catch {
-    return [];
+    // Unknown history cannot authorize a new-area floor, a suppression decision,
+    // or overwriting the only stored evidence. Retry without consuming attempts.
+    throw retryLater("cluster history unavailable");
   }
+}
+
+function loadClusterHistory(): Promise<ClusterPoint[]> {
+  return withClusterHistory(readClusterHistoryLocked);
 }
 
 /** Record a raw visit centroid into the on-device clustering history (capped). */
 export async function recordForClustering(raw: RawVisit): Promise<void> {
+  // Do not persist an identity the strict history reader would reject.
+  if (typeof raw.id !== "string" || raw.id.length === 0) return;
   if (!validObservation(raw)) return;
   const dwell = dwellMinutes(raw);
   // Retain long work/home stays even when they fail the meal-duration ceiling.
@@ -182,19 +210,25 @@ export async function recordForClustering(raw: RawVisit): Promise<void> {
     // recognised as home even though it began in the evening.
     dwellMin: dwellMinutes(raw) ?? 0,
   };
-  const history = await loadClusterHistory();
-  // A stop rejected for duration must not turn an unfamiliar city into a
-  // familiar one. Apply the same source-independent floor BEFORE recording;
-  // deliberately do not apply the meal ceiling to genuine long stays.
-  if (dwell < minDwellFor(isAwayFromKnownAreas(raw.lat, raw.lng, history))) return;
-  // Resolution retries must not manufacture independent visits. Legacy rows
-  // have no identity; they remain readable but cannot be retrospectively deduped.
-  const previous = history.findIndex((p) => p.visitId === raw.id);
-  if (previous >= 0) history[previous] = point;
-  else history.push(point);
-  // Keep the most recent 500 points — plenty to learn home/work, bounded storage.
-  const trimmed = history.slice(-500);
-  await AsyncStorage.setItem(CLUSTER_HISTORY_KEY, JSON.stringify(trimmed));
+  await withClusterHistory(async () => {
+    const history = await readClusterHistoryLocked();
+    // A stop rejected for duration must not turn an unfamiliar city into a
+    // familiar one. Apply the same source-independent floor BEFORE recording;
+    // deliberately do not apply the meal ceiling to genuine long stays.
+    if (dwell < minDwellFor(isAwayFromKnownAreas(raw.lat, raw.lng, history))) return;
+    // Resolution retries must not manufacture independent visits. Legacy rows
+    // have no identity; they remain readable but cannot be retrospectively deduped.
+    const previous = history.findIndex((p) => p.visitId === raw.id);
+    if (previous >= 0) history[previous] = point;
+    else history.push(point);
+    // Keep the most recent 500 points — plenty to learn home/work, bounded storage.
+    const trimmed = history.slice(-500);
+    try {
+      await AsyncStorage.setItem(CLUSTER_HISTORY_KEY, JSON.stringify(trimmed));
+    } catch {
+      throw retryLater("cluster history write unavailable");
+    }
+  });
 }
 
 const LUNCH_START_HOUR = 11;
@@ -272,7 +306,10 @@ export function clusterHitsFor(away: boolean): number {
 }
 
 export async function isHomeOrWorkSuppressed(raw: RawVisit): Promise<boolean> {
-  const history = await loadClusterHistory();
+  return homeOrWorkSuppressed(raw, await loadClusterHistory());
+}
+
+function homeOrWorkSuppressed(raw: RawVisit, history: ClusterPoint[]): boolean {
   const away = isAwayFromKnownAreas(raw.lat, raw.lng, history);
   const hits = clusterHitsFor(away);
   const near = history.filter((p) => distanceMeters(raw.lat, raw.lng, p.lat, p.lng) <= CLUSTER_RADIUS_M);
@@ -294,11 +331,12 @@ export async function qualifyVisit(raw: RawVisit): Promise<QualifyOutcome> {
   const dwell = dwellMinutes(raw);
   if (dwell == null) return { ok: false, reason: "open-visit" };
   if (!validObservation(raw)) return { ok: false, reason: "invalid-observation" };
-  const away = isAwayFromKnownAreas(raw.lat, raw.lng, await loadClusterHistory());
+  const history = await loadClusterHistory();
+  const away = isAwayFromKnownAreas(raw.lat, raw.lng, history);
   if (dwell < minDwellFor(away)) return { ok: false, reason: "dwell-too-short" };
   if (dwell > MAX_DWELL_MIN) return { ok: false, reason: "dwell-too-long" };
   if (raw.horizontalAccuracy > accuracyBound(raw)) return { ok: false, reason: "low-accuracy" };
-  if (await isHomeOrWorkSuppressed(raw)) return { ok: false, reason: "home-work-suppressed" };
+  if (homeOrWorkSuppressed(raw, history)) return { ok: false, reason: "home-work-suppressed" };
   return { ok: true, dwellMin: dwell };
 }
 

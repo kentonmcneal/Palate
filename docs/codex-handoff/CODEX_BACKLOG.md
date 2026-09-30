@@ -125,3 +125,5 @@ Revert individual Codex commits; baseline tag codex-baseline-20260928 is retaine
 2026-09-30 COMMITTED with entry: current-stop radius filtering prevents inherited out-of-radius cached suggestions; degraded filtered provider responses retry. Main177suites/2170tests/typespass. IN PROGRESS truthful capture status and strictserializedclusterhistory. Native sub5mincoffee/completion/captureownership remain unresolved.
 
 2026-09-30 COMMITTED with entry: capture status respects optout and unknown reads; shared Home/Profile copy no longer promises tracking/delivery; auth bootstrap ordering corrected.179suites/2199tests/typespass. IN PROGRESS strictserializedhistory; activation toggle races and native/device verification remain.
+
+2026-09-30 COMMITTED with entry: strictserializedhistory prevents failedread/new-user and lostupdate behavior; malformednewIDs rejected.181suites/2229tests/typespass. Native stop completion/captureownership, corruptdata recovery and real7Brew/device verification remain open.
