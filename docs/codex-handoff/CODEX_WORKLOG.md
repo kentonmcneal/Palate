@@ -390,3 +390,8 @@ Main75durable actual-SDK controls pass; independent10 actual-source read/caller 
 - Main14author+8independent realSDK2.110.7 synthetic transport controls pass; sourcehash matches reviewed candidate. Main190suites/2349tests pass,1skip; TypeScriptpass. No live user/database calls. Official update documentation checked; changelog markdown fetch unsupported. Installed SDK behavior tested directly.
 - LIMITS: Promise<void> and legacy missing-column tolerance unchanged; no affected-row/durable-rating claim. RLS still required; no live RLS proof. Optional rating failure does not remove a saved diary visit. Does not fix original ownership of global inbox/capture or cancel sent requests.
 - Rollback this helper/tests/reports commit together; no schema/native/config changes or deployment.
+
+## Passive onboarding disclosure — 2026-09-30
+- Two JS onboarding screens now distinguish optional background suggestions from confirmed diary entries, qualify missed/wrong stops and reminder delivery, describe pre-confirmation lookup/sync and actual deletion controls, and make dish details optional. Independent review preserved documented no-sale/no-ad commitments rather than removing them for lack of code proof. No claim of audited business compliance.
+- Main exact correctedhashes match independent review; TypeScriptpass. Copy-only JSX: no handler/control/nativeconfig changes; full190suite2349test run from preceding rating batch not rerun for prose. No device layout/VoiceOver signoff.
+- app.json/nativepermissionstrings proposal remains unapplied for separate release compatibility review. Hostedpolicy/landing untouched. No live calls/deployment. Rollback the two-screen/docs commit together.

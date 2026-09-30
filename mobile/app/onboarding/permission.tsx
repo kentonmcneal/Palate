@@ -76,23 +76,23 @@ export default function Permission() {
         <Text style={styles.h1}>Allow location</Text>
         <Spacer />
         <Text style={styles.p}>
-          iOS asks in two steps. Tap "Allow While Using the App" first, then
-          Palate asks once more for "Always," which is the one that matters.
+          Allow location to find nearby places while you use Palate. Background
+          suggestions are a separate, optional choice that needs Always access.
         </Text>
         <Spacer size={28} />
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Why "Always"</Text>
           <Text style={styles.cardBody}>
-            Palate logs where you eat without you doing anything. But your phone
-            is in your pocket while you eat, so the app is in the background.
-            "While Using the App" means it can only see somewhere you were
-            standing with Palate open, which is almost never.
+            With background suggestions enabled, Palate can suggest stops for food
+            or coffee while the app is closed. Some stops may be missed or matched
+            to the wrong place. Confirm a suggestion before adding it to your diary.
           </Text>
           <Spacer size={12} />
           <Text style={styles.cardBody}>
-            With "Always," you get one summary at the end of the day asking you to
-            confirm where you ate. Without it, you're back to typing every meal in
-            yourself. We never sell your location, and you can turn it off any time.
+            An evening reminder can help you review suggestions; delivery is not
+            guaranteed. You can also find nearby places while using Palate or add
+            a visit yourself. Dish details are optional. We never sell your location.
+            Manage background suggestions in Settings.
           </Text>
         </View>
       </ScrollView>

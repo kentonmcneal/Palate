@@ -26,14 +26,15 @@ export default function PrivacyScreen() {
         <Text style={styles.h1}>Your data, your call.</Text>
         <Spacer />
         <Text style={styles.p}>
-          You decide what's public. Profile visibility, your friends list, what
-          shows up in any feed. All your call. We don't sell your data and we
-          don't show ads.
+          Review your profile and visit visibility settings before sharing.
+          Suggested places and detection details may sync to your account before
+          you confirm a diary visit. Location does not tell Palate what you ordered.
+          We don't sell your data and we don't show ads.
         </Text>
         <Spacer size={32} />
-        <Row title="Pause anytime" body="Toggle off location tracking from Settings." />
-        <Row title="Delete what you want" body="Single visits, a week, or everything." />
-        <Row title="No selling, ever" body="Restaurants don't see your name or email." />
+        <Row title="Pause anytime" body="Manage foreground checks and background suggestions separately in Settings." />
+        <Row title="Delete what you want" body="Delete individual visits or use Settings to delete all visit history or your account." />
+        <Row title="Place lookups" body="Palate may send location to its servers and a places provider to find nearby places." />
       </ScrollView>
       <View style={styles.cta}>
         <Button title="Let's eat" onPress={finish} />
